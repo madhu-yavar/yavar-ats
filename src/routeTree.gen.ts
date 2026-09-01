@@ -10,33 +10,80 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as MatchingRouteImport } from './routes/matching'
+import { Route as CandidatesIndexRouteImport } from './routes/candidates.index'
+import { Route as RequisitionsIndexRouteImport } from './routes/requisitions.index'
+import { Route as RequisitionsIdRouteImport } from './routes/requisitions.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MatchingRoute = MatchingRouteImport.update({
+  id: '/matching',
+  path: '/matching',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CandidatesIndexRoute = CandidatesIndexRouteImport.update({
+  id: '/candidates/',
+  path: '/candidates/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RequisitionsIndexRoute = RequisitionsIndexRouteImport.update({
+  id: '/requisitions/',
+  path: '/requisitions/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RequisitionsIdRoute = RequisitionsIdRouteImport.update({
+  id: '/requisitions/$id',
+  path: '/requisitions/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/matching': typeof MatchingRoute
+  '/requisitions/$id': typeof RequisitionsIdRoute
+  '/candidates/': typeof CandidatesIndexRoute
+  '/requisitions/': typeof RequisitionsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/matching': typeof MatchingRoute
+  '/requisitions/$id': typeof RequisitionsIdRoute
+  '/candidates': typeof CandidatesIndexRoute
+  '/requisitions': typeof RequisitionsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/matching': typeof MatchingRoute
+  '/requisitions/$id': typeof RequisitionsIdRoute
+  '/candidates/': typeof CandidatesIndexRoute
+  '/requisitions/': typeof RequisitionsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    '/' | '/matching' | '/requisitions/$id' | '/candidates/' | '/requisitions/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/matching' | '/requisitions/$id' | '/candidates' | '/requisitions'
+  id:
+    | '__root__'
+    | '/'
+    | '/matching'
+    | '/requisitions/$id'
+    | '/candidates/'
+    | '/requisitions/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  MatchingRoute: typeof MatchingRoute
+  RequisitionsIdRoute: typeof RequisitionsIdRoute
+  CandidatesIndexRoute: typeof CandidatesIndexRoute
+  RequisitionsIndexRoute: typeof RequisitionsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +95,43 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/matching': {
+      id: '/matching'
+      path: '/matching'
+      fullPath: '/matching'
+      preLoaderRoute: typeof MatchingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/candidates/': {
+      id: '/candidates/'
+      path: '/candidates'
+      fullPath: '/candidates/'
+      preLoaderRoute: typeof CandidatesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/requisitions/': {
+      id: '/requisitions/'
+      path: '/requisitions'
+      fullPath: '/requisitions/'
+      preLoaderRoute: typeof RequisitionsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/requisitions/$id': {
+      id: '/requisitions/$id'
+      path: '/requisitions/$id'
+      fullPath: '/requisitions/$id'
+      preLoaderRoute: typeof RequisitionsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  MatchingRoute: MatchingRoute,
+  RequisitionsIdRoute: RequisitionsIdRoute,
+  CandidatesIndexRoute: CandidatesIndexRoute,
+  RequisitionsIndexRoute: RequisitionsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
