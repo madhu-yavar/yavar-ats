@@ -198,7 +198,15 @@ export async function scoreCandidate(opts: {
     rationale: ai.data.rationale,
     risk_flags: riskFlags,
     recommendation: overall >= 75 ? "select" : overall >= 60 ? "hold" : "reject",
-    social: { blended: social.score, basis: social.basis, signals, cached },
+    social: {
+      blended: social.score,
+      basis:
+        discovered.length > 0
+          ? `${social.basis} · auto-discovered from CV → ${discovered.join(", ")}`
+          : social.basis,
+      signals,
+      cached,
+    },
     contributions,
     model: MATCH_MODEL,
   };
