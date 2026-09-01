@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as MatchingRouteImport } from './routes/matching'
 import { Route as CandidatesIndexRouteImport } from './routes/candidates.index'
+import { Route as CandidatesIdRouteImport } from './routes/candidates.$id'
 import { Route as RequisitionsIndexRouteImport } from './routes/requisitions.index'
 import { Route as RequisitionsIdRouteImport } from './routes/requisitions.$id'
 
@@ -30,6 +31,11 @@ const CandidatesIndexRoute = CandidatesIndexRouteImport.update({
   path: '/candidates/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CandidatesIdRoute = CandidatesIdRouteImport.update({
+  id: '/candidates/$id',
+  path: '/candidates/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RequisitionsIndexRoute = RequisitionsIndexRouteImport.update({
   id: '/requisitions/',
   path: '/requisitions/',
@@ -44,6 +50,7 @@ const RequisitionsIdRoute = RequisitionsIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/matching': typeof MatchingRoute
+  '/candidates/$id': typeof CandidatesIdRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates/': typeof CandidatesIndexRoute
   '/requisitions/': typeof RequisitionsIndexRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/matching': typeof MatchingRoute
+  '/candidates/$id': typeof CandidatesIdRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates': typeof CandidatesIndexRoute
   '/requisitions': typeof RequisitionsIndexRoute
@@ -59,6 +67,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/matching': typeof MatchingRoute
+  '/candidates/$id': typeof CandidatesIdRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates/': typeof CandidatesIndexRoute
   '/requisitions/': typeof RequisitionsIndexRoute
@@ -66,13 +75,25 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/matching' | '/requisitions/$id' | '/candidates/' | '/requisitions/'
+    | '/'
+    | '/matching'
+    | '/candidates/$id'
+    | '/requisitions/$id'
+    | '/candidates/'
+    | '/requisitions/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/matching' | '/requisitions/$id' | '/candidates' | '/requisitions'
+  to:
+    | '/'
+    | '/matching'
+    | '/candidates/$id'
+    | '/requisitions/$id'
+    | '/candidates'
+    | '/requisitions'
   id:
     | '__root__'
     | '/'
     | '/matching'
+    | '/candidates/$id'
     | '/requisitions/$id'
     | '/candidates/'
     | '/requisitions/'
@@ -81,6 +102,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   MatchingRoute: typeof MatchingRoute
+  CandidatesIdRoute: typeof CandidatesIdRoute
   RequisitionsIdRoute: typeof RequisitionsIdRoute
   CandidatesIndexRoute: typeof CandidatesIndexRoute
   RequisitionsIndexRoute: typeof RequisitionsIndexRoute
@@ -109,6 +131,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CandidatesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/candidates/$id': {
+      id: '/candidates/$id'
+      path: '/candidates/$id'
+      fullPath: '/candidates/$id'
+      preLoaderRoute: typeof CandidatesIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/requisitions/': {
       id: '/requisitions/'
       path: '/requisitions'
@@ -129,6 +158,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   MatchingRoute: MatchingRoute,
+  CandidatesIdRoute: CandidatesIdRoute,
   RequisitionsIdRoute: RequisitionsIdRoute,
   CandidatesIndexRoute: CandidatesIndexRoute,
   RequisitionsIndexRoute: RequisitionsIndexRoute,
