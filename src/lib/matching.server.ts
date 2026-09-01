@@ -15,26 +15,26 @@ export type JdInputShape = {
   title: string;
   mustHave: string[];
   goodToHave: string[];
-  responsibilities?: string | null;
-  education?: string | null;
+  responsibilities?: string | null | undefined;
+  education?: string | null | undefined;
   experienceMin: number;
   experienceMax: number;
-  jdText?: string | null;
+  jdText?: string | null | undefined;
 };
 
 export type CandidateInputShape = {
   name: string;
   skills: string[];
   experienceYears: number;
-  education?: string | null;
-  resumeText?: string | null;
-  linkedinUrl?: string | null;
-  githubUrl?: string | null;
-  websiteUrl?: string | null;
-  xUrl?: string | null;
-  linkedinProfileText?: string | null;
+  education?: string | null | undefined;
+  resumeText?: string | null | undefined;
+  linkedinUrl?: string | null | undefined;
+  githubUrl?: string | null | undefined;
+  websiteUrl?: string | null | undefined;
+  xUrl?: string | null | undefined;
+  linkedinProfileText?: string | null | undefined;
   /** Previously fetched social signals — reused instead of re-fetching. */
-  cachedSocial?: SocialSignal[] | null;
+  cachedSocial?: SocialSignal[] | null | undefined;
 };
 
 export type Weights = { skills: number; experience: number; education: number; social: number };

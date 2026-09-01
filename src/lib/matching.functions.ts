@@ -78,6 +78,7 @@ const MatchInput = z.object({
     websiteUrl: z.string().optional().nullable(),
     xUrl: z.string().optional().nullable(),
     linkedinProfileText: z.string().optional().nullable(),
+    cachedSocial: z.array(z.any()).optional().nullable(),
   }),
   weights: z.object({
     skills: z.number(),
@@ -174,7 +175,7 @@ export const parseResume = createServerFn({ method: "POST" })
         "location, experience_years (number), education, skills (string array), linkedin_url, github_url, website_url. " +
         "Use null when a field is genuinely absent. Never invent values.",
       prompt: data.resumeText.slice(0, 20000),
-      model: MODEL,
+      model: MATCH_MODEL,
     });
     if (!result.ok) throw new Error(result.message);
     return result.data;
@@ -207,7 +208,7 @@ export const runAiScreening = createServerFn({ method: "POST" })
         "culture_org_score (0-100 each) based on the evidence supplied. Return ONLY JSON with keys: jd_match_score, " +
         "skillset_score, culture_role_score, culture_org_score, summary, transcript (array of {question, expected_signal}).",
       prompt: JSON.stringify(data),
-      model: MODEL,
+      model: MATCH_MODEL,
     });
     if (!result.ok) throw new Error(result.message);
     return result.data;
