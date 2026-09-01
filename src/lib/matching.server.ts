@@ -57,12 +57,34 @@ export type MatchResult = {
   model: string;
 };
 
+/**
+ * Harvest public profile links straight out of the raw CV text.
+ * Recruiter-entered fields always win; this only fills the blanks so a resume
+ * that merely *mentions* github.com/foo still gets crawled and scored.
+ */
+export function harvestProfileLinks(resumeText: string | null | undefined) {
+  const text = resumeText ?? "";
+  const pick = (re: RegExp) => {
+    const m = text.match(re);
+    return m ? `https://${m[0].replace(/^https?:\/\//i, "").replace(/[).,;]+$/, "")}` : null;
+  };
+  return {
+    githubUrl: pick(/(?:https?:\/\/)?(?:www\.)?github\.com\/[A-Za-z0-9-_.]+/i),
+    linkedinUrl: pick(/(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[A-Za-z0-9-_%]+/i),
+    xUrl: pick(/(?:https?:\/\/)?(?:www\.)?(?:x\.com|twitter\.com)\/[A-Za-z0-9-_]+/i),
+    websiteUrl: pick(
+      /(?:https?:\/\/)?(?:www\.)?[A-Za-z0-9-]+\.(?:dev|io|me|blog|substack\.com|medium\.com)(?:\/[A-Za-z0-9-_/.]*)?/i,
+    ),
+  };
+}
+
 /** Deterministic experience band score — auditable, never AI-guessed. */
 export function experienceScore(years: number, min: number, max: number) {
   if (years >= min && years <= max) return 100;
   if (years < min) return clamp(100 - (min - years) * 22);
   return clamp(100 - (years - max) * 10);
 }
+
 
 /**
  * Score one CV against one JD. Shared by the single-candidate server fn and the
@@ -103,6 +125,17 @@ export async function scoreCandidate(opts: {
   if (!ai.ok) throw new Error(ai.message);
 
   /* 2 — Social profiling: reuse cached signals when the recruiter has them. */
+  const harvested = harvestProfileLinks(candidate.resumeText);
+  const links = {
+    githubUrl: candidate.githubUrl || harvested.githubUrl,
+    linkedinUrl: candidate.linkedinUrl || harvested.linkedinUrl,
+    websiteUrl: candidate.websiteUrl || harvested.websiteUrl,
+    xUrl: candidate.xUrl || harvested.xUrl,
+  };
+  const discovered = (Object.keys(links) as (keyof typeof links)[])
+    .filter((k) => !candidate[k] && links[k])
+    .map((k) => `${k.replace("Url", "")}: ${links[k]}`);
+
   let signals: SocialSignal[] = [];
   let cached = false;
   if (opts.includeSocial) {
@@ -112,16 +145,16 @@ export async function scoreCandidate(opts: {
     } else {
       const jdSkills = [...jd.mustHave, ...jd.goodToHave];
       const settled = await Promise.all([
-        fetchGithubSignal(candidate.githubUrl ?? null, jdSkills),
+        fetchGithubSignal(links.githubUrl ?? null, jdSkills),
         fetchLinkedinSignal({
-          url: candidate.linkedinUrl ?? null,
+          url: links.linkedinUrl ?? null,
           jobTitle: jd.title,
           jdSkills,
           resumeText: candidate.resumeText ?? null,
           profileText: candidate.linkedinProfileText ?? null,
         }),
         fetchWritingSignal({
-          urls: [candidate.websiteUrl ?? "", candidate.xUrl ?? ""].filter(Boolean),
+          urls: [links.websiteUrl ?? "", links.xUrl ?? ""].filter(Boolean),
           jobTitle: jd.title,
           jdSkills,
         }),
@@ -129,6 +162,7 @@ export async function scoreCandidate(opts: {
       signals = settled.filter((s): s is SocialSignal => s !== null);
     }
   }
+
   const social = blendSocial(signals);
 
   /* 3 — Deterministic weighted roll-up. */
@@ -164,7 +198,15 @@ export async function scoreCandidate(opts: {
     rationale: ai.data.rationale,
     risk_flags: riskFlags,
     recommendation: overall >= 75 ? "select" : overall >= 60 ? "hold" : "reject",
-    social: { blended: social.score, basis: social.basis, signals, cached },
+    social: {
+      blended: social.score,
+      basis:
+        discovered.length > 0
+          ? `${social.basis} · auto-discovered from CV → ${discovered.join(", ")}`
+          : social.basis,
+      signals,
+      cached,
+    },
     contributions,
     model: MATCH_MODEL,
   };
