@@ -57,12 +57,34 @@ export type MatchResult = {
   model: string;
 };
 
+/**
+ * Harvest public profile links straight out of the raw CV text.
+ * Recruiter-entered fields always win; this only fills the blanks so a resume
+ * that merely *mentions* github.com/foo still gets crawled and scored.
+ */
+export function harvestProfileLinks(resumeText: string | null | undefined) {
+  const text = resumeText ?? "";
+  const pick = (re: RegExp) => {
+    const m = text.match(re);
+    return m ? `https://${m[0].replace(/^https?:\/\//i, "").replace(/[).,;]+$/, "")}` : null;
+  };
+  return {
+    githubUrl: pick(/(?:https?:\/\/)?(?:www\.)?github\.com\/[A-Za-z0-9-_.]+/i),
+    linkedinUrl: pick(/(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[A-Za-z0-9-_%]+/i),
+    xUrl: pick(/(?:https?:\/\/)?(?:www\.)?(?:x\.com|twitter\.com)\/[A-Za-z0-9-_]+/i),
+    websiteUrl: pick(
+      /(?:https?:\/\/)?(?:www\.)?[A-Za-z0-9-]+\.(?:dev|io|me|blog|substack\.com|medium\.com)(?:\/[A-Za-z0-9-_/.]*)?/i,
+    ),
+  };
+}
+
 /** Deterministic experience band score — auditable, never AI-guessed. */
 export function experienceScore(years: number, min: number, max: number) {
   if (years >= min && years <= max) return 100;
   if (years < min) return clamp(100 - (min - years) * 22);
   return clamp(100 - (years - max) * 10);
 }
+
 
 /**
  * Score one CV against one JD. Shared by the single-candidate server fn and the
