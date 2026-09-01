@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as InterviewsRouteImport } from './routes/interviews'
 import { Route as MatchingRouteImport } from './routes/matching'
 import { Route as CandidatesIndexRouteImport } from './routes/candidates.index'
 import { Route as CandidatesIdRouteImport } from './routes/candidates.$id'
@@ -19,6 +20,11 @@ import { Route as RequisitionsIdRouteImport } from './routes/requisitions.$id'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InterviewsRoute = InterviewsRouteImport.update({
+  id: '/interviews',
+  path: '/interviews',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MatchingRoute = MatchingRouteImport.update({
@@ -49,6 +55,7 @@ const RequisitionsIdRoute = RequisitionsIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/interviews': typeof InterviewsRoute
   '/matching': typeof MatchingRoute
   '/candidates/$id': typeof CandidatesIdRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
@@ -57,6 +64,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/interviews': typeof InterviewsRoute
   '/matching': typeof MatchingRoute
   '/candidates/$id': typeof CandidatesIdRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
@@ -66,6 +74,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/interviews': typeof InterviewsRoute
   '/matching': typeof MatchingRoute
   '/candidates/$id': typeof CandidatesIdRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
@@ -76,6 +85,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/interviews'
     | '/matching'
     | '/candidates/$id'
     | '/requisitions/$id'
@@ -84,6 +94,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/interviews'
     | '/matching'
     | '/candidates/$id'
     | '/requisitions/$id'
@@ -92,6 +103,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/interviews'
     | '/matching'
     | '/candidates/$id'
     | '/requisitions/$id'
@@ -101,6 +113,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  InterviewsRoute: typeof InterviewsRoute
   MatchingRoute: typeof MatchingRoute
   CandidatesIdRoute: typeof CandidatesIdRoute
   RequisitionsIdRoute: typeof RequisitionsIdRoute
@@ -115,6 +128,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/interviews': {
+      id: '/interviews'
+      path: '/interviews'
+      fullPath: '/interviews'
+      preLoaderRoute: typeof InterviewsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/matching': {
@@ -157,6 +177,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  InterviewsRoute: InterviewsRoute,
   MatchingRoute: MatchingRoute,
   CandidatesIdRoute: CandidatesIdRoute,
   RequisitionsIdRoute: RequisitionsIdRoute,
