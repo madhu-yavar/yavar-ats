@@ -1,0 +1,190 @@
+import { aiJson } from "./ai-gateway.server";
+import {
+  blendSocial,
+  fetchGithubSignal,
+  fetchLinkedinSignal,
+  fetchWritingSignal,
+  type SocialSignal,
+} from "./social.server";
+
+const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
+
+export const MATCH_MODEL = "google/gemini-3.7-flash";
+
+export type JdInputShape = {
+  title: string;
+  mustHave: string[];
+  goodToHave: string[];
+  responsibilities?: string | null;
+  education?: string | null;
+  experienceMin: number;
+  experienceMax: number;
+  jdText?: string | null;
+};
+
+export type CandidateInputShape = {
+  name: string;
+  skills: string[];
+  experienceYears: number;
+  education?: string | null;
+  resumeText?: string | null;
+  linkedinUrl?: string | null;
+  githubUrl?: string | null;
+  websiteUrl?: string | null;
+  xUrl?: string | null;
+  linkedinProfileText?: string | null;
+  /** Previously fetched social signals — reused instead of re-fetching. */
+  cachedSocial?: SocialSignal[] | null;
+};
+
+export type Weights = { skills: number; experience: number; education: number; social: number };
+
+export type MatchResult = {
+  skills_score: number;
+  experience_score: number;
+  education_score: number;
+  social_score: number;
+  overall_score: number;
+  weights: Weights;
+  matched_skills: string[];
+  missing_skills: string[];
+  transferable_skills: string[];
+  rationale: string;
+  risk_flags: string[];
+  recommendation: "select" | "reject" | "hold";
+  social: { blended: number; basis: string; signals: SocialSignal[]; cached: boolean };
+  contributions: { label: string; raw: number; weight: number; weighted: number }[];
+  model: string;
+};
+
+/** Deterministic experience band score — auditable, never AI-guessed. */
+export function experienceScore(years: number, min: number, max: number) {
+  if (years >= min && years <= max) return 100;
+  if (years < min) return clamp(100 - (min - years) * 22);
+  return clamp(100 - (years - max) * 10);
+}
+
+/**
+ * Score one CV against one JD. Shared by the single-candidate server fn and the
+ * bulk pipeline run so both produce byte-identical, auditable numbers.
+ */
+export async function scoreCandidate(opts: {
+  jd: JdInputShape;
+  candidate: CandidateInputShape;
+  weights: Weights;
+  includeSocial: boolean;
+}): Promise<MatchResult> {
+  const { jd, candidate, weights } = opts;
+
+  /* 1 — AI semantic assessment of skills + education (with evidence). */
+  const ai = await aiJson<{
+    skills_score: number;
+    education_score: number;
+    matched_skills: string[];
+    missing_skills: string[];
+    transferable_skills: string[];
+    risk_flags: string[];
+    rationale: string;
+  }>({
+    system:
+      "You are a rigorous technical recruiter mapping a CV against a job description. " +
+      "Judge semantic equivalence (e.g. 'EKS' evidences 'Kubernetes'), require evidence from the resume text, " +
+      "and never credit a must-have skill that is only listed but never demonstrated — flag that instead. " +
+      "skills_score weights must-have coverage far above good-to-have. " +
+      "education_score reflects fit against the stated qualification requirement (return 70 if no requirement is stated). " +
+      "Return ONLY JSON with keys: skills_score (0-100), education_score (0-100), matched_skills, missing_skills, " +
+      "transferable_skills, risk_flags (short strings), rationale (3-4 sentences, cite evidence).",
+    prompt: JSON.stringify({
+      job_description: jd,
+      candidate: { ...candidate, cachedSocial: undefined },
+    }),
+    model: MATCH_MODEL,
+  });
+  if (!ai.ok) throw new Error(ai.message);
+
+  /* 2 — Social profiling: reuse cached signals when the recruiter has them. */
+  let signals: SocialSignal[] = [];
+  let cached = false;
+  if (opts.includeSocial) {
+    if (candidate.cachedSocial?.length) {
+      signals = candidate.cachedSocial;
+      cached = true;
+    } else {
+      const jdSkills = [...jd.mustHave, ...jd.goodToHave];
+      const settled = await Promise.all([
+        fetchGithubSignal(candidate.githubUrl ?? null, jdSkills),
+        fetchLinkedinSignal({
+          url: candidate.linkedinUrl ?? null,
+          jobTitle: jd.title,
+          jdSkills,
+          resumeText: candidate.resumeText ?? null,
+          profileText: candidate.linkedinProfileText ?? null,
+        }),
+        fetchWritingSignal({
+          urls: [candidate.websiteUrl ?? "", candidate.xUrl ?? ""].filter(Boolean),
+          jobTitle: jd.title,
+          jdSkills,
+        }),
+      ]);
+      signals = settled.filter((s): s is SocialSignal => s !== null);
+    }
+  }
+  const social = blendSocial(signals);
+
+  /* 3 — Deterministic weighted roll-up. */
+  const skills = clamp(ai.data.skills_score);
+  const education = clamp(ai.data.education_score);
+  const experience = experienceScore(candidate.experienceYears, jd.experienceMin, jd.experienceMax);
+
+  const parts = [
+    { label: "Skills", raw: skills, weight: weights.skills },
+    { label: "Experience", raw: experience, weight: weights.experience },
+    { label: "Education", raw: education, weight: weights.education },
+    { label: "Social profile", raw: social.score, weight: weights.social },
+  ];
+  const totalWeight = parts.reduce((s, p) => s + p.weight, 0) || 100;
+  const contributions = parts.map((p) => ({ ...p, weighted: Math.round((p.raw * p.weight) / totalWeight) }));
+  const overall = clamp(contributions.reduce((s, p) => s + p.weighted, 0));
+
+  const riskFlags = [...(ai.data.risk_flags ?? [])];
+  if (candidate.experienceYears < jd.experienceMin) riskFlags.push("Below requisition experience band");
+  if (opts.includeSocial && !signals.some((s) => s.status === "ok"))
+    riskFlags.push("No verifiable public profile signal — social score defaulted to 0");
+
+  return {
+    skills_score: skills,
+    experience_score: experience,
+    education_score: education,
+    social_score: social.score,
+    overall_score: overall,
+    weights,
+    matched_skills: ai.data.matched_skills ?? [],
+    missing_skills: ai.data.missing_skills ?? [],
+    transferable_skills: ai.data.transferable_skills ?? [],
+    rationale: ai.data.rationale,
+    risk_flags: riskFlags,
+    recommendation: overall >= 75 ? "select" : overall >= 60 ? "hold" : "reject",
+    social: { blended: social.score, basis: social.basis, signals, cached },
+    contributions,
+    model: MATCH_MODEL,
+  };
+}
+
+/** Run an async mapper over a list with a hard concurrency ceiling. */
+export async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
+    while (true) {
+      const i = cursor++;
+      if (i >= items.length) return;
+      out[i] = await fn(items[i]!, i);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
