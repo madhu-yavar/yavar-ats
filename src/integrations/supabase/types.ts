@@ -109,6 +109,8 @@ export type Database = {
           email: string
           expected_ctc: number | null
           experience_years: number
+          external_id: string | null
+          external_provider: string | null
           full_name: string
           github_url: string | null
           id: string
@@ -130,6 +132,8 @@ export type Database = {
           email: string
           expected_ctc?: number | null
           experience_years?: number
+          external_id?: string | null
+          external_provider?: string | null
           full_name: string
           github_url?: string | null
           id?: string
@@ -151,6 +155,8 @@ export type Database = {
           email?: string
           expected_ctc?: number | null
           experience_years?: number
+          external_id?: string | null
+          external_provider?: string | null
           full_name?: string
           github_url?: string | null
           id?: string
@@ -236,6 +242,32 @@ export type Database = {
             columns: ["application_id"]
             isOneToOne: false
             referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integration_credentials: {
+        Row: {
+          integration_id: string
+          secrets: Json
+          updated_at: string
+        }
+        Insert: {
+          integration_id: string
+          secrets?: Json
+          updated_at?: string
+        }
+        Update: {
+          integration_id?: string
+          secrets?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_credentials_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: true
+            referencedRelation: "source_integrations"
             referencedColumns: ["id"]
           },
         ]
@@ -587,6 +619,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      source_integrations: {
+        Row: {
+          config: Json
+          created_at: string
+          credential_fields: string[]
+          enabled: boolean
+          has_credentials: boolean
+          id: string
+          label: string
+          last_test_message: string | null
+          last_test_status: string
+          last_tested_at: string | null
+          provider: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          credential_fields?: string[]
+          enabled?: boolean
+          has_credentials?: boolean
+          id?: string
+          label: string
+          last_test_message?: string | null
+          last_test_status?: string
+          last_tested_at?: string | null
+          provider: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          credential_fields?: string[]
+          enabled?: boolean
+          has_credentials?: boolean
+          id?: string
+          label?: string
+          last_test_message?: string | null
+          last_test_status?: string
+          last_tested_at?: string | null
+          provider?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {

@@ -6,6 +6,7 @@ import {
   FileSignature,
   LayoutDashboard,
   LogOut,
+  Plug,
   Target,
   Users,
 } from "lucide-react";
@@ -21,7 +22,9 @@ const NAV = [
   { to: "/interviews", label: "Interviews", icon: CalendarClock },
   { to: "/offers", label: "Offers", icon: FileSignature },
   { to: "/reports", label: "Reports", icon: BarChart3 },
+  { to: "/integrations", label: "Integrations", icon: Plug },
 ] as const;
+
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (

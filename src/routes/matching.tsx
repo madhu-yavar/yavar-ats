@@ -16,7 +16,8 @@ import {
   requisitionsQuery,
   socialProfilesQuery,
 } from "@/lib/data";
-import { matchJdToCv, type MatchResult } from "@/lib/matching.functions";
+import { matchJdToCv, matchPipeline, type MatchResult } from "@/lib/matching.functions";
+import { importCandidates } from "@/lib/integrations.functions";
 import { EmptyState, PageHeader, ScoreBar, ScoreChip, SkillPills } from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -47,6 +48,9 @@ export const Route = createFileRoute("/matching")({
 
 type Weights = { skills: number; experience: number; education: number; social: number };
 
+/** Social signals are re-used for this many days instead of being re-fetched. */
+const SOCIAL_TTL_DAYS = 14;
+
 function Matching() {
   const { req } = Route.useSearch();
   const navigate = Route.useNavigate();
@@ -58,6 +62,20 @@ function Matching() {
   const scores = useQuery(matchScoresQuery);
   const socials = useQuery(socialProfilesQuery);
   const runMatch = useServerFn(matchJdToCv);
+  const runPipeline = useServerFn(matchPipeline);
+  const runImport = useServerFn(importCandidates);
+  const boards = useQuery({
+    queryKey: ["source_integrations", "enabled"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("source_integrations")
+        .select("provider, label, enabled")
+        .eq("enabled", true)
+        .in("provider", ["naukri", "indeed", "linkedin"]);
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+  });
 
   const requisitions = reqs.data ?? [];
   const activeId = req ?? requisitions[0]?.id ?? "";
@@ -71,6 +89,10 @@ function Matching() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, MatchResult>>({});
   const [overrideReason, setOverrideReason] = useState("");
+  const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
+  const [rescoreAll, setRescoreAll] = useState(false);
+  const [board, setBoard] = useState("");
+  const [importing, setImporting] = useState(false);
 
   const effWeights: Weights = weights ?? {
     skills: requisition?.weight_skills ?? 50,
@@ -186,11 +208,164 @@ function Matching() {
     }
   }
 
-  async function scoreAll() {
-    for (const row of pipeline) {
-      if (!row.live) await score(row.app.id);
+  async function importApplicants() {
+    if (!board || !requisition) return;
+    setImporting(true);
+    try {
+      const res = await runImport({
+        data: { provider: board as "naukri" | "indeed" | "linkedin", requisitionId: requisition.id, limit: 10 },
+      });
+      toast.success(`${res.imported} of ${res.found} candidates imported from ${board}.`);
+      qc.invalidateQueries({ queryKey: ["candidates"] });
+      qc.invalidateQueries({ queryKey: ["applications"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setImporting(false);
     }
   }
+
+  /** Reuse a social signal we already fetched for this candidate if it is fresh. */
+  function cachedSocialFor(candidateId: string) {
+    const ttl = SOCIAL_TTL_DAYS * 86_400_000;
+    return (socials.data ?? [])
+      .filter(
+        (s) =>
+          s.candidate_id === candidateId &&
+          s.status === "ok" &&
+          Date.now() - new Date(s.fetched_at).getTime() < ttl,
+      )
+      .map((s) => ({
+        provider: s.provider,
+        profile_url: s.profile_url,
+        handle: s.handle,
+        score: s.score,
+        signals: s.signals,
+        rationale: s.rationale,
+        status: s.status,
+      }));
+  }
+
+  async function persistResult(applicationId: string, candidateId: string, stage: string, result: MatchResult) {
+    const { error } = await supabase.from("match_scores").insert({
+      application_id: applicationId,
+      skills_score: result.skills_score,
+      experience_score: result.experience_score,
+      education_score: result.education_score,
+      social_score: result.social_score,
+      overall_score: result.overall_score,
+      weights: result.weights as never,
+      matched_skills: result.matched_skills,
+      missing_skills: result.missing_skills,
+      rationale: result.rationale,
+      risk_flags: result.risk_flags,
+      recommendation: result.recommendation,
+      model: result.model,
+    });
+    if (error) throw new Error(error.message);
+
+    if (!result.social.cached) {
+      for (const s of result.social.signals) {
+        await supabase.from("social_profiles").upsert(
+          {
+            candidate_id: candidateId,
+            provider: s.provider,
+            profile_url: s.profile_url,
+            handle: s.handle,
+            score: s.score,
+            signals: s.signals as never,
+            rationale: s.rationale,
+            status: s.status,
+            fetched_at: new Date().toISOString(),
+          },
+          { onConflict: "candidate_id,provider" },
+        );
+      }
+    }
+
+    if (result.overall_score >= 75 && stage === "applied") {
+      await supabase.from("applications").update({ stage: "shortlisted" }).eq("id", applicationId);
+    }
+  }
+
+  /** One JD vs many CVs: bounded concurrency, cached social signals, per-row error isolation. */
+  async function scoreAll() {
+    if (!requisition) return;
+    if (weightTotal !== 100) {
+      toast.error("Weights must total 100 before scoring");
+      return;
+    }
+    const targets = pipeline.filter(
+      (r) => r.candidate && (rescoreAll || (!r.live && !r.stored)),
+    );
+    if (!targets.length) {
+      toast.info("Every applicant already has a score — switch on re-score to run them again.");
+      return;
+    }
+
+    setBulk({ done: 0, total: targets.length });
+    try {
+      const rows = await runPipeline({
+        data: {
+          jd: {
+            title: requisition.title,
+            mustHave: jd?.must_have?.length ? jd.must_have : requisition.must_have_skills,
+            goodToHave: jd?.good_to_have?.length ? jd.good_to_have : requisition.good_to_have_skills,
+            responsibilities: jd?.responsibilities ?? requisition.responsibilities,
+            education: requisition.education_requirement,
+            experienceMin: requisition.experience_min,
+            experienceMax: requisition.experience_max,
+            jdText: jd?.full_text ?? null,
+          },
+          weights: effWeights,
+          includeSocial,
+          concurrency: 3,
+          rows: targets.map((r) => ({
+            applicationId: r.app.id,
+            candidate: {
+              name: r.candidate!.full_name,
+              skills: r.candidate!.skills,
+              experienceYears: Number(r.candidate!.experience_years),
+              education: r.candidate!.education,
+              resumeText: r.candidate!.resume_text,
+              linkedinUrl: r.candidate!.linkedin_url,
+              githubUrl: r.candidate!.github_url,
+              websiteUrl: r.candidate!.website_url,
+              xUrl: r.candidate!.x_url,
+              cachedSocial: includeSocial ? cachedSocialFor(r.candidate!.id) : [],
+            },
+          })),
+        },
+      });
+
+      let failures = 0;
+      for (const row of rows) {
+        const target = targets.find((t) => t.app.id === row.applicationId);
+        if (!row.ok || !target?.candidate) {
+          failures += 1;
+          continue;
+        }
+        setResults((prev) => ({ ...prev, [row.applicationId]: row.result }));
+        try {
+          await persistResult(row.applicationId, target.candidate.id, target.app.stage, row.result);
+        } catch {
+          failures += 1;
+        }
+        setBulk((b) => (b ? { ...b, done: b.done + 1 } : b));
+      }
+
+      qc.invalidateQueries({ queryKey: ["match_scores"] });
+      qc.invalidateQueries({ queryKey: ["social_profiles"] });
+      qc.invalidateQueries({ queryKey: ["applications"] });
+      if (failures) toast.warning(`Scored ${rows.length - failures} of ${rows.length} — ${failures} failed.`);
+      else toast.success(`Scored ${rows.length} candidate${rows.length === 1 ? "" : "s"} against this JD.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Pipeline run failed");
+    } finally {
+      setBulk(null);
+    }
+  }
+
 
   async function saveOverride(applicationId: string, verdict: "select" | "reject" | "hold") {
     const stored = scoreMap.get(applicationId);
@@ -215,9 +390,16 @@ function Matching() {
         title="JD ↔ CV matching engine"
         description="Every score is a weighted roll-up of semantic skill mapping, a deterministic experience band, education fit and live social profiling — with the evidence behind each number."
         actions={
-          <Button onClick={scoreAll} disabled={Boolean(running) || pipeline.length === 0}>
-            <Target className="size-4" /> Score whole pipeline
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Switch checked={rescoreAll} onCheckedChange={setRescoreAll} />
+              Re-score already scored
+            </label>
+            <Button onClick={scoreAll} disabled={Boolean(running) || Boolean(bulk) || pipeline.length === 0}>
+              {bulk ? <Loader2 className="size-4 animate-spin" /> : <Target className="size-4" />}
+              {bulk ? `Scoring ${bulk.done}/${bulk.total}` : "Score whole pipeline"}
+            </Button>
+          </div>
         }
       />
 
@@ -256,6 +438,42 @@ function Matching() {
                 </p>
               </div>
             ) : null}
+          </section>
+
+          <section className="panel p-5">
+            <h2 className="font-semibold">Source applicants</h2>
+            <p className="text-xs text-muted-foreground">
+              Pull candidates from a job board you configured on the Integrations page.
+            </p>
+            {(boards.data ?? []).length === 0 ? (
+              <p className="mt-3 text-xs text-muted-foreground">
+                No searchable board is connected yet — configure LinkedIn, Naukri or Indeed under Integrations.
+              </p>
+            ) : (
+              <div className="mt-3 space-y-2">
+                <Select value={board} onValueChange={setBoard}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose board" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(boards.data ?? []).map((b) => (
+                      <SelectItem key={b.provider} value={b.provider}>
+                        {b.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={importApplicants}
+                  disabled={!board || importing}
+                >
+                  {importing ? <Loader2 className="size-4 animate-spin" /> : null} Import 10 matching CVs
+                </Button>
+              </div>
+            )}
           </section>
 
           <section className="panel p-5">
