@@ -17,6 +17,7 @@ import {
   socialProfilesQuery,
 } from "@/lib/data";
 import { matchJdToCv, matchPipeline, type MatchResult } from "@/lib/matching.functions";
+import { importCandidates } from "@/lib/integrations.functions";
 import { EmptyState, PageHeader, ScoreBar, ScoreChip, SkillPills } from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -62,6 +63,19 @@ function Matching() {
   const socials = useQuery(socialProfilesQuery);
   const runMatch = useServerFn(matchJdToCv);
   const runPipeline = useServerFn(matchPipeline);
+  const runImport = useServerFn(importCandidates);
+  const boards = useQuery({
+    queryKey: ["source_integrations", "enabled"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("source_integrations")
+        .select("provider, label, enabled")
+        .eq("enabled", true)
+        .in("provider", ["naukri", "indeed", "linkedin"]);
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+  });
 
   const requisitions = reqs.data ?? [];
   const activeId = req ?? requisitions[0]?.id ?? "";
@@ -77,6 +91,8 @@ function Matching() {
   const [overrideReason, setOverrideReason] = useState("");
   const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
   const [rescoreAll, setRescoreAll] = useState(false);
+  const [board, setBoard] = useState("");
+  const [importing, setImporting] = useState(false);
 
   const effWeights: Weights = weights ?? {
     skills: requisition?.weight_skills ?? 50,
@@ -189,6 +205,23 @@ function Matching() {
       toast.error(e instanceof Error ? e.message : "Matching failed");
     } finally {
       setRunning(null);
+    }
+  }
+
+  async function importApplicants() {
+    if (!board || !requisition) return;
+    setImporting(true);
+    try {
+      const res = await runImport({
+        data: { provider: board as "naukri" | "indeed" | "linkedin", requisitionId: requisition.id, limit: 10 },
+      });
+      toast.success(`${res.imported} of ${res.found} candidates imported from ${board}.`);
+      qc.invalidateQueries({ queryKey: ["candidates"] });
+      qc.invalidateQueries({ queryKey: ["applications"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -405,6 +438,42 @@ function Matching() {
                 </p>
               </div>
             ) : null}
+          </section>
+
+          <section className="panel p-5">
+            <h2 className="font-semibold">Source applicants</h2>
+            <p className="text-xs text-muted-foreground">
+              Pull candidates from a job board you configured on the Integrations page.
+            </p>
+            {(boards.data ?? []).length === 0 ? (
+              <p className="mt-3 text-xs text-muted-foreground">
+                No searchable board is connected yet — configure LinkedIn, Naukri or Indeed under Integrations.
+              </p>
+            ) : (
+              <div className="mt-3 space-y-2">
+                <Select value={board} onValueChange={setBoard}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose board" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(boards.data ?? []).map((b) => (
+                      <SelectItem key={b.provider} value={b.provider}>
+                        {b.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={importApplicants}
+                  disabled={!board || importing}
+                >
+                  {importing ? <Loader2 className="size-4 animate-spin" /> : null} Import 10 matching CVs
+                </Button>
+              </div>
+            )}
           </section>
 
           <section className="panel p-5">
