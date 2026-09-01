@@ -125,6 +125,17 @@ export async function scoreCandidate(opts: {
   if (!ai.ok) throw new Error(ai.message);
 
   /* 2 — Social profiling: reuse cached signals when the recruiter has them. */
+  const harvested = harvestProfileLinks(candidate.resumeText);
+  const links = {
+    githubUrl: candidate.githubUrl || harvested.githubUrl,
+    linkedinUrl: candidate.linkedinUrl || harvested.linkedinUrl,
+    websiteUrl: candidate.websiteUrl || harvested.websiteUrl,
+    xUrl: candidate.xUrl || harvested.xUrl,
+  };
+  const discovered = (Object.keys(links) as (keyof typeof links)[])
+    .filter((k) => !candidate[k] && links[k])
+    .map((k) => `${k.replace("Url", "")}: ${links[k]}`);
+
   let signals: SocialSignal[] = [];
   let cached = false;
   if (opts.includeSocial) {
@@ -134,16 +145,16 @@ export async function scoreCandidate(opts: {
     } else {
       const jdSkills = [...jd.mustHave, ...jd.goodToHave];
       const settled = await Promise.all([
-        fetchGithubSignal(candidate.githubUrl ?? null, jdSkills),
+        fetchGithubSignal(links.githubUrl ?? null, jdSkills),
         fetchLinkedinSignal({
-          url: candidate.linkedinUrl ?? null,
+          url: links.linkedinUrl ?? null,
           jobTitle: jd.title,
           jdSkills,
           resumeText: candidate.resumeText ?? null,
           profileText: candidate.linkedinProfileText ?? null,
         }),
         fetchWritingSignal({
-          urls: [candidate.websiteUrl ?? "", candidate.xUrl ?? ""].filter(Boolean),
+          urls: [links.websiteUrl ?? "", links.xUrl ?? ""].filter(Boolean),
           jobTitle: jd.title,
           jdSkills,
         }),
@@ -151,6 +162,7 @@ export async function scoreCandidate(opts: {
       signals = settled.filter((s): s is SocialSignal => s !== null);
     }
   }
+
   const social = blendSocial(signals);
 
   /* 3 — Deterministic weighted roll-up. */
