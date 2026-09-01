@@ -16,7 +16,7 @@ import {
   requisitionsQuery,
   socialProfilesQuery,
 } from "@/lib/data";
-import { matchJdToCv, type MatchResult } from "@/lib/matching.functions";
+import { matchJdToCv, matchPipeline, type MatchResult } from "@/lib/matching.functions";
 import { EmptyState, PageHeader, ScoreBar, ScoreChip, SkillPills } from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -47,6 +47,9 @@ export const Route = createFileRoute("/matching")({
 
 type Weights = { skills: number; experience: number; education: number; social: number };
 
+/** Social signals are re-used for this many days instead of being re-fetched. */
+const SOCIAL_TTL_DAYS = 14;
+
 function Matching() {
   const { req } = Route.useSearch();
   const navigate = Route.useNavigate();
@@ -58,6 +61,7 @@ function Matching() {
   const scores = useQuery(matchScoresQuery);
   const socials = useQuery(socialProfilesQuery);
   const runMatch = useServerFn(matchJdToCv);
+  const runPipeline = useServerFn(matchPipeline);
 
   const requisitions = reqs.data ?? [];
   const activeId = req ?? requisitions[0]?.id ?? "";
@@ -71,6 +75,8 @@ function Matching() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, MatchResult>>({});
   const [overrideReason, setOverrideReason] = useState("");
+  const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
+  const [rescoreAll, setRescoreAll] = useState(false);
 
   const effWeights: Weights = weights ?? {
     skills: requisition?.weight_skills ?? 50,
@@ -351,9 +357,16 @@ function Matching() {
         title="JD ↔ CV matching engine"
         description="Every score is a weighted roll-up of semantic skill mapping, a deterministic experience band, education fit and live social profiling — with the evidence behind each number."
         actions={
-          <Button onClick={scoreAll} disabled={Boolean(running) || pipeline.length === 0}>
-            <Target className="size-4" /> Score whole pipeline
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Switch checked={rescoreAll} onCheckedChange={setRescoreAll} />
+              Re-score already scored
+            </label>
+            <Button onClick={scoreAll} disabled={Boolean(running) || Boolean(bulk) || pipeline.length === 0}>
+              {bulk ? <Loader2 className="size-4 animate-spin" /> : <Target className="size-4" />}
+              {bulk ? `Scoring ${bulk.done}/${bulk.total}` : "Score whole pipeline"}
+            </Button>
+          </div>
         }
       />
 
