@@ -3,14 +3,15 @@ import { z } from "zod";
 
 import { aiJson } from "./ai-gateway.server";
 import {
-  blendSocial,
-  fetchGithubSignal,
-  fetchLinkedinSignal,
-  fetchWritingSignal,
-  type SocialSignal,
-} from "./social.server";
+  MATCH_MODEL,
+  mapWithConcurrency,
+  scoreCandidate,
+  type MatchResult,
+} from "./matching.server";
+import { type SocialSignal } from "./social.server";
 
-const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
+export type { MatchResult } from "./matching.server";
+
 
 /* ------------------------------------------------------------------ JD gen */
 
