@@ -186,11 +186,147 @@ function Matching() {
     }
   }
 
-  async function scoreAll() {
-    for (const row of pipeline) {
-      if (!row.live) await score(row.app.id);
+  /** Reuse a social signal we already fetched for this candidate if it is fresh. */
+  function cachedSocialFor(candidateId: string) {
+    const ttl = SOCIAL_TTL_DAYS * 86_400_000;
+    return (socials.data ?? [])
+      .filter(
+        (s) =>
+          s.candidate_id === candidateId &&
+          s.status === "ok" &&
+          Date.now() - new Date(s.fetched_at).getTime() < ttl,
+      )
+      .map((s) => ({
+        provider: s.provider,
+        profile_url: s.profile_url,
+        handle: s.handle,
+        score: s.score,
+        signals: s.signals,
+        rationale: s.rationale,
+        status: s.status,
+      }));
+  }
+
+  async function persistResult(applicationId: string, candidateId: string, stage: string, result: MatchResult) {
+    const { error } = await supabase.from("match_scores").insert({
+      application_id: applicationId,
+      skills_score: result.skills_score,
+      experience_score: result.experience_score,
+      education_score: result.education_score,
+      social_score: result.social_score,
+      overall_score: result.overall_score,
+      weights: result.weights as never,
+      matched_skills: result.matched_skills,
+      missing_skills: result.missing_skills,
+      rationale: result.rationale,
+      risk_flags: result.risk_flags,
+      recommendation: result.recommendation,
+      model: result.model,
+    });
+    if (error) throw new Error(error.message);
+
+    if (!result.social.cached) {
+      for (const s of result.social.signals) {
+        await supabase.from("social_profiles").upsert(
+          {
+            candidate_id: candidateId,
+            provider: s.provider,
+            profile_url: s.profile_url,
+            handle: s.handle,
+            score: s.score,
+            signals: s.signals as never,
+            rationale: s.rationale,
+            status: s.status,
+            fetched_at: new Date().toISOString(),
+          },
+          { onConflict: "candidate_id,provider" },
+        );
+      }
+    }
+
+    if (result.overall_score >= 75 && stage === "applied") {
+      await supabase.from("applications").update({ stage: "shortlisted" }).eq("id", applicationId);
     }
   }
+
+  /** One JD vs many CVs: bounded concurrency, cached social signals, per-row error isolation. */
+  async function scoreAll() {
+    if (!requisition) return;
+    if (weightTotal !== 100) {
+      toast.error("Weights must total 100 before scoring");
+      return;
+    }
+    const targets = pipeline.filter(
+      (r) => r.candidate && (rescoreAll || (!r.live && !r.stored)),
+    );
+    if (!targets.length) {
+      toast.info("Every applicant already has a score — switch on re-score to run them again.");
+      return;
+    }
+
+    setBulk({ done: 0, total: targets.length });
+    try {
+      const rows = await runPipeline({
+        data: {
+          jd: {
+            title: requisition.title,
+            mustHave: jd?.must_have?.length ? jd.must_have : requisition.must_have_skills,
+            goodToHave: jd?.good_to_have?.length ? jd.good_to_have : requisition.good_to_have_skills,
+            responsibilities: jd?.responsibilities ?? requisition.responsibilities,
+            education: requisition.education_requirement,
+            experienceMin: requisition.experience_min,
+            experienceMax: requisition.experience_max,
+            jdText: jd?.full_text ?? null,
+          },
+          weights: effWeights,
+          includeSocial,
+          concurrency: 3,
+          rows: targets.map((r) => ({
+            applicationId: r.app.id,
+            candidate: {
+              name: r.candidate!.full_name,
+              skills: r.candidate!.skills,
+              experienceYears: Number(r.candidate!.experience_years),
+              education: r.candidate!.education,
+              resumeText: r.candidate!.resume_text,
+              linkedinUrl: r.candidate!.linkedin_url,
+              githubUrl: r.candidate!.github_url,
+              websiteUrl: r.candidate!.website_url,
+              xUrl: r.candidate!.x_url,
+              cachedSocial: includeSocial ? cachedSocialFor(r.candidate!.id) : [],
+            },
+          })),
+        },
+      });
+
+      let failures = 0;
+      for (const row of rows) {
+        const target = targets.find((t) => t.app.id === row.applicationId);
+        if (!row.ok || !target?.candidate) {
+          failures += 1;
+          continue;
+        }
+        setResults((prev) => ({ ...prev, [row.applicationId]: row.result }));
+        try {
+          await persistResult(row.applicationId, target.candidate.id, target.app.stage, row.result);
+        } catch {
+          failures += 1;
+        }
+        setBulk((b) => (b ? { ...b, done: b.done + 1 } : b));
+      }
+
+      qc.invalidateQueries({ queryKey: ["match_scores"] });
+      qc.invalidateQueries({ queryKey: ["social_profiles"] });
+      qc.invalidateQueries({ queryKey: ["applications"] });
+      if (failures) toast.warning(`Scored ${rows.length - failures} of ${rows.length} — ${failures} failed.`);
+      else toast.success(`Scored ${rows.length} candidate${rows.length === 1 ? "" : "s"} against this JD.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Pipeline run failed");
+    } finally {
+      setBulk(null);
+    }
+  }
+
 
   async function saveOverride(applicationId: string, verdict: "select" | "reject" | "hold") {
     const stored = scoreMap.get(applicationId);
