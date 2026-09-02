@@ -367,17 +367,55 @@ function RequisitionDetail() {
                   />
                 </div>
               ))}
-              <p
-                className={
-                  Object.values(weights).reduce((a, b) => a + b, 0) === 100
-                    ? "num text-xs text-muted-foreground"
-                    : "num text-xs text-destructive"
-                }
-              >
-                Total {Object.values(weights).reduce((a, b) => a + b, 0)} / 100
-              </p>
+              <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+                <p className={weightTotal === 100 ? "num text-xs text-muted-foreground" : "num text-xs text-destructive"}>
+                  Total {weightTotal} / 100
+                  {weightTotal !== 100 ? " — rebalance before scoring" : ""}
+                </p>
+                {weightTotal !== 100 && (
+                  <Button size="sm" variant="outline" onClick={() => saveWeights(balanceWeights(weights))}>
+                    Balance to 100
+                  </Button>
+                )}
+              </div>
             </div>
           </section>
+
+          <section className="panel p-5">
+            <h2 className="font-semibold">Internal job posting (IJP)</h2>
+            <p className="text-xs text-muted-foreground">
+              Publish an approved requisition to employees first. Internal applicants are scored against the same JD.
+            </p>
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <div className="text-sm">
+                {r.status === "approved"
+                  ? r.ijp_enabled
+                    ? "Live on the internal job board"
+                    : "Not published internally"
+                  : "Available once the requisition is approved"}
+              </div>
+              <Switch
+                checked={r.ijp_enabled}
+                disabled={r.status !== "approved"}
+                onCheckedChange={toggleIjp}
+              />
+            </div>
+            {r.ijp_enabled && (
+              <div className="mt-4">
+                <Label className="mb-1.5 block text-xs text-muted-foreground">Note for employees</Label>
+                <Textarea
+                  rows={3}
+                  defaultValue={r.ijp_notes ?? ""}
+                  onBlur={(e) => saveIjpNotes(e.target.value)}
+                  placeholder="Eligibility, minimum tenure, manager endorsement…"
+                />
+                <Button asChild size="sm" variant="outline" className="mt-3">
+                  <Link to="/ijp">Open internal job board</Link>
+                </Button>
+              </div>
+            )}
+          </section>
+
 
           <section className="panel p-5">
             <h2 className="font-semibold">Approval trail</h2>
