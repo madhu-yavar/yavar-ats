@@ -206,6 +206,8 @@ export async function scoreCandidate(opts: {
       cached,
     },
     contributions,
+    model: ai.model,
+
   };
 }
 
