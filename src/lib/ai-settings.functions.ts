@@ -80,16 +80,18 @@ export const testAiModel = createServerFn({ method: "POST" })
       ? { status: "ok", message: `${cfg.provider} · ${cfg.model} responded in ${Date.now() - started}ms.` }
       : { status: "failed", message: res.message };
 
+    const stamp = {
+      last_test_status: outcome.status,
+      last_test_message: outcome.message,
+      last_tested_at: new Date().toISOString(),
+    };
     const { data: existing } = await context.supabase.from("ai_settings").select("id").limit(1).maybeSingle();
     if (existing) {
+      await context.supabase.from("ai_settings").update(stamp).eq("id", existing.id);
+    } else {
       await context.supabase
         .from("ai_settings")
-        .update({
-          last_test_status: outcome.status,
-          last_test_message: outcome.message,
-          last_tested_at: new Date().toISOString(),
-        })
-        .eq("id", existing.id);
+        .insert({ singleton: true, provider: cfg.provider, model: cfg.model, ...stamp });
     }
     return outcome;
   });
