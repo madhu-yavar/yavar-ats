@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, Github, Linkedin, RefreshCw, ShieldCheck, Sparkles, Upload } from "lucide-react";
 
@@ -22,6 +22,8 @@ import { verifyCandidates } from "@/lib/verification.functions";
 import { intakeCvs, type IntakeStatus } from "@/lib/cv-intake";
 import { normalizeExternalUrl } from "@/lib/external-links";
 import { canonical, nextAction, stalledDays, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
+import { computeCareerMetrics, type EmploymentRow } from "@/lib/career";
+
 
 import { EmptyState, PageHeader, ScoreChip, StageBadge } from "@/components/ats";
 import { StageMover } from "@/components/StageMover";
@@ -74,7 +76,9 @@ const SAVED_VIEWS = [
   { id: "unpooled", label: "Not in any pipeline" },
   { id: "stalled", label: "Stalled" },
   { id: "flagged", label: "Authenticity flags" },
+  { id: "incomplete", label: "Incomplete parsing" },
 ] as const;
+
 
 type ViewId = (typeof SAVED_VIEWS)[number]["id"];
 
@@ -86,6 +90,37 @@ const VIEW_STAGES: Partial<Record<ViewId, Stage[]>> = {
   closed: ["rejected", "withdrawn", "offer_declined", "no_show"],
   reserve: ["reserve", "on_hold"],
 };
+
+const EXP_BANDS = [
+  { id: "all", label: "Any experience" },
+  { id: "0-2", label: "0–2 yrs" },
+  { id: "3-5", label: "3–5 yrs" },
+  { id: "6-9", label: "6–9 yrs" },
+  { id: "10-14", label: "10–14 yrs" },
+  { id: "15-60", label: "15+ yrs" },
+];
+
+/** What the CV parser could not fill in — surfaced so nobody schedules blind. */
+function gaps(c: Candidate) {
+  const out: string[] = [];
+  if (!c.email?.trim()) out.push("email");
+  if (!c.phone?.trim()) out.push("phone");
+  if (!c.location?.trim()) out.push("location");
+  if (!c.skills?.length) out.push("skills");
+  if (!Number(c.experience_years)) out.push("experience");
+  if (!c.education?.trim()) out.push("education");
+  if (!c.current_employer?.trim()) out.push("employer");
+  if (!c.resume_text?.trim()) out.push("resume text");
+  if (!(Array.isArray(c.employment_history) ? c.employment_history.length : 0)) out.push("work history");
+  return out;
+}
+
+function money(v: number | null) {
+  if (v === null || v === undefined) return "—";
+  return v >= 100000 ? `${(v / 100000).toFixed(1)}L` : v.toLocaleString();
+}
+
+
 
 function Candidates() {
   const qc = useQueryClient();
@@ -102,6 +137,9 @@ function Candidates() {
   const [sourceFilter, setSourceFilter] = useState("all");
   const [reqFilter, setReqFilter] = useState("all");
   const [minScore, setMinScore] = useState("0");
+  const [expBand, setExpBand] = useState("all");
+  const [expanded, setExpanded] = useState<string | null>(null);
+
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [moverIds, setMoverIds] = useState<string[] | null>(null);
   const [moverStage, setMoverStage] = useState<Stage | undefined>(undefined);
@@ -239,6 +277,9 @@ function Candidates() {
         const hit =
           c.full_name.toLowerCase().includes(t) ||
           c.email.toLowerCase().includes(t) ||
+          (c.phone ?? "").toLowerCase().includes(t) ||
+          (c.current_employer ?? "").toLowerCase().includes(t) ||
+          (c.education ?? "").toLowerCase().includes(t) ||
           (c.location ?? "").toLowerCase().includes(t) ||
           c.skills.some((s) => s.toLowerCase().includes(t));
         if (!hit) return false;
@@ -246,19 +287,26 @@ function Candidates() {
       if (sourceFilter !== "all" && c.source !== sourceFilter) return false;
       if (reqFilter !== "all" && !r.apps.some((a) => a.requisition_id === reqFilter)) return false;
       if (floor > 0 && (r.score ?? 0) < floor) return false;
+      if (expBand !== "all") {
+        const y = Number(c.experience_years) || 0;
+        const [lo, hi] = expBand.split("-").map(Number) as [number, number];
+        if (y < lo || y > hi) return false;
+      }
 
       const stages = VIEW_STAGES[view];
       if (stages) return r.stage ? stages.includes(canonical(r.stage)) : false;
       if (view === "new") return new Date(c.created_at).getTime() >= weekAgo;
       if (view === "unpooled") return r.apps.length === 0;
       if (view === "stalled") return r.stalled !== null;
+      if (view === "incomplete") return gaps(c).length > 0;
       if (view === "flagged") {
         const v = verifMap.get(c.id);
         return !!v && (v.authenticity_score < 60 || (v.red_flags ?? []).length > 0);
       }
       return true;
     });
-  }, [rows, q, sourceFilter, reqFilter, minScore, view, verifMap]);
+  }, [rows, q, sourceFilter, reqFilter, minScore, expBand, view, verifMap]);
+
 
   const selectedRows = filtered.filter((r) => selected.has(r.candidate.id));
   const selectedAppIds = selectedRows.flatMap((r) => (r.primary ? [r.primary.id] : []));
@@ -645,7 +693,23 @@ function Candidates() {
             </SelectContent>
           </Select>
         </div>
+        <div className="w-40">
+          <Label className="mb-1.5 block text-xs text-muted-foreground">Experience</Label>
+          <Select value={expBand} onValueChange={setExpBand}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {EXP_BANDS.map((b) => (
+                <SelectItem key={b.id} value={b.id}>
+                  {b.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <div className="w-36">
+
           <Label className="mb-1.5 block text-xs text-muted-foreground">Min score</Label>
           <Select value={minScore} onValueChange={setMinScore}>
             <SelectTrigger>
@@ -701,13 +765,18 @@ function Candidates() {
                 <TableHead className="w-10">
                   <Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all" />
                 </TableHead>
-                <TableHead className="w-[260px]">Candidate</TableHead>
+                <TableHead className="w-[240px]">Candidate</TableHead>
+                <TableHead className="w-[200px]">Contact</TableHead>
+                <TableHead className="w-[190px]">Current role & tenure</TableHead>
                 <TableHead className="w-[120px]">Experience</TableHead>
-                <TableHead className="w-[200px]">Skills</TableHead>
+                <TableHead className="w-[190px]">Skills & education</TableHead>
+                <TableHead className="w-[170px]">Comp & availability</TableHead>
                 <TableHead className="w-[190px]">Stage & next action</TableHead>
+                <TableHead className="w-[110px]">Parsing</TableHead>
                 <TableHead className="text-right">Match</TableHead>
                 <TableHead className="text-right">Authenticity</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
+
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -715,8 +784,14 @@ function Candidates() {
                 const c = r.candidate;
                 const v = verifMap.get(c.id);
                 const flags = (v?.red_flags ?? []).length;
+                const missing = gaps(c);
+                const history = (Array.isArray(c.employment_history) ? c.employment_history : []) as EmploymentRow[];
+                const metrics = history.length ? computeCareerMetrics(history) : null;
+                const current = history[0] ?? null;
+                const isOpen = expanded === c.id;
                 return (
-                  <TableRow key={c.id} className="align-top">
+                  <Fragment key={c.id}>
+                  <TableRow className="align-top">
                     <TableCell>
                       <Checkbox
                         checked={selected.has(c.id)}
@@ -724,15 +799,16 @@ function Candidates() {
                         aria-label={`Select ${c.full_name}`}
                       />
                     </TableCell>
-                    <TableCell className="w-[260px]">
+                    <TableCell className="w-[240px]">
                       <Link to="/candidates/$id" params={{ id: c.id }} className="font-medium hover:underline">
                         {c.full_name}
                       </Link>
                       <div className="text-xs text-muted-foreground">
-                        {c.email} · {c.source}
-                        {c.is_internal ? " · internal" : ""}
+                        {c.source}
+                        {c.is_internal ? " · internal" : ""} · added{" "}
+                        {new Date(c.created_at).toLocaleDateString()}
                       </div>
-                      <div className="mt-1 flex gap-2 text-muted-foreground">
+                      <div className="mt-1 flex items-center gap-2 text-muted-foreground">
                         {normalizeExternalUrl(c.linkedin_url) ? (
                           <a
                             href={normalizeExternalUrl(c.linkedin_url)!}
@@ -753,6 +829,13 @@ function Candidates() {
                             <Github className="size-3.5 hover:text-foreground" />
                           </a>
                         ) : null}
+                        <button
+                          type="button"
+                          className="text-xs underline-offset-4 hover:underline"
+                          onClick={() => setExpanded(isOpen ? null : c.id)}
+                        >
+                          {isOpen ? "Hide detail" : "Detail"}
+                        </button>
                       </div>
                       {r.stalled !== null ? (
                         <div className="mt-1 inline-flex items-center gap-1 text-xs text-amber-600">
@@ -760,17 +843,70 @@ function Candidates() {
                         </div>
                       ) : null}
                     </TableCell>
-                    <TableCell className="w-[120px] text-sm">
-                      <span className="num">{c.experience_years} yrs</span>
-                      <div className="line-clamp-2 text-xs text-muted-foreground" title={c.location ?? ""}>
-                        {c.location ?? "—"}
+                    <TableCell className="w-[200px] text-xs">
+                      {c.email ? (
+                        <a href={`mailto:${c.email}`} className="break-all hover:underline">
+                          {c.email}
+                        </a>
+                      ) : (
+                        <span className="text-destructive">no email parsed</span>
+                      )}
+                      <div className="num mt-0.5 text-muted-foreground">{c.phone || "no phone"}</div>
+                      <div className="line-clamp-1 text-muted-foreground" title={c.location ?? ""}>
+                        {c.location ?? "location unknown"}
                       </div>
                     </TableCell>
-                    <TableCell className="w-[200px] text-xs text-muted-foreground">
-                      <span className="line-clamp-2">{c.skills.slice(0, 6).join(" · ") || "—"}</span>
+                    <TableCell className="w-[190px] text-xs">
+                      <div className="line-clamp-1 font-medium text-foreground" title={current?.title ?? ""}>
+                        {current?.title || "—"}
+                      </div>
+                      <div className="line-clamp-1 text-muted-foreground">
+                        {c.current_employer || current?.company || "employer unknown"}
+                      </div>
+                      {metrics ? (
+                        <div className="num mt-0.5 text-muted-foreground">
+                          {metrics.current_tenure_years !== null
+                            ? `${metrics.current_tenure_years.toFixed(1)}y here`
+                            : "tenure n/a"}{" "}
+                          · {metrics.employers} employers · avg {metrics.avg_tenure_years.toFixed(1)}y
+                        </div>
+                      ) : (
+                        <div className="text-muted-foreground">no work history parsed</div>
+                      )}
+                    </TableCell>
+                    <TableCell className="w-[120px] text-sm">
+                      <span className="num">{c.experience_years} yrs</span>
+                      {metrics && metrics.jobs_last_5y > 2 ? (
+                        <div className="num text-xs text-amber-600">{metrics.jobs_last_5y} jobs / 5y</div>
+                      ) : null}
+                      {metrics && metrics.longest_gap_months >= 6 ? (
+                        <div className="num text-xs text-amber-600">{metrics.longest_gap_months}m gap</div>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="w-[190px] text-xs text-muted-foreground">
+                      <span className="line-clamp-2">{c.skills.slice(0, 6).join(" · ") || "no skills parsed"}</span>
                       {c.skills.length > 6 ? (
                         <span className="num block text-[11px]">+{c.skills.length - 6} more</span>
                       ) : null}
+                      <span className="line-clamp-1 mt-0.5 block" title={c.education ?? ""}>
+                        {c.education || "education unknown"}
+                      </span>
+                    </TableCell>
+                    <TableCell className="w-[170px] text-xs text-muted-foreground">
+                      <div className="num">
+                        CTC {money(c.current_ctc as number | null)} → exp {money(c.expected_ctc as number | null)}
+                      </div>
+                      <div className="num">
+                        {c.notice_period_days !== null ? `${c.notice_period_days}d notice` : "notice unknown"}
+                      </div>
+                      <div>
+                        {c.willing_to_relocate === null
+                          ? "relocation not asked"
+                          : c.willing_to_relocate
+                            ? "will relocate"
+                            : "no relocation"}
+                        {c.work_authorization ? ` · ${c.work_authorization}` : ""}
+                      </div>
                     </TableCell>
                     <TableCell className="w-[190px]">
                       {r.stage ? (
@@ -788,7 +924,23 @@ function Candidates() {
                       <div className="mt-1 text-xs text-muted-foreground">
                         {r.stage ? nextAction(r.stage) : "Match against an open requisition"}
                       </div>
+                      {r.primary ? (
+                        <div className="num mt-0.5 text-[11px] text-muted-foreground">
+                          last activity {new Date(r.primary.last_activity_at).toLocaleDateString()}
+                        </div>
+                      ) : null}
                     </TableCell>
+                    <TableCell className="w-[110px] text-xs">
+                      {missing.length === 0 ? (
+                        <span className="text-emerald-600">complete</span>
+                      ) : (
+                        <span className="text-amber-600" title={`Missing: ${missing.join(", ")}`}>
+                          {missing.length} field{missing.length === 1 ? "" : "s"} missing
+                        </span>
+                      )}
+                      <div className="text-muted-foreground">{c.resume_text ? "CV on file" : "no CV text"}</div>
+                    </TableCell>
+
                     <TableCell className="text-right">
                       {r.score !== null ? <ScoreChip score={r.score} size="sm" /> : <span className="text-xs text-muted-foreground">—</span>}
                     </TableCell>
@@ -839,7 +991,52 @@ function Candidates() {
                       )}
                     </TableCell>
                   </TableRow>
+                  {isOpen ? (
+                    <TableRow className="bg-surface-2">
+                      <TableCell colSpan={11} className="text-xs">
+                        <div className="grid gap-4 sm:grid-cols-3">
+                          <div>
+                            <div className="mb-1 font-medium">Work history (parsed)</div>
+                            {history.length ? (
+                              <ul className="space-y-1 text-muted-foreground">
+                                {history.map((h, i) => (
+                                  <li key={`${h.company}-${i}`}>
+                                    {h.title || "role"} · {h.company || "employer"} ·{" "}
+                                    <span className="num">
+                                      {h.start ?? "?"} – {h.end ?? "present"}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="text-muted-foreground">
+                                Nothing parsed yet — run matching to extract the history from the CV.
+                              </p>
+                            )}
+                          </div>
+                          <div>
+                            <div className="mb-1 font-medium">All skills</div>
+                            <p className="text-muted-foreground">{c.skills.join(" · ") || "—"}</p>
+                            <div className="mt-2 mb-1 font-medium">Preferred locations</div>
+                            <p className="text-muted-foreground">
+                              {(c.preferred_locations ?? []).join(" · ") || "—"}
+                            </p>
+                          </div>
+                          <div>
+                            <div className="mb-1 font-medium">Missing from the parse</div>
+                            <p className="text-muted-foreground">{missing.join(", ") || "nothing — record is complete"}</p>
+                            <div className="mt-2 mb-1 font-medium">Verification</div>
+                            <p className="text-muted-foreground">
+                              {v ? v.summary || `Authenticity ${v.authenticity_score}` : "not run yet"}
+                            </p>
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                  </Fragment>
                 );
+
               })}
             </TableBody>
           </Table>
