@@ -232,8 +232,11 @@ function Requisitions() {
         }
       />
 
+      <DepartmentBudgets />
+
       {requisitions.length === 0 ? (
         <EmptyState title="No requisitions yet" hint="Raise your first requisition to start sourcing." />
+
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {requisitions.map((r) => {
@@ -291,7 +294,95 @@ function Requisitions() {
   );
 }
 
+function DepartmentBudgets() {
+  const qc = useQueryClient();
+  const depts = useQuery(departmentsQuery);
+  const [form, setForm] = useState({ name: "", head_name: "", budgeted_headcount: "", budgeted_cost: "" });
+  const [saving, setSaving] = useState(false);
+  const departments = depts.data ?? [];
+
+  async function addDept() {
+    if (!form.name.trim()) {
+      toast.error("Department name is required");
+      return;
+    }
+    setSaving(true);
+    const { error } = await supabase.from("departments").insert({
+      name: form.name.trim(),
+      head_name: form.head_name.trim() || null,
+      budgeted_headcount: Number(form.budgeted_headcount) || 0,
+      budgeted_cost: Number(form.budgeted_cost) || 0,
+    });
+    setSaving(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(`${form.name.trim()} added to workforce plan`);
+    setForm({ name: "", head_name: "", budgeted_headcount: "", budgeted_cost: "" });
+    qc.invalidateQueries({ queryKey: ["departments"] });
+  }
+
+  return (
+    <section className="panel mb-6 p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-base font-semibold">Departments & budgeted headcount</h2>
+        <p className="text-xs text-muted-foreground">
+          Requisitions are checked against these budgets. Add your real departments before raising requisitions.
+        </p>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-5">
+        <Field label="Department" className="sm:col-span-2">
+          <Input
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="Engineering"
+          />
+        </Field>
+        <Field label="Department head">
+          <Input value={form.head_name} onChange={(e) => setForm({ ...form, head_name: e.target.value })} />
+        </Field>
+        <Field label="Budgeted headcount">
+          <Input
+            inputMode="numeric"
+            value={form.budgeted_headcount}
+            onChange={(e) => setForm({ ...form, budgeted_headcount: e.target.value })}
+          />
+        </Field>
+        <Field label="Budgeted cost (₹)">
+          <Input
+            inputMode="numeric"
+            value={form.budgeted_cost}
+            onChange={(e) => setForm({ ...form, budgeted_cost: e.target.value })}
+          />
+        </Field>
+      </div>
+      <div className="mt-3 flex justify-end">
+        <Button size="sm" onClick={addDept} disabled={saving}>
+          {saving ? "Adding…" : "Add department"}
+        </Button>
+      </div>
+
+      {departments.length > 0 && (
+        <ul className="mt-4 divide-y border-t text-sm">
+          {departments.map((d) => (
+            <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+              <span className="font-medium">{d.name}</span>
+              <span className="num text-xs text-muted-foreground">
+                {d.head_name ?? "No head assigned"} · {d.budgeted_headcount} roles ·{" "}
+                {inr(Number(d.budgeted_cost))}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function Field({
+
   label,
   children,
   className,
