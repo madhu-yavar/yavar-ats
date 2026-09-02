@@ -220,16 +220,20 @@ function RequisitionDetail() {
       if (error) throw new Error(error.message);
 
       // Keep the requisition's scoring baseline in sync with the uploaded JD.
-      const patch: Record<string, unknown> = {};
-      if (jd.must_have?.length && !r!.must_have_skills.length) patch['must_have_skills'] = jd.must_have;
-      if (jd.good_to_have?.length && !r!.good_to_have_skills.length) patch['good_to_have_skills'] = jd.good_to_have;
-      if (jd.experience_min || jd.experience_max) {
-        if (!r!.experience_min && !r!.experience_max) {
-          patch['experience_min'] = jd.experience_min;
-          patch['experience_max'] = Math.max(jd.experience_max, jd.experience_min);
-        }
+      const patch: {
+        must_have_skills?: string[];
+        good_to_have_skills?: string[];
+        experience_min?: number;
+        experience_max?: number;
+      } = {};
+      if (jd.must_have?.length && !r!.must_have_skills.length) patch.must_have_skills = jd.must_have;
+      if (jd.good_to_have?.length && !r!.good_to_have_skills.length) patch.good_to_have_skills = jd.good_to_have;
+      if ((jd.experience_min || jd.experience_max) && !r!.experience_min && !r!.experience_max) {
+        patch.experience_min = jd.experience_min;
+        patch.experience_max = Math.max(jd.experience_max, jd.experience_min);
       }
       if (Object.keys(patch).length) await supabase.from("requisitions").update(patch).eq("id", r!.id);
+
 
       setJdPaste("");
       setShowImport(false);
