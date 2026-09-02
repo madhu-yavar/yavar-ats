@@ -82,6 +82,7 @@ function Requisitions() {
   const skills = byKind(masters.data, "skill");
   const locations = byKind(masters.data, "location");
   const education = byKind(masters.data, "education");
+  const roleTitles = byKind(masters.data, "role_title");
 
   async function createSkill(name: string) {
     try {
@@ -91,6 +92,31 @@ function Requisitions() {
       /* already in the library — the value is still selected */
     }
   }
+
+  async function createRoleTitle(name: string) {
+    try {
+      await addMasterItem("role_title", name);
+      qc.invalidateQueries({ queryKey: ["master_items"] });
+    } catch {
+      /* already in the library */
+    }
+  }
+
+  async function createDepartment(name: string) {
+    const { data, error } = await supabase
+      .from("departments")
+      .insert({ name: name.trim(), budgeted_headcount: 0, budgeted_cost: 0 })
+      .select("id")
+      .maybeSingle();
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    await qc.invalidateQueries({ queryKey: ["departments"] });
+    if (data?.id) setForm((f) => ({ ...f, department_id: data.id }));
+    toast.success(`${name.trim()} added — set its budget below`);
+  }
+
 
   async function create() {
     if (!form.title.trim()) {
