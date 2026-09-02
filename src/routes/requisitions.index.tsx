@@ -13,7 +13,7 @@ import {
   requisitionsQuery,
 } from "@/lib/data";
 import { EmptyState, PageHeader, SkillPills, StatusBadge, inr } from "@/components/ats";
-import { MasterSelect, TokenPicker } from "@/components/pickers";
+import { CreatableSelect, MasterSelect, TokenPicker } from "@/components/pickers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
