@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { byKind, masterItemsQuery } from "@/lib/data";
-import { allowedTransitions, REASON_REQUIRED, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
+import { allowedTransitions, REASON_REQUIRED, reasonsForStage, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
 import { moveStage, moveStages } from "@/lib/lifecycle.functions";
 
 import { Button } from "@/components/ui/button";
