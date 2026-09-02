@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Github, Linkedin, RefreshCw, ShieldCheck, Sparkles, Upload } from "lucide-react";
+import { AlertTriangle, Copy, Github, Linkedin, Merge, RefreshCw, ShieldCheck, Sparkles, Upload } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -23,6 +23,7 @@ import { intakeCvs, type IntakeStatus } from "@/lib/cv-intake";
 import { normalizeExternalUrl } from "@/lib/external-links";
 import { canonical, nextAction, stalledDays, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
 import { computeCareerMetrics, type EmploymentRow } from "@/lib/career";
+import { duplicateIndex, findDuplicateGroups, freshness, mergeCandidates } from "@/lib/dedupe";
 
 
 import { EmptyState, PageHeader, ScoreChip, StageBadge } from "@/components/ats";
@@ -77,6 +78,8 @@ const SAVED_VIEWS = [
   { id: "stalled", label: "Stalled" },
   { id: "flagged", label: "Authenticity flags" },
   { id: "incomplete", label: "Incomplete parsing" },
+  { id: "duplicates", label: "Possible duplicates" },
+  { id: "stale", label: "Stale CVs (1yr+)" },
 ] as const;
 
 
@@ -166,6 +169,7 @@ function Candidates() {
   const [moverIds, setMoverIds] = useState<string[] | null>(null);
   const [moverStage, setMoverStage] = useState<Stage | undefined>(undefined);
   const [syncing, setSyncing] = useState(false);
+  const [merging, setMerging] = useState(false);
 
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -220,6 +224,11 @@ function Candidates() {
       setBulkBusy(false);
     }
   }
+
+  // Pool hygiene is computed client-side and is fully explainable: which two rows
+  // look like the same person, and why.
+  const dupGroups = useMemo(() => findDuplicateGroups(cands.data ?? []), [cands.data]);
+  const dupMap = useMemo(() => duplicateIndex(dupGroups), [dupGroups]);
 
   const scoreMap = latestScores(scores.data ?? []);
   const verifMap = latestVerifications(verifs.data ?? []);
@@ -321,13 +330,15 @@ function Candidates() {
       if (view === "unpooled") return r.apps.length === 0;
       if (view === "stalled") return r.stalled !== null;
       if (view === "incomplete") return gaps(c).length > 0;
+      if (view === "duplicates") return dupMap.has(c.id);
+      if (view === "stale") return freshness(c).tier === "stale";
       if (view === "flagged") {
         const v = verifMap.get(c.id);
         return !!v && (v.authenticity_score < 60 || (v.red_flags ?? []).length > 0);
       }
       return true;
     });
-  }, [rows, q, sourceFilter, reqFilter, minScore, expBand, view, verifMap]);
+  }, [rows, q, sourceFilter, reqFilter, minScore, expBand, view, verifMap, dupMap]);
 
 
   const selectedRows = filtered.filter((r) => selected.has(r.candidate.id));
@@ -360,6 +371,31 @@ function Candidates() {
       toast.error(e instanceof Error ? e.message : "Re-verification failed");
     } finally {
       setSyncing(false);
+    }
+  }
+
+  /** Merge the selected rows into the oldest record, keeping every field and application. */
+  async function mergeSelected() {
+    if (selectedRows.length < 2) return;
+    const members = selectedRows
+      .map((r) => r.candidate)
+      .slice()
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    const survivor = members[0]!;
+    setMerging(true);
+    try {
+      const out = await mergeCandidates(survivor, members.slice(1));
+      await qc.invalidateQueries({ queryKey: ["candidates"] });
+      await qc.invalidateQueries({ queryKey: ["applications"] });
+      setSelected(new Set());
+      toast.success(
+        `Merged ${out.merged} duplicate${out.merged === 1 ? "" : "s"} into ${survivor.full_name}` +
+          (out.movedApplications ? ` · ${out.movedApplications} application(s) moved` : ""),
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Merge failed");
+    } finally {
+      setMerging(false);
     }
   }
 
@@ -767,6 +803,15 @@ function Candidates() {
             >
               Move stage ({selectedAppIds.length})
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={selectedRows.length < 2 || merging}
+              onClick={mergeSelected}
+              title="Merge the selected rows into the oldest record"
+            >
+              <Merge className="size-4" /> Merge ({selectedRows.length})
+            </Button>
             <Button size="sm" variant="outline" onClick={resyncSelected} disabled={syncing}>
               <RefreshCw className={"size-4" + (syncing ? " animate-spin" : "")} /> Re-verify
             </Button>
@@ -811,6 +856,8 @@ function Candidates() {
                 const metrics = history.length ? computeCareerMetrics(history) : null;
                 const current = history[0] ?? null;
                 const isOpen = expanded === c.id;
+                const fresh = freshness(c);
+                const dup = dupMap.get(c.id);
                 return (
                   <Fragment key={c.id}>
                   <TableRow className="align-top">
@@ -829,6 +876,28 @@ function Candidates() {
                         {c.source}
                         {c.is_internal ? " · internal" : ""} · added{" "}
                         {new Date(c.created_at).toLocaleDateString()}
+                      </div>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+                        <span
+                          className={
+                            fresh.tier === "stale"
+                              ? "text-destructive"
+                              : fresh.tier === "aging"
+                                ? "text-amber-600"
+                                : "text-muted-foreground"
+                          }
+                          title={`Profile data last refreshed ${fresh.days} days ago`}
+                        >
+                          CV {fresh.label}
+                        </span>
+                        {dup ? (
+                          <span
+                            className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-amber-700 dark:text-amber-400"
+                            title={`Possible duplicate (${dup.confidence}) — matched on ${dup.reasons.join(", ")}`}
+                          >
+                            <Copy className="size-3" /> dup ×{dup.members.length}
+                          </span>
+                        ) : null}
                       </div>
                       <div className="mt-1 flex items-center gap-2 text-muted-foreground">
                         {normalizeExternalUrl(c.linkedin_url) ? (
