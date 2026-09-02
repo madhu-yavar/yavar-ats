@@ -1018,7 +1018,7 @@ function Candidates() {
                   </TableRow>
                   {isOpen ? (
                     <TableRow className="bg-surface-2">
-                      <TableCell colSpan={11} className="text-xs">
+                      <TableCell colSpan={12} className="text-xs">
                         <div className="grid gap-4 sm:grid-cols-3">
                           <div>
                             <div className="mb-1 font-medium">Work history (parsed)</div>
