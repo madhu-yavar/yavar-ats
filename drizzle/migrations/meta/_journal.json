@@ -43,6 +43,13 @@
       "when": 1788319289742,
       "tag": "0005_add_requisition_engagement_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788319318173,
+      "tag": "0006_allow_engagement_master_kinds",
+      "breakpoints": true
     }
   ]
 }
