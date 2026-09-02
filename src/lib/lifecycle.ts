@@ -100,6 +100,54 @@ export const REASON_REQUIRED: Stage[] = [
   "joining_deferred",
 ];
 
+/**
+ * Reasons that make sense for each destination stage. The reason picker is
+ * driven by the stage the recruiter chose, so a "Salary expectation mismatch"
+ * can never be attached to a "Shortlisted" move.
+ */
+export const STAGE_REASONS: Partial<Record<Stage, string[]>> = {
+  shortlisted: ["Strong JD match", "Recruiter recommendation", "Referral", "Internal applicant priority"],
+  l1: ["Cleared screening", "Panel availability confirmed"],
+  l2: ["Cleared L1", "Panel availability confirmed"],
+  l3: ["Cleared L2", "Leadership round required"],
+  offer_pending: ["Cleared final round", "Approved by hiring manager"],
+  offer_released: ["Approvals complete", "Verbal acceptance received"],
+  offer_accepted: ["Candidate accepted in writing", "Joining date agreed"],
+  offer_declined: [
+    "Better offer elsewhere",
+    "Compensation mismatch",
+    "Location or relocation issue",
+    "Counter-offer from current employer",
+    "Role expectation mismatch",
+  ],
+  joined: ["Joined on agreed date", "Joined after deferral"],
+  no_show: ["Did not report on joining date", "Unreachable after acceptance", "Absconded post acceptance"],
+  joining_deferred: ["Notice period extended", "Personal reasons", "Requisition start date moved", "Relocation delay"],
+  on_hold: ["Requisition on hold", "Budget freeze", "Panel unavailable", "Awaiting candidate response"],
+  reserve: ["Good fit, no open role", "Runner-up for this requisition", "Keep warm for next quarter"],
+  withdrawn: [
+    "Candidate withdrew",
+    "Accepted another offer",
+    "Not interested in the role",
+    "Unresponsive to follow-ups",
+  ],
+  rejected: [
+    "Skills gap against must-haves",
+    "Insufficient relevant experience",
+    "Education criteria not met",
+    "Compensation expectation beyond band",
+    "Failed interview round",
+    "Background or authenticity concern",
+    "Location or notice-period constraint",
+  ],
+};
+
+/** The reason options for a destination stage (empty means free-text note only). */
+export function reasonsForStage(stage: Stage): string[] {
+  return STAGE_REASONS[canonical(stage)] ?? [];
+}
+
+
 export function isTerminal(stage: Stage) {
   return ["joined", "hired", "rejected", "withdrawn", "offer_declined", "no_show"].includes(stage);
 }

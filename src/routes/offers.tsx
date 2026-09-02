@@ -35,13 +35,17 @@ export const Route = createFileRoute("/offers")({
   component: Offers,
 });
 
-const FLOW: Record<string, { next: string; label: string }> = {
+/** Offer approval chain, and the candidate stage each step implies. */
+const FLOW: Record<string, { next: string; label: string; stage?: string }> = {
   draft: { next: "pending_hr", label: "Send to HR" },
   pending_hr: { next: "pending_cbo", label: "HR approve" },
   pending_cbo: { next: "approved", label: "CBO approve" },
-  approved: { next: "released", label: "Release offer" },
-  released: { next: "accepted", label: "Mark accepted" },
+  approved: { next: "released", label: "Release offer", stage: "offer_released" },
+  released: { next: "accepted", label: "Mark accepted", stage: "offer_accepted" },
 };
+
+/** A candidate is offer-ready once the final round is cleared or HR pushed them to offer. */
+const OFFER_READY = ["l3", "offer", "offer_pending"];
 
 function Offers() {
   const qc = useQueryClient();
@@ -54,7 +58,8 @@ function Offers() {
   const [ctc, setCtc] = useState("");
   const [joining, setJoining] = useState("");
 
-  const offerStage = (apps.data ?? []).filter((a) => ["offer", "hired"].includes(a.stage));
+  const raisedFor = new Set((offers.data ?? []).map((o) => o.application_id));
+  const offerStage = (apps.data ?? []).filter((a) => OFFER_READY.includes(a.stage) && !raisedFor.has(a.id));
 
   async function create() {
     if (!appId || !ctc) {
@@ -76,10 +81,14 @@ function Offers() {
       toast.error(error.message);
       return;
     }
+    // Raising the offer is what puts the candidate in "offer pending approval".
+    await supabase.from("applications").update({ stage: "offer_pending" }).eq("id", appId);
+    setAppId("");
     setCtc("");
     setJoining("");
     toast.success("Offer raised and sent for HR approval");
     qc.invalidateQueries({ queryKey: ["offers"] });
+    qc.invalidateQueries({ queryKey: ["applications"] });
   }
 
   async function advance(id: string, status: string, trail: unknown) {
@@ -97,22 +106,25 @@ function Offers() {
       toast.error(error.message);
       return;
     }
-    if (step.next === "accepted") {
+    if (step.stage) {
       const offer = (offers.data ?? []).find((o) => o.id === id);
-      if (offer) await supabase.from("applications").update({ stage: "hired" }).eq("id", offer.application_id);
+      if (offer)
+        await supabase.from("applications").update({ stage: step.stage as never }).eq("id", offer.application_id);
     }
     toast.success(`Offer moved to ${step.next.replace("_", " ")}`);
     qc.invalidateQueries({ queryKey: ["offers"] });
     qc.invalidateQueries({ queryKey: ["applications"] });
   }
 
+
   return (
     <>
       <PageHeader
         eyebrow="Closure"
         title="Offers"
-        description="Offers are validated against the approved requisition budget before HR and CBO sign-off."
+        description="A candidate becomes offer-ready when the final interview round is recorded as a select (or you move them to offer manually). Raising the offer sets the candidate to Offer pending approval; HR then CBO sign off against the requisition budget, releasing sets Offer released, and acceptance sets Offer accepted — joining is confirmed from the candidate's stage mover."
       />
+
 
       <div className="grid gap-6 lg:grid-cols-3">
         <section className="panel lg:col-span-2">
@@ -121,7 +133,11 @@ function Offers() {
           </div>
           {(offers.data ?? []).length === 0 ? (
             <div className="p-5">
-              <EmptyState title="No offers yet" hint="Candidates reach this stage after an L3 select verdict." />
+              <EmptyState
+                title="No offers yet"
+                hint="Record a select verdict on the final interview round, or move a candidate to Offer pending — they then appear in the picker on the right."
+              />
+
             </div>
           ) : (
             <ul className="divide-y divide-border">
@@ -183,9 +199,10 @@ function Offers() {
                 <SelectContent>
                   {offerStage.map((a) => {
                     const c = (cands.data ?? []).find((x) => x.id === a.candidate_id);
+                    const r = (reqs.data ?? []).find((x) => x.id === a.requisition_id);
                     return (
                       <SelectItem key={a.id} value={a.id}>
-                        {c?.full_name}
+                        {c?.full_name} — {r?.title ?? "Requisition"}
                       </SelectItem>
                     );
                   })}
@@ -193,8 +210,10 @@ function Offers() {
               </Select>
               {offerStage.length === 0 ? (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  No candidate has cleared L3 yet — record a select verdict on the interviews page.
+                  Nobody is offer-ready. Record a select verdict on the final round in Interviews, or use Move stage on
+                  the candidate to set Offer pending approval.
                 </p>
+
               ) : null}
             </div>
             <div>

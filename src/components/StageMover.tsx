@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { byKind, masterItemsQuery } from "@/lib/data";
-import { allowedTransitions, REASON_REQUIRED, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
+import { allowedTransitions, REASON_REQUIRED, reasonsForStage, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
 import { moveStage, moveStages } from "@/lib/lifecycle.functions";
 
 import { Button } from "@/components/ui/button";
@@ -56,14 +56,28 @@ export function StageMover({
     }
   }, [open]);
 
+  // A reason belongs to a stage — clearing it when the stage changes keeps them paired.
+  useEffect(() => {
+    setReason("");
+  }, [toStage]);
+
+
   const options = useMemo<Stage[]>(() => {
     if (currentStage) return allowedTransitions(currentStage);
     // Bulk move across mixed stages: offer every stage, the server rejects illegal rows.
     return Object.keys(STAGE_LABEL).filter((s) => !["offer", "hired"].includes(s)) as Stage[];
   }, [currentStage]);
 
-  const reasons = byKind(masters.data, "rejection_reason");
+  // Reasons are driven by the destination stage, so the two fields stay logically paired.
+  const masterRejectReasons = byKind(masters.data, "rejection_reason").map((r) => r.name);
+  const reasons = useMemo(() => {
+    if (!toStage) return [];
+    const base = reasonsForStage(toStage);
+    const extra = toStage === "rejected" ? masterRejectReasons : [];
+    return Array.from(new Set([...base, ...extra]));
+  }, [toStage, masterRejectReasons.join("|")]);
   const needsReason = toStage ? REASON_REQUIRED.includes(toStage) : false;
+
 
   async function submit() {
     if (!toStage) return;
@@ -122,19 +136,28 @@ export function StageMover({
             <Label className="mb-1.5 block text-xs text-muted-foreground">
               Reason {needsReason ? <span className="text-destructive">*</span> : "(optional)"}
             </Label>
-            <Select value={reason} onValueChange={setReason}>
+            <Select value={reason} onValueChange={setReason} disabled={!toStage || reasons.length === 0}>
               <SelectTrigger>
-                <SelectValue placeholder="Pick a reason" />
+                <SelectValue
+                  placeholder={
+                    !toStage
+                      ? "Choose the new stage first"
+                      : reasons.length === 0
+                        ? "No reason needed — add a note instead"
+                        : `Why ${STAGE_LABEL[toStage]}?`
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
                 {reasons.map((r) => (
-                  <SelectItem key={r.id} value={r.name}>
-                    {r.name}
+                  <SelectItem key={r} value={r}>
+                    {r}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+
 
           <div>
             <Label className="mb-1.5 block text-xs text-muted-foreground">Note</Label>

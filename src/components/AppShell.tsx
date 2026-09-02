@@ -24,7 +24,7 @@ const NAV = [
   { to: "/candidates", label: "Talent pool", icon: Users },
   { to: "/matching", label: "JD ↔ CV matching", icon: Target },
   { to: "/interviews", label: "Interviews", icon: CalendarClock },
-  { to: "/interviews/mine", label: "My interviews", icon: CalendarClock },
+
   { to: "/offers", label: "Offers", icon: FileSignature },
   { to: "/reports", label: "Reports", icon: BarChart3 },
   { to: "/team", label: "Users & roles", icon: ShieldCheck },
