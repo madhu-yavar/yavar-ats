@@ -145,29 +145,75 @@ async function graphToken(s: Record<string, string>) {
   return String(body["access_token"] ?? "");
 }
 
+const TEAMS_PERMISSION_HELP =
+  "Microsoft rejected the request (403 Forbidden). Ask your Microsoft 365 admin to grant the app registration " +
+  "the application permissions OnlineMeetings.ReadWrite.All and Calendars.ReadWrite (with admin consent), and to " +
+  "run an application access policy (New-CsApplicationAccessPolicy / Grant-CsApplicationAccessPolicy) for the " +
+  "organizer mailbox so the app may create meetings on their behalf.";
+
 async function teamsMeeting(s: Record<string, string>, req: MeetingRequest): Promise<MeetingResult> {
   const token = await graphToken(s);
   const start = new Date(req.startIso);
   const end = new Date(start.getTime() + req.durationMins * 60_000);
-  const res = await fetch(
-    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(s["organizer_email"]!)}/onlineMeetings`,
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        subject: req.topic,
-        startDateTime: start.toISOString(),
-        endDateTime: end.toISOString(),
-      }),
-    },
-  );
-  const body = await jsonOrThrow(res, "Teams meeting creation");
+  const user = encodeURIComponent(s["organizer_email"]!);
+  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+
+  // Preferred: dedicated online meeting (needs OnlineMeetings.ReadWrite.All + access policy).
+  const direct = await fetch(`https://graph.microsoft.com/v1.0/users/${user}/onlineMeetings`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      subject: req.topic,
+      startDateTime: start.toISOString(),
+      endDateTime: end.toISOString(),
+    }),
+  });
+
+  if (direct.ok) {
+    const body = (await direct.json()) as Record<string, unknown>;
+    return {
+      joinUrl: String(body["joinWebUrl"] ?? ""),
+      externalId: (body["id"] as string | undefined) ?? null,
+      provider: "teams",
+    };
+  }
+
+  if (direct.status !== 403 && direct.status !== 401) {
+    await jsonOrThrow(direct, "Teams meeting creation");
+  }
+
+  // Fallback: calendar event with a Teams link (needs Calendars.ReadWrite only).
+  const evt = await fetch(`https://graph.microsoft.com/v1.0/users/${user}/events`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      subject: req.topic,
+      body: req.agenda ? { contentType: "text", content: req.agenda } : undefined,
+      start: { dateTime: start.toISOString(), timeZone: "UTC" },
+      end: { dateTime: end.toISOString(), timeZone: "UTC" },
+      attendees: req.attendees.filter(Boolean).map((email) => ({
+        emailAddress: { address: email },
+        type: "required",
+      })),
+      isOnlineMeeting: true,
+      onlineMeetingProvider: "teamsForBusiness",
+    }),
+  });
+
+  if (!evt.ok) {
+    const detail = (await evt.text()).slice(0, 300);
+    throw new Error(`${TEAMS_PERMISSION_HELP} (Graph said: ${evt.status} ${detail})`);
+  }
+
+  const body = (await evt.json()) as Record<string, unknown>;
+  const meeting = body["onlineMeeting"] as { joinUrl?: string } | undefined;
   return {
-    joinUrl: String(body["joinWebUrl"] ?? ""),
+    joinUrl: String(meeting?.joinUrl ?? ""),
     externalId: (body["id"] as string | undefined) ?? null,
     provider: "teams",
   };
 }
+
 
 /* --------------------------------------------------------------- dispatch */
 
