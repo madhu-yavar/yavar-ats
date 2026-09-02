@@ -114,6 +114,12 @@ function Panel({
 
 function Dashboard() {
   const qc = useQueryClient();
+  const { roles, isAdmin } = useRoles();
+  const execScope: "CHRO" | "HR head" | null = isAdmin
+    ? "CHRO"
+    : roles.includes("hr_head")
+      ? "HR head"
+      : null;
   const reqs = useQuery(requisitionsQuery);
   const apps = useQuery(applicationsQuery);
   const scores = useQuery(matchScoresQuery);
