@@ -54,36 +54,43 @@ export const Route = createFileRoute("/requisitions/")({
   component: Requisitions,
 });
 
-const csv = (v: string) =>
-  v
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-
 function Requisitions() {
   const qc = useQueryClient();
   const reqs = useQuery(requisitionsQuery);
   const depts = useQuery(departmentsQuery);
   const apps = useQuery(applicationsQuery);
+  const masters = useQuery(masterItemsQuery);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     title: "",
     department_id: "",
-    location: "Mumbai",
+    location: "",
     openings: "1",
     experience_min: "3",
     experience_max: "6",
     budget_ctc: "1800000",
     hiring_manager: "",
-    must: "",
-    good: "",
+    must: [] as string[],
+    good: [] as string[],
     responsibilities: "",
     education_requirement: "",
   });
 
   const requisitions = reqs.data ?? [];
   const departments = depts.data ?? [];
+  const skills = byKind(masters.data, "skill");
+  const locations = byKind(masters.data, "location");
+  const education = byKind(masters.data, "education");
+
+  async function createSkill(name: string) {
+    try {
+      await addMasterItem("skill", name);
+      qc.invalidateQueries({ queryKey: ["master_items"] });
+    } catch {
+      /* already in the library — the value is still selected */
+    }
+  }
 
   async function create() {
     if (!form.title.trim()) {
@@ -102,8 +109,8 @@ function Requisitions() {
       experience_max: Number(form.experience_max) || 0,
       budget_ctc: Number(form.budget_ctc) || 0,
       hiring_manager: form.hiring_manager || null,
-      must_have_skills: csv(form.must),
-      good_to_have_skills: csv(form.good),
+      must_have_skills: form.must,
+      good_to_have_skills: form.good,
       responsibilities: form.responsibilities || null,
       education_requirement: form.education_requirement || null,
       status: "pending_dh",
