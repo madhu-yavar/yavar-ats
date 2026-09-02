@@ -75,6 +75,10 @@ function Requisitions() {
     good: [] as string[],
     responsibilities: "",
     education_requirement: "",
+    billing_type: "Non-billable",
+    engagement_type: "Internal / Corporate",
+    client_name: "",
+    cost_center: "",
   });
 
   const requisitions = reqs.data ?? [];
