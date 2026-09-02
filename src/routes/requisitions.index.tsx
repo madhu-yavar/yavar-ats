@@ -75,6 +75,10 @@ function Requisitions() {
     good: [] as string[],
     responsibilities: "",
     education_requirement: "",
+    billing_type: "Non-billable",
+    engagement_type: "Internal / Corporate",
+    client_name: "",
+    cost_center: "",
   });
 
   const requisitions = reqs.data ?? [];
@@ -83,6 +87,18 @@ function Requisitions() {
   const locations = byKind(masters.data, "location");
   const education = byKind(masters.data, "education");
   const roleTitles = byKind(masters.data, "role_title");
+  const billingTypes = byKind(masters.data, "billing_type");
+  const engagementTypes = byKind(masters.data, "engagement_type");
+  const clients = byKind(masters.data, "client");
+
+  async function createClient(name: string) {
+    try {
+      await addMasterItem("client", name);
+      qc.invalidateQueries({ queryKey: ["master_items"] });
+    } catch {
+      /* already in the library */
+    }
+  }
 
   async function createSkill(name: string) {
     try {
@@ -139,6 +155,10 @@ function Requisitions() {
       good_to_have_skills: form.good,
       responsibilities: form.responsibilities || null,
       education_requirement: form.education_requirement || null,
+      billing_type: form.billing_type,
+      engagement_type: form.engagement_type,
+      client_name: form.client_name || null,
+      cost_center: form.cost_center || null,
       status: "pending_dh",
     });
     setSaving(false);
@@ -242,6 +262,38 @@ function Requisitions() {
                     onChange={(e) => setForm({ ...form, hiring_manager: e.target.value })}
                   />
                 </Field>
+                <Field label="Billing type">
+                  <MasterSelect
+                    options={billingTypes}
+                    value={form.billing_type}
+                    onChange={(v) => setForm({ ...form, billing_type: v })}
+                    placeholder="Billable / Non-billable"
+                  />
+                </Field>
+                <Field label="Engagement type">
+                  <MasterSelect
+                    options={engagementTypes}
+                    value={form.engagement_type}
+                    onChange={(v) => setForm({ ...form, engagement_type: v })}
+                    placeholder="Client project, R&D, internal…"
+                  />
+                </Field>
+                <Field label="Client / account">
+                  <CreatableSelect
+                    options={clients}
+                    value={form.client_name}
+                    onChange={(v) => setForm({ ...form, client_name: v })}
+                    onCreate={createClient}
+                    placeholder="Only for client-billed roles"
+                  />
+                </Field>
+                <Field label="Cost centre">
+                  <Input
+                    value={form.cost_center}
+                    onChange={(e) => setForm({ ...form, cost_center: e.target.value })}
+                    placeholder="e.g. CC-ENG-01"
+                  />
+                </Field>
                 <Field label="Must-have skills" className="sm:col-span-2">
                   <TokenPicker
                     options={skills}
@@ -312,6 +364,25 @@ function Requisitions() {
                     <h3 className="mt-1 text-lg font-semibold">{r.title}</h3>
                     <div className="text-sm text-muted-foreground">
                       {dept?.name ?? "Unassigned"} · {r.location}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+                      <span
+                        className={
+                          r.billing_type === "Billable"
+                            ? "rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary"
+                            : "rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground"
+                        }
+                      >
+                        {r.billing_type}
+                      </span>
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
+                        {r.engagement_type}
+                      </span>
+                      {r.client_name ? (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
+                          {r.client_name}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                   <StatusBadge status={r.status} />

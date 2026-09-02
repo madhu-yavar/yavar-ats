@@ -568,11 +568,15 @@ export type Database = {
       requisitions: {
         Row: {
           approval_trail: Json
+          billing_type: string
           budget_ctc: number
+          client_name: string | null
           code: string
+          cost_center: string | null
           created_at: string
           department_id: string | null
           education_requirement: string | null
+          engagement_type: string
           experience_max: number
           experience_min: number
           good_to_have_skills: string[]
@@ -593,11 +597,15 @@ export type Database = {
         }
         Insert: {
           approval_trail?: Json
+          billing_type?: string
           budget_ctc?: number
+          client_name?: string | null
           code: string
+          cost_center?: string | null
           created_at?: string
           department_id?: string | null
           education_requirement?: string | null
+          engagement_type?: string
           experience_max?: number
           experience_min?: number
           good_to_have_skills?: string[]
@@ -618,11 +626,15 @@ export type Database = {
         }
         Update: {
           approval_trail?: Json
+          billing_type?: string
           budget_ctc?: number
+          client_name?: string | null
           code?: string
+          cost_center?: string | null
           created_at?: string
           department_id?: string | null
           education_requirement?: string | null
+          engagement_type?: string
           experience_max?: number
           experience_min?: number
           good_to_have_skills?: string[]

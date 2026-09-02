@@ -55,6 +55,14 @@ const GROUPS: { kind: MasterKind; title: string; hint: string; placeholder: stri
   },
   { kind: "location", title: "Locations", hint: "Job locations and work models.", placeholder: "Ahmedabad" },
   { kind: "employment_type", title: "Employment types", hint: "Full-time, contract, internship…", placeholder: "Retainer" },
+  { kind: "billing_type", title: "Billing types", hint: "Billable vs non-billable positions.", placeholder: "Partially billable" },
+  {
+    kind: "engagement_type",
+    title: "Engagement types",
+    hint: "Client project, R&D, internal, pre-sales…",
+    placeholder: "Innovation lab",
+  },
+  { kind: "client", title: "Clients / accounts", hint: "Accounts that billable requisitions map to.", placeholder: "Acme Corp" },
   { kind: "industry", title: "Industries", hint: "Optional classification for reporting.", placeholder: "Logistics" },
 ];
 
