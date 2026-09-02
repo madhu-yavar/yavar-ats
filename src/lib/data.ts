@@ -28,6 +28,24 @@ export const departmentsQuery = queryOptions({
   queryFn: () => unwrap<Department[]>(supabase.from("departments").select("*").order("name")),
 });
 
+/** Global reference library: skills, locations, education, employment types, industries. */
+export const masterItemsQuery = queryOptions({
+  queryKey: ["master_items"],
+  queryFn: () =>
+    unwrap<MasterItem[]>(
+      supabase.from("master_items").select("*").eq("active", true).order("sort_order").order("name"),
+    ),
+});
+
+export function byKind(items: MasterItem[] | undefined, kind: MasterKind) {
+  return (items ?? []).filter((i) => i.kind === kind);
+}
+
+export async function addMasterItem(kind: MasterKind, name: string, category?: string | null) {
+  const { error } = await supabase.from("master_items").insert({ kind, name: name.trim(), category: category ?? null });
+  if (error && !/duplicate|unique/i.test(error.message)) throw new Error(error.message);
+}
+
 export const requisitionsQuery = queryOptions({
   queryKey: ["requisitions"],
   queryFn: () =>
