@@ -18,6 +18,8 @@ import {
 } from "@/lib/data";
 import { matchJdToCv, matchPipeline, type MatchResult } from "@/lib/matching.functions";
 import { importCandidates } from "@/lib/integrations.functions";
+import { balanceWeights } from "@/lib/cv-extract";
+
 import { EmptyState, PageHeader, ScoreBar, ScoreChip, SkillPills } from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
