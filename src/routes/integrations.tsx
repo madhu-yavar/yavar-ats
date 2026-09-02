@@ -33,6 +33,9 @@ const FIELD_LABEL: Record<string, string> = {
   api_key: "API key",
   employer_id: "Employer ID",
   token: "Personal access token",
+  refresh_token: "OAuth refresh token",
+  tenant_id: "Azure tenant ID",
+  organizer_email: "Organizer mailbox (host)",
 };
 
 export const Route = createFileRoute("/integrations")({
@@ -83,7 +86,16 @@ function IntegrationCard({ row }: { row: Integration }) {
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<"save" | "test" | "clear" | null>(null);
 
-  const provider = row.provider as "linkedin" | "naukri" | "indeed" | "github" | "careers";
+  const provider = row.provider as
+    | "linkedin"
+    | "naukri"
+    | "indeed"
+    | "github"
+    | "careers"
+    | "zoom"
+    | "google_meet"
+    | "teams";
+  const isMeeting = row.category === "meeting";
   const notes = typeof cfg["notes"] === "string" ? (cfg["notes"] as string) : null;
   const docs = typeof cfg["docs"] === "string" ? (cfg["docs"] as string) : null;
 
@@ -177,7 +189,7 @@ function IntegrationCard({ row }: { row: Integration }) {
             <div key={field}>
               <Label className="text-xs text-muted-foreground">{FIELD_LABEL[field] ?? field}</Label>
               <Input
-                type="password"
+                type={field === "organizer_email" ? "email" : "password"}
                 autoComplete="off"
                 placeholder={row.has_credentials ? "•••••• stored — leave blank to keep" : "Paste value"}
                 value={secrets[field] ?? ""}
@@ -185,7 +197,7 @@ function IntegrationCard({ row }: { row: Integration }) {
               />
             </div>
           ))}
-          {provider !== "github" && provider !== "careers" ? (
+          {!isMeeting && provider !== "github" && provider !== "careers" ? (
             <div className="sm:col-span-2">
               <Label className="text-xs text-muted-foreground">Partner API base URL</Label>
               <Input
@@ -403,7 +415,7 @@ function Integrations() {
     <>
       <PageHeader
         eyebrow="Settings"
-        title="Sourcing integrations"
+        title="Integrations"
         description="Store each job board's API credentials, verify the connection live, and switch it on as a sourcing channel. Credentials are held server-side and are never sent to the browser."
       />
 
@@ -435,11 +447,43 @@ function Integrations() {
       {rows.isLoading ? (
         <p className="text-sm text-muted-foreground">Loading integrations…</p>
       ) : (
-        <div className="grid gap-4">
-          {(rows.data ?? []).map((row) => (
-            <IntegrationCard key={row.id} row={row} />
-          ))}
-        </div>
+        <>
+          <div className="grid gap-4">
+            {(rows.data ?? []).filter((r) => r.category !== "meeting").map((row) => (
+              <IntegrationCard key={row.id} row={row} />
+            ))}
+          </div>
+
+          <section className="panel p-5">
+            <h2 className="font-semibold">Interview meeting links</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Connect your own conferencing account and the scheduler will mint a real join link for every interview
+              round — no copy-pasting. Credentials stay server-side.
+            </p>
+            <ul className="mt-2 space-y-1.5 text-sm text-muted-foreground">
+              <li>
+                <strong className="text-foreground">Zoom</strong> — create a Server-to-Server OAuth app with the
+                <span className="num"> meeting:write:admin</span> scope and paste the account ID, client ID and secret.
+              </li>
+              <li>
+                <strong className="text-foreground">Google Calendar / Meet</strong> — an OAuth client plus a refresh
+                token for the recruiting calendar; events are created with a Meet link and invites are emailed to the
+                panel and candidate.
+              </li>
+              <li>
+                <strong className="text-foreground">Microsoft Teams</strong> — an Entra app with
+                <span className="num"> OnlineMeetings.ReadWrite.All</span> application permission and the organizer
+                mailbox that hosts the calls.
+              </li>
+            </ul>
+          </section>
+
+          <div className="grid gap-4">
+            {(rows.data ?? []).filter((r) => r.category === "meeting").map((row) => (
+              <IntegrationCard key={row.id} row={row} />
+            ))}
+          </div>
+        </>
       )}
     </>
   );
