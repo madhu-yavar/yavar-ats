@@ -18,6 +18,7 @@ import { Route as MatchingRouteImport } from './routes/matching'
 import { Route as OffersRouteImport } from './routes/offers'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as TeamRouteImport } from './routes/team'
+import { Route as AssessTokenRouteImport } from './routes/assess.$token'
 import { Route as CandidatesIndexRouteImport } from './routes/candidates.index'
 import { Route as CandidatesIdRouteImport } from './routes/candidates.$id'
 import { Route as InterviewsMineRouteImport } from './routes/interviews.mine'
@@ -70,6 +71,11 @@ const TeamRoute = TeamRouteImport.update({
   path: '/team',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AssessTokenRoute = AssessTokenRouteImport.update({
+  id: '/assess/$token',
+  path: '/assess/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CandidatesIndexRoute = CandidatesIndexRouteImport.update({
   id: '/candidates/',
   path: '/candidates/',
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/offers': typeof OffersRoute
   '/reports': typeof ReportsRoute
   '/team': typeof TeamRoute
+  '/assess/$token': typeof AssessTokenRoute
   '/candidates/$id': typeof CandidatesIdRoute
   '/interviews/mine': typeof InterviewsMineRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
@@ -128,6 +135,7 @@ export interface FileRoutesByTo {
   '/offers': typeof OffersRoute
   '/reports': typeof ReportsRoute
   '/team': typeof TeamRoute
+  '/assess/$token': typeof AssessTokenRoute
   '/candidates/$id': typeof CandidatesIdRoute
   '/interviews/mine': typeof InterviewsMineRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
@@ -146,6 +154,7 @@ export interface FileRoutesById {
   '/offers': typeof OffersRoute
   '/reports': typeof ReportsRoute
   '/team': typeof TeamRoute
+  '/assess/$token': typeof AssessTokenRoute
   '/candidates/$id': typeof CandidatesIdRoute
   '/interviews/mine': typeof InterviewsMineRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
@@ -165,6 +174,7 @@ export interface FileRouteTypes {
     | '/offers'
     | '/reports'
     | '/team'
+    | '/assess/$token'
     | '/candidates/$id'
     | '/interviews/mine'
     | '/requisitions/$id'
@@ -182,6 +192,7 @@ export interface FileRouteTypes {
     | '/offers'
     | '/reports'
     | '/team'
+    | '/assess/$token'
     | '/candidates/$id'
     | '/interviews/mine'
     | '/requisitions/$id'
@@ -199,6 +210,7 @@ export interface FileRouteTypes {
     | '/offers'
     | '/reports'
     | '/team'
+    | '/assess/$token'
     | '/candidates/$id'
     | '/interviews/mine'
     | '/requisitions/$id'
@@ -217,6 +229,7 @@ export interface RootRouteChildren {
   OffersRoute: typeof OffersRoute
   ReportsRoute: typeof ReportsRoute
   TeamRoute: typeof TeamRoute
+  AssessTokenRoute: typeof AssessTokenRoute
   CandidatesIdRoute: typeof CandidatesIdRoute
   RequisitionsIdRoute: typeof RequisitionsIdRoute
   CandidatesIndexRoute: typeof CandidatesIndexRoute
@@ -289,6 +302,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TeamRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/assess/$token': {
+      id: '/assess/$token'
+      path: '/assess/$token'
+      fullPath: '/assess/$token'
+      preLoaderRoute: typeof AssessTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/candidates/': {
       id: '/candidates/'
       path: '/candidates'
@@ -356,6 +376,7 @@ const rootRouteChildren: RootRouteChildren = {
   OffersRoute: OffersRoute,
   ReportsRoute: ReportsRoute,
   TeamRoute: TeamRoute,
+  AssessTokenRoute: AssessTokenRoute,
   CandidatesIdRoute: CandidatesIdRoute,
   RequisitionsIdRoute: RequisitionsIdRoute,
   CandidatesIndexRoute: CandidatesIndexRoute,
