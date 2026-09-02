@@ -314,7 +314,8 @@ function Candidates() {
         website_url: p.website_url ?? "",
         x_url: "",
         source: "direct",
-      });
+      }));
+
       toast.success("Resume parsed — review the extracted fields");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Parsing failed");
