@@ -83,6 +83,115 @@ export const importJd = createServerFn({ method: "POST" })
     return result.data;
   });
 
+/* ------------------------------------------- JD-aware weight intelligence */
+
+const WeightAdviceInput = z.object({
+  title: z.string(),
+  seniorityHint: z.string().optional().nullable(),
+  mustHave: z.array(z.string()),
+  goodToHave: z.array(z.string()),
+  education: z.string().optional().nullable(),
+  experienceMin: z.number(),
+  experienceMax: z.number(),
+  jdText: z.string().optional().nullable(),
+});
+
+export type WeightAdvice = {
+  skills: number;
+  experience: number;
+  education: number;
+  social: number;
+  rationale: string;
+  notes: string[];
+};
+
+/**
+ * Ask the model to distribute the 100 scoring points across the four dimensions
+ * for THIS job, then hard-normalise server-side so the total is always exactly 100.
+ */
+export const suggestWeights = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => WeightAdviceInput.parse(data))
+  .handler(async ({ data }): Promise<WeightAdvice> => {
+    const result = await aiJson<WeightAdvice>({
+      system:
+        "You tune the scoring model for one specific job description. Distribute exactly 100 points across " +
+        "skills, experience, education and social (public-profile evidence). Reason about the role: deep " +
+        "technical/IC roles weight skills highest; leadership and regulated roles weight experience higher; " +
+        "research, medical, academic or licence-bound roles raise education; developer-relations, design, " +
+        "content, growth and open-source-heavy roles raise social. Keep social between 5 and 30 and never 0 " +
+        "unless the role has no public footprint at all. Return ONLY JSON with keys: skills, experience, " +
+        "education, social (integers summing to 100), rationale (2-3 sentences), notes (2-4 short bullet strings).",
+      prompt: JSON.stringify(data),
+    });
+    if (!result.ok) throw new Error(result.message);
+
+    const raw = {
+      skills: Math.max(0, Math.round(Number(result.data.skills) || 0)),
+      experience: Math.max(0, Math.round(Number(result.data.experience) || 0)),
+      education: Math.max(0, Math.round(Number(result.data.education) || 0)),
+      social: Math.max(0, Math.round(Number(result.data.social) || 0)),
+    };
+    const total = raw.skills + raw.experience + raw.education + raw.social || 1;
+    const scaled = {
+      skills: Math.round((raw.skills / total) * 100),
+      experience: Math.round((raw.experience / total) * 100),
+      education: Math.round((raw.education / total) * 100),
+      social: Math.round((raw.social / total) * 100),
+    };
+    // Push any rounding drift onto the largest bucket so the total is exactly 100.
+    const drift = 100 - (scaled.skills + scaled.experience + scaled.education + scaled.social);
+    const biggest = (Object.keys(scaled) as (keyof typeof scaled)[]).reduce((a, b) =>
+      scaled[a] >= scaled[b] ? a : b,
+    );
+    scaled[biggest] += drift;
+
+    return {
+      ...scaled,
+      rationale: result.data.rationale ?? "",
+      notes: result.data.notes ?? [],
+    };
+  });
+
+/* --------------------------------------------- LinkedIn job post designer */
+
+const PostInput = z.object({
+  title: z.string(),
+  company: z.string().default("Yavar"),
+  location: z.string().optional().nullable(),
+  openings: z.number().default(1),
+  experienceMin: z.number(),
+  experienceMax: z.number(),
+  mustHave: z.array(z.string()),
+  goodToHave: z.array(z.string()),
+  jdText: z.string().optional().nullable(),
+  tone: z.enum(["professional", "warm", "bold"]).default("professional"),
+  applyUrl: z.string().optional().nullable(),
+});
+
+export type SocialJobPost = {
+  headline: string;
+  body: string;
+  hashtags: string[];
+  call_to_action: string;
+};
+
+/** Draft a ready-to-publish LinkedIn job post from the approved requisition + JD. */
+export const draftLinkedinPost = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => PostInput.parse(data))
+  .handler(async ({ data }) => {
+    const result = await aiJson<SocialJobPost>({
+      system:
+        "You write high-performing LinkedIn hiring posts. Concrete, specific, no buzzwords, no emojis except at " +
+        "most two, no 'rockstar/ninja'. Structure the body in short scannable lines with real detail on the role, " +
+        "the stack and what success looks like. Under 1300 characters. Return ONLY JSON with keys: headline " +
+        "(one line), body (the post text with line breaks), hashtags (5-8 strings without the # symbol), call_to_action.",
+      prompt: JSON.stringify(data),
+    });
+    if (!result.ok) throw new Error(result.message);
+    return result.data;
+  });
+
+
 
 /* -------------------------------------------------------------- JD vs CV */
 

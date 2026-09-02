@@ -8,7 +8,7 @@ import { Github, Linkedin, Sparkles, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { applicationsQuery, candidatesQuery, latestScores, matchScoresQuery, requisitionsQuery } from "@/lib/data";
 import { parseResume } from "@/lib/matching.functions";
-import { extractResumeText } from "@/lib/cv-extract";
+import { intakeCvs, type IntakeStatus } from "@/lib/cv-intake";
 
 import { EmptyState, PageHeader, ScoreChip, SkillPills } from "@/components/ats";
 import { Button } from "@/components/ui/button";
@@ -61,8 +61,8 @@ function Candidates() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkReqId, setBulkReqId] = useState("");
   const [bulkSource, setBulkSource] = useState("direct");
-  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
-  const [bulkLog, setBulkLog] = useState<{ file: string; ok: boolean; message: string }[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkLog, setBulkLog] = useState<IntakeStatus[]>([]);
   const [form, setForm] = useState({
     full_name: "",
     email: "",
@@ -77,54 +77,32 @@ function Candidates() {
     source: "direct",
   });
 
-  /** Bulk CV intake: read each file locally, AI-parse it, then insert the candidate. */
+  /** Bulk CV intake: read each file locally, AI-parse it, then upsert the candidate. */
   async function bulkUpload(files: FileList | null) {
     if (!files || files.length === 0) return;
     const list = Array.from(files);
-    setBulkProgress({ done: 0, total: list.length });
-    setBulkLog([]);
-    for (const [i, file] of list.entries()) {
-      try {
-        const text = await extractResumeText(file);
-        if (text.length < 20) throw new Error("No readable text found in the file");
-        const p = await parse({ data: { resumeText: text.slice(0, 20000) } });
-        const email = (p.email ?? "").trim() || `unknown+${Date.now()}-${i}@import.local`;
-        const { data, error } = await supabase
-          .from("candidates")
-          .insert({
-            full_name: (p.full_name ?? "").trim() || file.name.replace(/\.[^.]+$/, ""),
-            email,
-            location: p.location || null,
-            experience_years: Number(p.experience_years) || 0,
-            education: p.education || null,
-            skills: p.skills ?? [],
-            linkedin_url: p.linkedin_url || null,
-            github_url: p.github_url || null,
-            website_url: p.website_url || null,
-            source: bulkSource,
-            resume_text: text,
-          })
-          .select("id")
-          .single();
-        if (error || !data) throw new Error(error?.message ?? "Insert failed");
-        if (bulkReqId) {
-          await supabase
-            .from("applications")
-            .insert({ requisition_id: bulkReqId, candidate_id: data.id, source: bulkSource });
-        }
-        setBulkLog((l) => [...l, { file: file.name, ok: true, message: `${p.full_name ?? "parsed"} · ${(p.skills ?? []).length} skills` }]);
-      } catch (e) {
-        setBulkLog((l) => [
-          ...l,
-          { file: file.name, ok: false, message: e instanceof Error ? e.message : "Failed" },
-        ]);
-      }
-      setBulkProgress({ done: i + 1, total: list.length });
+    setBulkBusy(true);
+    setBulkLog(list.map((f) => ({ file: f.name, state: "pending" as const, message: "Queued" })));
+    try {
+      const summary = await intakeCvs({
+        files: list,
+        parse,
+        source: bulkSource,
+        requisitionId: bulkReqId || null,
+        onUpdate: (i, patch) =>
+          setBulkLog((l) => l.map((row, idx) => (idx === i ? { ...row, ...patch } : row))),
+      });
+      await qc.invalidateQueries({ queryKey: ["candidates"] });
+      await qc.invalidateQueries({ queryKey: ["applications"] });
+      if (summary.failed === 0) toast.success(`${summary.ok} CV${summary.ok === 1 ? "" : "s"} added to the talent pool`);
+      else toast.warning(`${summary.ok} parsed · ${summary.failed} failed — see the list`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Bulk upload failed");
+    } finally {
+      setBulkBusy(false);
     }
-    qc.invalidateQueries({ queryKey: ["candidates"] });
-    qc.invalidateQueries({ queryKey: ["applications"] });
-    toast.success("Bulk CV parsing finished");
   }
+
 
 
   const scoreMap = latestScores(scores.data ?? []);
@@ -283,25 +261,43 @@ function Candidates() {
                 <Input
                   type="file"
                   multiple
+                  disabled={bulkBusy}
                   accept=".pdf,.docx,.txt,.md"
-                  onChange={(e) => bulkUpload(e.target.files)}
+                  onChange={(e) => {
+                    bulkUpload(e.target.files);
+                    e.target.value = "";
+                  }}
                 />
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Text-based PDF, DOCX, TXT or MD. Scanned/image-only PDFs cannot be read — export a text PDF.
+                </p>
               </div>
 
-              {bulkProgress && (
-                <p className="num text-xs text-muted-foreground">
-                  Parsed {bulkProgress.done} / {bulkProgress.total}
-                </p>
-              )}
               {bulkLog.length > 0 && (
-                <ul className="max-h-56 space-y-1 overflow-y-auto text-xs">
-                  {bulkLog.map((l, i) => (
-                    <li key={i} className={l.ok ? "text-muted-foreground" : "text-destructive"}>
-                      <span className="font-medium">{l.file}</span> — {l.message}
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  <p className="num text-xs text-muted-foreground">
+                    {bulkLog.filter((l) => l.state === "ok").length} parsed ·{" "}
+                    {bulkLog.filter((l) => l.state === "error").length} failed · {bulkLog.length} total
+                  </p>
+                  <ul className="max-h-56 space-y-1 overflow-y-auto text-xs">
+                    {bulkLog.map((l, i) => (
+                      <li
+                        key={i}
+                        className={
+                          l.state === "error"
+                            ? "text-destructive"
+                            : l.state === "ok"
+                              ? "text-muted-foreground"
+                              : "text-foreground"
+                        }
+                      >
+                        <span className="font-medium">{l.file}</span> — {l.message}
+                      </li>
+                    ))}
+                  </ul>
+                </>
               )}
+
 
               <DialogFooter>
                 <Button variant="outline" onClick={() => setBulkOpen(false)}>

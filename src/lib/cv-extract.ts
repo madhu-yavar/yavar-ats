@@ -8,10 +8,13 @@ export async function extractResumeText(file: File): Promise<string> {
 
   if (name.endsWith(".pdf")) {
     const pdfjs = await import("pdfjs-dist");
-    const workerUrl = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;
-    pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+    // Vite bundles the pdf.js worker for us; a worker *port* is the only
+    // reliable wiring in both dev and the built worker runtime.
+    const PdfWorker = (await import("pdfjs-dist/build/pdf.worker.min.mjs?worker")).default;
+    pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker() as unknown as Worker;
     const buf = await file.arrayBuffer();
     const doc = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise;
+
     const pages: string[] = [];
     for (let i = 1; i <= doc.numPages; i++) {
       const page = await doc.getPage(i);
@@ -23,22 +26,33 @@ export async function extractResumeText(file: File): Promise<string> {
           .replace(/\s+/g, " "),
       );
     }
-    return pages.join("\n\n").trim();
+    const text = pages.join("\n\n").trim();
+    if (text.length < 20) {
+      throw new Error(
+        "This PDF has no selectable text (it looks like a scan or image). Export a text PDF or upload the DOCX.",
+      );
+    }
+    return text;
   }
 
   if (name.endsWith(".docx")) {
     const mammoth = await import("mammoth/mammoth.browser");
     const buf = await file.arrayBuffer();
     const { value } = await mammoth.extractRawText({ arrayBuffer: buf });
-    return value.trim();
+    const text = value.trim();
+    if (text.length < 20) throw new Error("No readable text found in this Word file");
+    return text;
   }
 
   if (name.endsWith(".doc")) {
     throw new Error("Legacy .doc is not readable — save as .docx or PDF");
   }
 
-  return (await file.text()).trim();
+  const plain = (await file.text()).trim();
+  if (plain.length < 20) throw new Error("File is empty or unreadable");
+  return plain;
 }
+
 
 /** Proportionally rescale weights so they total exactly 100. */
 export function balanceWeights<T extends Record<string, number>>(w: T): T {
