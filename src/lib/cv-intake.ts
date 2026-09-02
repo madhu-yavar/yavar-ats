@@ -108,6 +108,13 @@ export async function intakeCvs(opts: {
         mergedFrom = match.reason;
       }
 
+      if (!candidateId) {
+        const { data, error } = await supabase.from("candidates").insert(row).select("id").single();
+        if (error || !data) throw new Error(error?.message ?? "Could not save the candidate");
+        candidateId = data.id;
+      }
+
+
       if (requisitionId) {
         const { data: existingApp } = await supabase
           .from("applications")
