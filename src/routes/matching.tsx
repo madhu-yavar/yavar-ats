@@ -480,7 +480,9 @@ function Matching() {
 
           <section className="panel p-5">
             <h2 className="font-semibold">Scoring weights</h2>
-            <p className="text-xs text-muted-foreground">Adjust for this run; requisition defaults are preloaded.</p>
+            <p className="text-xs text-muted-foreground">
+              Move a slider or type a number — the other three rebalance so the total always stays 100.
+            </p>
             <div className="mt-4 space-y-4">
               {(
                 [
@@ -491,16 +493,23 @@ function Matching() {
                 ] as const
               ).map(([key, label]) => (
                 <div key={key}>
-                  <div className="mb-1.5 flex items-center justify-between text-sm">
+                  <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
                     <span>{label}</span>
-                    <span className="num font-semibold">{effWeights[key]}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={effWeights[key]}
+                      onChange={(e) => setWeight(key, Number(e.target.value))}
+                      className="num h-8 w-16 rounded-md border border-border bg-background px-2 text-right text-sm"
+                    />
                   </div>
                   <Slider
                     value={[effWeights[key]]}
                     min={0}
-                    max={70}
-                    step={5}
-                    onValueChange={([v]) => setWeights({ ...effWeights, [key]: v })}
+                    max={100}
+                    step={1}
+                    onValueChange={([v]) => setWeight(key, v ?? 0)}
                   />
                 </div>
               ))}
@@ -513,12 +522,18 @@ function Matching() {
                   Total {weightTotal} / 100
                   {weightTotal !== 100 ? " — rebalance to score" : ""}
                 </p>
-                {weightTotal !== 100 && (
-                  <Button size="sm" variant="outline" onClick={() => setWeights(balanceWeights(effWeights))}>
-                    Balance to 100
+                <div className="flex gap-2">
+                  {weightTotal !== 100 && (
+                    <Button size="sm" variant="outline" onClick={() => setWeights(balanceWeights(effWeights))}>
+                      Balance to 100
+                    </Button>
+                  )}
+                  <Button size="sm" variant="ghost" onClick={() => setWeights(null)}>
+                    Reset to requisition
                   </Button>
-                )}
+                </div>
               </div>
+
 
               <div className="flex items-center justify-between border-t border-border pt-4">
                 <div>
