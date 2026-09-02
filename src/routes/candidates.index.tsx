@@ -120,6 +120,28 @@ function money(v: number | null) {
   return v >= 100000 ? `${(v / 100000).toFixed(1)}L` : v.toLocaleString();
 }
 
+/** Education arrives either as prose or as raw parsed JSON — always show readable text. */
+function educationLabel(raw: string | null | undefined) {
+  const value = (raw ?? "").trim();
+  if (!value) return "";
+  if (!(value.startsWith("[") || value.startsWith("{"))) return value;
+  try {
+    const parsed = JSON.parse(value);
+    const rows = Array.isArray(parsed) ? parsed : [parsed];
+    const parts = rows
+      .map((r: Record<string, unknown>) =>
+        [r?.["degree"], r?.["institution"], r?.["end_date"] ?? r?.["year"]]
+          .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+          .join(", "),
+      )
+      .filter((s) => s.length > 0);
+    return parts.join(" · ");
+  } catch {
+    return value;
+  }
+}
+
+
 
 
 function Candidates() {
