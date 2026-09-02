@@ -133,7 +133,11 @@ function Offers() {
           </div>
           {(offers.data ?? []).length === 0 ? (
             <div className="p-5">
-              <EmptyState title="No offers yet" hint="Candidates reach this stage after an L3 select verdict." />
+              <EmptyState
+                title="No offers yet"
+                hint="Record a select verdict on the final interview round, or move a candidate to Offer pending — they then appear in the picker on the right."
+              />
+
             </div>
           ) : (
             <ul className="divide-y divide-border">
