@@ -35,13 +35,17 @@ export const Route = createFileRoute("/offers")({
   component: Offers,
 });
 
-const FLOW: Record<string, { next: string; label: string }> = {
+/** Offer approval chain, and the candidate stage each step implies. */
+const FLOW: Record<string, { next: string; label: string; stage?: string }> = {
   draft: { next: "pending_hr", label: "Send to HR" },
   pending_hr: { next: "pending_cbo", label: "HR approve" },
   pending_cbo: { next: "approved", label: "CBO approve" },
-  approved: { next: "released", label: "Release offer" },
-  released: { next: "accepted", label: "Mark accepted" },
+  approved: { next: "released", label: "Release offer", stage: "offer_released" },
+  released: { next: "accepted", label: "Mark accepted", stage: "offer_accepted" },
 };
+
+/** A candidate is offer-ready once the final round is cleared or HR pushed them to offer. */
+const OFFER_READY = ["l3", "offer", "offer_pending"];
 
 function Offers() {
   const qc = useQueryClient();
@@ -54,7 +58,8 @@ function Offers() {
   const [ctc, setCtc] = useState("");
   const [joining, setJoining] = useState("");
 
-  const offerStage = (apps.data ?? []).filter((a) => ["offer", "hired"].includes(a.stage));
+  const raisedFor = new Set((offers.data ?? []).map((o) => o.application_id));
+  const offerStage = (apps.data ?? []).filter((a) => OFFER_READY.includes(a.stage) && !raisedFor.has(a.id));
 
   async function create() {
     if (!appId || !ctc) {
@@ -76,10 +81,14 @@ function Offers() {
       toast.error(error.message);
       return;
     }
+    // Raising the offer is what puts the candidate in "offer pending approval".
+    await supabase.from("applications").update({ stage: "offer_pending" }).eq("id", appId);
+    setAppId("");
     setCtc("");
     setJoining("");
     toast.success("Offer raised and sent for HR approval");
     qc.invalidateQueries({ queryKey: ["offers"] });
+    qc.invalidateQueries({ queryKey: ["applications"] });
   }
 
   async function advance(id: string, status: string, trail: unknown) {
@@ -97,14 +106,16 @@ function Offers() {
       toast.error(error.message);
       return;
     }
-    if (step.next === "accepted") {
+    if (step.stage) {
       const offer = (offers.data ?? []).find((o) => o.id === id);
-      if (offer) await supabase.from("applications").update({ stage: "hired" }).eq("id", offer.application_id);
+      if (offer)
+        await supabase.from("applications").update({ stage: step.stage as never }).eq("id", offer.application_id);
     }
     toast.success(`Offer moved to ${step.next.replace("_", " ")}`);
     qc.invalidateQueries({ queryKey: ["offers"] });
     qc.invalidateQueries({ queryKey: ["applications"] });
   }
+
 
   return (
     <>
