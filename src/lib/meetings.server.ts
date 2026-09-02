@@ -18,11 +18,25 @@ export type MeetingRequest = {
 
 export type MeetingResult = { joinUrl: string; externalId: string | null; provider: MeetingProviderId };
 
+const FIELD_LABEL: Record<string, string> = {
+  tenant_id: "Directory (tenant) ID",
+  client_id: "Application (client) ID",
+  client_secret: "Client secret value",
+  organizer_email: "Organizer mailbox",
+  account_id: "Account ID",
+  refresh_token: "Refresh token",
+};
+
 function need(secrets: Record<string, string>, keys: string[], label: string) {
   const missing = keys.filter((k) => !secrets[k]);
   if (missing.length)
-    throw new Error(`${label} is not fully configured — add ${missing.join(", ")} on the Integrations page.`);
+    throw new Error(
+      `${label} is not fully configured — save ${missing
+        .map((k) => FIELD_LABEL[k] ?? k)
+        .join(", ")} on the Integrations page, then test again.`,
+    );
 }
+
 
 async function jsonOrThrow(res: Response, label: string) {
   const text = await res.text();
