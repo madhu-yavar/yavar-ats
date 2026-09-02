@@ -15,7 +15,7 @@ export type Interview = Tables<"interviews">;
 export type Offer = Tables<"offers">;
 export type AiInterview = Tables<"ai_interviews">;
 export type MasterItem = Tables<"master_items">;
-export type MasterKind = "skill" | "location" | "education" | "employment_type" | "industry";
+export type MasterKind = "skill" | "location" | "education" | "employment_type" | "industry" | "role_title";
 
 async function unwrap<T>(p: PromiseLike<{ data: T | null; error: { message: string } | null }>) {
   const { data, error } = await p;
