@@ -262,6 +262,38 @@ function Requisitions() {
                     onChange={(e) => setForm({ ...form, hiring_manager: e.target.value })}
                   />
                 </Field>
+                <Field label="Billing type">
+                  <MasterSelect
+                    options={billingTypes}
+                    value={form.billing_type}
+                    onChange={(v) => setForm({ ...form, billing_type: v })}
+                    placeholder="Billable / Non-billable"
+                  />
+                </Field>
+                <Field label="Engagement type">
+                  <MasterSelect
+                    options={engagementTypes}
+                    value={form.engagement_type}
+                    onChange={(v) => setForm({ ...form, engagement_type: v })}
+                    placeholder="Client project, R&D, internal…"
+                  />
+                </Field>
+                <Field label="Client / account">
+                  <CreatableSelect
+                    options={clients}
+                    value={form.client_name}
+                    onChange={(v) => setForm({ ...form, client_name: v })}
+                    onCreate={createClient}
+                    placeholder="Only for client-billed roles"
+                  />
+                </Field>
+                <Field label="Cost centre">
+                  <Input
+                    value={form.cost_center}
+                    onChange={(e) => setForm({ ...form, cost_center: e.target.value })}
+                    placeholder="e.g. CC-ENG-01"
+                  />
+                </Field>
                 <Field label="Must-have skills" className="sm:col-span-2">
                   <TokenPicker
                     options={skills}
