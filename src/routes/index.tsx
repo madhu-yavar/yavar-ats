@@ -203,9 +203,9 @@ function Dashboard() {
       .map((req) => {
         const taken = appliedTo.get(req.id) ?? new Set<string>();
         const pool = candidates.filter((c) => !taken.has(c.id));
-        const ranked = rankPool(pool, req)
-          .filter((r) => r.fit >= 40 && (r.mustHits.length > 0 || r.mustHits.length + r.mustMisses.length === 0))
-          .slice(0, 3);
+        // Always show the best three the history has; weak fits are labelled
+        // rather than hidden, so the recruiter knows the pool was checked.
+        const ranked = rankPool(pool, req).slice(0, 3);
         return { req, ranked };
       })
       .filter((row) => row.ranked.length > 0);
@@ -345,6 +345,7 @@ function Dashboard() {
                           {r.candidate.experience_years} yrs
                           {r.experienceOk ? "" : " (band mismatch)"}
                           {r.locationOk ? "" : " · location mismatch"}
+                          {r.fit < 40 ? " · weak fit" : ""}
                         </span>
                         <span
                           className={
