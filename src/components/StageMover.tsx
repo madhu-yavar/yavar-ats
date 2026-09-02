@@ -130,19 +130,28 @@ export function StageMover({
             <Label className="mb-1.5 block text-xs text-muted-foreground">
               Reason {needsReason ? <span className="text-destructive">*</span> : "(optional)"}
             </Label>
-            <Select value={reason} onValueChange={setReason}>
+            <Select value={reason} onValueChange={setReason} disabled={!toStage || reasons.length === 0}>
               <SelectTrigger>
-                <SelectValue placeholder="Pick a reason" />
+                <SelectValue
+                  placeholder={
+                    !toStage
+                      ? "Choose the new stage first"
+                      : reasons.length === 0
+                        ? "No reason needed — add a note instead"
+                        : `Why ${STAGE_LABEL[toStage]}?`
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
                 {reasons.map((r) => (
-                  <SelectItem key={r.id} value={r.name}>
-                    {r.name}
+                  <SelectItem key={r} value={r}>
+                    {r}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+
 
           <div>
             <Label className="mb-1.5 block text-xs text-muted-foreground">Note</Label>
