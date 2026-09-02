@@ -1,16 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
+import { useOrg } from "@/hooks/useOrg";
+import type { AppRole } from "@/lib/org.functions";
 
-import { myRoles, type AppRole } from "@/lib/roles.functions";
-
-/** Roles for the signed-in user, plus the approval permission helper. */
+/** Roles for the signed-in user inside their organisation, plus approval helpers. */
 export function useRoles() {
-  const fetchRoles = useServerFn(myRoles);
-  const q = useQuery({ queryKey: ["my_roles"], queryFn: () => fetchRoles({}) });
-  const roles = (q.data ?? []) as AppRole[];
-  const isAdmin = roles.includes("president_cbo");
+  const { roles, isOwner, isLoading } = useOrg();
+  const isAdmin = isOwner || roles.includes("president_cbo");
 
-  /** Which role owns each approval hop. Admin (CHRO) can action every step. */
+  /** Which role owns each approval hop. The CHRO admin can action every step. */
   function canApprove(status: string) {
     if (isAdmin) return true;
     const owner: Record<string, AppRole> = {
@@ -34,5 +30,5 @@ export function useRoles() {
     )[status];
   }
 
-  return { roles, isAdmin, canApprove, requiredRoleFor, isLoading: q.isLoading };
+  return { roles, isAdmin, canApprove, requiredRoleFor, isLoading };
 }
