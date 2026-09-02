@@ -104,6 +104,28 @@ function Matching() {
   };
   const weightTotal = effWeights.skills + effWeights.experience + effWeights.education + effWeights.social;
 
+  /** Set one weight and spread the remaining points across the other three, keeping the total at 100. */
+  function setWeight(key: keyof Weights, raw: number) {
+    const value = Math.max(0, Math.min(100, Math.round(Number.isFinite(raw) ? raw : 0)));
+    const others = (Object.keys(effWeights) as (keyof Weights)[]).filter((k) => k !== key);
+    const otherTotal = others.reduce((s, k) => s + effWeights[k], 0);
+    const remaining = 100 - value;
+    const next = { ...effWeights, [key]: value } as Weights;
+
+    if (otherTotal === 0) {
+      others.forEach((k, i) => (next[k] = Math.floor(remaining / 3) + (i < remaining % 3 ? 1 : 0)));
+    } else {
+      let assigned = 0;
+      others.forEach((k, i) => {
+        const v = i === others.length - 1 ? remaining - assigned : Math.round((effWeights[k] / otherTotal) * remaining);
+        next[k] = Math.max(0, v);
+        assigned += next[k];
+      });
+    }
+    setWeights(next);
+  }
+
+
   const scoreMap = latestScores(scores.data ?? []);
   const pipeline = useMemo(() => {
     const rows = (apps.data ?? [])
