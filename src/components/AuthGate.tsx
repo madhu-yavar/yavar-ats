@@ -13,13 +13,26 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      setSession(s);
       setReady(true);
     });
-    return () => sub.subscription.unsubscribe();
+    // Never leave the app stuck on the splash if session restore stalls.
+    const bail = setTimeout(() => setReady(true), 4000);
+    supabase.auth
+      .getSession()
+      .then(({ data }) => setSession(data.session))
+      .catch(() => undefined)
+      .finally(() => {
+        clearTimeout(bail);
+        setReady(true);
+      });
+    return () => {
+      clearTimeout(bail);
+      sub.subscription.unsubscribe();
+    };
   }, []);
+
 
   if (!ready) {
     return (
