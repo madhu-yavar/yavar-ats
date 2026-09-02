@@ -3,7 +3,6 @@ import { z } from "zod";
 
 import { aiJson } from "./ai-gateway.server";
 import {
-  MATCH_MODEL,
   mapWithConcurrency,
   scoreCandidate,
   type MatchResult,
@@ -175,7 +174,6 @@ export const parseResume = createServerFn({ method: "POST" })
         "location, experience_years (number), education, skills (string array), linkedin_url, github_url, website_url. " +
         "Use null when a field is genuinely absent. Never invent values.",
       prompt: data.resumeText.slice(0, 20000),
-      model: MATCH_MODEL,
     });
     if (!result.ok) throw new Error(result.message);
     return result.data;
@@ -208,7 +206,6 @@ export const runAiScreening = createServerFn({ method: "POST" })
         "culture_org_score (0-100 each) based on the evidence supplied. Return ONLY JSON with keys: jd_match_score, " +
         "skillset_score, culture_role_score, culture_org_score, summary, transcript (array of {question, expected_signal}).",
       prompt: JSON.stringify(data),
-      model: MATCH_MODEL,
     });
     if (!result.ok) throw new Error(result.message);
     return result.data;

@@ -15,6 +15,13 @@
       "when": 1788281814889,
       "tag": "0001_create_source_integrations",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788317492585,
+      "tag": "0002_create_ai_settings",
+      "breakpoints": true
     }
   ]
 }

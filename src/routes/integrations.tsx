@@ -3,11 +3,12 @@ import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, CircleAlert, CircleDashed, KeyRound, Loader2, Plug } from "lucide-react";
+import { CheckCircle2, CircleAlert, CircleDashed, KeyRound, Loader2, Plug, Sparkles } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { disconnectIntegration, saveIntegration, testIntegration } from "@/lib/integrations.functions";
+import { getAiSettings, removeAiKey, saveAiSettings, testAiModel } from "@/lib/ai-settings.functions";
 import { PageHeader } from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -227,6 +228,174 @@ function IntegrationCard({ row }: { row: Integration }) {
   );
 }
 
+const PROVIDER_MODELS: Record<string, { id: string; label: string }[]> = {
+  lovable: [
+    { id: "google/gemini-3.7-flash", label: "Gemini 3.7 Flash — fast, default" },
+    { id: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro — deeper reasoning" },
+    { id: "openai/gpt-5.5", label: "GPT-5.5 — strongest reasoning" },
+    { id: "openai/gpt-5.4-mini", label: "GPT-5.4 mini — cheap, high volume" },
+  ],
+  openai: [
+    { id: "gpt-5.5", label: "GPT-5.5" },
+    { id: "gpt-4.1", label: "GPT-4.1" },
+    { id: "gpt-4o", label: "GPT-4o" },
+  ],
+  anthropic: [
+    { id: "claude-sonnet-4-5", label: "Claude Sonnet 4.5" },
+    { id: "claude-opus-4-1", label: "Claude Opus 4.1" },
+    { id: "claude-3-5-haiku-latest", label: "Claude 3.5 Haiku" },
+  ],
+};
+
+function AiModelCard() {
+  const settings = useQuery({ queryKey: ["ai_settings"], queryFn: () => getAiSettings({ data: undefined }) });
+  const qc = useQueryClient();
+  const save = useServerFn(saveAiSettings);
+  const test = useServerFn(testAiModel);
+  const removeKey = useServerFn(removeAiKey);
+
+  const [provider, setProvider] = useState<string | null>(null);
+  const [model, setModel] = useState<string | null>(null);
+  const [apiKey, setApiKey] = useState("");
+  const [busy, setBusy] = useState<"save" | "test" | "clear" | null>(null);
+
+  const s = settings.data;
+  const activeProvider = provider ?? s?.provider ?? "lovable";
+  const models = PROVIDER_MODELS[activeProvider] ?? [];
+  const activeModel = model ?? (provider && provider !== s?.provider ? models[0]?.id : s?.model) ?? "";
+  const keyStored = activeProvider !== "lovable" && s?.keys?.[activeProvider as "openai" | "anthropic"];
+
+  async function onSave() {
+    setBusy("save");
+    try {
+      await save({ data: { provider: activeProvider as "lovable", model: activeModel, apiKey } });
+      setApiKey("");
+      toast.success("Scoring model updated");
+      qc.invalidateQueries({ queryKey: ["ai_settings"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function onTest() {
+    setBusy("test");
+    try {
+      const out = await test({ data: undefined });
+      if (out.status === "ok") toast.success(out.message);
+      else toast.error(out.message);
+      qc.invalidateQueries({ queryKey: ["ai_settings"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Test failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function onClearKey() {
+    setBusy("clear");
+    try {
+      await removeKey({ data: { provider: activeProvider as "openai" } });
+      toast.success("API key removed");
+      qc.invalidateQueries({ queryKey: ["ai_settings"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <article className="panel p-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <Sparkles className="size-4 text-primary" />
+        <h3 className="font-semibold">AI model for matching & scoring</h3>
+        {s ? <StatusPill status={s.last_test_status} /> : null}
+      </div>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Drives every AI step: JD drafting, resume parsing, JD↔CV skill mapping, LinkedIn narrative scoring and AI
+        screening. Deterministic scoring (experience band, GitHub signals, weighted roll-up) never uses a model.
+      </p>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label>Provider</Label>
+          <select
+            className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+            value={activeProvider}
+            onChange={(e) => {
+              setProvider(e.target.value);
+              setModel(PROVIDER_MODELS[e.target.value]?.[0]?.id ?? "");
+            }}
+          >
+            <option value="lovable">Built-in Lovable AI (Gemini + OpenAI, no key)</option>
+            <option value="openai">OpenAI — your own API key</option>
+            <option value="anthropic">Anthropic Claude — your own API key</option>
+          </select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Model</Label>
+          <select
+            className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+            value={models.some((m) => m.id === activeModel) ? activeModel : "__custom"}
+            onChange={(e) => setModel(e.target.value === "__custom" ? "" : e.target.value)}
+          >
+            {models.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+            <option value="__custom">Other (type an exact model id)</option>
+          </select>
+        </div>
+
+        {!models.some((m) => m.id === activeModel) && (
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>Model id</Label>
+            <Input value={activeModel} onChange={(e) => setModel(e.target.value)} placeholder="exact model id" />
+          </div>
+        )}
+
+        {activeProvider !== "lovable" && (
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label className="flex items-center gap-1.5">
+              <KeyRound className="size-3.5" />
+              {activeProvider === "openai" ? "OpenAI API key" : "Anthropic API key"}
+            </Label>
+            <Input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder={keyStored ? "•••••••• stored — leave blank to keep" : "sk-…"}
+            />
+            <p className="text-xs text-muted-foreground">
+              Stored server-side only; it is never returned to the browser.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {s?.last_test_message ? <p className="mt-3 text-xs text-muted-foreground">{s.last_test_message}</p> : null}
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <Button size="sm" onClick={onSave} disabled={busy !== null || !activeModel}>
+          {busy === "save" ? <Loader2 className="size-3.5 animate-spin" /> : null} Save
+        </Button>
+        <Button size="sm" variant="outline" onClick={onTest} disabled={busy !== null}>
+          {busy === "test" ? <Loader2 className="size-3.5 animate-spin" /> : null} Test model
+        </Button>
+        {keyStored ? (
+          <Button size="sm" variant="ghost" onClick={onClearKey} disabled={busy !== null}>
+            Remove key
+          </Button>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
 function Integrations() {
   const rows = useQuery(integrationsQuery);
 
@@ -238,7 +407,10 @@ function Integrations() {
         description="Store each job board's API credentials, verify the connection live, and switch it on as a sourcing channel. Credentials are held server-side and are never sent to the browser."
       />
 
+      <AiModelCard />
+
       <section className="panel p-5">
+
         <h2 className="font-semibold">What each channel can actually do</h2>
         <ul className="mt-2 space-y-1.5 text-sm text-muted-foreground">
           <li>

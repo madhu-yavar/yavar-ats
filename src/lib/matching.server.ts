@@ -9,7 +9,6 @@ import {
 
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 
-export const MATCH_MODEL = "google/gemini-3.7-flash";
 
 export type JdInputShape = {
   title: string;
@@ -120,7 +119,6 @@ export async function scoreCandidate(opts: {
       job_description: jd,
       candidate: { ...candidate, cachedSocial: undefined },
     }),
-    model: MATCH_MODEL,
   });
   if (!ai.ok) throw new Error(ai.message);
 
@@ -208,7 +206,8 @@ export async function scoreCandidate(opts: {
       cached,
     },
     contributions,
-    model: MATCH_MODEL,
+    model: ai.model,
+
   };
 }
 
