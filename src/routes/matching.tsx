@@ -98,6 +98,11 @@ function Matching() {
   const [board, setBoard] = useState("");
   const [importing, setImporting] = useState(false);
   const [addingFromPool, setAddingFromPool] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+
+  function toggleSelected(applicationId: string, on: boolean) {
+    setSelected((prev) => (on ? [...new Set([...prev, applicationId])] : prev.filter((id) => id !== applicationId)));
+  }
 
   const effWeights: Weights = weights ?? {
     skills: requisition?.weight_skills ?? 50,
