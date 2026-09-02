@@ -205,7 +205,10 @@ export async function mergeCandidates(survivor: Candidate, dupes: Candidate[]) {
 
   const patch = mergeCandidateFields(survivor, others);
   if (Object.keys(patch).length > 0) {
-    const { error } = await supabase.from("candidates").update(patch).eq("id", survivor.id);
+    const { error } = await supabase
+      .from("candidates")
+      .update(patch as never)
+      .eq("id", survivor.id);
     if (error) throw new Error(error.message);
   }
 
