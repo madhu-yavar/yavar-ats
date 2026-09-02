@@ -9,3 +9,10 @@
 - [x] Logistics & risk filters (CTC band, notice period, relocation, work authorisation) — flags only, never alters the score.
 - [x] Mindset assessment: role-specific situational questionnaire on a private candidate link, AI-scored on six behavioural dimensions.
 - [x] Weights re-balanced to exactly 100: Skills 40 / Experience 15 / Career 10 / Impact 10 / Education 10 / Social 15.
+
+## Talent pool hygiene & historic matching (done)
+- [x] Duplicate detection on email (alias-aware), phone (last 10 digits), LinkedIn/GitHub URL, name+employer — with certain/likely confidence.
+- [x] Bulk CV intake enriches an existing profile instead of creating a second row; blanks filled, skills unioned, newest CV kept.
+- [x] "Merge" bulk action folds duplicates into the oldest record and re-points applications and child records.
+- [x] CV freshness (fresh <90d / aging / stale >1yr) with "Possible duplicates" and "Stale CVs" saved views.
+- [x] Dashboard: pool-health panel, funnel conversion, source mix, skill scarcity, stalled SLA list, and auto-suggested pool candidates per open requisition with one-click add.

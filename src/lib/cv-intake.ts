@@ -6,6 +6,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { extractResumeText } from "@/lib/cv-extract";
 import { mapWithLimit } from "@/lib/shortlist";
+import { findExistingCandidate } from "@/lib/dedupe";
 
 export type IntakeStatus = {
   file: string;
@@ -66,21 +67,45 @@ export async function intakeCvs(opts: {
         resume_text: text,
       };
 
-      // Existing person? Refresh their record instead of failing on the unique email.
+      // Same human already in the pool? Enrich that record instead of creating a
+      // second row — match on email, phone or LinkedIn, not just the email.
       let candidateId: string | null = null;
-      let updated = false;
-      if (email) {
-        const { data: existing } = await supabase
-          .from("candidates")
-          .select("id")
-          .eq("email", email)
-          .maybeSingle();
-        if (existing?.id) {
-          const { error } = await supabase.from("candidates").update(row).eq("id", existing.id);
-          if (error) throw new Error(error.message);
-          candidateId = existing.id;
-          updated = true;
+      let mergedFrom: string | null = null;
+      const match = await findExistingCandidate({
+        email,
+        phone: row.phone,
+        linkedin_url: row.linkedin_url,
+        full_name: row.full_name,
+      });
+
+      if (match) {
+        const existing = match.candidate as unknown as Record<string, unknown>;
+        const patch: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(row)) {
+          if (key === "skills" || key === "resume_text") continue;
+          const current = existing[key];
+          const blank =
+            current === null ||
+            current === undefined ||
+            (typeof current === "string" && current.trim() === "") ||
+            (typeof current === "number" && current === 0);
+          const incoming =
+            value === null || value === undefined || (typeof value === "string" && value.trim() === "") ? null : value;
+          if (blank && incoming !== null) patch[key] = incoming;
         }
+        const skills = new Set([...(match.candidate.skills ?? []), ...row.skills].map((x) => x.trim()).filter(Boolean));
+        patch["skills"] = [...skills];
+        // The newer CV is the better narrative when it is at least as complete.
+        if (text.length >= (match.candidate.resume_text ?? "").length) patch["resume_text"] = text;
+        patch["last_synced_at"] = new Date().toISOString();
+
+        const { error } = await supabase
+          .from("candidates")
+          .update(patch as never)
+          .eq("id", match.candidate.id);
+        if (error) throw new Error(error.message);
+        candidateId = match.candidate.id;
+        mergedFrom = match.reason;
       }
 
       if (!candidateId) {
@@ -88,6 +113,7 @@ export async function intakeCvs(opts: {
         if (error || !data) throw new Error(error?.message ?? "Could not save the candidate");
         candidateId = data.id;
       }
+
 
       if (requisitionId) {
         const { data: existingApp } = await supabase
@@ -106,7 +132,7 @@ export async function intakeCvs(opts: {
 
       opts.onUpdate(i, {
         state: "ok",
-        message: `${row.full_name} · ${row.skills.length} skills · ${row.experience_years} yrs${updated ? " (updated)" : ""}`,
+        message: `${row.full_name} · ${row.skills.length} skills · ${row.experience_years} yrs${mergedFrom ? ` (existing profile refreshed — matched on ${mergedFrom})` : ""}`,
         candidateId,
       });
       return { ok: true as const, candidateId };
