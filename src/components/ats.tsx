@@ -125,25 +125,31 @@ export function ScoreChip({ score, size = "md" }: { score: number; size?: "sm" |
   );
 }
 
-const STAGE_LABEL: Record<string, string> = {
-  applied: "Applied",
-  ai_screened: "AI screened",
-  shortlisted: "Shortlisted",
-  l1: "L1 — Technical",
-  l2: "L2 — Dept Head",
-  l3: "L3 — HR / CBO",
-  offer: "Offer",
-  hired: "Hired",
-  rejected: "Rejected",
+import { STAGE_LABEL, STAGE_TONE, type Stage } from "@/lib/lifecycle";
+
+const STAGE_TONE_CLASS: Record<string, string> = {
+  neutral: "border-border bg-surface-2 text-muted-foreground",
+  active: "border-ring/40 bg-primary/10 text-primary",
+  good: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  warn: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-500",
+  bad: "border-destructive/30 bg-destructive/10 text-destructive",
 };
 
 export function StageBadge({ stage }: { stage: string }) {
+  const label = STAGE_LABEL[stage as Stage] ?? stage;
+  const tone = STAGE_TONE[stage as Stage] ?? "neutral";
   return (
-    <Badge variant={stage === "rejected" ? "destructive" : stage === "hired" ? "default" : "secondary"}>
-      {STAGE_LABEL[stage] ?? stage}
-    </Badge>
+    <span
+      className={cn(
+        "inline-flex items-center whitespace-nowrap rounded-md border px-2 py-0.5 text-xs font-medium",
+        STAGE_TONE_CLASS[tone],
+      )}
+    >
+      {label}
+    </span>
   );
 }
+
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "Draft",

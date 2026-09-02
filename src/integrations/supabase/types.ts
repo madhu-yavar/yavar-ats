@@ -114,25 +114,34 @@ export type Database = {
           applied_at: string
           candidate_id: string
           id: string
+          last_activity_at: string
           requisition_id: string
           source: string
           stage: Database["public"]["Enums"]["app_stage"]
+          stage_note: string | null
+          stage_reason: string | null
         }
         Insert: {
           applied_at?: string
           candidate_id: string
           id?: string
+          last_activity_at?: string
           requisition_id: string
           source?: string
           stage?: Database["public"]["Enums"]["app_stage"]
+          stage_note?: string | null
+          stage_reason?: string | null
         }
         Update: {
           applied_at?: string
           candidate_id?: string
           id?: string
+          last_activity_at?: string
           requisition_id?: string
           source?: string
           stage?: Database["public"]["Enums"]["app_stage"]
+          stage_note?: string | null
+          stage_reason?: string | null
         }
         Relationships: [
           {
@@ -147,6 +156,53 @@ export type Database = {
             columns: ["requisition_id"]
             isOneToOne: false
             referencedRelation: "requisitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      candidate_verifications: {
+        Row: {
+          authenticity_score: number
+          candidate_id: string
+          claims: Json
+          created_at: string
+          evidence: Json
+          id: string
+          model: string | null
+          red_flags: string[]
+          status: string
+          summary: string | null
+        }
+        Insert: {
+          authenticity_score?: number
+          candidate_id: string
+          claims?: Json
+          created_at?: string
+          evidence?: Json
+          id?: string
+          model?: string | null
+          red_flags?: string[]
+          status?: string
+          summary?: string | null
+        }
+        Update: {
+          authenticity_score?: number
+          candidate_id?: string
+          claims?: Json
+          created_at?: string
+          evidence?: Json
+          id?: string
+          model?: string | null
+          red_flags?: string[]
+          status?: string
+          summary?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidate_verifications_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
             referencedColumns: ["id"]
           },
         ]
@@ -168,6 +224,7 @@ export type Database = {
           github_url: string | null
           id: string
           is_internal: boolean
+          last_synced_at: string | null
           linkedin_url: string | null
           location: string | null
           manager_endorsed: boolean
@@ -176,6 +233,7 @@ export type Database = {
           resume_text: string | null
           skills: string[]
           source: string
+          sync_status: string
           website_url: string | null
           x_url: string | null
         }
@@ -195,6 +253,7 @@ export type Database = {
           github_url?: string | null
           id?: string
           is_internal?: boolean
+          last_synced_at?: string | null
           linkedin_url?: string | null
           location?: string | null
           manager_endorsed?: boolean
@@ -203,6 +262,7 @@ export type Database = {
           resume_text?: string | null
           skills?: string[]
           source?: string
+          sync_status?: string
           website_url?: string | null
           x_url?: string | null
         }
@@ -222,6 +282,7 @@ export type Database = {
           github_url?: string | null
           id?: string
           is_internal?: boolean
+          last_synced_at?: string | null
           linkedin_url?: string | null
           location?: string | null
           manager_endorsed?: boolean
@@ -230,6 +291,7 @@ export type Database = {
           resume_text?: string | null
           skills?: string[]
           source?: string
+          sync_status?: string
           website_url?: string | null
           x_url?: string | null
         }
@@ -690,6 +752,7 @@ export type Database = {
           fetched_at: string
           handle: string | null
           id: string
+          last_synced_at: string | null
           profile_url: string | null
           provider: string
           rationale: string | null
@@ -703,6 +766,7 @@ export type Database = {
           fetched_at?: string
           handle?: string | null
           id?: string
+          last_synced_at?: string | null
           profile_url?: string | null
           provider: string
           rationale?: string | null
@@ -716,6 +780,7 @@ export type Database = {
           fetched_at?: string
           handle?: string | null
           id?: string
+          last_synced_at?: string | null
           profile_url?: string | null
           provider?: string
           rationale?: string | null
@@ -779,6 +844,47 @@ export type Database = {
         }
         Relationships: []
       }
+      stage_events: {
+        Row: {
+          actor: string | null
+          application_id: string
+          created_at: string
+          from_stage: Database["public"]["Enums"]["app_stage"] | null
+          id: string
+          note: string | null
+          reason: string | null
+          to_stage: Database["public"]["Enums"]["app_stage"]
+        }
+        Insert: {
+          actor?: string | null
+          application_id: string
+          created_at?: string
+          from_stage?: Database["public"]["Enums"]["app_stage"] | null
+          id?: string
+          note?: string | null
+          reason?: string | null
+          to_stage: Database["public"]["Enums"]["app_stage"]
+        }
+        Update: {
+          actor?: string | null
+          application_id?: string
+          created_at?: string
+          from_stage?: Database["public"]["Enums"]["app_stage"] | null
+          id?: string
+          note?: string | null
+          reason?: string | null
+          to_stage?: Database["public"]["Enums"]["app_stage"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stage_events_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
@@ -818,6 +924,7 @@ export type Database = {
         | "hr_head"
         | "president_cbo"
       app_stage:
+        | "sourced"
         | "applied"
         | "ai_screened"
         | "shortlisted"
@@ -827,6 +934,16 @@ export type Database = {
         | "offer"
         | "hired"
         | "rejected"
+        | "offer_pending"
+        | "offer_released"
+        | "offer_accepted"
+        | "offer_declined"
+        | "joined"
+        | "no_show"
+        | "joining_deferred"
+        | "withdrawn"
+        | "on_hold"
+        | "reserve"
       jd_status: "draft" | "pending_dh" | "approved" | "changes_requested"
       offer_status:
         | "draft"
@@ -983,6 +1100,7 @@ export const Constants = {
         "president_cbo",
       ],
       app_stage: [
+        "sourced",
         "applied",
         "ai_screened",
         "shortlisted",
@@ -992,6 +1110,16 @@ export const Constants = {
         "offer",
         "hired",
         "rejected",
+        "offer_pending",
+        "offer_released",
+        "offer_accepted",
+        "offer_declined",
+        "joined",
+        "no_show",
+        "joining_deferred",
+        "withdrawn",
+        "on_hold",
+        "reserve",
       ],
       jd_status: ["draft", "pending_dh", "approved", "changes_requested"],
       offer_status: [

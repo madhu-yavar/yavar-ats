@@ -24,7 +24,8 @@ export type MasterKind =
   | "role_title"
   | "billing_type"
   | "engagement_type"
-  | "client";
+  | "client"
+  | "rejection_reason";
 
 async function unwrap<T>(p: PromiseLike<{ data: T | null; error: { message: string } | null }>) {
   const { data, error } = await p;
@@ -137,9 +138,56 @@ export const aiInterviewsQuery = queryOptions({
   queryFn: () => unwrap<AiInterview[]>(supabase.from("ai_interviews").select("*")),
 });
 
+export type StageEvent = Tables<"stage_events">;
+export type CandidateVerification = Tables<"candidate_verifications">;
+
+export const stageEventsQuery = (applicationIds: string[]) =>
+  queryOptions({
+    queryKey: ["stage_events", [...applicationIds].sort().join(",")],
+    enabled: applicationIds.length > 0,
+    queryFn: () =>
+      unwrap<StageEvent[]>(
+        supabase
+          .from("stage_events")
+          .select("*")
+          .in("application_id", applicationIds)
+          .order("created_at", { ascending: false }),
+      ),
+  });
+
+/** Every verification run; newest first, so the head of each candidate group is current. */
+export const verificationsQuery = queryOptions({
+  queryKey: ["candidate_verifications"],
+  queryFn: () =>
+    unwrap<CandidateVerification[]>(
+      supabase.from("candidate_verifications").select("*").order("created_at", { ascending: false }),
+    ),
+});
+
+export const candidateVerificationsQuery = (candidateId: string) =>
+  queryOptions({
+    queryKey: ["candidate_verifications", candidateId],
+    queryFn: () =>
+      unwrap<CandidateVerification[]>(
+        supabase
+          .from("candidate_verifications")
+          .select("*")
+          .eq("candidate_id", candidateId)
+          .order("created_at", { ascending: false }),
+      ),
+  });
+
+/** Latest verification per candidate. */
+export function latestVerifications(rows: CandidateVerification[]) {
+  const map = new Map<string, CandidateVerification>();
+  for (const v of rows) if (!map.has(v.candidate_id)) map.set(v.candidate_id, v);
+  return map;
+}
+
 /** Latest score per application. */
 export function latestScores(scores: MatchScore[]) {
   const map = new Map<string, MatchScore>();
   for (const s of scores) if (!map.has(s.application_id)) map.set(s.application_id, s);
   return map;
 }
+

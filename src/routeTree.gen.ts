@@ -22,6 +22,7 @@ import { Route as CandidatesIndexRouteImport } from './routes/candidates.index'
 import { Route as CandidatesIdRouteImport } from './routes/candidates.$id'
 import { Route as RequisitionsIndexRouteImport } from './routes/requisitions.index'
 import { Route as RequisitionsIdRouteImport } from './routes/requisitions.$id'
+import { Route as ApiPublicSyncCandidatesRouteImport } from './routes/api/public/sync-candidates'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -88,6 +89,11 @@ const RequisitionsIdRoute = RequisitionsIdRouteImport.update({
   path: '/requisitions/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicSyncCandidatesRoute = ApiPublicSyncCandidatesRouteImport.update({
+  id: '/api/public/sync-candidates',
+  path: '/api/public/sync-candidates',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -103,6 +109,7 @@ export interface FileRoutesByFullPath {
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates/': typeof CandidatesIndexRoute
   '/requisitions/': typeof RequisitionsIndexRoute
+  '/api/public/sync-candidates': typeof ApiPublicSyncCandidatesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -118,6 +125,7 @@ export interface FileRoutesByTo {
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates': typeof CandidatesIndexRoute
   '/requisitions': typeof RequisitionsIndexRoute
+  '/api/public/sync-candidates': typeof ApiPublicSyncCandidatesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -134,6 +142,7 @@ export interface FileRoutesById {
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates/': typeof CandidatesIndexRoute
   '/requisitions/': typeof RequisitionsIndexRoute
+  '/api/public/sync-candidates': typeof ApiPublicSyncCandidatesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -151,6 +160,7 @@ export interface FileRouteTypes {
     | '/requisitions/$id'
     | '/candidates/'
     | '/requisitions/'
+    | '/api/public/sync-candidates'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -166,6 +176,7 @@ export interface FileRouteTypes {
     | '/requisitions/$id'
     | '/candidates'
     | '/requisitions'
+    | '/api/public/sync-candidates'
   id:
     | '__root__'
     | '/'
@@ -181,6 +192,7 @@ export interface FileRouteTypes {
     | '/requisitions/$id'
     | '/candidates/'
     | '/requisitions/'
+    | '/api/public/sync-candidates'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -197,6 +209,7 @@ export interface RootRouteChildren {
   RequisitionsIdRoute: typeof RequisitionsIdRoute
   CandidatesIndexRoute: typeof CandidatesIndexRoute
   RequisitionsIndexRoute: typeof RequisitionsIndexRoute
+  ApiPublicSyncCandidatesRoute: typeof ApiPublicSyncCandidatesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -292,6 +305,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RequisitionsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/sync-candidates': {
+      id: '/api/public/sync-candidates'
+      path: '/api/public/sync-candidates'
+      fullPath: '/api/public/sync-candidates'
+      preLoaderRoute: typeof ApiPublicSyncCandidatesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -309,6 +329,7 @@ const rootRouteChildren: RootRouteChildren = {
   RequisitionsIdRoute: RequisitionsIdRoute,
   CandidatesIndexRoute: CandidatesIndexRoute,
   RequisitionsIndexRoute: RequisitionsIndexRoute,
+  ApiPublicSyncCandidatesRoute: ApiPublicSyncCandidatesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

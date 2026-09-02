@@ -57,6 +57,20 @@
       "when": 1788326420668,
       "tag": "0007_roles_admin_and_ijp",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788342108953,
+      "tag": "0008_lifecycle_stage_events_and_verification",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788342176177,
+      "tag": "0009_stage_events_and_candidate_verifications",
+      "breakpoints": true
     }
   ]
 }
