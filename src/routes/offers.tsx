@@ -199,9 +199,10 @@ function Offers() {
                 <SelectContent>
                   {offerStage.map((a) => {
                     const c = (cands.data ?? []).find((x) => x.id === a.candidate_id);
+                    const r = (reqs.data ?? []).find((x) => x.id === a.requisition_id);
                     return (
                       <SelectItem key={a.id} value={a.id}>
-                        {c?.full_name}
+                        {c?.full_name} — {r?.title ?? "Requisition"}
                       </SelectItem>
                     );
                   })}
@@ -209,8 +210,10 @@ function Offers() {
               </Select>
               {offerStage.length === 0 ? (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  No candidate has cleared L3 yet — record a select verdict on the interviews page.
+                  Nobody is offer-ready. Record a select verdict on the final round in Interviews, or use Move stage on
+                  the candidate to set Offer pending approval.
                 </p>
+
               ) : null}
             </div>
             <div>
