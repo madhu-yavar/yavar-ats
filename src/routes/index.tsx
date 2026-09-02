@@ -272,6 +272,10 @@ function Dashboard() {
         }
       />
 
+      {execScope ? <LeadershipBoard scope={execScope} /> : null}
+
+
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Open requisitions" value={open.length} hint={`${pending.length} awaiting approval`} />
         <StatCard label="Talent pool" value={candidates.length} hint={`${poolHealth.untapped} not in any pipeline`} />
