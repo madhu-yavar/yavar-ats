@@ -188,7 +188,70 @@ function RequisitionDetail() {
       toast.error(e instanceof Error ? e.message : "JD generation failed");
     } finally {
       setBusy(false);
+  }
+
+  /** Take a recruiter's own JD (pasted text or PDF/DOCX/TXT file) and file it as a JD version. */
+  async function useExistingJd(raw: string) {
+    const text = raw.trim();
+    if (text.length < 30) {
+      toast.error("Paste or upload the full JD text first");
+      return;
     }
+    setBusy(true);
+    try {
+      const jd = await runImportJd({ data: { jdText: text, title: r!.title } });
+      const { error } = await supabase.from("job_descriptions").insert({
+        requisition_id: r!.id,
+        version: ((jds.data ?? [])[0]?.version ?? 0) + 1,
+        status: "pending_dh",
+        purpose: jd.purpose,
+        responsibilities: jd.responsibilities,
+        must_have: jd.must_have,
+        good_to_have: jd.good_to_have,
+        qualifications: jd.qualifications,
+        success_factors: jd.success_factors,
+        reporting_to: jd.reporting_to,
+        full_text: jd.full_text,
+      });
+      if (error) throw new Error(error.message);
+
+      // Keep the requisition's scoring baseline in sync with the uploaded JD.
+      const patch: Record<string, unknown> = {};
+      if (jd.must_have?.length && !r!.must_have_skills.length) patch['must_have_skills'] = jd.must_have;
+      if (jd.good_to_have?.length && !r!.good_to_have_skills.length) patch['good_to_have_skills'] = jd.good_to_have;
+      if (jd.experience_min || jd.experience_max) {
+        if (!r!.experience_min && !r!.experience_max) {
+          patch['experience_min'] = jd.experience_min;
+          patch['experience_max'] = Math.max(jd.experience_max, jd.experience_min);
+        }
+      }
+      if (Object.keys(patch).length) await supabase.from("requisitions").update(patch).eq("id", r!.id);
+
+      setJdPaste("");
+      setShowImport(false);
+      toast.success("Your JD was imported, structured and sent for Department Head review");
+      qc.invalidateQueries({ queryKey: ["jd", id] });
+      qc.invalidateQueries({ queryKey: ["requisition", id] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "JD import failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onJdFile(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const text = await extractResumeText(file);
+      setJdPaste(text);
+      await useExistingJd(text);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not read that file");
+      setBusy(false);
+    }
+  }
+
   }
 
   async function approveJd() {
