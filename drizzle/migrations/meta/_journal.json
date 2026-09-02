@@ -85,6 +85,13 @@
       "when": 1788347220714,
       "tag": "0011_meeting_providers",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1788353207725,
+      "tag": "0012_career_impact_logistics_mindset",
+      "breakpoints": true
     }
   ]
 }

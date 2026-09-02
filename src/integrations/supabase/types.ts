@@ -160,6 +160,75 @@ export type Database = {
           },
         ]
       }
+      candidate_assessments: {
+        Row: {
+          answers: Json
+          candidate_id: string
+          completed_at: string | null
+          created_at: string
+          dimensions: Json | null
+          id: string
+          mindset_score: number | null
+          model: string | null
+          questions: Json
+          red_flags: string[]
+          requisition_id: string | null
+          status: string
+          strengths: string[]
+          summary: string | null
+          token: string
+        }
+        Insert: {
+          answers?: Json
+          candidate_id: string
+          completed_at?: string | null
+          created_at?: string
+          dimensions?: Json | null
+          id?: string
+          mindset_score?: number | null
+          model?: string | null
+          questions?: Json
+          red_flags?: string[]
+          requisition_id?: string | null
+          status?: string
+          strengths?: string[]
+          summary?: string | null
+          token: string
+        }
+        Update: {
+          answers?: Json
+          candidate_id?: string
+          completed_at?: string | null
+          created_at?: string
+          dimensions?: Json | null
+          id?: string
+          mindset_score?: number | null
+          model?: string | null
+          questions?: Json
+          red_flags?: string[]
+          requisition_id?: string | null
+          status?: string
+          strengths?: string[]
+          summary?: string | null
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidate_assessments_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidate_assessments_requisition_id_fkey"
+            columns: ["requisition_id"]
+            isOneToOne: false
+            referencedRelation: "requisitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       candidate_verifications: {
         Row: {
           authenticity_score: number
@@ -209,13 +278,16 @@ export type Database = {
       }
       candidates: {
         Row: {
+          career_metrics: Json | null
           consent_given: boolean
           created_at: string
           current_ctc: number | null
           current_department: string | null
+          current_employer: string | null
           education: string | null
           email: string
           employee_id: string | null
+          employment_history: Json
           expected_ctc: number | null
           experience_years: number
           external_id: string | null
@@ -230,21 +302,28 @@ export type Database = {
           manager_endorsed: boolean
           notice_period_days: number | null
           phone: string | null
+          preferred_locations: string[]
+          referral_source: string | null
           resume_text: string | null
           skills: string[]
           source: string
           sync_status: string
           website_url: string | null
+          willing_to_relocate: boolean | null
+          work_authorization: string | null
           x_url: string | null
         }
         Insert: {
+          career_metrics?: Json | null
           consent_given?: boolean
           created_at?: string
           current_ctc?: number | null
           current_department?: string | null
+          current_employer?: string | null
           education?: string | null
           email: string
           employee_id?: string | null
+          employment_history?: Json
           expected_ctc?: number | null
           experience_years?: number
           external_id?: string | null
@@ -259,21 +338,28 @@ export type Database = {
           manager_endorsed?: boolean
           notice_period_days?: number | null
           phone?: string | null
+          preferred_locations?: string[]
+          referral_source?: string | null
           resume_text?: string | null
           skills?: string[]
           source?: string
           sync_status?: string
           website_url?: string | null
+          willing_to_relocate?: boolean | null
+          work_authorization?: string | null
           x_url?: string | null
         }
         Update: {
+          career_metrics?: Json | null
           consent_given?: boolean
           created_at?: string
           current_ctc?: number | null
           current_department?: string | null
+          current_employer?: string | null
           education?: string | null
           email?: string
           employee_id?: string | null
+          employment_history?: Json
           expected_ctc?: number | null
           experience_years?: number
           external_id?: string | null
@@ -288,11 +374,15 @@ export type Database = {
           manager_endorsed?: boolean
           notice_period_days?: number | null
           phone?: string | null
+          preferred_locations?: string[]
+          referral_source?: string | null
           resume_text?: string | null
           skills?: string[]
           source?: string
           sync_status?: string
           website_url?: string | null
+          willing_to_relocate?: boolean | null
+          work_authorization?: string | null
           x_url?: string | null
         }
         Relationships: []
@@ -564,10 +654,18 @@ export type Database = {
       match_scores: {
         Row: {
           application_id: string
+          career_flags: string[]
+          career_metrics: Json | null
+          career_score: number
           computed_at: string
           education_score: number
           experience_score: number
           id: string
+          impact_highlights: string[]
+          impact_score: number
+          innovation_score: number
+          innovation_signals: string[]
+          logistics_flags: string[]
           matched_skills: string[]
           missing_skills: string[]
           model: string | null
@@ -585,10 +683,18 @@ export type Database = {
         }
         Insert: {
           application_id: string
+          career_flags?: string[]
+          career_metrics?: Json | null
+          career_score?: number
           computed_at?: string
           education_score?: number
           experience_score?: number
           id?: string
+          impact_highlights?: string[]
+          impact_score?: number
+          innovation_score?: number
+          innovation_signals?: string[]
+          logistics_flags?: string[]
           matched_skills?: string[]
           missing_skills?: string[]
           model?: string | null
@@ -606,10 +712,18 @@ export type Database = {
         }
         Update: {
           application_id?: string
+          career_flags?: string[]
+          career_metrics?: Json | null
+          career_score?: number
           computed_at?: string
           education_score?: number
           experience_score?: number
           id?: string
+          impact_highlights?: string[]
+          impact_score?: number
+          innovation_score?: number
+          innovation_signals?: string[]
+          logistics_flags?: string[]
           matched_skills?: string[]
           missing_skills?: string[]
           model?: string | null
@@ -682,6 +796,8 @@ export type Database = {
           code: string
           cost_center: string | null
           created_at: string
+          ctc_band_max: number | null
+          ctc_band_min: number | null
           department_id: string | null
           education_requirement: string | null
           engagement_type: string
@@ -694,6 +810,7 @@ export type Database = {
           ijp_notes: string | null
           ijp_posted_at: string | null
           location: string | null
+          max_notice_period_days: number | null
           must_have_skills: string[]
           opened_at: string
           openings: number
@@ -701,10 +818,13 @@ export type Database = {
           responsibilities: string | null
           status: Database["public"]["Enums"]["req_status"]
           title: string
+          weight_career: number
           weight_education: number
           weight_experience: number
+          weight_impact: number
           weight_skills: number
           weight_social: number
+          work_authorization_required: string | null
         }
         Insert: {
           approval_trail?: Json
@@ -714,6 +834,8 @@ export type Database = {
           code: string
           cost_center?: string | null
           created_at?: string
+          ctc_band_max?: number | null
+          ctc_band_min?: number | null
           department_id?: string | null
           education_requirement?: string | null
           engagement_type?: string
@@ -726,6 +848,7 @@ export type Database = {
           ijp_notes?: string | null
           ijp_posted_at?: string | null
           location?: string | null
+          max_notice_period_days?: number | null
           must_have_skills?: string[]
           opened_at?: string
           openings?: number
@@ -733,10 +856,13 @@ export type Database = {
           responsibilities?: string | null
           status?: Database["public"]["Enums"]["req_status"]
           title: string
+          weight_career?: number
           weight_education?: number
           weight_experience?: number
+          weight_impact?: number
           weight_skills?: number
           weight_social?: number
+          work_authorization_required?: string | null
         }
         Update: {
           approval_trail?: Json
@@ -746,6 +872,8 @@ export type Database = {
           code?: string
           cost_center?: string | null
           created_at?: string
+          ctc_band_max?: number | null
+          ctc_band_min?: number | null
           department_id?: string | null
           education_requirement?: string | null
           engagement_type?: string
@@ -758,6 +886,7 @@ export type Database = {
           ijp_notes?: string | null
           ijp_posted_at?: string | null
           location?: string | null
+          max_notice_period_days?: number | null
           must_have_skills?: string[]
           opened_at?: string
           openings?: number
@@ -765,10 +894,13 @@ export type Database = {
           responsibilities?: string | null
           status?: Database["public"]["Enums"]["req_status"]
           title?: string
+          weight_career?: number
           weight_education?: number
           weight_experience?: number
+          weight_impact?: number
           weight_skills?: number
           weight_social?: number
+          work_authorization_required?: string | null
         }
         Relationships: [
           {

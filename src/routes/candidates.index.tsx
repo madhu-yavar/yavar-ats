@@ -127,8 +127,14 @@ function Candidates() {
     github_url: "",
     website_url: "",
     x_url: "",
+    current_employer: "",
+    notice_period_days: "",
+    current_ctc: "",
+    expected_ctc: "",
+    work_authorization: "",
     source: "direct",
   });
+  const [willingToRelocate, setWillingToRelocate] = useState<"yes" | "no" | "unknown">("unknown");
 
   /** Bulk CV intake: read each file locally, AI-parse it, then upsert the candidate. */
   async function bulkUpload(files: FileList | null) {
@@ -295,7 +301,8 @@ function Candidates() {
     setBusy(true);
     try {
       const p = await parse({ data: { resumeText: resume } });
-      setForm({
+      setForm((prev) => ({
+        ...prev,
         full_name: p.full_name ?? "",
         email: p.email ?? "",
         location: p.location ?? "",
@@ -307,7 +314,8 @@ function Candidates() {
         website_url: p.website_url ?? "",
         x_url: "",
         source: "direct",
-      });
+      }));
+
       toast.success("Resume parsed — review the extracted fields");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Parsing failed");
@@ -339,6 +347,12 @@ function Candidates() {
         website_url: form.website_url || null,
         x_url: form.x_url || null,
         source: form.source,
+        current_employer: form.current_employer || null,
+        notice_period_days: form.notice_period_days ? Number(form.notice_period_days) : null,
+        current_ctc: form.current_ctc ? Number(form.current_ctc) : null,
+        expected_ctc: form.expected_ctc ? Number(form.expected_ctc) : null,
+        work_authorization: form.work_authorization || null,
+        willing_to_relocate: willingToRelocate === "unknown" ? null : willingToRelocate === "yes",
         resume_text: resume || null,
       })
       .select("id")
@@ -388,6 +402,19 @@ function Candidates() {
                 </DialogHeader>
 
                 <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label className="mb-1.5 block text-xs text-muted-foreground">Open to relocation</Label>
+                    <Select value={willingToRelocate} onValueChange={(v) => setWillingToRelocate(v as never)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unknown">Not asked yet</SelectItem>
+                        <SelectItem value="yes">Yes</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div>
                     <Label className="mb-1.5 block text-xs text-muted-foreground">Source</Label>
                     <Select value={bulkSource} onValueChange={setBulkSource}>
@@ -504,6 +531,11 @@ function Candidates() {
                       ["github_url", "GitHub URL"],
                       ["website_url", "Portfolio / blog URL"],
                       ["x_url", "X profile URL"],
+                      ["current_employer", "Current employer"],
+                      ["notice_period_days", "Notice period (days)"],
+                      ["current_ctc", "Current CTC (₹)"],
+                      ["expected_ctc", "Expected CTC (₹)"],
+                      ["work_authorization", "Work authorisation"],
                     ] as const
                   ).map(([key, label]) => (
                     <div key={key} className={key === "skills" ? "sm:col-span-2" : undefined}>

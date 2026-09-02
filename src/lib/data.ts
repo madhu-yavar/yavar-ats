@@ -177,6 +177,21 @@ export const candidateVerificationsQuery = (candidateId: string) =>
       ),
   });
 
+export type CandidateAssessment = Tables<"candidate_assessments">;
+
+export const candidateAssessmentsQuery = (candidateId: string) =>
+  queryOptions({
+    queryKey: ["candidate_assessments", candidateId],
+    queryFn: () =>
+      unwrap<CandidateAssessment[]>(
+        supabase
+          .from("candidate_assessments")
+          .select("*")
+          .eq("candidate_id", candidateId)
+          .order("created_at", { ascending: false }),
+      ),
+  });
+
 /** Latest verification per candidate. */
 export function latestVerifications(rows: CandidateVerification[]) {
   const map = new Map<string, CandidateVerification>();

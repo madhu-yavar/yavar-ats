@@ -99,6 +99,8 @@ const WeightAdviceInput = z.object({
 export type WeightAdvice = {
   skills: number;
   experience: number;
+  career: number;
+  impact: number;
   education: number;
   social: number;
   rationale: string;
@@ -106,7 +108,7 @@ export type WeightAdvice = {
 };
 
 /**
- * Ask the model to distribute the 100 scoring points across the four dimensions
+ * Ask the model to distribute the 100 scoring points across the six dimensions
  * for THIS job, then hard-normalise server-side so the total is always exactly 100.
  */
 export const suggestWeights = createServerFn({ method: "POST" })
@@ -115,34 +117,32 @@ export const suggestWeights = createServerFn({ method: "POST" })
     const result = await aiJson<WeightAdvice>({
       system:
         "You tune the scoring model for one specific job description. Distribute exactly 100 points across " +
-        "skills, experience, education and social (public-profile evidence). Reason about the role: deep " +
-        "technical/IC roles weight skills highest; leadership and regulated roles weight experience higher; " +
-        "research, medical, academic or licence-bound roles raise education; developer-relations, design, " +
-        "content, growth and open-source-heavy roles raise social. Keep social between 5 and 30 and never 0 " +
-        "unless the role has no public footprint at all. Return ONLY JSON with keys: skills, experience, " +
-        "education, social (integers summing to 100), rationale (2-3 sentences), notes (2-4 short bullet strings).",
+        "six dimensions: skills, experience (years vs band), career (tenure stability, progression, gaps), " +
+        "impact (quantified outcomes, ownership, innovation evidence), education and social (public-profile " +
+        "evidence). Reason about the role: deep technical/IC roles weight skills highest; leadership and " +
+        "regulated roles weight experience and career higher; high-churn or business-critical roles raise " +
+        "career; product, founding, R&D and growth roles raise impact; research, medical, academic or " +
+        "licence-bound roles raise education; developer-relations, design, content and open-source-heavy " +
+        "roles raise social. Keep career and impact between 5 and 25 each, and social between 5 and 30 and " +
+        "never 0 unless the role has no public footprint at all. Return ONLY JSON with keys: skills, " +
+        "experience, career, impact, education, social (integers summing to 100), rationale (2-3 sentences), " +
+        "notes (2-4 short bullet strings).",
       prompt: JSON.stringify(data),
     });
     if (!result.ok) throw new Error(result.message);
 
-    const raw = {
-      skills: Math.max(0, Math.round(Number(result.data.skills) || 0)),
-      experience: Math.max(0, Math.round(Number(result.data.experience) || 0)),
-      education: Math.max(0, Math.round(Number(result.data.education) || 0)),
-      social: Math.max(0, Math.round(Number(result.data.social) || 0)),
-    };
-    const total = raw.skills + raw.experience + raw.education + raw.social || 1;
-    const scaled = {
-      skills: Math.round((raw.skills / total) * 100),
-      experience: Math.round((raw.experience / total) * 100),
-      education: Math.round((raw.education / total) * 100),
-      social: Math.round((raw.social / total) * 100),
-    };
+    const keys = ["skills", "experience", "career", "impact", "education", "social"] as const;
+    const raw = Object.fromEntries(
+      keys.map((k) => [k, Math.max(0, Math.round(Number((result.data as never as Record<string, unknown>)[k]) || 0))]),
+    ) as Record<(typeof keys)[number], number>;
+    const total = keys.reduce((s, k) => s + raw[k], 0) || 1;
+    const scaled = Object.fromEntries(keys.map((k) => [k, Math.round((raw[k] / total) * 100)])) as Record<
+      (typeof keys)[number],
+      number
+    >;
     // Push any rounding drift onto the largest bucket so the total is exactly 100.
-    const drift = 100 - (scaled.skills + scaled.experience + scaled.education + scaled.social);
-    const biggest = (Object.keys(scaled) as (keyof typeof scaled)[]).reduce((a, b) =>
-      scaled[a] >= scaled[b] ? a : b,
-    );
+    const drift = 100 - keys.reduce((s, k) => s + scaled[k], 0);
+    const biggest = keys.reduce((a, b) => (scaled[a] >= scaled[b] ? a : b));
     scaled[biggest] += drift;
 
     return {
@@ -205,6 +205,17 @@ const MatchInput = z.object({
     experienceMin: z.number(),
     experienceMax: z.number(),
     jdText: z.string().optional().nullable(),
+    constraints: z
+      .object({
+        ctcBandMin: z.number().optional().nullable(),
+        ctcBandMax: z.number().optional().nullable(),
+        budgetCtc: z.number().optional().nullable(),
+        maxNoticePeriodDays: z.number().optional().nullable(),
+        locations: z.array(z.string()).optional().nullable(),
+        workAuthorizationRequired: z.string().optional().nullable(),
+      })
+      .optional()
+      .nullable(),
   }),
   candidate: z.object({
     name: z.string(),
@@ -218,15 +229,25 @@ const MatchInput = z.object({
     xUrl: z.string().optional().nullable(),
     linkedinProfileText: z.string().optional().nullable(),
     cachedSocial: z.array(z.any()).optional().nullable(),
+    noticePeriodDays: z.number().optional().nullable(),
+    currentCtc: z.number().optional().nullable(),
+    expectedCtc: z.number().optional().nullable(),
+    location: z.string().optional().nullable(),
+    preferredLocations: z.array(z.string()).optional().nullable(),
+    willingToRelocate: z.boolean().optional().nullable(),
+    workAuthorization: z.string().optional().nullable(),
   }),
   weights: z.object({
     skills: z.number(),
     experience: z.number(),
+    career: z.number(),
+    impact: z.number(),
     education: z.number(),
     social: z.number(),
   }),
   includeSocial: z.boolean().default(true),
 });
+
 
 export const matchJdToCv = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => MatchInput.parse(data))

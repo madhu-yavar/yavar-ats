@@ -128,6 +128,8 @@ function Reports() {
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <ScoreBar label="Skills" score={avg((id) => scoreMap.get(id)!.skills_score)} />
               <ScoreBar label="Experience" score={avg((id) => scoreMap.get(id)!.experience_score)} />
+              <ScoreBar label="Career history" score={avg((id) => scoreMap.get(id)!.career_score ?? 0)} />
+              <ScoreBar label="Impact & innovation" score={avg((id) => scoreMap.get(id)!.impact_score ?? 0)} />
               <ScoreBar label="Education" score={avg((id) => scoreMap.get(id)!.education_score)} />
               <ScoreBar label="Social profile" score={avg((id) => scoreMap.get(id)!.social_score)} />
             </div>

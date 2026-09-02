@@ -11,6 +11,7 @@ import {
   applicationsQuery,
   candidateQuery,
   candidateVerificationsQuery,
+  candidateAssessmentsQuery,
   evaluationsQuery,
   jdQuery,
   latestScores,
@@ -21,6 +22,7 @@ import {
 } from "@/lib/data";
 import { runAiScreening } from "@/lib/matching.functions";
 import { verifyCandidate } from "@/lib/verification.functions";
+import { createAssessment } from "@/lib/assessment.functions";
 import { normalizeExternalUrl } from "@/lib/external-links";
 import { nextAction, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
 import { StageMover } from "@/components/StageMover";
@@ -59,8 +61,10 @@ function CandidateDetail() {
   const aiRuns = useQuery(aiInterviewsQuery);
   const screen = useServerFn(runAiScreening);
   const verify = useServerFn(verifyCandidate);
+  const makeAssessment = useServerFn(createAssessment);
   const [busy, setBusy] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
+  const [assessing, setAssessing] = useState(false);
   const [mover, setMover] = useState<{ id: string; stage: Stage } | null>(null);
 
   const c = cand.data;
@@ -70,6 +74,8 @@ function CandidateDetail() {
   const scoreMap = latestScores(scores.data ?? []);
   const social = (socials.data ?? []).filter((s) => s.candidate_id === id);
   const verifs = useQuery(candidateVerificationsQuery(id));
+  const assessments = useQuery(candidateAssessmentsQuery(id));
+  const assessment = (assessments.data ?? [])[0] ?? null;
   const verification = (verifs.data ?? [])[0] ?? null;
   const appIds = myApps.map((a) => a.id);
   const events = useQuery({ ...stageEventsQuery(appIds), enabled: appIds.length > 0 });
@@ -112,6 +118,24 @@ function CandidateDetail() {
       toast.error(e instanceof Error ? e.message : "AI screening failed");
     } finally {
       setBusy(null);
+    }
+  }
+
+  /** Issue a role-specific mindset questionnaire the candidate fills in themselves. */
+  async function sendAssessment() {
+    setAssessing(true);
+    try {
+      const out = await makeAssessment({
+        data: { candidateId: id, requisitionId: firstReqId || null, count: 6 },
+      });
+      const link = `${window.location.origin}/assess/${out.token}`;
+      await navigator.clipboard?.writeText(link).catch(() => undefined);
+      toast.success("Questionnaire created — private link copied to your clipboard");
+      qc.invalidateQueries({ queryKey: ["candidate_assessments", id] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not create the questionnaire");
+    } finally {
+      setAssessing(false);
     }
   }
 
@@ -195,9 +219,11 @@ function CandidateDetail() {
 
                       {s ? (
                         <>
-                          <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                          <div className="mt-4 grid gap-3 sm:grid-cols-3">
                             <ScoreBar label="Skills" score={s.skills_score} />
                             <ScoreBar label="Experience" score={s.experience_score} />
+                            <ScoreBar label="Career history" score={s.career_score ?? 0} />
+                            <ScoreBar label="Impact & innovation" score={s.impact_score ?? 0} />
                             <ScoreBar label="Education" score={s.education_score} />
                             <ScoreBar label="Social" score={s.social_score} />
                           </div>
@@ -451,6 +477,75 @@ function CandidateDetail() {
                 <li className="text-muted-foreground">No public profiles on file.</li>
               ) : null}
             </ul>
+          </section>
+
+          <section className="panel p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">Mindset & ways of working</h2>
+                <p className="text-xs text-muted-foreground">
+                  Measured from the candidate&apos;s own situational answers — never inferred from the CV.
+                </p>
+              </div>
+              <Button size="sm" variant="outline" onClick={sendAssessment} disabled={assessing}>
+                {assessing ? "Writing questions…" : assessment ? "New questionnaire" : "Send questionnaire"}
+              </Button>
+            </div>
+
+            {!assessment ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                No questionnaire sent yet. Creating one copies a private link you can email to the candidate.
+              </p>
+            ) : assessment.status !== "completed" ? (
+              <div className="mt-3 space-y-2 text-sm">
+                <p className="text-muted-foreground">Sent, awaiting the candidate&apos;s answers.</p>
+                <button
+                  type="button"
+                  className="text-xs underline"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(`${window.location.origin}/assess/${assessment.token}`);
+                    toast.success("Link copied");
+                  }}
+                >
+                  Copy the candidate link again
+                </button>
+              </div>
+            ) : (
+              <div className="mt-3 space-y-3">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-semibold">{assessment.mindset_score ?? 0}</span>
+                  <span className="text-xs text-muted-foreground">/ 100 mindset</span>
+                </div>
+                {((assessment.dimensions as unknown as { dimension: string; score: number; evidence: string }[]) ??
+                  []).map((d) => (
+                  <div key={d.dimension}>
+                    <ScoreBar label={d.dimension} score={d.score} />
+                    <p className="mt-1 text-xs text-muted-foreground">{d.evidence}</p>
+                  </div>
+                ))}
+                {assessment.strengths.length ? (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Strengths</Label>
+                    <ul className="mt-1 space-y-0.5 text-sm text-muted-foreground">
+                      {assessment.strengths.map((x) => (
+                        <li key={x}>• {x}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {assessment.red_flags.length ? (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Watch-outs</Label>
+                    <ul className="mt-1 space-y-0.5 text-sm text-destructive">
+                      {assessment.red_flags.map((x) => (
+                        <li key={x}>! {x}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {assessment.summary ? <p className="text-sm text-muted-foreground">{assessment.summary}</p> : null}
+              </div>
+            )}
           </section>
 
           <section className="panel p-5">
