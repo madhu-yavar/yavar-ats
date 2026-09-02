@@ -38,6 +38,182 @@ const FIELD_LABEL: Record<string, string> = {
   organizer_email: "Organizer mailbox (host)",
 };
 
+/** Plain-English hint shown under each credential box. */
+const FIELD_HINT: Record<string, string> = {
+  client_id: "A long public code shown on the app page after you create the app. Safe to copy.",
+  client_secret: "The private password for that app. Shown only once — copy it right away.",
+  account_id: "Your company's account number, shown on the same app page.",
+  api_key: "A single long key your account manager or the developer portal gives you.",
+  employer_id: "Your employer/company number on the job board.",
+  token: "A read-only token you generate in your own account settings.",
+  refresh_token: "A long-lived code from the one-time sign-in step described below.",
+  tenant_id: "Your organisation's directory ID in Microsoft Entra (Azure AD).",
+  organizer_email: "The mailbox that will host the interviews, e.g. interviews@yourcompany.com.",
+};
+
+type SetupGuide = {
+  who: string;
+  minutes: string;
+  links: { label: string; href: string }[];
+  steps: string[];
+};
+
+/** Step-by-step, non-technical setup instructions per provider. */
+const SETUP_GUIDE: Record<string, SetupGuide> = {
+  linkedin: {
+    who: "Needs a LinkedIn Talent Solutions / Recruiter subscription and an admin of your LinkedIn company page.",
+    minutes: "10 min + LinkedIn review (1–5 working days)",
+    links: [
+      { label: "Create a LinkedIn app", href: "https://www.linkedin.com/developers/apps/new" },
+      { label: "Request Talent Solutions access", href: "https://business.linkedin.com/talent-solutions/recruiter" },
+      { label: "LinkedIn API docs", href: "https://learn.microsoft.com/en-us/linkedin/talent/" },
+    ],
+    steps: [
+      "Open “Create a LinkedIn app”, sign in, and link it to your company page.",
+      "On the app’s Auth tab, copy the Client ID and Client secret into the boxes below.",
+      "On the Products tab, request the recruiting products you bought (Talent Solutions / Job Posting). LinkedIn reviews this.",
+      "Once approved, press Test connection here. Approval is what unlocks posting jobs.",
+    ],
+  },
+  naukri: {
+    who: "Needs a Naukri Resdex / RMS employer subscription. Ask your Naukri account manager for API access.",
+    minutes: "5 min once Naukri sends your pack",
+    links: [
+      { label: "Naukri employer portal", href: "https://recruit.naukri.com/" },
+      { label: "Naukri employer support", href: "https://www.naukri.com/recruiter-services" },
+    ],
+    steps: [
+      "Email your Naukri account manager and ask for “Resdex API credentials for our ATS”.",
+      "They send an onboarding pack with a client ID, client secret and an API base URL.",
+      "Paste all three below (base URL goes in the last box) and press Test connection.",
+    ],
+  },
+  indeed: {
+    who: "Needs an Indeed employer account; API keys are issued by Indeed partner support.",
+    minutes: "5 min once Indeed issues the key",
+    links: [
+      { label: "Indeed employer sign-in", href: "https://employers.indeed.com/" },
+      { label: "Indeed partner / API portal", href: "https://developer.indeed.com/" },
+    ],
+    steps: [
+      "Sign in to the Indeed employer account and request API/partner access for your ATS.",
+      "Copy the API key they issue into the box below.",
+      "Add the API base URL from their email, then press Test connection.",
+    ],
+  },
+  github: {
+    who: "Anyone with a free GitHub account. Optional — it only raises the hourly limit.",
+    minutes: "2 min",
+    links: [
+      {
+        label: "Create a read-only token",
+        href: "https://github.com/settings/tokens/new?description=ATS%20candidate%20verification&scopes=public_repo",
+      },
+    ],
+    steps: [
+      "Open the link, sign in, set expiry to “No expiration” (or 1 year), leave all tick boxes unchecked.",
+      "Press Generate token and copy the value that appears once.",
+      "Paste it below and press Test connection. Without a token the app still works, just slower.",
+    ],
+  },
+  careers: {
+    who: "Nothing to configure — this is the built-in careers page source.",
+    minutes: "0 min",
+    links: [],
+    steps: ["Leave this on. Applicants from your own careers page land straight in the talent pool."],
+  },
+  zoom: {
+    who: "Needs a paid Zoom plan and someone with the Zoom admin role.",
+    minutes: "10 min",
+    links: [
+      { label: "Zoom App Marketplace (Build app)", href: "https://marketplace.zoom.us/develop/create" },
+      { label: "Zoom setup guide (with screenshots)", href: "https://developers.zoom.us/docs/internal-apps/create/" },
+    ],
+    steps: [
+      "Open the Marketplace link, choose Build App → “Server-to-Server OAuth”, and give it the name “ATS interviews”.",
+      "On the App Credentials page copy Account ID, Client ID and Client Secret into the boxes below.",
+      "Open the Scopes page, press Add Scopes and tick meeting:write:admin and meeting:read:admin.",
+      "Press Activate your app in Zoom, then Test connection here.",
+    ],
+  },
+  google_meet: {
+    who: "Needs a Google Workspace account for the recruiting calendar and its admin.",
+    minutes: "15 min",
+    links: [
+      { label: "Google Cloud credentials page", href: "https://console.cloud.google.com/apis/credentials" },
+      { label: "Turn on Calendar API", href: "https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" },
+      { label: "OAuth Playground (get refresh token)", href: "https://developers.google.com/oauthplayground/" },
+    ],
+    steps: [
+      "In Google Cloud, create a project, then press “Turn on Calendar API”.",
+      "On the credentials page choose Create credentials → OAuth client ID → Web application, and add https://developers.google.com/oauthplayground as an authorised redirect URI.",
+      "Copy the Client ID and Client secret into the boxes below.",
+      "Open the OAuth Playground, press the gear icon, tick “Use your own OAuth credentials” and paste the same ID and secret.",
+      "In step 1 enter the scope https://www.googleapis.com/auth/calendar, authorise with the recruiting calendar account, then exchange the code and copy the refresh token into the box below.",
+      "Press Test connection.",
+    ],
+  },
+  teams: {
+    who: "Needs Microsoft 365 and a Global/Application admin in Microsoft Entra (Azure AD).",
+    minutes: "15 min",
+    links: [
+      { label: "Register an Entra app", href: "https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" },
+      {
+        label: "Microsoft setup guide",
+        href: "https://learn.microsoft.com/en-us/graph/cloud-communications-online-meeting-application-access-policy",
+      },
+    ],
+    steps: [
+      "Open the Entra link and press New registration; name it “ATS interviews”.",
+      "From the Overview page copy the Application (client) ID and Directory (tenant) ID below.",
+      "Go to Certificates & secrets → New client secret, copy the value immediately into the box below.",
+      "Go to API permissions → Add a permission → Microsoft Graph → Application permissions → OnlineMeetings.ReadWrite.All, then press Grant admin consent.",
+      "Ask IT to run the Teams application access policy (see the Microsoft guide) for the organiser mailbox you enter below.",
+      "Enter that mailbox and press Test connection.",
+    ],
+  },
+};
+
+function SetupHelp({ provider, label }: { provider: string; label: string }) {
+  const guide = SETUP_GUIDE[provider];
+  if (!guide) return null;
+  return (
+    <details className="mt-3 rounded-lg border border-border bg-surface-2 p-3 open:pb-4">
+      <summary className="cursor-pointer text-sm font-medium">
+        How do I get these? — step-by-step for {label}
+      </summary>
+      <p className="mt-3 text-xs text-muted-foreground">
+        {guide.who} · Roughly {guide.minutes}.
+      </p>
+      {guide.links.length ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {guide.links.map((l) => (
+            <a
+              key={l.href}
+              href={l.href}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-primary hover:bg-surface-1"
+            >
+              {l.label} ↗
+            </a>
+          ))}
+        </div>
+      ) : null}
+      <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
+        {guide.steps.map((s) => (
+          <li key={s}>{s}</li>
+        ))}
+      </ol>
+      <p className="mt-3 text-xs text-muted-foreground">
+        Stuck on a step? Forward this list to whoever administers the account — everything above happens on the
+        provider’s own website, not here.
+      </p>
+    </details>
+  );
+}
+
+
 export const Route = createFileRoute("/integrations")({
   head: () => ({
     meta: [
