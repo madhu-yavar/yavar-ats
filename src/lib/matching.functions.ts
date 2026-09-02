@@ -53,6 +53,37 @@ export const generateJd = createServerFn({ method: "POST" })
     return result.data;
   });
 
+/* ------------------------------------------------- Existing JD import */
+
+const JdImportInput = z.object({
+  jdText: z.string().min(30),
+  title: z.string().optional().nullable(),
+});
+
+/**
+ * Structure a recruiter's existing JD (pasted or extracted from PDF/DOCX) into the
+ * same shape as an AI-drafted JD so scoring, must-have coverage and audit stay identical.
+ */
+export const importJd = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => JdImportInput.parse(data))
+  .handler(async ({ data }) => {
+    const result = await aiJson<
+      GeneratedJd & { experience_min: number; experience_max: number; detected_title: string }
+    >({
+      system:
+        "You are parsing an EXISTING job description supplied by a recruiter. Extract, never invent. " +
+        "Keep the original wording where possible; only normalise structure. " +
+        "Return ONLY JSON with keys: detected_title, purpose, responsibilities (markdown bullets), " +
+        "must_have (string array of concrete skills), good_to_have (string array), qualifications, " +
+        "success_factors, reporting_to, experience_min (number, 0 if absent), experience_max (number, 0 if absent), " +
+        "full_text (the JD cleaned up as markdown).",
+      prompt: JSON.stringify(data),
+    });
+    if (!result.ok) throw new Error(result.message);
+    return result.data;
+  });
+
+
 /* -------------------------------------------------------------- JD vs CV */
 
 const MatchInput = z.object({
