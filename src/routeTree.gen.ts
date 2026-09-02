@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as IjpRouteImport } from './routes/ijp'
 import { Route as IntegrationsRouteImport } from './routes/integrations'
 import { Route as InterviewsRouteImport } from './routes/interviews'
 import { Route as MastersRouteImport } from './routes/masters'
@@ -25,6 +26,11 @@ import { Route as RequisitionsIdRouteImport } from './routes/requisitions.$id'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IjpRoute = IjpRouteImport.update({
+  id: '/ijp',
+  path: '/ijp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IntegrationsRoute = IntegrationsRouteImport.update({
@@ -85,6 +91,7 @@ const RequisitionsIdRoute = RequisitionsIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/ijp': typeof IjpRoute
   '/integrations': typeof IntegrationsRoute
   '/interviews': typeof InterviewsRoute
   '/masters': typeof MastersRoute
@@ -99,6 +106,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/ijp': typeof IjpRoute
   '/integrations': typeof IntegrationsRoute
   '/interviews': typeof InterviewsRoute
   '/masters': typeof MastersRoute
@@ -114,6 +122,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/ijp': typeof IjpRoute
   '/integrations': typeof IntegrationsRoute
   '/interviews': typeof InterviewsRoute
   '/masters': typeof MastersRoute
@@ -130,6 +139,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/ijp'
     | '/integrations'
     | '/interviews'
     | '/masters'
@@ -144,6 +154,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/ijp'
     | '/integrations'
     | '/interviews'
     | '/masters'
@@ -158,6 +169,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/ijp'
     | '/integrations'
     | '/interviews'
     | '/masters'
@@ -173,6 +185,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  IjpRoute: typeof IjpRoute
   IntegrationsRoute: typeof IntegrationsRoute
   InterviewsRoute: typeof InterviewsRoute
   MastersRoute: typeof MastersRoute
@@ -193,6 +206,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ijp': {
+      id: '/ijp'
+      path: '/ijp'
+      fullPath: '/ijp'
+      preLoaderRoute: typeof IjpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/integrations': {
@@ -277,6 +297,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  IjpRoute: IjpRoute,
   IntegrationsRoute: IntegrationsRoute,
   InterviewsRoute: InterviewsRoute,
   MastersRoute: MastersRoute,

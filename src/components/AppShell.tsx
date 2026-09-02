@@ -2,12 +2,14 @@ import { Link } from "@tanstack/react-router";
 import {
   BarChart3,
   Briefcase,
+  Building2,
   CalendarClock,
   Database,
   FileSignature,
   LayoutDashboard,
   LogOut,
   Plug,
+  ShieldCheck,
   Target,
   Users,
 } from "lucide-react";
@@ -18,14 +20,17 @@ import { Button } from "@/components/ui/button";
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/requisitions", label: "Requisitions & JD", icon: Briefcase },
+  { to: "/ijp", label: "Internal postings", icon: Building2 },
   { to: "/candidates", label: "Talent pool", icon: Users },
   { to: "/matching", label: "JD ↔ CV matching", icon: Target },
   { to: "/interviews", label: "Interviews", icon: CalendarClock },
   { to: "/offers", label: "Offers", icon: FileSignature },
   { to: "/reports", label: "Reports", icon: BarChart3 },
+  { to: "/team", label: "Users & roles", icon: ShieldCheck },
   { to: "/integrations", label: "Integrations", icon: Plug },
   { to: "/masters", label: "Master data", icon: Database },
 ] as const;
+
 
 
 export function AppShell({ children }: { children: React.ReactNode }) {
