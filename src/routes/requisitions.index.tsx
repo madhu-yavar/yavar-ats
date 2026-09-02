@@ -232,8 +232,11 @@ function Requisitions() {
         }
       />
 
+      <DepartmentBudgets />
+
       {requisitions.length === 0 ? (
         <EmptyState title="No requisitions yet" hint="Raise your first requisition to start sourcing." />
+
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {requisitions.map((r) => {
