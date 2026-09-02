@@ -3,16 +3,30 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Github, Linkedin, Sparkles, Upload } from "lucide-react";
+import { AlertTriangle, Github, Linkedin, RefreshCw, ShieldCheck, Sparkles, Upload } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
-import { applicationsQuery, candidatesQuery, latestScores, matchScoresQuery, requisitionsQuery } from "@/lib/data";
+import {
+  applicationsQuery,
+  candidatesQuery,
+  latestScores,
+  latestVerifications,
+  matchScoresQuery,
+  requisitionsQuery,
+  verificationsQuery,
+  type Application,
+  type Candidate,
+} from "@/lib/data";
 import { parseResume } from "@/lib/matching.functions";
+import { verifyCandidates } from "@/lib/verification.functions";
 import { intakeCvs, type IntakeStatus } from "@/lib/cv-intake";
 import { normalizeExternalUrl } from "@/lib/external-links";
+import { canonical, nextAction, stalledDays, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
 
-import { EmptyState, PageHeader, ScoreChip, SkillPills } from "@/components/ats";
+import { EmptyState, PageHeader, ScoreChip, SkillPills, StageBadge } from "@/components/ats";
+import { StageMover } from "@/components/StageMover";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,25 +40,52 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export const Route = createFileRoute("/candidates/")({
   head: () => ({
     meta: [
-      { title: "Talent Pool — AI Resume Parsing & Social Signals" },
+      { title: "Talent Pool — pipeline states, match scores & authenticity" },
       {
         name: "description",
         content:
-          "Central candidate database with AI resume parsing, LinkedIn and GitHub links, skills tags and live match scores.",
+          "Searchable candidate database in a dense table: current pipeline stage, next action, match score, authenticity verdict and stalled-candidate flags.",
       },
-      { property: "og:title", content: "Talent Pool — AI Resume Parsing & Social Signals" },
+      { property: "og:title", content: "Talent Pool — pipeline states, match scores & authenticity" },
       {
         property: "og:description",
-        content: "Search the candidate database by skill, source and match score across every open requisition.",
+        content:
+          "Filter thousands of candidates by stage, source, experience and score; move stages with an audited reason and re-verify claims in bulk.",
       },
     ],
   }),
   component: Candidates,
 });
+
+const SAVED_VIEWS = [
+  { id: "all", label: "All" },
+  { id: "new", label: "New this week" },
+  { id: "screening", label: "In screening" },
+  { id: "interview", label: "In interview" },
+  { id: "offer", label: "Offer stage" },
+  { id: "joined", label: "Joined" },
+  { id: "closed", label: "Closed / rejected" },
+  { id: "reserve", label: "Reserve & on hold" },
+  { id: "unpooled", label: "Not in any pipeline" },
+  { id: "stalled", label: "Stalled" },
+  { id: "flagged", label: "Authenticity flags" },
+] as const;
+
+type ViewId = (typeof SAVED_VIEWS)[number]["id"];
+
+const VIEW_STAGES: Partial<Record<ViewId, Stage[]>> = {
+  screening: ["sourced", "applied", "ai_screened", "shortlisted"],
+  interview: ["l1", "l2", "l3"],
+  offer: ["offer_pending", "offer_released", "offer_accepted", "joining_deferred"],
+  joined: ["joined"],
+  closed: ["rejected", "withdrawn", "offer_declined", "no_show"],
+  reserve: ["reserve", "on_hold"],
+};
 
 function Candidates() {
   const qc = useQueryClient();
@@ -52,9 +93,20 @@ function Candidates() {
   const apps = useQuery(applicationsQuery);
   const reqs = useQuery(requisitionsQuery);
   const scores = useQuery(matchScoresQuery);
+  const verifs = useQuery(verificationsQuery);
   const parse = useServerFn(parseResume);
+  const reverify = useServerFn(verifyCandidates);
 
   const [q, setQ] = useState("");
+  const [view, setView] = useState<ViewId>("all");
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [reqFilter, setReqFilter] = useState("all");
+  const [minScore, setMinScore] = useState("0");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [moverIds, setMoverIds] = useState<string[] | null>(null);
+  const [moverStage, setMoverStage] = useState<Stage | undefined>(undefined);
+  const [syncing, setSyncing] = useState(false);
+
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [resume, setResume] = useState("");
@@ -90,8 +142,7 @@ function Candidates() {
         parse,
         source: bulkSource,
         requisitionId: bulkReqId || null,
-        onUpdate: (i, patch) =>
-          setBulkLog((l) => l.map((row, idx) => (idx === i ? { ...row, ...patch } : row))),
+        onUpdate: (i, patch) => setBulkLog((l) => l.map((row, idx) => (idx === i ? { ...row, ...patch } : row))),
       });
       await qc.invalidateQueries({ queryKey: ["candidates"] });
       await qc.invalidateQueries({ queryKey: ["applications"] });
@@ -104,27 +155,137 @@ function Candidates() {
     }
   }
 
-
-
   const scoreMap = latestScores(scores.data ?? []);
-  const bestScore = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const a of apps.data ?? []) {
-      const s = scoreMap.get(a.id);
-      if (s) m.set(a.candidate_id, Math.max(m.get(a.candidate_id) ?? 0, s.overall_score));
-    }
-    return m;
-  }, [apps.data, scoreMap]);
+  const verifMap = latestVerifications(verifs.data ?? []);
 
-  const filtered = (cands.data ?? []).filter((c) => {
+  /**
+   * One row per candidate. The "primary" application is the most advanced /
+   * best-scoring pipeline the candidate sits in, so the table shows real state
+   * rather than a card with no lifecycle at all.
+   */
+  type Row = {
+    candidate: Candidate;
+    apps: Application[];
+    primary: Application | null;
+    stage: Stage | null;
+    score: number | null;
+    stalled: number | null;
+  };
+
+  const rows = useMemo<Row[]>(() => {
+    const byCandidate = new Map<string, Application[]>();
+    for (const a of apps.data ?? []) {
+      const list = byCandidate.get(a.candidate_id) ?? [];
+      list.push(a);
+      byCandidate.set(a.candidate_id, list);
+    }
+    const order = [
+      "joined",
+      "offer_accepted",
+      "offer_released",
+      "offer_pending",
+      "l3",
+      "l2",
+      "l1",
+      "shortlisted",
+      "ai_screened",
+      "applied",
+      "sourced",
+      "joining_deferred",
+      "on_hold",
+      "reserve",
+      "offer_declined",
+      "no_show",
+      "withdrawn",
+      "rejected",
+    ];
+    const rank = (s: string) => {
+      const i = order.indexOf(canonical(s as Stage));
+      return i === -1 ? order.length : i;
+    };
+
+    return (cands.data ?? []).map((c) => {
+      const list = (byCandidate.get(c.id) ?? []).slice().sort((a, b) => rank(a.stage) - rank(b.stage));
+      const primary = list[0] ?? null;
+      const best = list.reduce<number | null>((acc, a) => {
+        const s = scoreMap.get(a.id)?.overall_score;
+        return s === undefined ? acc : Math.max(acc ?? 0, s);
+      }, null);
+      return {
+        candidate: c,
+        apps: list,
+        primary,
+        stage: primary ? (primary.stage as Stage) : null,
+        score: best,
+        stalled: primary ? stalledDays(primary.stage as Stage, primary.last_activity_at) : null,
+      };
+    });
+  }, [cands.data, apps.data, scoreMap]);
+
+  const filtered = useMemo(() => {
     const t = q.toLowerCase().trim();
-    if (!t) return true;
-    return (
-      c.full_name.toLowerCase().includes(t) ||
-      (c.location ?? "").toLowerCase().includes(t) ||
-      c.skills.some((s) => s.toLowerCase().includes(t))
-    );
-  });
+    const weekAgo = Date.now() - 7 * 86_400_000;
+    const floor = Number(minScore) || 0;
+
+    return rows.filter((r) => {
+      const c = r.candidate;
+      if (t) {
+        const hit =
+          c.full_name.toLowerCase().includes(t) ||
+          c.email.toLowerCase().includes(t) ||
+          (c.location ?? "").toLowerCase().includes(t) ||
+          c.skills.some((s) => s.toLowerCase().includes(t));
+        if (!hit) return false;
+      }
+      if (sourceFilter !== "all" && c.source !== sourceFilter) return false;
+      if (reqFilter !== "all" && !r.apps.some((a) => a.requisition_id === reqFilter)) return false;
+      if (floor > 0 && (r.score ?? 0) < floor) return false;
+
+      const stages = VIEW_STAGES[view];
+      if (stages) return r.stage ? stages.includes(canonical(r.stage)) : false;
+      if (view === "new") return new Date(c.created_at).getTime() >= weekAgo;
+      if (view === "unpooled") return r.apps.length === 0;
+      if (view === "stalled") return r.stalled !== null;
+      if (view === "flagged") {
+        const v = verifMap.get(c.id);
+        return !!v && (v.authenticity_score < 60 || (v.red_flags ?? []).length > 0);
+      }
+      return true;
+    });
+  }, [rows, q, sourceFilter, reqFilter, minScore, view, verifMap]);
+
+  const selectedRows = filtered.filter((r) => selected.has(r.candidate.id));
+  const selectedAppIds = selectedRows.flatMap((r) => (r.primary ? [r.primary.id] : []));
+  const allChecked = filtered.length > 0 && filtered.every((r) => selected.has(r.candidate.id));
+
+  function toggleAll() {
+    setSelected(allChecked ? new Set() : new Set(filtered.map((r) => r.candidate.id)));
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function resyncSelected() {
+    if (selectedRows.length === 0) return;
+    setSyncing(true);
+    try {
+      const out = await reverify({ data: { candidateIds: selectedRows.slice(0, 50).map((r) => r.candidate.id) } });
+      await qc.invalidateQueries({ queryKey: ["candidate_verifications"] });
+      await qc.invalidateQueries({ queryKey: ["candidates"] });
+      if (out.failed) toast.warning(`${out.ok} verified · ${out.failed} failed`);
+      else toast.success(`${out.ok} candidate${out.ok === 1 ? "" : "s"} re-verified`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Re-verification failed");
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   async function autofill() {
     if (resume.trim().length < 20) {
@@ -191,7 +352,7 @@ function Candidates() {
     if (reqId) {
       await supabase
         .from("applications")
-        .insert({ requisition_id: reqId, candidate_id: data.id, source: form.source });
+        .insert({ requisition_id: reqId, candidate_id: data.id, source: form.source, stage: "sourced" });
     }
     setBusy(false);
     setOpen(false);
@@ -201,243 +362,480 @@ function Candidates() {
     qc.invalidateQueries({ queryKey: ["applications"] });
   }
 
+  const sources = [...new Set((cands.data ?? []).map((c) => c.source))].sort();
+
   return (
     <>
       <PageHeader
         eyebrow="Candidate database"
         title="Talent pool"
-        description="One searchable pool across job boards, referrals and direct applications — with the social handles that feed the social profiling score."
+        description="Every candidate, their live pipeline state, next action, match score and authenticity verdict — one table that scales past thousands of rows."
         actions={
           <div className="flex items-center gap-2">
-          <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Upload className="size-4" /> Bulk upload CVs
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
-              <DialogHeader>
-                <DialogTitle>Bulk upload CVs</DialogTitle>
-                <DialogDescription>
-                  Drop in up to a few dozen PDF, DOCX or TXT resumes — each one is read, AI-parsed and added to the
-                  talent pool automatically. No typing.
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <Label className="mb-1.5 block text-xs text-muted-foreground">Source</Label>
-                  <Select value={bulkSource} onValueChange={setBulkSource}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {["direct", "naukri", "linkedin", "referral", "consultant", "campus", "ijp"].map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {s}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="mb-1.5 block text-xs text-muted-foreground">Apply all to requisition</Label>
-                  <Select value={bulkReqId} onValueChange={setBulkReqId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Optional" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(reqs.data ?? []).map((r) => (
-                        <SelectItem key={r.id} value={r.id}>
-                          {r.code} — {r.title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div>
-                <Label className="mb-1.5 block text-xs text-muted-foreground">Resume files</Label>
-                <Input
-                  type="file"
-                  multiple
-                  disabled={bulkBusy}
-                  accept=".pdf,.docx,.txt,.md"
-                  onChange={(e) => {
-                    bulkUpload(e.target.files);
-                    e.target.value = "";
-                  }}
-                />
-                <p className="mt-1.5 text-xs text-muted-foreground">
-                  Text-based PDF, DOCX, TXT or MD. Scanned/image-only PDFs cannot be read — export a text PDF.
-                </p>
-              </div>
-
-              {bulkLog.length > 0 && (
-                <>
-                  <p className="num text-xs text-muted-foreground">
-                    {bulkLog.filter((l) => l.state === "ok").length} parsed ·{" "}
-                    {bulkLog.filter((l) => l.state === "error").length} failed · {bulkLog.length} total
-                  </p>
-                  <ul className="max-h-56 space-y-1 overflow-y-auto text-xs">
-                    {bulkLog.map((l, i) => (
-                      <li
-                        key={i}
-                        className={
-                          l.state === "error"
-                            ? "text-destructive"
-                            : l.state === "ok"
-                              ? "text-muted-foreground"
-                              : "text-foreground"
-                        }
-                      >
-                        <span className="font-medium">{l.file}</span> — {l.message}
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-
-
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setBulkOpen(false)}>
-                  Done
+            <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Upload className="size-4" /> Bulk upload CVs
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+                <DialogHeader>
+                  <DialogTitle>Bulk upload CVs</DialogTitle>
+                  <DialogDescription>
+                    Drop in up to a few dozen PDF, DOCX or TXT resumes — each one is read, AI-parsed and added to the
+                    talent pool automatically. No typing.
+                  </DialogDescription>
+                </DialogHeader>
 
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button>Add candidate</Button>
-            </DialogTrigger>
-
-            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Add candidate</DialogTitle>
-                <DialogDescription>
-                  Paste a resume and let AI extract the structured fields, then attach the candidate to a requisition.
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Resume text</Label>
-                <Textarea rows={6} value={resume} onChange={(e) => setResume(e.target.value)} />
-                <Button variant="outline" size="sm" onClick={autofill} disabled={busy}>
-                  <Sparkles className="size-4" /> Parse with AI
-                </Button>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                {(
-                  [
-                    ["full_name", "Full name"],
-                    ["email", "Email"],
-                    ["location", "Location"],
-                    ["experience_years", "Experience (yrs)"],
-                    ["education", "Education"],
-                    ["skills", "Skills (comma separated)"],
-                    ["linkedin_url", "LinkedIn URL"],
-                    ["github_url", "GitHub URL"],
-                    ["website_url", "Portfolio / blog URL"],
-                    ["x_url", "X profile URL"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <div key={key} className={key === "skills" ? "sm:col-span-2" : undefined}>
-                    <Label className="mb-1.5 block text-xs text-muted-foreground">{label}</Label>
-                    <Input
-                      value={form[key]}
-                      onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                    />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label className="mb-1.5 block text-xs text-muted-foreground">Source</Label>
+                    <Select value={bulkSource} onValueChange={setBulkSource}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["direct", "naukri", "linkedin", "referral", "consultant", "campus", "ijp"].map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                ))}
-                <div>
-                  <Label className="mb-1.5 block text-xs text-muted-foreground">Source</Label>
-                  <Select value={form.source} onValueChange={(v) => setForm({ ...form, source: v })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {["direct", "naukri", "linkedin", "referral", "consultant", "campus"].map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {s}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div>
+                    <Label className="mb-1.5 block text-xs text-muted-foreground">Apply all to requisition</Label>
+                    <Select value={bulkReqId} onValueChange={setBulkReqId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Optional" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(reqs.data ?? []).map((r) => (
+                          <SelectItem key={r.id} value={r.id}>
+                            {r.code} — {r.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div>
-                  <Label className="mb-1.5 block text-xs text-muted-foreground">Apply to requisition</Label>
-                  <Select value={reqId} onValueChange={setReqId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Optional" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(reqs.data ?? []).map((r) => (
-                        <SelectItem key={r.id} value={r.id}>
-                          {r.code} — {r.title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
 
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={save} disabled={busy}>
-                  {busy ? "Saving…" : "Save candidate"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                <div>
+                  <Label className="mb-1.5 block text-xs text-muted-foreground">Resume files</Label>
+                  <Input
+                    type="file"
+                    multiple
+                    disabled={bulkBusy}
+                    accept=".pdf,.docx,.txt,.md"
+                    onChange={(e) => {
+                      bulkUpload(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    Text-based PDF, DOCX, TXT or MD. Scanned/image-only PDFs cannot be read — export a text PDF.
+                  </p>
+                </div>
+
+                {bulkLog.length > 0 && (
+                  <>
+                    <p className="num text-xs text-muted-foreground">
+                      {bulkLog.filter((l) => l.state === "ok").length} parsed ·{" "}
+                      {bulkLog.filter((l) => l.state === "error").length} failed · {bulkLog.length} total
+                    </p>
+                    <ul className="max-h-56 space-y-1 overflow-y-auto text-xs">
+                      {bulkLog.map((l, i) => (
+                        <li
+                          key={i}
+                          className={
+                            l.state === "error"
+                              ? "text-destructive"
+                              : l.state === "ok"
+                                ? "text-muted-foreground"
+                                : "text-foreground"
+                          }
+                        >
+                          <span className="font-medium">{l.file}</span> — {l.message}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setBulkOpen(false)}>
+                    Done
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button>Add candidate</Button>
+              </DialogTrigger>
+
+              <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Add candidate</DialogTitle>
+                  <DialogDescription>
+                    Paste a resume and let AI extract the structured fields, then attach the candidate to a requisition.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Resume text</Label>
+                  <Textarea rows={6} value={resume} onChange={(e) => setResume(e.target.value)} />
+                  <Button variant="outline" size="sm" onClick={autofill} disabled={busy}>
+                    <Sparkles className="size-4" /> Parse with AI
+                  </Button>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {(
+                    [
+                      ["full_name", "Full name"],
+                      ["email", "Email"],
+                      ["location", "Location"],
+                      ["experience_years", "Experience (yrs)"],
+                      ["education", "Education"],
+                      ["skills", "Skills (comma separated)"],
+                      ["linkedin_url", "LinkedIn URL"],
+                      ["github_url", "GitHub URL"],
+                      ["website_url", "Portfolio / blog URL"],
+                      ["x_url", "X profile URL"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <div key={key} className={key === "skills" ? "sm:col-span-2" : undefined}>
+                      <Label className="mb-1.5 block text-xs text-muted-foreground">{label}</Label>
+                      <Input value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
+                    </div>
+                  ))}
+                  <div>
+                    <Label className="mb-1.5 block text-xs text-muted-foreground">Source</Label>
+                    <Select value={form.source} onValueChange={(v) => setForm({ ...form, source: v })}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["direct", "naukri", "linkedin", "referral", "consultant", "campus"].map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="mb-1.5 block text-xs text-muted-foreground">Apply to requisition</Label>
+                    <Select value={reqId} onValueChange={setReqId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Optional" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(reqs.data ?? []).map((r) => (
+                          <SelectItem key={r.id} value={r.id}>
+                            {r.code} — {r.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={save} disabled={busy}>
+                    {busy ? "Saving…" : "Save candidate"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
-
         }
       />
 
-      <Input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Search by name, skill or location…"
-        className="max-w-md"
-      />
+      {/* Saved views */}
+      <div className="flex flex-wrap gap-1.5">
+        {SAVED_VIEWS.map((v) => (
+          <button
+            key={v.id}
+            onClick={() => setView(v.id)}
+            className={
+              "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors " +
+              (view === v.id
+                ? "border-ring bg-primary/10 text-primary"
+                : "border-border text-muted-foreground hover:text-foreground")
+            }
+          >
+            {v.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-56 flex-1">
+          <Label className="mb-1.5 block text-xs text-muted-foreground">Search</Label>
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, email, skill or location…" />
+        </div>
+        <div className="w-44">
+          <Label className="mb-1.5 block text-xs text-muted-foreground">Source</Label>
+          <Select value={sourceFilter} onValueChange={setSourceFilter}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All sources</SelectItem>
+              {sources.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="w-60">
+          <Label className="mb-1.5 block text-xs text-muted-foreground">Requisition</Label>
+          <Select value={reqFilter} onValueChange={setReqFilter}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any requisition</SelectItem>
+              {(reqs.data ?? []).map((r) => (
+                <SelectItem key={r.id} value={r.id}>
+                  {r.code} — {r.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="w-36">
+          <Label className="mb-1.5 block text-xs text-muted-foreground">Min score</Label>
+          <Select value={minScore} onValueChange={setMinScore}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {["0", "50", "60", "70", "80"].map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s === "0" ? "Any" : `${s}+`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Bulk action bar */}
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <span className="num text-muted-foreground">
+          {filtered.length} of {rows.length} candidates
+          {selected.size > 0 ? ` · ${selected.size} selected` : ""}
+        </span>
+        {selected.size > 0 ? (
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={selectedAppIds.length === 0}
+              onClick={() => {
+                setMoverStage(undefined);
+                setMoverIds(selectedAppIds);
+              }}
+            >
+              Move stage ({selectedAppIds.length})
+            </Button>
+            <Button size="sm" variant="outline" onClick={resyncSelected} disabled={syncing}>
+              <RefreshCw className={"size-4" + (syncing ? " animate-spin" : "")} /> Re-verify
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+              Clear
+            </Button>
+          </>
+        ) : null}
+      </div>
 
       {filtered.length === 0 ? (
-        <EmptyState title="No candidates found" hint="Add a candidate or clear the search." />
+        <EmptyState title="No candidates match" hint="Change the view or clear the filters." />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((c) => (
-            <Link
-              key={c.id}
-              to="/candidates/$id"
-              params={{ id: c.id }}
-              className="panel block p-5 transition-colors hover:border-ring"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h3 className="truncate font-semibold">{c.full_name}</h3>
-                  <p className="num text-xs text-muted-foreground">
-                    {c.experience_years} yrs · {c.location ?? "—"} · {c.source}
-                  </p>
-                </div>
-                {bestScore.has(c.id) ? <ScoreChip score={bestScore.get(c.id)!} size="sm" /> : null}
-              </div>
-              <p className="mt-2 truncate text-xs text-muted-foreground">{c.education ?? "Education not captured"}</p>
-              <div className="mt-3">
-                <SkillPills skills={c.skills.slice(0, 5)} />
-              </div>
-              <div className="mt-3 flex gap-3 text-muted-foreground">
-                {normalizeExternalUrl(c.linkedin_url) ? <Linkedin className="size-4" /> : null}
-                {normalizeExternalUrl(c.github_url) ? <Github className="size-4" /> : null}
-              </div>
-            </Link>
-          ))}
+        <div className="panel overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all" />
+                </TableHead>
+                <TableHead>Candidate</TableHead>
+                <TableHead>Experience</TableHead>
+                <TableHead>Skills</TableHead>
+                <TableHead>Stage</TableHead>
+                <TableHead>Next action</TableHead>
+                <TableHead className="text-right">Match</TableHead>
+                <TableHead className="text-right">Authenticity</TableHead>
+                <TableHead>Links</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.slice(0, 300).map((r) => {
+                const c = r.candidate;
+                const v = verifMap.get(c.id);
+                const flags = (v?.red_flags ?? []).length;
+                return (
+                  <TableRow key={c.id} className="align-top">
+                    <TableCell>
+                      <Checkbox
+                        checked={selected.has(c.id)}
+                        onCheckedChange={() => toggleOne(c.id)}
+                        aria-label={`Select ${c.full_name}`}
+                      />
+                    </TableCell>
+                    <TableCell className="min-w-48">
+                      <Link to="/candidates/$id" params={{ id: c.id }} className="font-medium hover:underline">
+                        {c.full_name}
+                      </Link>
+                      <div className="text-xs text-muted-foreground">
+                        {c.email} · {c.source}
+                        {c.is_internal ? " · internal" : ""}
+                      </div>
+                      {r.stalled !== null ? (
+                        <div className="mt-1 inline-flex items-center gap-1 text-xs text-amber-600">
+                          <AlertTriangle className="size-3.5" /> stalled {r.stalled}d
+                        </div>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="num whitespace-nowrap text-sm">
+                      {c.experience_years} yrs
+                      <div className="text-xs text-muted-foreground">{c.location ?? "—"}</div>
+                    </TableCell>
+                    <TableCell className="max-w-56">
+                      <SkillPills skills={c.skills.slice(0, 4)} />
+                    </TableCell>
+                    <TableCell>
+                      {r.stage ? (
+                        <>
+                          <StageBadge stage={r.stage} />
+                          {r.apps.length > 1 ? (
+                            <div className="num mt-1 text-xs text-muted-foreground">
+                              +{r.apps.length - 1} more pipeline{r.apps.length > 2 ? "s" : ""}
+                            </div>
+                          ) : null}
+                        </>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Pool only</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="max-w-44 text-xs text-muted-foreground">
+                      {r.stage ? nextAction(r.stage) : "Match against an open requisition"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {r.score !== null ? <ScoreChip score={r.score} size="sm" /> : <span className="text-xs text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {v ? (
+                        <div className="inline-flex flex-col items-end">
+                          <span
+                            className={
+                              "num inline-flex items-center gap-1 text-sm font-semibold " +
+                              (v.authenticity_score >= 70
+                                ? "text-emerald-600"
+                                : v.authenticity_score >= 45
+                                  ? "text-amber-600"
+                                  : "text-destructive")
+                            }
+                          >
+                            <ShieldCheck className="size-3.5" /> {v.authenticity_score}
+                          </span>
+                          {flags > 0 ? (
+                            <span className="text-xs text-muted-foreground">
+                              {flags} flag{flags === 1 ? "" : "s"}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">not run</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2 text-muted-foreground">
+                        {normalizeExternalUrl(c.linkedin_url) ? (
+                          <a
+                            href={normalizeExternalUrl(c.linkedin_url)!}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            aria-label="LinkedIn profile"
+                          >
+                            <Linkedin className="size-4 hover:text-foreground" />
+                          </a>
+                        ) : null}
+                        {normalizeExternalUrl(c.github_url) ? (
+                          <a
+                            href={normalizeExternalUrl(c.github_url)!}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            aria-label="GitHub profile"
+                          >
+                            <Github className="size-4 hover:text-foreground" />
+                          </a>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {r.primary ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setMoverStage(r.stage ?? undefined);
+                            setMoverIds([r.primary!.id]);
+                          }}
+                        >
+                          Move
+                        </Button>
+                      ) : (
+                        <Link
+                          to="/matching"
+                          className="text-xs text-muted-foreground underline hover:text-foreground"
+                        >
+                          Match
+                        </Link>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+          {filtered.length > 300 ? (
+            <p className="num border-t border-border p-3 text-xs text-muted-foreground">
+              Showing the first 300 of {filtered.length} matches — narrow the filters to see the rest.
+            </p>
+          ) : null}
         </div>
       )}
+
+      <StageMover
+        open={moverIds !== null}
+        onOpenChange={(v) => !v && setMoverIds(null)}
+        applicationIds={moverIds ?? []}
+        {...(moverStage ? { currentStage: moverStage } : {})}
+        onDone={() => {
+          setSelected(new Set());
+          qc.invalidateQueries({ queryKey: ["applications"] });
+          qc.invalidateQueries({ queryKey: ["stage_events"] });
+        }}
+      />
+
+      <p className="text-xs text-muted-foreground">
+        Stage labels come from the pipeline state machine, so only legal transitions are offered and every change is
+        written to the audit trail with a reason. Authenticity is produced by the verification agent — an{" "}
+        <span className="font-medium">unverified</span> claim means no public trace was found, not that the claim is
+        false.
+      </p>
     </>
   );
 }
