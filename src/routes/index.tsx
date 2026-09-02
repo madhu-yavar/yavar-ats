@@ -204,7 +204,7 @@ function Dashboard() {
         const taken = appliedTo.get(req.id) ?? new Set<string>();
         const pool = candidates.filter((c) => !taken.has(c.id));
         const ranked = rankPool(pool, req)
-          .filter((r) => r.fit >= 55 && r.mustHits.length > 0)
+          .filter((r) => r.fit >= 40 && (r.mustHits.length > 0 || r.mustHits.length + r.mustMisses.length === 0))
           .slice(0, 3);
         return { req, ranked };
       })
