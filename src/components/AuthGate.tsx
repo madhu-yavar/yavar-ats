@@ -148,7 +148,9 @@ function SignIn() {
             className="w-full text-center text-sm text-muted-foreground underline-offset-4 hover:underline"
             onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
           >
-            {mode === "signin" ? "No account yet? Sign up" : "Already have an account? Sign in"}
+            {mode === "signin"
+              ? "New company? Register your organisation"
+              : "Already have an account? Sign in"}
           </button>
         </form>
       </div>
