@@ -145,7 +145,7 @@ function MasterCard({
         {list.map((i) => (
           <Badge key={i.id} variant="secondary" className="gap-1">
             {i.name}
-            <button type="button" onClick={() => retire(i.id)} aria-label={`Retire ${i.name}`}>
+            <button type="button" onClick={() => remove(i.id, i.name)} aria-label={`Delete ${i.name}`}>
               <Trash2 className="h-3 w-3" />
             </button>
           </Badge>
