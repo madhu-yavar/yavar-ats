@@ -154,7 +154,12 @@ function Requisitions() {
                   </Select>
                 </Field>
                 <Field label="Location">
-                  <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+                  <MasterSelect
+                    options={locations}
+                    value={form.location}
+                    onChange={(v) => setForm({ ...form, location: v })}
+                    placeholder="Select location"
+                  />
                 </Field>
                 <Field label="Openings">
                   <Input
@@ -190,25 +195,30 @@ function Requisitions() {
                     onChange={(e) => setForm({ ...form, hiring_manager: e.target.value })}
                   />
                 </Field>
-                <Field label="Must-have skills (comma separated)" className="sm:col-span-2">
-                  <Input
+                <Field label="Must-have skills" className="sm:col-span-2">
+                  <TokenPicker
+                    options={skills}
                     value={form.must}
-                    onChange={(e) => setForm({ ...form, must: e.target.value })}
-                    placeholder="Python, PostgreSQL, AWS, System design"
+                    onChange={(v) => setForm({ ...form, must: v })}
+                    onCreate={createSkill}
+                    placeholder="Search the skills library…"
                   />
                 </Field>
-                <Field label="Good-to-have skills (comma separated)" className="sm:col-span-2">
-                  <Input
+                <Field label="Good-to-have skills" className="sm:col-span-2">
+                  <TokenPicker
+                    options={skills}
                     value={form.good}
-                    onChange={(e) => setForm({ ...form, good: e.target.value })}
-                    placeholder="Kafka, Terraform, GraphQL"
+                    onChange={(v) => setForm({ ...form, good: v })}
+                    onCreate={createSkill}
+                    placeholder="Search the skills library…"
                   />
                 </Field>
                 <Field label="Education requirement" className="sm:col-span-2">
-                  <Input
+                  <MasterSelect
+                    options={education}
                     value={form.education_requirement}
-                    onChange={(e) => setForm({ ...form, education_requirement: e.target.value })}
-                    placeholder="B.E./B.Tech in Computer Science or equivalent"
+                    onChange={(v) => setForm({ ...form, education_requirement: v })}
+                    placeholder="Select minimum qualification"
                   />
                 </Field>
                 <Field label="Key responsibilities" className="sm:col-span-2">
