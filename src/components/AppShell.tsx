@@ -88,6 +88,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         <main className="mx-auto max-w-7xl space-y-6 p-5 sm:p-8">{children}</main>
       </div>
+      <Copilot />
     </div>
   );
 }
