@@ -397,6 +397,8 @@ function Candidates() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          </div>
+
         }
       />
 
