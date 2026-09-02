@@ -155,6 +155,10 @@ function Requisitions() {
       good_to_have_skills: form.good,
       responsibilities: form.responsibilities || null,
       education_requirement: form.education_requirement || null,
+      billing_type: form.billing_type,
+      engagement_type: form.engagement_type,
+      client_name: form.client_name || null,
+      cost_center: form.cost_center || null,
       status: "pending_dh",
     });
     setSaving(false);
