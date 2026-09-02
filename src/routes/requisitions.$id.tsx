@@ -16,6 +16,9 @@ import {
   requisitionQuery,
 } from "@/lib/data";
 import { generateJd } from "@/lib/matching.functions";
+import { balanceWeights } from "@/lib/cv-extract";
+import { useRoles } from "@/hooks/useRoles";
+
 import {
   EmptyState,
   PageHeader,
