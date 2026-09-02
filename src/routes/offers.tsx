@@ -122,8 +122,9 @@ function Offers() {
       <PageHeader
         eyebrow="Closure"
         title="Offers"
-        description="Offers are validated against the approved requisition budget before HR and CBO sign-off."
+        description="A candidate becomes offer-ready when the final interview round is recorded as a select (or you move them to offer manually). Raising the offer sets the candidate to Offer pending approval; HR then CBO sign off against the requisition budget, releasing sets Offer released, and acceptance sets Offer accepted — joining is confirmed from the candidate's stage mover."
       />
+
 
       <div className="grid gap-6 lg:grid-cols-3">
         <section className="panel lg:col-span-2">
