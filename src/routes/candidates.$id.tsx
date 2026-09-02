@@ -219,9 +219,11 @@ function CandidateDetail() {
 
                       {s ? (
                         <>
-                          <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                          <div className="mt-4 grid gap-3 sm:grid-cols-3">
                             <ScoreBar label="Skills" score={s.skills_score} />
                             <ScoreBar label="Experience" score={s.experience_score} />
+                            <ScoreBar label="Career history" score={s.career_score ?? 0} />
+                            <ScoreBar label="Impact & innovation" score={s.impact_score ?? 0} />
                             <ScoreBar label="Education" score={s.education_score} />
                             <ScoreBar label="Social" score={s.social_score} />
                           </div>
