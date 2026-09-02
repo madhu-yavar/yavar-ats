@@ -301,7 +301,8 @@ function Candidates() {
     setBusy(true);
     try {
       const p = await parse({ data: { resumeText: resume } });
-      setForm({
+      setForm((prev) => ({
+        ...prev,
         full_name: p.full_name ?? "",
         email: p.email ?? "",
         location: p.location ?? "",
