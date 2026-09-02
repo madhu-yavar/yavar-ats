@@ -145,3 +145,95 @@ export function MasterSelect({
     </div>
   );
 }
+
+/** Searchable single-select over a named list, with the ability to add a new entry inline. */
+export function CreatableSelect({
+  options,
+  value,
+  onChange,
+  onCreate,
+  placeholder = "Search…",
+  addLabel = "Add",
+}: {
+  options: { id: string; name: string; category?: string | null }[];
+  value: string;
+  onChange: (next: string) => void;
+  onCreate?: (name: string) => Promise<void> | void;
+  placeholder?: string;
+  addLabel?: string;
+}) {
+  const [q, setQ] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const matches = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return options.filter((o) => (needle ? o.name.toLowerCase().includes(needle) : true)).slice(0, 60);
+  }, [options, q]);
+
+  const exact = options.some((o) => o.name.toLowerCase() === q.trim().toLowerCase());
+
+  return (
+    <div className="rounded-md border bg-card">
+      <div className="flex items-center gap-2 border-b p-2">
+        <Input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={placeholder}
+          className="h-8 border-0 shadow-none focus-visible:ring-0"
+        />
+        {q.trim() && !exact && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 shrink-0 gap-1"
+            disabled={busy}
+            onClick={async () => {
+              const name = q.trim();
+              setBusy(true);
+              try {
+                await onCreate?.(name);
+                onChange(name);
+                setQ("");
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <Plus className="h-3.5 w-3.5" /> {addLabel} “{q.trim()}”
+          </Button>
+        )}
+      </div>
+      <ul className="max-h-40 overflow-y-auto p-1 text-sm">
+        {matches.length === 0 && <li className="px-2 py-3 text-xs text-muted-foreground">No matches yet.</li>}
+        {matches.map((o) => (
+          <li key={o.id}>
+            <button
+              type="button"
+              onClick={() => onChange(o.name)}
+              className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left hover:bg-accent"
+            >
+              <span>
+                {o.name}
+                {o.category && <span className="ml-2 text-xs text-muted-foreground">{o.category}</span>}
+              </span>
+              {o.name === value && <Check className="h-4 w-4 text-primary" />}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {value && (
+        <div className="flex items-center gap-2 border-t p-2 text-xs">
+          <span className="text-muted-foreground">Selected:</span>
+          <Badge variant="secondary" className="gap-1">
+            {value}
+            <button type="button" onClick={() => onChange("")} aria-label="Clear selection">
+              <X className="h-3 w-3" />
+            </button>
+          </Badge>
+        </div>
+      )}
+    </div>
+  );
+}
+
