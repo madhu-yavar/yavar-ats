@@ -3,6 +3,7 @@ import {
   BarChart3,
   Briefcase,
   CalendarClock,
+  Database,
   FileSignature,
   LayoutDashboard,
   LogOut,
