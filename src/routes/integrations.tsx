@@ -300,6 +300,21 @@ function IntegrationCard({ row }: { row: Integration }) {
   async function onTest() {
     setBusy("test");
     try {
+      // Typed-but-unsaved values are the #1 cause of a "not fully configured"
+      // failure, so persist them first and then test what is actually stored.
+      const pending = Object.values(secrets).some((v) => v.trim().length > 0);
+      if (pending) {
+        await save({
+          data: {
+            integrationId: row.id,
+            provider,
+            enabled,
+            config: { ...cfg, base_url: baseUrl } as Record<string, string>,
+            secrets,
+          },
+        });
+        setSecrets({});
+      }
       const outcome = await test({ data: { integrationId: row.id, provider } });
       if (outcome.status === "ok") toast.success(outcome.message);
       else if (outcome.status === "pending") toast.warning(outcome.message);
@@ -311,6 +326,7 @@ function IntegrationCard({ row }: { row: Integration }) {
       setBusy(null);
     }
   }
+
 
   async function onClear() {
     setBusy("clear");
