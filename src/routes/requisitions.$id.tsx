@@ -192,7 +192,9 @@ function RequisitionDetail() {
       toast.error(e instanceof Error ? e.message : "JD generation failed");
     } finally {
       setBusy(false);
+    }
   }
+
 
   /** Take a recruiter's own JD (pasted text or PDF/DOCX/TXT file) and file it as a JD version. */
   async function useExistingJd(raw: string) {
