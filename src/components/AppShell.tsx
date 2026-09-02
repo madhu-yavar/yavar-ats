@@ -3,6 +3,7 @@ import {
   BarChart3,
   Briefcase,
   CalendarClock,
+  Database,
   FileSignature,
   LayoutDashboard,
   LogOut,
@@ -23,6 +24,7 @@ const NAV = [
   { to: "/offers", label: "Offers", icon: FileSignature },
   { to: "/reports", label: "Reports", icon: BarChart3 },
   { to: "/integrations", label: "Integrations", icon: Plug },
+  { to: "/masters", label: "Master data", icon: Database },
 ] as const;
 
 

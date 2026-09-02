@@ -423,6 +423,36 @@ export type Database = {
           },
         ]
       }
+      master_items: {
+        Row: {
+          active: boolean
+          category: string | null
+          created_at: string
+          id: string
+          kind: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          active?: boolean
+          category?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          active?: boolean
+          category?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          name?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       match_scores: {
         Row: {
           application_id: string

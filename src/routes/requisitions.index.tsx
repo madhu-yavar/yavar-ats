@@ -4,8 +4,16 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
-import { applicationsQuery, departmentsQuery, requisitionsQuery } from "@/lib/data";
+import {
+  addMasterItem,
+  applicationsQuery,
+  byKind,
+  departmentsQuery,
+  masterItemsQuery,
+  requisitionsQuery,
+} from "@/lib/data";
 import { EmptyState, PageHeader, SkillPills, StatusBadge, inr } from "@/components/ats";
+import { MasterSelect, TokenPicker } from "@/components/pickers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,36 +54,43 @@ export const Route = createFileRoute("/requisitions/")({
   component: Requisitions,
 });
 
-const csv = (v: string) =>
-  v
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-
 function Requisitions() {
   const qc = useQueryClient();
   const reqs = useQuery(requisitionsQuery);
   const depts = useQuery(departmentsQuery);
   const apps = useQuery(applicationsQuery);
+  const masters = useQuery(masterItemsQuery);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     title: "",
     department_id: "",
-    location: "Mumbai",
+    location: "",
     openings: "1",
     experience_min: "3",
     experience_max: "6",
     budget_ctc: "1800000",
     hiring_manager: "",
-    must: "",
-    good: "",
+    must: [] as string[],
+    good: [] as string[],
     responsibilities: "",
     education_requirement: "",
   });
 
   const requisitions = reqs.data ?? [];
   const departments = depts.data ?? [];
+  const skills = byKind(masters.data, "skill");
+  const locations = byKind(masters.data, "location");
+  const education = byKind(masters.data, "education");
+
+  async function createSkill(name: string) {
+    try {
+      await addMasterItem("skill", name);
+      qc.invalidateQueries({ queryKey: ["master_items"] });
+    } catch {
+      /* already in the library — the value is still selected */
+    }
+  }
 
   async function create() {
     if (!form.title.trim()) {
@@ -94,8 +109,8 @@ function Requisitions() {
       experience_max: Number(form.experience_max) || 0,
       budget_ctc: Number(form.budget_ctc) || 0,
       hiring_manager: form.hiring_manager || null,
-      must_have_skills: csv(form.must),
-      good_to_have_skills: csv(form.good),
+      must_have_skills: form.must,
+      good_to_have_skills: form.good,
       responsibilities: form.responsibilities || null,
       education_requirement: form.education_requirement || null,
       status: "pending_dh",
@@ -152,9 +167,19 @@ function Requisitions() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {departments.length === 0 && (
+                    <p className="mt-1 text-xs text-destructive">
+                      No departments yet — add one in “Departments &amp; budgeted headcount” below first.
+                    </p>
+                  )}
                 </Field>
                 <Field label="Location">
-                  <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+                  <MasterSelect
+                    options={locations}
+                    value={form.location}
+                    onChange={(v) => setForm({ ...form, location: v })}
+                    placeholder="Select location"
+                  />
                 </Field>
                 <Field label="Openings">
                   <Input
@@ -190,25 +215,30 @@ function Requisitions() {
                     onChange={(e) => setForm({ ...form, hiring_manager: e.target.value })}
                   />
                 </Field>
-                <Field label="Must-have skills (comma separated)" className="sm:col-span-2">
-                  <Input
+                <Field label="Must-have skills" className="sm:col-span-2">
+                  <TokenPicker
+                    options={skills}
                     value={form.must}
-                    onChange={(e) => setForm({ ...form, must: e.target.value })}
-                    placeholder="Python, PostgreSQL, AWS, System design"
+                    onChange={(v) => setForm({ ...form, must: v })}
+                    onCreate={createSkill}
+                    placeholder="Search the skills library…"
                   />
                 </Field>
-                <Field label="Good-to-have skills (comma separated)" className="sm:col-span-2">
-                  <Input
+                <Field label="Good-to-have skills" className="sm:col-span-2">
+                  <TokenPicker
+                    options={skills}
                     value={form.good}
-                    onChange={(e) => setForm({ ...form, good: e.target.value })}
-                    placeholder="Kafka, Terraform, GraphQL"
+                    onChange={(v) => setForm({ ...form, good: v })}
+                    onCreate={createSkill}
+                    placeholder="Search the skills library…"
                   />
                 </Field>
                 <Field label="Education requirement" className="sm:col-span-2">
-                  <Input
+                  <MasterSelect
+                    options={education}
                     value={form.education_requirement}
-                    onChange={(e) => setForm({ ...form, education_requirement: e.target.value })}
-                    placeholder="B.E./B.Tech in Computer Science or equivalent"
+                    onChange={(v) => setForm({ ...form, education_requirement: v })}
+                    placeholder="Select minimum qualification"
                   />
                 </Field>
                 <Field label="Key responsibilities" className="sm:col-span-2">

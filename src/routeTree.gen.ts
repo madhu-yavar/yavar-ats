@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as IntegrationsRouteImport } from './routes/integrations'
 import { Route as InterviewsRouteImport } from './routes/interviews'
+import { Route as MastersRouteImport } from './routes/masters'
 import { Route as MatchingRouteImport } from './routes/matching'
 import { Route as OffersRouteImport } from './routes/offers'
 import { Route as ReportsRouteImport } from './routes/reports'
@@ -33,6 +34,11 @@ const IntegrationsRoute = IntegrationsRouteImport.update({
 const InterviewsRoute = InterviewsRouteImport.update({
   id: '/interviews',
   path: '/interviews',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MastersRoute = MastersRouteImport.update({
+  id: '/masters',
+  path: '/masters',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MatchingRoute = MatchingRouteImport.update({
@@ -75,6 +81,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/integrations': typeof IntegrationsRoute
   '/interviews': typeof InterviewsRoute
+  '/masters': typeof MastersRoute
   '/matching': typeof MatchingRoute
   '/offers': typeof OffersRoute
   '/reports': typeof ReportsRoute
@@ -87,6 +94,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/integrations': typeof IntegrationsRoute
   '/interviews': typeof InterviewsRoute
+  '/masters': typeof MastersRoute
   '/matching': typeof MatchingRoute
   '/offers': typeof OffersRoute
   '/reports': typeof ReportsRoute
@@ -100,6 +108,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/integrations': typeof IntegrationsRoute
   '/interviews': typeof InterviewsRoute
+  '/masters': typeof MastersRoute
   '/matching': typeof MatchingRoute
   '/offers': typeof OffersRoute
   '/reports': typeof ReportsRoute
@@ -114,6 +123,7 @@ export interface FileRouteTypes {
     | '/'
     | '/integrations'
     | '/interviews'
+    | '/masters'
     | '/matching'
     | '/offers'
     | '/reports'
@@ -126,6 +136,7 @@ export interface FileRouteTypes {
     | '/'
     | '/integrations'
     | '/interviews'
+    | '/masters'
     | '/matching'
     | '/offers'
     | '/reports'
@@ -138,6 +149,7 @@ export interface FileRouteTypes {
     | '/'
     | '/integrations'
     | '/interviews'
+    | '/masters'
     | '/matching'
     | '/offers'
     | '/reports'
@@ -151,6 +163,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   IntegrationsRoute: typeof IntegrationsRoute
   InterviewsRoute: typeof InterviewsRoute
+  MastersRoute: typeof MastersRoute
   MatchingRoute: typeof MatchingRoute
   OffersRoute: typeof OffersRoute
   ReportsRoute: typeof ReportsRoute
@@ -181,6 +194,13 @@ declare module '@tanstack/react-router' {
       path: '/interviews'
       fullPath: '/interviews'
       preLoaderRoute: typeof InterviewsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/masters': {
+      id: '/masters'
+      path: '/masters'
+      fullPath: '/masters'
+      preLoaderRoute: typeof MastersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/matching': {
@@ -239,6 +259,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   IntegrationsRoute: IntegrationsRoute,
   InterviewsRoute: InterviewsRoute,
+  MastersRoute: MastersRoute,
   MatchingRoute: MatchingRoute,
   OffersRoute: OffersRoute,
   ReportsRoute: ReportsRoute,

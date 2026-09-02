@@ -14,6 +14,8 @@ export type Evaluation = Tables<"evaluations">;
 export type Interview = Tables<"interviews">;
 export type Offer = Tables<"offers">;
 export type AiInterview = Tables<"ai_interviews">;
+export type MasterItem = Tables<"master_items">;
+export type MasterKind = "skill" | "location" | "education" | "employment_type" | "industry";
 
 async function unwrap<T>(p: PromiseLike<{ data: T | null; error: { message: string } | null }>) {
   const { data, error } = await p;
@@ -25,6 +27,24 @@ export const departmentsQuery = queryOptions({
   queryKey: ["departments"],
   queryFn: () => unwrap<Department[]>(supabase.from("departments").select("*").order("name")),
 });
+
+/** Global reference library: skills, locations, education, employment types, industries. */
+export const masterItemsQuery = queryOptions({
+  queryKey: ["master_items"],
+  queryFn: () =>
+    unwrap<MasterItem[]>(
+      supabase.from("master_items").select("*").eq("active", true).order("sort_order").order("name"),
+    ),
+});
+
+export function byKind(items: MasterItem[] | undefined, kind: MasterKind) {
+  return (items ?? []).filter((i) => i.kind === kind);
+}
+
+export async function addMasterItem(kind: MasterKind, name: string, category?: string | null) {
+  const { error } = await supabase.from("master_items").insert({ kind, name: name.trim(), category: category ?? null });
+  if (error && !/duplicate|unique/i.test(error.message)) throw new Error(error.message);
+}
 
 export const requisitionsQuery = queryOptions({
   queryKey: ["requisitions"],
