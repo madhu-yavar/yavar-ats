@@ -106,12 +106,14 @@ function MasterCard({
     }
   }
 
-  async function retire(id: string) {
-    const { error } = await supabase.from("master_items").update({ active: false }).eq("id", id);
+  async function remove(id: string, name: string) {
+    if (!confirm(`Delete "${name}"? This permanently removes it from the library.`)) return;
+    const { error } = await supabase.from("master_items").delete().eq("id", id);
     if (error) {
       toast.error(error.message);
       return;
     }
+    toast.success(`${name} deleted`);
     qc.invalidateQueries({ queryKey: ["master_items"] });
   }
 
