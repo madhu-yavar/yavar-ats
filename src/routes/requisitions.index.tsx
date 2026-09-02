@@ -100,6 +100,15 @@ function Requisitions() {
     }
   }
 
+  async function createEducation(name: string) {
+    try {
+      await addMasterItem("education", name);
+      qc.invalidateQueries({ queryKey: ["master_items"] });
+    } catch {
+      /* already in the library */
+    }
+  }
+
   async function createSkill(name: string) {
     try {
       await addMasterItem("skill", name);
@@ -108,6 +117,7 @@ function Requisitions() {
       /* already in the library — the value is still selected */
     }
   }
+
 
   async function createRoleTitle(name: string) {
     try {
@@ -320,14 +330,16 @@ function Requisitions() {
                     placeholder="Search the skills library…"
                   />
                 </Field>
-                <Field label="Education requirement" className="sm:col-span-2">
-                  <MasterSelect
+                <Field label="Education requirement — any of these qualifies" className="sm:col-span-2">
+                  <TokenPicker
                     options={education}
-                    value={form.education_requirement}
-                    onChange={(v) => setForm({ ...form, education_requirement: v })}
-                    placeholder="Select minimum qualification"
+                    value={form.education_requirement ? form.education_requirement.split(" | ") : []}
+                    onChange={(v) => setForm({ ...form, education_requirement: v.join(" | ") })}
+                    onCreate={createEducation}
+                    placeholder="Search qualifications — pick every acceptable degree…"
                   />
                 </Field>
+
                 <Field label="Key responsibilities" className="sm:col-span-2">
                   <Textarea
                     rows={4}

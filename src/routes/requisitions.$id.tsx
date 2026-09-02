@@ -15,8 +15,19 @@ import {
   matchScoresQuery,
   requisitionQuery,
 } from "@/lib/data";
-import { generateJd, importJd } from "@/lib/matching.functions";
+import {
+  draftLinkedinPost,
+  generateJd,
+  importJd,
+  parseResume,
+  suggestWeights,
+  type SocialJobPost,
+  type WeightAdvice,
+} from "@/lib/matching.functions";
 import { balanceWeights, extractResumeText } from "@/lib/cv-extract";
+import { intakeCvs, type IntakeStatus } from "@/lib/cv-intake";
+import { rankPool } from "@/lib/shortlist";
+
 
 import { useRoles } from "@/hooks/useRoles";
 
@@ -84,6 +95,23 @@ function RequisitionDetail() {
   const [showImport, setShowImport] = useState(false);
   const [comment, setComment] = useState("");
 
+  const runSuggestWeights = useServerFn(suggestWeights);
+  const runParseResume = useServerFn(parseResume);
+  const runDraftPost = useServerFn(draftLinkedinPost);
+
+  const [advising, setAdvising] = useState(false);
+  const [advice, setAdvice] = useState<WeightAdvice | null>(null);
+
+  const [poolSearch, setPoolSearch] = useState("");
+  const [picked, setPicked] = useState<string[]>([]);
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const [uploadLog, setUploadLog] = useState<IntakeStatus[]>([]);
+
+  const [postTone, setPostTone] = useState<"professional" | "warm" | "bold">("professional");
+  const [post, setPost] = useState<SocialJobPost | null>(null);
+  const [postBusy, setPostBusy] = useState(false);
+
+
 
   const r = req.data;
   if (req.isLoading) return <p className="text-sm text-muted-foreground">Loading requisition…</p>;
@@ -93,6 +121,19 @@ function RequisitionDetail() {
   const latestJd = (jds.data ?? [])[0];
   const scoreMap = latestScores(scores.data ?? []);
   const pipeline = (apps.data ?? []).filter((a) => a.requisition_id === r.id);
+
+  /** Talent-pool candidates not yet applied here, pre-ranked against this JD. */
+  const inPipeline = new Set(pipeline.map((a) => a.candidate_id));
+  const poolRanked = rankPool(
+    (cands.data ?? []).filter((c) => {
+      if (inPipeline.has(c.id)) return false;
+      const q = poolSearch.trim().toLowerCase();
+      if (!q) return true;
+      return [c.full_name, c.location ?? "", (c.skills ?? []).join(" ")].join(" ").toLowerCase().includes(q);
+    }),
+    r,
+  ).slice(0, 60);
+
   const weights = {
     skills: r.weight_skills,
     experience: r.weight_experience,
@@ -295,6 +336,105 @@ function RequisitionDetail() {
     qc.invalidateQueries({ queryKey: ["requisition", id] });
   }
 
+  /* ------------------------------------------------ JD-aware weight advice */
+
+  async function adviseWeights() {
+    setAdvising(true);
+    try {
+      const a = await runSuggestWeights({
+        data: {
+          title: r!.title,
+          mustHave: r!.must_have_skills,
+          goodToHave: r!.good_to_have_skills,
+          education: r!.education_requirement,
+          experienceMin: r!.experience_min,
+          experienceMax: r!.experience_max,
+          jdText: latestJd?.full_text ?? null,
+        },
+      });
+      setAdvice(a);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not analyse the JD");
+    } finally {
+      setAdvising(false);
+    }
+  }
+
+  /* ------------------------------------------------------ candidate sourcing */
+
+  /** Attach talent-pool candidates to this requisition as applications. */
+  async function addFromPool(ids: string[]) {
+    if (ids.length === 0) return;
+    const already = new Set(pipeline.map((a) => a.candidate_id));
+    const fresh = ids.filter((cid) => !already.has(cid));
+    if (fresh.length === 0) {
+      toast.info("Those candidates are already in this pipeline");
+      return;
+    }
+    const { error } = await supabase
+      .from("applications")
+      .insert(fresh.map((cid) => ({ requisition_id: r!.id, candidate_id: cid, source: "talent_pool" })));
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    setPicked([]);
+    toast.success(`${fresh.length} candidate(s) added — run the Matching engine to score them`);
+    qc.invalidateQueries({ queryKey: ["applications"] });
+  }
+
+  /** Upload brand-new CVs straight onto this requisition. */
+  async function uploadCvs(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const list = Array.from(files);
+    setUploadBusy(true);
+    setUploadLog(list.map((f) => ({ file: f.name, state: "pending" as const, message: "Queued" })));
+    try {
+      const summary = await intakeCvs({
+        files: list,
+        parse: runParseResume,
+        source: "direct",
+        requisitionId: r!.id,
+        onUpdate: (i, patch) => setUploadLog((l) => l.map((row, idx) => (idx === i ? { ...row, ...patch } : row))),
+      });
+      await qc.invalidateQueries({ queryKey: ["candidates"] });
+      await qc.invalidateQueries({ queryKey: ["applications"] });
+      if (summary.failed === 0) toast.success(`${summary.ok} CV(s) added to this requisition`);
+      else toast.warning(`${summary.ok} parsed · ${summary.failed} failed`);
+    } finally {
+      setUploadBusy(false);
+    }
+  }
+
+  /* ----------------------------------------------------- LinkedIn job post */
+
+  async function makePost() {
+    setPostBusy(true);
+    try {
+      const p = await runDraftPost({
+        data: {
+          title: r!.title,
+          company: "Yavar",
+          location: r!.location,
+          openings: r!.openings,
+          experienceMin: r!.experience_min,
+          experienceMax: r!.experience_max,
+          mustHave: r!.must_have_skills,
+          goodToHave: r!.good_to_have_skills,
+          jdText: latestJd?.full_text ?? null,
+          tone: postTone,
+          applyUrl: typeof window === "undefined" ? null : `${window.location.origin}/ijp`,
+        },
+      });
+      setPost(p);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not draft the post");
+    } finally {
+      setPostBusy(false);
+    }
+  }
+
+
   return (
     <>
       <Link
@@ -423,6 +563,206 @@ function RequisitionDetail() {
             )}
           </section>
 
+          {/* ---------------------------------------- Source candidates */}
+          <section className="panel p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">Source candidates for this JD</h2>
+                <p className="text-xs text-muted-foreground">
+                  Pull people already in the talent pool — pre-ranked on must-have overlap and experience band — or
+                  drop in fresh CVs. Added candidates become applications, then the Matching engine does the full
+                  AI + social scoring.
+                </p>
+              </div>
+              <Button asChild variant="outline">
+                <Link to="/matching" search={{ req: r.id }}>
+                  Open matching engine
+                </Link>
+              </Button>
+            </div>
+
+            <div className="mt-4 grid gap-5 lg:grid-cols-2">
+              <div>
+                <Label className="mb-1.5 block text-xs text-muted-foreground">From the talent pool</Label>
+                <Input
+                  placeholder="Search name, skill or location…"
+                  value={poolSearch}
+                  onChange={(e) => setPoolSearch(e.target.value)}
+                />
+                <ul className="mt-3 max-h-80 divide-y divide-border overflow-y-auto rounded-lg border border-border">
+                  {poolRanked.length === 0 && (
+                    <li className="p-4 text-xs text-muted-foreground">
+                      No unattached candidates match. Add CVs to the talent pool first.
+                    </li>
+                  )}
+                  {poolRanked.map((p) => (
+                    <li key={p.candidate.id} className="flex items-center gap-3 p-3">
+                      <input
+                        type="checkbox"
+                        className="size-4 accent-[var(--primary)]"
+                        checked={picked.includes(p.candidate.id)}
+                        onChange={(e) =>
+                          setPicked((prev) =>
+                            e.target.checked
+                              ? [...prev, p.candidate.id]
+                              : prev.filter((x) => x !== p.candidate.id),
+                          )
+                        }
+                      />
+                      <ScoreChip score={p.fit} />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">{p.candidate.full_name}</div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {p.candidate.experience_years} yrs · {p.candidate.location ?? "—"} ·{" "}
+                          {p.mustHits.length}/{r.must_have_skills.length || 0} must-haves
+                          {p.experienceOk ? "" : " · outside band"}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Button onClick={() => addFromPool(picked)} disabled={picked.length === 0}>
+                    Add {picked.length || ""} to pipeline
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setPicked(poolRanked.slice(0, 10).map((p) => p.candidate.id))}
+                    disabled={poolRanked.length === 0}
+                  >
+                    Auto-shortlist top 10
+                  </Button>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Pre-rank is a free keyword/experience overlap — it decides who to score, never who to hire.
+                </p>
+              </div>
+
+              <div>
+                <Label className="mb-1.5 block text-xs text-muted-foreground">Upload new CVs onto this requisition</Label>
+                <Input
+                  type="file"
+                  multiple
+                  disabled={uploadBusy}
+                  accept=".pdf,.docx,.txt,.md"
+                  onChange={(e) => {
+                    uploadCvs(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Each CV is read in the browser, AI-parsed into structured fields, saved to the talent pool (existing
+                  emails are updated, not duplicated) and applied to this requisition.
+                </p>
+                {uploadLog.length > 0 && (
+                  <ul className="mt-3 max-h-72 space-y-1 overflow-y-auto text-xs">
+                    {uploadLog.map((l, i) => (
+                      <li
+                        key={i}
+                        className={
+                          l.state === "error"
+                            ? "text-destructive"
+                            : l.state === "ok"
+                              ? "text-muted-foreground"
+                              : "text-foreground"
+                        }
+                      >
+                        <span className="font-medium">{l.file}</span> — {l.message}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* ---------------------------------------- LinkedIn post designer */}
+          <section className="panel p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">LinkedIn job post</h2>
+                <p className="text-xs text-muted-foreground">
+                  {r.status === "approved"
+                    ? "Design the post from the approved JD, preview it exactly as it will appear, then publish."
+                    : "Available once the requisition is approved — approve it above to design the post."}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  className="h-9 rounded-md border border-border bg-background px-2 text-sm"
+                  value={postTone}
+                  onChange={(e) => setPostTone(e.target.value as typeof postTone)}
+                >
+                  <option value="professional">Professional</option>
+                  <option value="warm">Warm</option>
+                  <option value="bold">Bold</option>
+                </select>
+                <Button onClick={makePost} disabled={postBusy || r.status !== "approved"}>
+                  <Sparkles className="size-4" /> {postBusy ? "Designing…" : post ? "Redesign" : "Design post"}
+                </Button>
+              </div>
+            </div>
+
+            {post && (
+              <div className="mt-4 grid gap-5 lg:grid-cols-2">
+                <div className="rounded-xl border border-border bg-card p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="grid size-11 place-items-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                      Y
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold">Yavar</div>
+                      <div className="text-xs text-muted-foreground">Company · Just now</div>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-sm font-medium">{post.headline}</p>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{post.body}</p>
+                  <p className="mt-2 text-sm text-primary">{post.hashtags.map((h) => `#${h}`).join(" ")}</p>
+                  <p className="mt-3 text-sm font-medium">{post.call_to_action}</p>
+                </div>
+
+                <div className="space-y-3">
+                  <Textarea
+                    rows={14}
+                    className="text-xs leading-relaxed"
+                    value={`${post.headline}\n\n${post.body}\n\n${post.call_to_action}\n\n${post.hashtags
+                      .map((h) => `#${h}`)
+                      .join(" ")}`}
+                    onChange={(e) => setPost({ ...post, body: e.target.value, headline: "", call_to_action: "", hashtags: [] })}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(
+                          `${post.headline}\n\n${post.body}\n\n${post.call_to_action}\n\n${post.hashtags
+                            .map((h) => `#${h}`)
+                            .join(" ")}`,
+                        );
+                        toast.success("Post copied — paste it into LinkedIn");
+                      }}
+                    >
+                      Copy post
+                    </Button>
+                    <Button asChild variant="outline">
+                      <a href="https://www.linkedin.com/feed/?shareActive=true" target="_blank" rel="noreferrer">
+                        Open LinkedIn composer
+                      </a>
+                    </Button>
+                    <Button asChild variant="ghost">
+                      <Link to="/integrations">Configure auto-publishing</Link>
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Auto-publishing uses the LinkedIn connection configured by the admin on the Integrations page. Until
+                    a page access token is connected, copy-paste keeps you unblocked.
+                  </p>
+                </div>
+              </div>
+            )}
+          </section>
+
+
           <section className="panel">
             <div className="border-b border-border p-5">
               <h2 className="font-semibold">Applicant pipeline</h2>
@@ -501,8 +841,49 @@ function RequisitionDetail() {
                   </Button>
                 )}
               </div>
+
+              <div className="border-t border-border pt-3">
+                <Button size="sm" variant="outline" onClick={adviseWeights} disabled={advising}>
+                  <Sparkles className="size-4" /> {advising ? "Reading the JD…" : "Suggest weights from this JD"}
+                </Button>
+                {advice && (
+                  <div className="mt-3 space-y-2 rounded-lg border border-dashed border-border p-3 text-xs">
+                    <p className="num font-semibold">
+                      Skills {advice.skills} · Experience {advice.experience} · Education {advice.education} · Social{" "}
+                      {advice.social}
+                    </p>
+                    <p className="text-muted-foreground">{advice.rationale}</p>
+                    {advice.notes.length > 0 && (
+                      <ul className="list-disc space-y-0.5 pl-4 text-muted-foreground">
+                        {advice.notes.map((n, i) => (
+                          <li key={i}>{n}</li>
+                        ))}
+                      </ul>
+                    )}
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          saveWeights({
+                            skills: advice.skills,
+                            experience: advice.experience,
+                            education: advice.education,
+                            social: advice.social,
+                          })
+                        }
+                      >
+                        Apply these weights
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setAdvice(null)}>
+                        Dismiss
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </section>
+
 
           <section className="panel p-5">
             <h2 className="font-semibold">Internal job posting (IJP)</h2>
