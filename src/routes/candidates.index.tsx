@@ -874,7 +874,7 @@ function Candidates() {
                         <div className="text-muted-foreground">no work history parsed</div>
                       )}
                     </TableCell>
-                    <TableCell className="w-[120px] text-sm">
+                    <TableCell className="w-[110px] text-sm">
                       <span className="num">{c.experience_years} yrs</span>
                       {metrics && metrics.jobs_last_5y > 2 ? (
                         <div className="num text-xs text-amber-600">{metrics.jobs_last_5y} jobs / 5y</div>
@@ -883,15 +883,18 @@ function Candidates() {
                         <div className="num text-xs text-amber-600">{metrics.longest_gap_months}m gap</div>
                       ) : null}
                     </TableCell>
-                    <TableCell className="w-[190px] text-xs text-muted-foreground">
-                      <span className="line-clamp-2">{c.skills.slice(0, 6).join(" · ") || "no skills parsed"}</span>
+                    <TableCell className="w-[200px] text-xs text-muted-foreground">
+                      <span className="line-clamp-2 break-words">
+                        {c.skills.slice(0, 6).join(" · ") || "no skills parsed"}
+                      </span>
                       {c.skills.length > 6 ? (
                         <span className="num block text-[11px]">+{c.skills.length - 6} more</span>
                       ) : null}
-                      <span className="line-clamp-1 mt-0.5 block" title={c.education ?? ""}>
-                        {c.education || "education unknown"}
+                      <span className="mt-0.5 line-clamp-2 block break-words" title={educationLabel(c.education)}>
+                        {educationLabel(c.education) || "education unknown"}
                       </span>
                     </TableCell>
+
                     <TableCell className="w-[170px] text-xs text-muted-foreground">
                       <div className="num">
                         CTC {money(c.current_ctc as number | null)} → exp {money(c.expected_ctc as number | null)}
