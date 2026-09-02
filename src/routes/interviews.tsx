@@ -80,11 +80,13 @@ function Interviews() {
     level: number;
     interviewer: string;
     interviewerEmail: string;
+    candidateEmail: string;
     scheduledAt: string;
     durationMins: string;
     mode: "online" | "onsite" | "phone";
     meetingLink: string;
     agenda: string;
+    rescheduleReason: string;
   } | null>(null);
 
   const [form, setForm] = useState({
@@ -104,12 +106,15 @@ function Interviews() {
 
   function openSlot(applicationId: string, level: number, interviewId: string | null) {
     const existing = (ivs.data ?? []).find((i) => i.id === interviewId);
+    const app = (apps.data ?? []).find((a) => a.id === applicationId);
+    const candidate = (cands.data ?? []).find((c) => c.id === app?.candidate_id);
     setSlot({
       applicationId,
       interviewId,
       level,
       interviewer: existing?.interviewer ?? "",
       interviewerEmail: existing?.interviewer_email ?? "",
+      candidateEmail: candidate?.email ?? "",
       scheduledAt: localInputValue(
         existing?.scheduled_at ? new Date(existing.scheduled_at) : new Date(Date.now() + 86_400_000),
       ),
@@ -117,11 +122,21 @@ function Interviews() {
       mode: (existing?.mode as "online" | "onsite" | "phone") ?? "online",
       meetingLink: existing?.teams_link ?? "",
       agenda: existing?.agenda ?? "",
+      rescheduleReason: "",
     });
   }
 
+
   async function saveSlot() {
     if (!slot) return;
+    if (!slot.candidateEmail.trim()) {
+      toast.error("The candidate needs an email address — that is where the invite goes");
+      return;
+    }
+    if (slot.interviewId && !slot.rescheduleReason.trim()) {
+      toast.error("Give a reason for the re-schedule");
+      return;
+    }
     setBusy(true);
     try {
       await doSchedule({
@@ -131,17 +146,21 @@ function Interviews() {
           level: slot.level,
           interviewer: slot.interviewer || null,
           interviewerEmail: slot.interviewerEmail || null,
+          candidateEmail: slot.candidateEmail.trim(),
           scheduledAt: slot.scheduledAt,
           durationMins: Number(slot.durationMins) || 60,
           mode: slot.mode,
           meetingLink: slot.meetingLink || null,
           agenda: slot.agenda || null,
+          rescheduleReason: slot.rescheduleReason || null,
         },
       });
       toast.success(`L${slot.level} ${slot.interviewId ? "re-scheduled" : "scheduled"}`);
       setSlot(null);
       qc.invalidateQueries({ queryKey: ["interviews"] });
       qc.invalidateQueries({ queryKey: ["applications"] });
+      qc.invalidateQueries({ queryKey: ["candidates"] });
+      qc.invalidateQueries({ queryKey: ["stage_events"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not schedule the interview");
     } finally {
@@ -163,10 +182,11 @@ function Interviews() {
           topic: `L${slot.level} interview — ${candidate?.full_name ?? "Candidate"} — ${req?.title ?? "Requisition"}`,
           startIso: new Date(slot.scheduledAt).toISOString(),
           durationMins: Number(slot.durationMins) || 60,
-          attendees: [slot.interviewerEmail, candidate?.email].filter((e): e is string => Boolean(e)),
+          attendees: [slot.interviewerEmail, slot.candidateEmail].filter((e): e is string => Boolean(e)),
           agenda: slot.agenda || null,
         },
       });
+
       setSlot({ ...slot, meetingLink: result.joinUrl, mode: "online" });
       toast.success("Meeting link created — save the slot to store it");
     } catch (e) {
@@ -345,8 +365,37 @@ function Interviews() {
                     {slot?.applicationId === a.id && (
                       <div className="mt-3 grid gap-3 rounded-lg border border-border bg-surface-2 p-4 sm:grid-cols-2">
                         <div className="sm:col-span-2 text-xs font-medium">
-                          Schedule L{slot.level} — {c?.full_name}
+                          {slot.interviewId ? "Re-schedule" : "Schedule"} L{slot.level} — {c?.full_name}
                         </div>
+                        <div className="sm:col-span-2">
+                          <Label className="mb-1.5 block text-xs text-muted-foreground">
+                            Candidate email — the invite goes here
+                          </Label>
+                          <Input
+                            type="email"
+                            value={slot.candidateEmail}
+                            onChange={(e) => setSlot({ ...slot, candidateEmail: e.target.value })}
+                            placeholder="candidate@example.com"
+                          />
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {c?.email
+                              ? `Taken from the CV parsed into the talent pool (${c.email}). Correcting it here updates the candidate record.`
+                              : "No email was found on this CV — type the correct address; it is saved back to the candidate profile."}
+                          </p>
+                        </div>
+                        {slot.interviewId ? (
+                          <div className="sm:col-span-2">
+                            <Label className="mb-1.5 block text-xs text-muted-foreground">
+                              Reason for re-scheduling (required, audited)
+                            </Label>
+                            <Input
+                              value={slot.rescheduleReason}
+                              onChange={(e) => setSlot({ ...slot, rescheduleReason: e.target.value })}
+                              placeholder="Candidate travelling / panel conflict / client ask…"
+                            />
+                          </div>
+                        ) : null}
+
                         <div>
                           <Label className="mb-1.5 block text-xs text-muted-foreground">Interviewer name</Label>
                           <Input

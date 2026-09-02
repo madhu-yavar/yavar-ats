@@ -240,6 +240,10 @@ const ScheduleInput = z.object({
   meetingLink: z.string().optional().nullable(),
   agenda: z.string().optional().nullable(),
   interviewId: z.string().uuid().optional().nullable(),
+  /** Required when re-scheduling an existing round, so the change is auditable. */
+  rescheduleReason: z.string().optional().nullable(),
+  /** Recruiter-confirmed candidate email; written back to the candidate record. */
+  candidateEmail: z.string().email().optional().nullable(),
 });
 
 /** Create or re-schedule a round and park the application on that interview stage. */
@@ -262,19 +266,63 @@ export const scheduleInterview = createServerFn({ method: "POST" })
       status: "scheduled",
     };
 
+    const { data: app } = await context.supabase
+      .from("applications")
+      .select("id, stage, candidate_id")
+      .eq("id", data.applicationId)
+      .maybeSingle();
+
+    /* Candidate email is the invite address: confirm it before the round exists. */
+    let candidateEmail: string | null = null;
+    if (app) {
+      const { data: cand } = await context.supabase
+        .from("candidates")
+        .select("id, email")
+        .eq("id", app.candidate_id)
+        .maybeSingle();
+      candidateEmail = cand?.email ?? null;
+      const typed = data.candidateEmail?.trim().toLowerCase() || null;
+      if (typed && typed !== (candidateEmail ?? "").toLowerCase()) {
+        await context.supabase.from("candidates").update({ email: typed }).eq("id", app.candidate_id);
+        candidateEmail = typed;
+      }
+    }
+    if (!candidateEmail) {
+      throw new Error("This candidate has no email on file — add one before scheduling, or the invite cannot be sent.");
+    }
+
+    let rescheduled = false;
     if (data.interviewId) {
-      const { error } = await context.supabase.from("interviews").update(row).eq("id", data.interviewId);
+      const reason = data.rescheduleReason?.trim();
+      if (!reason) throw new Error("Give a reason for the re-schedule — it is written to the audit trail.");
+      const { data: previous } = await context.supabase
+        .from("interviews")
+        .select("scheduled_at")
+        .eq("id", data.interviewId)
+        .maybeSingle();
+      const { error } = await context.supabase
+        .from("interviews")
+        .update({ ...row, status: "rescheduled" })
+        .eq("id", data.interviewId);
       if (error) throw new Error(error.message);
+      rescheduled = true;
+
+      if (app) {
+        const wasAt = previous?.scheduled_at ? new Date(previous.scheduled_at).toISOString() : "unscheduled";
+        await context.supabase.from("stage_events").insert({
+          application_id: app.id,
+          from_stage: app.stage,
+          to_stage: app.stage,
+          actor,
+          reason: `L${data.level} re-scheduled: ${reason}`,
+          note: `${wasAt} → ${row.scheduled_at}`,
+        });
+      }
     } else {
       const { error } = await context.supabase.from("interviews").insert(row);
       if (error) throw new Error(error.message);
     }
 
-    const { data: app } = await context.supabase
-      .from("applications")
-      .select("id, stage")
-      .eq("id", data.applicationId)
-      .maybeSingle();
     const target = (`l${data.level}`) as Stage;
     if (app && app.stage !== target && canMove(app.stage as Stage, target)) {
       await context.supabase
@@ -288,7 +336,10 @@ export const scheduleInterview = createServerFn({ method: "POST" })
         actor,
         reason: `L${data.level} interview scheduled`,
       });
+    } else if (app) {
+      await context.supabase.from("applications").update({ last_activity_at: now }).eq("id", app.id);
     }
 
-    return { ok: true as const };
+    return { ok: true as const, rescheduled, candidateEmail };
   });
+
