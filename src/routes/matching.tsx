@@ -351,19 +351,25 @@ function Matching() {
   }
 
   /** One JD vs many CVs: bounded concurrency, cached social signals, per-row error isolation. */
-  async function scoreAll() {
+  async function scoreAll(applicationIds?: string[]) {
     if (!requisition) return;
     if (weightTotal !== 100) {
       toast.error("Weights must total 100 before scoring");
       return;
     }
-    const targets = pipeline.filter(
-      (r) => r.candidate && (rescoreAll || (!r.live && !r.stored)),
+    const explicit = applicationIds?.length ? new Set(applicationIds) : null;
+    const targets = pipeline.filter((r) =>
+      r.candidate && (explicit ? explicit.has(r.app.id) : rescoreAll || (!r.live && !r.stored)),
     );
     if (!targets.length) {
-      toast.info("Every applicant already has a score — switch on re-score to run them again.");
+      toast.info(
+        explicit
+          ? "Select at least one candidate to score."
+          : "Every applicant already has a score — switch on re-score to run them again.",
+      );
       return;
     }
+
 
     setBulk({ done: 0, total: targets.length });
     try {
