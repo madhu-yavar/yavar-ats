@@ -15,6 +15,7 @@ import { useRouterState } from "@tanstack/react-router";
 
 import { AuthGate } from "@/components/AuthGate";
 import { AppShell } from "@/components/AppShell";
+import { OrgGate } from "@/components/OrgGate";
 import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
@@ -133,10 +134,12 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthGate>
-        <AppShell>
-          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-          <Outlet />
-        </AppShell>
+        <OrgGate>
+          <AppShell>
+            {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+            <Outlet />
+          </AppShell>
+        </OrgGate>
       </AuthGate>
       <Toaster />
     </QueryClientProvider>
