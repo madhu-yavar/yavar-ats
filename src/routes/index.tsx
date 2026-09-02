@@ -21,6 +21,8 @@ import { canonical, stalledDays, STAGE_LABEL, type Stage } from "@/lib/lifecycle
 import { findDuplicateGroups, freshness } from "@/lib/dedupe";
 import { rankPool } from "@/lib/shortlist";
 import { PageHeader, ScoreChip, StageBadge, StatCard, StatusBadge, inr } from "@/components/ats";
+import { LeadershipBoard } from "@/components/LeadershipBoard";
+import { useRoles } from "@/hooks/useRoles";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/")({
@@ -114,6 +116,12 @@ function Panel({
 
 function Dashboard() {
   const qc = useQueryClient();
+  const { roles, isAdmin } = useRoles();
+  const execScope: "CHRO" | "HR head" | null = isAdmin
+    ? "CHRO"
+    : roles.includes("hr_head")
+      ? "HR head"
+      : null;
   const reqs = useQuery(requisitionsQuery);
   const apps = useQuery(applicationsQuery);
   const scores = useQuery(matchScoresQuery);
@@ -271,6 +279,10 @@ function Dashboard() {
           </div>
         }
       />
+
+      {execScope ? <LeadershipBoard scope={execScope} /> : null}
+
+
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Open requisitions" value={open.length} hint={`${pending.length} awaiting approval`} />

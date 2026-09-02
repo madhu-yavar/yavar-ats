@@ -26,3 +26,8 @@
 ## Next
 - [ ] Slice 2: role-scoped CHRO / HR-head dashboards.
 - [ ] Slice 3: embedded HR copilot (one conversation, database-backed).
+
+## Enterprise readiness — slice 2 & 3 (done)
+- [x] Slice 2: CHRO / HR-head leadership board on the dashboard (open demand, salary commitment vs departmental budget, pipeline coverage per seat, offer accept rate, time to hire, demand & supply by department). Recruiters keep the operational view only.
+- [x] Slice 3: embedded HR copilot — floating panel on every page, one ongoing conversation per user persisted in `copilot_messages` (org-scoped, RLS own-rows), grounded in a live org data snapshot via the configured AI provider.
+- [x] Org registration path made explicit on the sign-in screen ("New company? Register your organisation" → owner account → 4-step setup wizard).
