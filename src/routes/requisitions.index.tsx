@@ -70,6 +70,10 @@ function Requisitions() {
     experience_min: "3",
     experience_max: "6",
     budget_ctc: "1800000",
+    ctc_band_min: "",
+    ctc_band_max: "",
+    max_notice_period_days: "",
+    work_authorization_required: "",
     hiring_manager: "",
     must: [] as string[],
     good: [] as string[],
@@ -160,6 +164,10 @@ function Requisitions() {
       experience_min: Number(form.experience_min) || 0,
       experience_max: Number(form.experience_max) || 0,
       budget_ctc: Number(form.budget_ctc) || 0,
+      ctc_band_min: form.ctc_band_min ? Number(form.ctc_band_min) : null,
+      ctc_band_max: form.ctc_band_max ? Number(form.ctc_band_max) : null,
+      max_notice_period_days: form.max_notice_period_days ? Number(form.max_notice_period_days) : null,
+      work_authorization_required: form.work_authorization_required || null,
       hiring_manager: form.hiring_manager || null,
       must_have_skills: form.must,
       good_to_have_skills: form.good,
@@ -258,6 +266,37 @@ function Requisitions() {
                     type="number"
                     value={form.budget_ctc}
                     onChange={(e) => setForm({ ...form, budget_ctc: e.target.value })}
+                  />
+                </Field>
+                <Field label="CTC band min (₹)">
+                  <Input
+                    type="number"
+                    value={form.ctc_band_min}
+                    onChange={(e) => setForm({ ...form, ctc_band_min: e.target.value })}
+                  />
+                </Field>
+                <Field label="CTC band max (₹)">
+                  <Input
+                    type="number"
+                    value={form.ctc_band_max}
+                    onChange={(e) => setForm({ ...form, ctc_band_max: e.target.value })}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Used to flag out-of-band expectations — it never lowers a candidate&apos;s match score.
+                  </p>
+                </Field>
+                <Field label="Max notice period (days)">
+                  <Input
+                    type="number"
+                    value={form.max_notice_period_days}
+                    onChange={(e) => setForm({ ...form, max_notice_period_days: e.target.value })}
+                  />
+                </Field>
+                <Field label="Work authorisation required">
+                  <Input
+                    placeholder="e.g. Indian citizen / H-1B / EU work permit"
+                    value={form.work_authorization_required}
+                    onChange={(e) => setForm({ ...form, work_authorization_required: e.target.value })}
                   />
                 </Field>
                 <Field label="Experience min (yrs)">
