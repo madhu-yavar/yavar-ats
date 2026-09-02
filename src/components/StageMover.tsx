@@ -56,6 +56,12 @@ export function StageMover({
     }
   }, [open]);
 
+  // A reason belongs to a stage — clearing it when the stage changes keeps them paired.
+  useEffect(() => {
+    setReason("");
+  }, [toStage]);
+
+
   const options = useMemo<Stage[]>(() => {
     if (currentStage) return allowedTransitions(currentStage);
     // Bulk move across mixed stages: offer every stage, the server rejects illegal rows.
