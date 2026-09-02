@@ -12,7 +12,7 @@ import {
   type ProviderId,
 } from "./integrations.server";
 
-const PROVIDERS = ["linkedin", "naukri", "indeed", "github", "careers"] as const;
+const PROVIDERS = ["linkedin", "naukri", "indeed", "github", "careers", "zoom", "google_meet", "teams"] as const;
 
 const SaveInput = z.object({
   integrationId: z.string().uuid(),

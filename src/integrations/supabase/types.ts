@@ -835,6 +835,7 @@ export type Database = {
       }
       source_integrations: {
         Row: {
+          category: string
           config: Json
           created_at: string
           credential_fields: string[]
@@ -849,6 +850,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          category?: string
           config?: Json
           created_at?: string
           credential_fields?: string[]
@@ -863,6 +865,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          category?: string
           config?: Json
           created_at?: string
           credential_fields?: string[]

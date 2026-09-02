@@ -6,7 +6,15 @@
  * service-role client used here, never from the browser.
  */
 
-export type ProviderId = "linkedin" | "naukri" | "indeed" | "github" | "careers";
+export type ProviderId =
+  | "linkedin"
+  | "naukri"
+  | "indeed"
+  | "github"
+  | "careers"
+  | "zoom"
+  | "google_meet"
+  | "teams";
 
 export type TestOutcome = {
   status: "ok" | "pending" | "failed";
@@ -155,6 +163,12 @@ export async function testProvider(
       return testTokenEndpoint("Indeed", secrets, config, ["api_key"]);
     case "careers":
       return { status: "ok", message: "Built-in source — no credentials required." };
+    case "zoom":
+    case "google_meet":
+    case "teams": {
+      const { testMeetingProvider } = await import("./meetings.server");
+      return testMeetingProvider(provider, secrets);
+    }
     default:
       return { status: "failed", message: "Unknown provider." };
   }
