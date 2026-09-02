@@ -663,14 +663,14 @@ function Candidates() {
         <EmptyState title="No candidates match" hint="Change the view or clear the filters." />
       ) : (
         <div className="panel overflow-x-auto">
-          <Table>
+          <Table className="table-fixed">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10">
                   <Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all" />
                 </TableHead>
-                <TableHead>Candidate</TableHead>
-                <TableHead>Experience</TableHead>
+                <TableHead className="w-[260px]">Candidate</TableHead>
+                <TableHead className="w-[120px]">Experience</TableHead>
                 <TableHead className="w-[200px]">Skills</TableHead>
                 <TableHead className="w-[190px]">Stage & next action</TableHead>
                 <TableHead className="text-right">Match</TableHead>
@@ -692,7 +692,7 @@ function Candidates() {
                         aria-label={`Select ${c.full_name}`}
                       />
                     </TableCell>
-                    <TableCell className="min-w-48">
+                    <TableCell className="w-[260px]">
                       <Link to="/candidates/$id" params={{ id: c.id }} className="font-medium hover:underline">
                         {c.full_name}
                       </Link>
@@ -728,9 +728,11 @@ function Candidates() {
                         </div>
                       ) : null}
                     </TableCell>
-                    <TableCell className="num whitespace-nowrap text-sm">
-                      {c.experience_years} yrs
-                      <div className="text-xs text-muted-foreground">{c.location ?? "—"}</div>
+                    <TableCell className="w-[120px] text-sm">
+                      <span className="num">{c.experience_years} yrs</span>
+                      <div className="line-clamp-2 text-xs text-muted-foreground" title={c.location ?? ""}>
+                        {c.location ?? "—"}
+                      </div>
                     </TableCell>
                     <TableCell className="w-[200px] text-xs text-muted-foreground">
                       <span className="line-clamp-2">{c.skills.slice(0, 6).join(" · ") || "—"}</span>
