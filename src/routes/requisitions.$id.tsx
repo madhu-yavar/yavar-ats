@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Sparkles } from "lucide-react";
+import { ArrowLeft, Sparkles, Upload } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -15,8 +15,9 @@ import {
   matchScoresQuery,
   requisitionQuery,
 } from "@/lib/data";
-import { generateJd } from "@/lib/matching.functions";
-import { balanceWeights } from "@/lib/cv-extract";
+import { generateJd, importJd } from "@/lib/matching.functions";
+import { balanceWeights, extractResumeText } from "@/lib/cv-extract";
+
 import { useRoles } from "@/hooks/useRoles";
 
 import {
@@ -74,11 +75,15 @@ function RequisitionDetail() {
   const cands = useQuery(candidatesQuery);
   const scores = useQuery(matchScoresQuery);
   const draftJd = useServerFn(generateJd);
+  const runImportJd = useServerFn(importJd);
   const { roles, canApprove, requiredRoleFor } = useRoles();
 
   const [busy, setBusy] = useState(false);
   const [jdText, setJdText] = useState<string | null>(null);
+  const [jdPaste, setJdPaste] = useState("");
+  const [showImport, setShowImport] = useState(false);
   const [comment, setComment] = useState("");
+
 
   const r = req.data;
   if (req.isLoading) return <p className="text-sm text-muted-foreground">Loading requisition…</p>;
@@ -190,6 +195,75 @@ function RequisitionDetail() {
     }
   }
 
+
+  /** Take a recruiter's own JD (pasted text or PDF/DOCX/TXT file) and file it as a JD version. */
+  async function useExistingJd(raw: string) {
+    const text = raw.trim();
+    if (text.length < 30) {
+      toast.error("Paste or upload the full JD text first");
+      return;
+    }
+    setBusy(true);
+    try {
+      const jd = await runImportJd({ data: { jdText: text, title: r!.title } });
+      const { error } = await supabase.from("job_descriptions").insert({
+        requisition_id: r!.id,
+        version: ((jds.data ?? [])[0]?.version ?? 0) + 1,
+        status: "pending_dh",
+        purpose: jd.purpose,
+        responsibilities: jd.responsibilities,
+        must_have: jd.must_have,
+        good_to_have: jd.good_to_have,
+        qualifications: jd.qualifications,
+        success_factors: jd.success_factors,
+        reporting_to: jd.reporting_to,
+        full_text: jd.full_text,
+      });
+      if (error) throw new Error(error.message);
+
+      // Keep the requisition's scoring baseline in sync with the uploaded JD.
+      const patch: {
+        must_have_skills?: string[];
+        good_to_have_skills?: string[];
+        experience_min?: number;
+        experience_max?: number;
+      } = {};
+      if (jd.must_have?.length && !r!.must_have_skills.length) patch.must_have_skills = jd.must_have;
+      if (jd.good_to_have?.length && !r!.good_to_have_skills.length) patch.good_to_have_skills = jd.good_to_have;
+      if ((jd.experience_min || jd.experience_max) && !r!.experience_min && !r!.experience_max) {
+        patch.experience_min = jd.experience_min;
+        patch.experience_max = Math.max(jd.experience_max, jd.experience_min);
+      }
+      if (Object.keys(patch).length) await supabase.from("requisitions").update(patch).eq("id", r!.id);
+
+
+      setJdPaste("");
+      setShowImport(false);
+      toast.success("Your JD was imported, structured and sent for Department Head review");
+      qc.invalidateQueries({ queryKey: ["jd", id] });
+      qc.invalidateQueries({ queryKey: ["requisition", id] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "JD import failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onJdFile(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const text = await extractResumeText(file);
+      setJdPaste(text);
+      await useExistingJd(text);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not read that file");
+      setBusy(false);
+    }
+  }
+
+
+
   async function approveJd() {
     if (!latestJd) return;
     const { error } = await supabase
@@ -264,10 +338,49 @@ function RequisitionDetail() {
                   {latestJd ? `Version ${latestJd.version} · ${latestJd.status}` : "No JD drafted yet"}
                 </p>
               </div>
-              <Button variant="outline" onClick={draft} disabled={busy}>
-                <Sparkles className="size-4" /> {latestJd ? "Redraft with AI" : "Draft with AI"}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="outline" onClick={() => setShowImport((v) => !v)} disabled={busy}>
+                  <Upload className="size-4" /> I already have a JD
+                </Button>
+                <Button variant="outline" onClick={draft} disabled={busy}>
+                  <Sparkles className="size-4" /> {latestJd ? "Redraft with AI" : "Draft with AI"}
+                </Button>
+              </div>
             </div>
+
+            {showImport && (
+              <div className="mt-4 space-y-3 rounded-lg border border-dashed border-border p-4">
+                <div>
+                  <Label className="text-sm">Upload your existing JD</Label>
+                  <p className="text-xs text-muted-foreground">
+                    PDF, DOCX or TXT. We extract the text, structure it into must-have / good-to-have skills and the
+                    experience band, then file it as the next JD version for approval — nothing is rewritten.
+                  </p>
+                </div>
+                <Input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.txt,.md"
+                  disabled={busy}
+                  onChange={(e) => onJdFile(e.target.files?.[0])}
+                />
+                <Textarea
+                  rows={8}
+                  placeholder="…or paste the JD text here"
+                  value={jdPaste}
+                  onChange={(e) => setJdPaste(e.target.value)}
+                  className="text-xs"
+                />
+                <div className="flex gap-2">
+                  <Button onClick={() => useExistingJd(jdPaste)} disabled={busy}>
+                    {busy ? "Importing…" : "Import this JD"}
+                  </Button>
+                  <Button variant="ghost" onClick={() => setShowImport(false)} disabled={busy}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+
 
             {latestJd ? (
               <div className="mt-4 space-y-4">
