@@ -949,6 +949,7 @@ export type Database = {
           full_name: string | null
           id: string
           invited_by: string | null
+          invited_role: Database["public"]["Enums"]["app_role"] | null
           is_owner: boolean
           joined_at: string | null
           org_id: string
@@ -962,6 +963,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           invited_by?: string | null
+          invited_role?: Database["public"]["Enums"]["app_role"] | null
           is_owner?: boolean
           joined_at?: string | null
           org_id: string
@@ -975,6 +977,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           invited_by?: string | null
+          invited_role?: Database["public"]["Enums"]["app_role"] | null
           is_owner?: boolean
           joined_at?: string | null
           org_id?: string

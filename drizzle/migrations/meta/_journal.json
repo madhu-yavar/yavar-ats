@@ -99,6 +99,13 @@
       "when": 1788369473252,
       "tag": "0013_multi_tenant_organizations",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788369508941,
+      "tag": "0014_org_member_invited_role",
+      "breakpoints": true
     }
   ]
 }
