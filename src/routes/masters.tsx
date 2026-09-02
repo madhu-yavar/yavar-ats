@@ -35,11 +35,18 @@ export const Route = createFileRoute("/masters")({
 
 const GROUPS: { kind: MasterKind; title: string; hint: string; placeholder: string }[] = [
   {
+    kind: "role_title",
+    title: "Role titles",
+    hint: "Standard job titles recruiters pick from when raising a requisition.",
+    placeholder: "Senior Backend Engineer",
+  },
+  {
     kind: "skill",
     title: "Skills taxonomy",
     hint: "Drives requisition must-haves, JD drafting and the 50-point skill match.",
     placeholder: "Kubernetes",
   },
+
   {
     kind: "education",
     title: "Education / qualifications",
