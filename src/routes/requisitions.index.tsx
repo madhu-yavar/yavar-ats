@@ -87,6 +87,18 @@ function Requisitions() {
   const locations = byKind(masters.data, "location");
   const education = byKind(masters.data, "education");
   const roleTitles = byKind(masters.data, "role_title");
+  const billingTypes = byKind(masters.data, "billing_type");
+  const engagementTypes = byKind(masters.data, "engagement_type");
+  const clients = byKind(masters.data, "client");
+
+  async function createClient(name: string) {
+    try {
+      await addMasterItem("client", name);
+      qc.invalidateQueries({ queryKey: ["master_items"] });
+    } catch {
+      /* already in the library */
+    }
+  }
 
   async function createSkill(name: string) {
     try {
