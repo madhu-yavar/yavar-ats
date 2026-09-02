@@ -759,7 +759,7 @@ function Candidates() {
         <EmptyState title="No candidates match" hint="Change the view or clear the filters." />
       ) : (
         <div className="panel overflow-x-auto">
-          <Table className="table-fixed">
+          <Table className="min-w-[1720px] table-fixed">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10">
@@ -767,18 +767,18 @@ function Candidates() {
                 </TableHead>
                 <TableHead className="w-[240px]">Candidate</TableHead>
                 <TableHead className="w-[200px]">Contact</TableHead>
-                <TableHead className="w-[190px]">Current role & tenure</TableHead>
-                <TableHead className="w-[120px]">Experience</TableHead>
-                <TableHead className="w-[190px]">Skills & education</TableHead>
-                <TableHead className="w-[170px]">Comp & availability</TableHead>
-                <TableHead className="w-[190px]">Stage & next action</TableHead>
-                <TableHead className="w-[110px]">Parsing</TableHead>
-                <TableHead className="text-right">Match</TableHead>
-                <TableHead className="text-right">Authenticity</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-
+                <TableHead className="w-[190px]">Current role &amp; tenure</TableHead>
+                <TableHead className="w-[110px]">Experience</TableHead>
+                <TableHead className="w-[200px]">Skills &amp; education</TableHead>
+                <TableHead className="w-[170px]">Comp &amp; availability</TableHead>
+                <TableHead className="w-[190px]">Stage &amp; next action</TableHead>
+                <TableHead className="w-[120px]">Parsing</TableHead>
+                <TableHead className="w-[90px] whitespace-nowrap text-right">Match</TableHead>
+                <TableHead className="w-[120px] whitespace-nowrap text-right">Authenticity</TableHead>
+                <TableHead className="w-[100px] whitespace-nowrap text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
               {filtered.slice(0, 300).map((r) => {
                 const c = r.candidate;
