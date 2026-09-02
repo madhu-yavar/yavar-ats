@@ -19,13 +19,13 @@ export const createAssessment = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: candidate, error: cErr } = await context.supabase
       .from("candidates")
-      .select("id, full_name, current_title, skills")
+      .select("id, full_name, current_employer, skills")
       .eq("id", data.candidateId)
       .maybeSingle();
     if (cErr) throw new Error(cErr.message);
     if (!candidate) throw new Error("Candidate not found");
 
-    let title = candidate.current_title ?? "the role";
+    let title = candidate.current_employer ? `their next role after ${candidate.current_employer}` : "the role";
     let mustHave: string[] = candidate.skills ?? [];
     let responsibilities: string | null = null;
 
