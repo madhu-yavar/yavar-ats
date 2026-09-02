@@ -75,11 +75,15 @@ function RequisitionDetail() {
   const cands = useQuery(candidatesQuery);
   const scores = useQuery(matchScoresQuery);
   const draftJd = useServerFn(generateJd);
+  const runImportJd = useServerFn(importJd);
   const { roles, canApprove, requiredRoleFor } = useRoles();
 
   const [busy, setBusy] = useState(false);
   const [jdText, setJdText] = useState<string | null>(null);
+  const [jdPaste, setJdPaste] = useState("");
+  const [showImport, setShowImport] = useState(false);
   const [comment, setComment] = useState("");
+
 
   const r = req.data;
   if (req.isLoading) return <p className="text-sm text-muted-foreground">Loading requisition…</p>;
