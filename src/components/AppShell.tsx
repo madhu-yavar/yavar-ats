@@ -16,6 +16,7 @@ import {
 
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Copilot } from "@/components/Copilot";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
