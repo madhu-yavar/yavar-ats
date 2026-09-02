@@ -268,16 +268,27 @@ export const updateOrganization = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const orgId = await assertOwner(context.userId);
     const db = await admin();
-    const patch: Record<string, unknown> = {};
-    if (data.name !== undefined) patch["name"] = data.name.trim();
-    if (data.legalName !== undefined) patch["legal_name"] = data.legalName.trim() || null;
-    if (data.industry !== undefined) patch["industry"] = data.industry.trim() || null;
-    if (data.hqCountry !== undefined) patch["hq_country"] = data.hqCountry.trim() || null;
-    if (data.hqCity !== undefined) patch["hq_city"] = data.hqCity.trim() || null;
-    if (data.employeeBand !== undefined) patch["employee_band"] = data.employeeBand.trim() || null;
-    if (data.currency !== undefined) patch["currency"] = data.currency.trim() || "INR";
-    if (data.fiscalYearStartMonth !== undefined) patch["fiscal_year_start_month"] = data.fiscalYearStartMonth;
-    if (data.careersEmail !== undefined) patch["careers_email"] = data.careersEmail.trim() || null;
+    type OrgPatch = {
+      name?: string;
+      legal_name?: string | null;
+      industry?: string | null;
+      hq_country?: string | null;
+      hq_city?: string | null;
+      employee_band?: string | null;
+      currency?: string;
+      fiscal_year_start_month?: number;
+      careers_email?: string | null;
+    };
+    const patch: OrgPatch = {};
+    if (data.name !== undefined) patch.name = data.name.trim();
+    if (data.legalName !== undefined) patch.legal_name = data.legalName.trim() || null;
+    if (data.industry !== undefined) patch.industry = data.industry.trim() || null;
+    if (data.hqCountry !== undefined) patch.hq_country = data.hqCountry.trim() || null;
+    if (data.hqCity !== undefined) patch.hq_city = data.hqCity.trim() || null;
+    if (data.employeeBand !== undefined) patch.employee_band = data.employeeBand.trim() || null;
+    if (data.currency !== undefined) patch.currency = data.currency.trim() || "INR";
+    if (data.fiscalYearStartMonth !== undefined) patch.fiscal_year_start_month = data.fiscalYearStartMonth;
+    if (data.careersEmail !== undefined) patch.careers_email = data.careersEmail.trim() || null;
 
     const { error } = await db.from("organizations").update(patch).eq("id", orgId);
     if (error) throw new Error(error.message);
