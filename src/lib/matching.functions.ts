@@ -205,6 +205,17 @@ const MatchInput = z.object({
     experienceMin: z.number(),
     experienceMax: z.number(),
     jdText: z.string().optional().nullable(),
+    constraints: z
+      .object({
+        ctcBandMin: z.number().optional().nullable(),
+        ctcBandMax: z.number().optional().nullable(),
+        budgetCtc: z.number().optional().nullable(),
+        maxNoticePeriodDays: z.number().optional().nullable(),
+        locations: z.array(z.string()).optional().nullable(),
+        workAuthorizationRequired: z.string().optional().nullable(),
+      })
+      .optional()
+      .nullable(),
   }),
   candidate: z.object({
     name: z.string(),
@@ -218,15 +229,25 @@ const MatchInput = z.object({
     xUrl: z.string().optional().nullable(),
     linkedinProfileText: z.string().optional().nullable(),
     cachedSocial: z.array(z.any()).optional().nullable(),
+    noticePeriodDays: z.number().optional().nullable(),
+    currentCtc: z.number().optional().nullable(),
+    expectedCtc: z.number().optional().nullable(),
+    location: z.string().optional().nullable(),
+    preferredLocations: z.array(z.string()).optional().nullable(),
+    willingToRelocate: z.boolean().optional().nullable(),
+    workAuthorization: z.string().optional().nullable(),
   }),
   weights: z.object({
     skills: z.number(),
     experience: z.number(),
+    career: z.number(),
+    impact: z.number(),
     education: z.number(),
     social: z.number(),
   }),
   includeSocial: z.boolean().default(true),
 });
+
 
 export const matchJdToCv = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => MatchInput.parse(data))

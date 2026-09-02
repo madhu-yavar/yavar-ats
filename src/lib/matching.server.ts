@@ -1,5 +1,13 @@
 import { aiJson } from "./ai-gateway.server";
 import {
+  careerScore,
+  computeCareerMetrics,
+  type CareerAssessment,
+  type CareerMetrics,
+  type EmploymentRow,
+} from "./career";
+import { logisticsCheck, type LogisticsCheck, type LogisticsRequisition } from "./logistics";
+import {
   blendSocial,
   fetchGithubSignal,
   fetchLinkedinSignal,
@@ -19,6 +27,8 @@ export type JdInputShape = {
   experienceMin: number;
   experienceMax: number;
   jdText?: string | null | undefined;
+  /** Practical constraints — used for logistics flags only, never for the score. */
+  constraints?: LogisticsRequisition | null | undefined;
 };
 
 export type CandidateInputShape = {
@@ -34,13 +44,42 @@ export type CandidateInputShape = {
   linkedinProfileText?: string | null | undefined;
   /** Previously fetched social signals — reused instead of re-fetching. */
   cachedSocial?: SocialSignal[] | null | undefined;
+  /** Logistics facts on file (notice, CTC, location, authorisation). */
+  noticePeriodDays?: number | null | undefined;
+  currentCtc?: number | null | undefined;
+  expectedCtc?: number | null | undefined;
+  location?: string | null | undefined;
+  preferredLocations?: string[] | null | undefined;
+  willingToRelocate?: boolean | null | undefined;
+  workAuthorization?: string | null | undefined;
 };
 
-export type Weights = { skills: number; experience: number; education: number; social: number };
+export type Weights = {
+  skills: number;
+  experience: number;
+  career: number;
+  impact: number;
+  education: number;
+  social: number;
+};
+
+export const DEFAULT_WEIGHTS: Weights = {
+  skills: 40,
+  experience: 15,
+  career: 10,
+  impact: 10,
+  education: 10,
+  social: 15,
+};
 
 export type MatchResult = {
   skills_score: number;
   experience_score: number;
+  career_score: number;
+  impact_score: number;
+  innovation_score: number;
+  /** Weighted blend of impact (60) and innovation (40) — the scored dimension. */
+  impact_innovation_score: number;
   education_score: number;
   social_score: number;
   overall_score: number;
@@ -52,9 +91,21 @@ export type MatchResult = {
   risk_flags: string[];
   recommendation: "select" | "reject" | "hold";
   social: { blended: number; basis: string; signals: SocialSignal[]; cached: boolean };
+  career: {
+    metrics: CareerMetrics;
+    assessment: CareerAssessment;
+    history: EmploymentRow[];
+  };
+  impact: {
+    highlights: string[];
+    innovation_signals: string[];
+    rationale: string;
+  };
+  logistics: LogisticsCheck | null;
   contributions: { label: string; raw: number; weight: number; weighted: number }[];
   model: string;
 };
+
 
 /**
  * Harvest public profile links straight out of the raw CV text.
@@ -97,7 +148,7 @@ export async function scoreCandidate(opts: {
 }): Promise<MatchResult> {
   const { jd, candidate, weights } = opts;
 
-  /* 1 — AI semantic assessment of skills + education (with evidence). */
+  /* 1 — AI extraction + semantic assessment (skills, education, history, impact). */
   const ai = await aiJson<{
     skills_score: number;
     education_score: number;
@@ -106,6 +157,13 @@ export async function scoreCandidate(opts: {
     transferable_skills: string[];
     risk_flags: string[];
     rationale: string;
+    employment_history: EmploymentRow[];
+    skill_recency_years: number | null;
+    impact_score: number;
+    innovation_score: number;
+    impact_highlights: string[];
+    innovation_signals: string[];
+    impact_rationale: string;
   }>({
     system:
       "You are a rigorous technical recruiter mapping a CV against a job description. " +
@@ -113,14 +171,30 @@ export async function scoreCandidate(opts: {
       "and never credit a must-have skill that is only listed but never demonstrated — flag that instead. " +
       "skills_score weights must-have coverage far above good-to-have. " +
       "education_score reflects fit against the stated qualification requirement (return 70 if no requirement is stated). " +
-      "Return ONLY JSON with keys: skills_score (0-100), education_score (0-100), matched_skills, missing_skills, " +
-      "transferable_skills, risk_flags (short strings), rationale (3-4 sentences, cite evidence).",
+      "ALSO extract, never invent:\n" +
+      "• employment_history: every role as {company, title, start, end, level_hint}. Use YYYY-MM (or YYYY) for " +
+      "start/end; use null for end when the role is current. Omit a role entirely only if neither company nor title " +
+      "is stated. Keep chronological order.\n" +
+      "• skill_recency_years: how many years ago the JD's core must-have skills were last used in a role " +
+      "(0 if used in the current role, null if it cannot be told).\n" +
+      "• impact_score (0-100): reward quantified outcomes (metrics, %, scale, revenue/cost/latency/users), " +
+      "genuine ownership ('built/owned/led' with scope, team size, budget) and complexity (greenfield, migrations, " +
+      "incident ownership). Punish pure task-listing and responsibility copy-paste with no outcome.\n" +
+      "• innovation_score (0-100): patents, publications, conference talks, open-source work, hackathons, dated " +
+      "certifications, self-taught pivots, new technology adopted per year, side projects, and evidence of " +
+      "inventing a process or product rather than only executing one. 0 only when there is no such evidence at all.\n" +
+      "• impact_highlights and innovation_signals: 2-5 short strings each, quoting the CV evidence.\n" +
+      "Return ONLY JSON with keys: skills_score, education_score, matched_skills, missing_skills, " +
+      "transferable_skills, risk_flags (short strings), rationale (3-4 sentences, cite evidence), " +
+      "employment_history, skill_recency_years, impact_score, innovation_score, impact_highlights, " +
+      "innovation_signals, impact_rationale (2-3 sentences).",
     prompt: JSON.stringify({
       job_description: jd,
       candidate: { ...candidate, cachedSocial: undefined },
     }),
   });
   if (!ai.ok) throw new Error(ai.message);
+
 
   /* 2 — Social profiling: reuse cached signals when the recruiter has them. */
   const harvested = harvestProfileLinks(candidate.resumeText);
@@ -163,7 +237,33 @@ export async function scoreCandidate(opts: {
 
   const social = blendSocial(signals);
 
-  /* 3 — Deterministic weighted roll-up. */
+  /* 3 — Career history: AI extracts the roles, TypeScript does the maths. */
+  const history = (ai.data.employment_history ?? []).filter((r) => r && (r.company || r.title));
+  const careerMetrics = computeCareerMetrics(history, { skillRecencyYears: ai.data.skill_recency_years ?? null });
+  const career = careerScore(careerMetrics);
+
+  /* 4 — Impact & innovation, blended 60/40 into one scored dimension. */
+  const impact = clamp(ai.data.impact_score);
+  const innovation = clamp(ai.data.innovation_score);
+  const impactInnovation = clamp(impact * 0.6 + innovation * 0.4);
+
+  /* 5 — Logistics: flags and blockers only, never part of the score. */
+  const logistics = jd.constraints
+    ? logisticsCheck(
+        {
+          noticePeriodDays: candidate.noticePeriodDays ?? null,
+          currentCtc: candidate.currentCtc ?? null,
+          expectedCtc: candidate.expectedCtc ?? null,
+          location: candidate.location ?? null,
+          preferredLocations: candidate.preferredLocations ?? null,
+          willingToRelocate: candidate.willingToRelocate ?? null,
+          workAuthorization: candidate.workAuthorization ?? null,
+        },
+        jd.constraints,
+      )
+    : null;
+
+  /* 6 — Deterministic weighted roll-up. */
   const skills = clamp(ai.data.skills_score);
   const education = clamp(ai.data.education_score);
   const experience = experienceScore(candidate.experienceYears, jd.experienceMin, jd.experienceMax);
@@ -171,6 +271,8 @@ export async function scoreCandidate(opts: {
   const parts = [
     { label: "Skills", raw: skills, weight: weights.skills },
     { label: "Experience", raw: experience, weight: weights.experience },
+    { label: "Career history", raw: career.score, weight: weights.career },
+    { label: "Impact & innovation", raw: impactInnovation, weight: weights.impact },
     { label: "Education", raw: education, weight: weights.education },
     { label: "Social profile", raw: social.score, weight: weights.social },
   ];
@@ -178,7 +280,7 @@ export async function scoreCandidate(opts: {
   const contributions = parts.map((p) => ({ ...p, weighted: Math.round((p.raw * p.weight) / totalWeight) }));
   const overall = clamp(contributions.reduce((s, p) => s + p.weighted, 0));
 
-  const riskFlags = [...(ai.data.risk_flags ?? [])];
+  const riskFlags = [...(ai.data.risk_flags ?? []), ...career.flags];
   if (candidate.experienceYears < jd.experienceMin) riskFlags.push("Below requisition experience band");
   if (opts.includeSocial && !signals.some((s) => s.status === "ok"))
     riskFlags.push("No verifiable public profile signal — social score defaulted to 0");
@@ -186,6 +288,10 @@ export async function scoreCandidate(opts: {
   return {
     skills_score: skills,
     experience_score: experience,
+    career_score: career.score,
+    impact_score: impact,
+    innovation_score: innovation,
+    impact_innovation_score: impactInnovation,
     education_score: education,
     social_score: social.score,
     overall_score: overall,
@@ -194,7 +300,7 @@ export async function scoreCandidate(opts: {
     missing_skills: ai.data.missing_skills ?? [],
     transferable_skills: ai.data.transferable_skills ?? [],
     rationale: ai.data.rationale,
-    risk_flags: riskFlags,
+    risk_flags: [...new Set(riskFlags)],
     recommendation: overall >= 75 ? "select" : overall >= 60 ? "hold" : "reject",
     social: {
       blended: social.score,
@@ -205,11 +311,18 @@ export async function scoreCandidate(opts: {
       signals,
       cached,
     },
+    career: { metrics: careerMetrics, assessment: career, history },
+    impact: {
+      highlights: ai.data.impact_highlights ?? [],
+      innovation_signals: ai.data.innovation_signals ?? [],
+      rationale: ai.data.impact_rationale ?? "",
+    },
+    logistics,
     contributions,
     model: ai.model,
-
   };
 }
+
 
 /** Run an async mapper over a list with a hard concurrency ceiling. */
 export async function mapWithConcurrency<T, R>(

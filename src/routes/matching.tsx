@@ -50,7 +50,23 @@ export const Route = createFileRoute("/matching")({
   component: Matching,
 });
 
-type Weights = { skills: number; experience: number; education: number; social: number };
+type Weights = {
+  skills: number;
+  experience: number;
+  career: number;
+  impact: number;
+  education: number;
+  social: number;
+};
+
+const WEIGHT_LABELS: Record<keyof Weights, string> = {
+  skills: "Skills fit",
+  experience: "Experience",
+  career: "Career history",
+  impact: "Impact & innovation",
+  education: "Education",
+  social: "Social profiling",
+};
 
 /** Social signals are re-used for this many days instead of being re-fetched. */
 const SOCIAL_TTL_DAYS = 14;
@@ -105,14 +121,16 @@ function Matching() {
   }
 
   const effWeights: Weights = weights ?? {
-    skills: requisition?.weight_skills ?? 50,
-    experience: requisition?.weight_experience ?? 25,
+    skills: requisition?.weight_skills ?? 40,
+    experience: requisition?.weight_experience ?? 15,
+    career: requisition?.weight_career ?? 10,
+    impact: requisition?.weight_impact ?? 10,
     education: requisition?.weight_education ?? 10,
     social: requisition?.weight_social ?? 15,
   };
-  const weightTotal = effWeights.skills + effWeights.experience + effWeights.education + effWeights.social;
+  const weightTotal = (Object.keys(effWeights) as (keyof Weights)[]).reduce((s, k) => s + effWeights[k], 0);
 
-  /** Set one weight and spread the remaining points across the other three, keeping the total at 100. */
+  /** Set one weight and spread the remaining points across the others, keeping the total at 100. */
   function setWeight(key: keyof Weights, raw: number) {
     const value = Math.max(0, Math.min(100, Math.round(Number.isFinite(raw) ? raw : 0)));
     const others = (Object.keys(effWeights) as (keyof Weights)[]).filter((k) => k !== key);
@@ -121,7 +139,8 @@ function Matching() {
     const next = { ...effWeights, [key]: value } as Weights;
 
     if (otherTotal === 0) {
-      others.forEach((k, i) => (next[k] = Math.floor(remaining / 3) + (i < remaining % 3 ? 1 : 0)));
+      const n = others.length;
+      others.forEach((k, i) => (next[k] = Math.floor(remaining / n) + (i < remaining % n ? 1 : 0)));
     } else {
       let assigned = 0;
       others.forEach((k, i) => {
@@ -201,6 +220,13 @@ function Matching() {
             experienceMin: requisition.experience_min,
             experienceMax: requisition.experience_max,
             jdText: jd?.full_text ?? null,
+            constraints: {
+              ctcBandMin: requisition.ctc_band_min ? Number(requisition.ctc_band_min) : null,
+              ctcBandMax: requisition.ctc_band_max ? Number(requisition.ctc_band_max) : null,
+              maxNoticePeriodDays: requisition.max_notice_period_days,
+              locations: requisition.location ? [requisition.location] : null,
+              workAuthorizationRequired: requisition.work_authorization_required,
+            },
           },
           candidate: {
             name: row.candidate.full_name,
@@ -212,6 +238,13 @@ function Matching() {
             githubUrl: row.candidate.github_url,
             websiteUrl: row.candidate.website_url,
             xUrl: row.candidate.x_url,
+            noticePeriodDays: row.candidate.notice_period_days,
+            currentCtc: row.candidate.current_ctc ? Number(row.candidate.current_ctc) : null,
+            expectedCtc: row.candidate.expected_ctc ? Number(row.candidate.expected_ctc) : null,
+            location: row.candidate.location,
+            preferredLocations: row.candidate.preferred_locations ?? null,
+            willingToRelocate: row.candidate.willing_to_relocate,
+            workAuthorization: row.candidate.work_authorization,
           },
           weights: effWeights,
           includeSocial,
@@ -225,6 +258,14 @@ function Matching() {
         application_id: applicationId,
         skills_score: result.skills_score,
         experience_score: result.experience_score,
+        career_score: result.career_score,
+        impact_score: result.impact_score,
+        innovation_score: result.innovation_score,
+        career_metrics: result.career.metrics as never,
+        career_flags: result.career.assessment.flags,
+        logistics_flags: [...(result.logistics?.flags ?? []), ...(result.logistics?.blockers ?? [])],
+        impact_highlights: result.impact.highlights,
+        innovation_signals: result.impact.innovation_signals,
         education_score: result.education_score,
         social_score: result.social_score,
         overall_score: result.overall_score,
@@ -311,8 +352,16 @@ function Matching() {
   async function persistResult(applicationId: string, candidateId: string, stage: string, result: MatchResult) {
     const { error } = await supabase.from("match_scores").insert({
       application_id: applicationId,
-      skills_score: result.skills_score,
+        skills_score: result.skills_score,
       experience_score: result.experience_score,
+      career_score: result.career_score,
+      impact_score: result.impact_score,
+      innovation_score: result.innovation_score,
+      career_metrics: result.career.metrics as never,
+      career_flags: result.career.assessment.flags,
+      logistics_flags: [...(result.logistics?.flags ?? []), ...(result.logistics?.blockers ?? [])],
+      impact_highlights: result.impact.highlights,
+      innovation_signals: result.impact.innovation_signals,
       education_score: result.education_score,
       social_score: result.social_score,
       overall_score: result.overall_score,
@@ -384,6 +433,13 @@ function Matching() {
             experienceMin: requisition.experience_min,
             experienceMax: requisition.experience_max,
             jdText: jd?.full_text ?? null,
+            constraints: {
+              ctcBandMin: requisition.ctc_band_min ? Number(requisition.ctc_band_min) : null,
+              ctcBandMax: requisition.ctc_band_max ? Number(requisition.ctc_band_max) : null,
+              maxNoticePeriodDays: requisition.max_notice_period_days,
+              locations: requisition.location ? [requisition.location] : null,
+              workAuthorizationRequired: requisition.work_authorization_required,
+            },
           },
           weights: effWeights,
           includeSocial,
@@ -400,6 +456,13 @@ function Matching() {
               githubUrl: r.candidate!.github_url,
               websiteUrl: r.candidate!.website_url,
               xUrl: r.candidate!.x_url,
+              noticePeriodDays: r.candidate!.notice_period_days,
+              currentCtc: r.candidate!.current_ctc ? Number(r.candidate!.current_ctc) : null,
+              expectedCtc: r.candidate!.expected_ctc ? Number(r.candidate!.expected_ctc) : null,
+              location: r.candidate!.location,
+              preferredLocations: r.candidate!.preferred_locations ?? null,
+              willingToRelocate: r.candidate!.willing_to_relocate,
+              workAuthorization: r.candidate!.work_authorization,
               cachedSocial: includeSocial ? cachedSocialFor(r.candidate!.id) : [],
             },
           })),
@@ -612,17 +675,13 @@ function Matching() {
           <section className="panel p-5">
             <h2 className="font-semibold">Scoring weights</h2>
             <p className="text-xs text-muted-foreground">
-              Move a slider or type a number — the other three rebalance so the total always stays 100.
+              Move a slider or type a number — the others rebalance so the total always stays 100.
             </p>
             <div className="mt-4 space-y-4">
-              {(
-                [
-                  ["skills", "Skills fit"],
-                  ["experience", "Experience"],
-                  ["education", "Education"],
-                  ["social", "Social profiling"],
-                ] as const
-              ).map(([key, label]) => (
+              {(Object.keys(WEIGHT_LABELS) as (keyof Weights)[]).map((key) => {
+                const label = WEIGHT_LABELS[key];
+                return (
+
                 <div key={key}>
                   <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
                     <span>{label}</span>
@@ -643,7 +702,9 @@ function Matching() {
                     onValueChange={([v]) => setWeight(key, v ?? 0)}
                   />
                 </div>
-              ))}
+                );
+              })}
+
               <div className="flex items-center justify-between gap-3">
                 <p
                   className={
@@ -732,12 +793,25 @@ function Matching() {
                   </div>
 
                   {(result || stored) && (
-                    <div className="grid gap-3 border-t border-border bg-surface-2 p-5 sm:grid-cols-4">
+                    <div className="grid gap-3 border-t border-border bg-surface-2 p-5 sm:grid-cols-3 lg:grid-cols-6">
                       <ScoreBar label="Skills" score={result?.skills_score ?? stored!.skills_score} weight={effWeights.skills} />
                       <ScoreBar
                         label="Experience"
                         score={result?.experience_score ?? stored!.experience_score}
                         weight={effWeights.experience}
+                      />
+                      <ScoreBar
+                        label="Career history"
+                        score={result?.career_score ?? stored!.career_score}
+                        weight={effWeights.career}
+                      />
+                      <ScoreBar
+                        label="Impact & innov."
+                        score={
+                          result?.impact_innovation_score ??
+                          Math.round(stored!.impact_score * 0.6 + stored!.innovation_score * 0.4)
+                        }
+                        weight={effWeights.impact}
                       />
                       <ScoreBar
                         label="Education"
@@ -751,6 +825,7 @@ function Matching() {
                       />
                     </div>
                   )}
+
 
                   {isOpen && (result || stored) && (
                     <div className="space-y-6 border-t border-border p-5">
