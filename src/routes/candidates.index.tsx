@@ -120,6 +120,28 @@ function money(v: number | null) {
   return v >= 100000 ? `${(v / 100000).toFixed(1)}L` : v.toLocaleString();
 }
 
+/** Education arrives either as prose or as raw parsed JSON — always show readable text. */
+function educationLabel(raw: string | null | undefined) {
+  const value = (raw ?? "").trim();
+  if (!value) return "";
+  if (!(value.startsWith("[") || value.startsWith("{"))) return value;
+  try {
+    const parsed = JSON.parse(value);
+    const rows = Array.isArray(parsed) ? parsed : [parsed];
+    const parts = rows
+      .map((r: Record<string, unknown>) =>
+        [r?.["degree"], r?.["institution"], r?.["end_date"] ?? r?.["year"]]
+          .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+          .join(", "),
+      )
+      .filter((s) => s.length > 0);
+    return parts.join(" · ");
+  } catch {
+    return value;
+  }
+}
+
+
 
 
 function Candidates() {
@@ -759,7 +781,7 @@ function Candidates() {
         <EmptyState title="No candidates match" hint="Change the view or clear the filters." />
       ) : (
         <div className="panel overflow-x-auto">
-          <Table className="table-fixed">
+          <Table className="min-w-[1720px] table-fixed">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10">
@@ -767,18 +789,18 @@ function Candidates() {
                 </TableHead>
                 <TableHead className="w-[240px]">Candidate</TableHead>
                 <TableHead className="w-[200px]">Contact</TableHead>
-                <TableHead className="w-[190px]">Current role & tenure</TableHead>
-                <TableHead className="w-[120px]">Experience</TableHead>
-                <TableHead className="w-[190px]">Skills & education</TableHead>
-                <TableHead className="w-[170px]">Comp & availability</TableHead>
-                <TableHead className="w-[190px]">Stage & next action</TableHead>
-                <TableHead className="w-[110px]">Parsing</TableHead>
-                <TableHead className="text-right">Match</TableHead>
-                <TableHead className="text-right">Authenticity</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-
+                <TableHead className="w-[190px]">Current role &amp; tenure</TableHead>
+                <TableHead className="w-[110px]">Experience</TableHead>
+                <TableHead className="w-[200px]">Skills &amp; education</TableHead>
+                <TableHead className="w-[170px]">Comp &amp; availability</TableHead>
+                <TableHead className="w-[190px]">Stage &amp; next action</TableHead>
+                <TableHead className="w-[120px]">Parsing</TableHead>
+                <TableHead className="w-[90px] whitespace-nowrap text-right">Match</TableHead>
+                <TableHead className="w-[120px] whitespace-nowrap text-right">Authenticity</TableHead>
+                <TableHead className="w-[100px] whitespace-nowrap text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
               {filtered.slice(0, 300).map((r) => {
                 const c = r.candidate;
@@ -874,7 +896,7 @@ function Candidates() {
                         <div className="text-muted-foreground">no work history parsed</div>
                       )}
                     </TableCell>
-                    <TableCell className="w-[120px] text-sm">
+                    <TableCell className="w-[110px] text-sm">
                       <span className="num">{c.experience_years} yrs</span>
                       {metrics && metrics.jobs_last_5y > 2 ? (
                         <div className="num text-xs text-amber-600">{metrics.jobs_last_5y} jobs / 5y</div>
@@ -883,15 +905,18 @@ function Candidates() {
                         <div className="num text-xs text-amber-600">{metrics.longest_gap_months}m gap</div>
                       ) : null}
                     </TableCell>
-                    <TableCell className="w-[190px] text-xs text-muted-foreground">
-                      <span className="line-clamp-2">{c.skills.slice(0, 6).join(" · ") || "no skills parsed"}</span>
+                    <TableCell className="w-[200px] text-xs text-muted-foreground">
+                      <span className="line-clamp-2 break-words">
+                        {c.skills.slice(0, 6).join(" · ") || "no skills parsed"}
+                      </span>
                       {c.skills.length > 6 ? (
                         <span className="num block text-[11px]">+{c.skills.length - 6} more</span>
                       ) : null}
-                      <span className="line-clamp-1 mt-0.5 block" title={c.education ?? ""}>
-                        {c.education || "education unknown"}
+                      <span className="mt-0.5 line-clamp-2 block break-words" title={educationLabel(c.education)}>
+                        {educationLabel(c.education) || "education unknown"}
                       </span>
                     </TableCell>
+
                     <TableCell className="w-[170px] text-xs text-muted-foreground">
                       <div className="num">
                         CTC {money(c.current_ctc as number | null)} → exp {money(c.expected_ctc as number | null)}
@@ -993,7 +1018,7 @@ function Candidates() {
                   </TableRow>
                   {isOpen ? (
                     <TableRow className="bg-surface-2">
-                      <TableCell colSpan={11} className="text-xs">
+                      <TableCell colSpan={12} className="text-xs">
                         <div className="grid gap-4 sm:grid-cols-3">
                           <div>
                             <div className="mb-1 font-medium">Work history (parsed)</div>
