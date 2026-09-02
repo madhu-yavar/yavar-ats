@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Github, Linkedin, Sparkles } from "lucide-react";
+import { Github, Linkedin, Sparkles, Upload } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { applicationsQuery, candidatesQuery, latestScores, matchScoresQuery, requisitionsQuery } from "@/lib/data";
