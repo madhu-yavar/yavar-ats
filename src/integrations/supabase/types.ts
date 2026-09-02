@@ -58,6 +58,57 @@ export type Database = {
           },
         ]
       }
+      ai_provider_credentials: {
+        Row: {
+          api_key: string
+          provider: string
+          updated_at: string
+        }
+        Insert: {
+          api_key: string
+          provider: string
+          updated_at?: string
+        }
+        Update: {
+          api_key?: string
+          provider?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ai_settings: {
+        Row: {
+          id: string
+          last_test_message: string | null
+          last_test_status: string
+          last_tested_at: string | null
+          model: string
+          provider: string
+          singleton: boolean
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          last_test_message?: string | null
+          last_test_status?: string
+          last_tested_at?: string | null
+          model?: string
+          provider?: string
+          singleton?: boolean
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          last_test_message?: string | null
+          last_test_status?: string
+          last_tested_at?: string | null
+          model?: string
+          provider?: string
+          singleton?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       applications: {
         Row: {
           applied_at: string
