@@ -262,7 +262,7 @@ function RequisitionDetail() {
     }
   }
 
-  }
+
 
   async function approveJd() {
     if (!latestJd) return;
