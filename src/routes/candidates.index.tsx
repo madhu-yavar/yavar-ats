@@ -23,7 +23,7 @@ import { intakeCvs, type IntakeStatus } from "@/lib/cv-intake";
 import { normalizeExternalUrl } from "@/lib/external-links";
 import { canonical, nextAction, stalledDays, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
 
-import { EmptyState, PageHeader, ScoreChip, SkillPills, StageBadge } from "@/components/ats";
+import { EmptyState, PageHeader, ScoreChip, StageBadge } from "@/components/ats";
 import { StageMover } from "@/components/StageMover";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -671,12 +671,10 @@ function Candidates() {
                 </TableHead>
                 <TableHead>Candidate</TableHead>
                 <TableHead>Experience</TableHead>
-                <TableHead>Skills</TableHead>
-                <TableHead>Stage</TableHead>
-                <TableHead>Next action</TableHead>
+                <TableHead className="w-[200px]">Skills</TableHead>
+                <TableHead className="w-[190px]">Stage & next action</TableHead>
                 <TableHead className="text-right">Match</TableHead>
                 <TableHead className="text-right">Authenticity</TableHead>
-                <TableHead>Links</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -702,6 +700,28 @@ function Candidates() {
                         {c.email} · {c.source}
                         {c.is_internal ? " · internal" : ""}
                       </div>
+                      <div className="mt-1 flex gap-2 text-muted-foreground">
+                        {normalizeExternalUrl(c.linkedin_url) ? (
+                          <a
+                            href={normalizeExternalUrl(c.linkedin_url)!}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            aria-label="LinkedIn profile"
+                          >
+                            <Linkedin className="size-3.5 hover:text-foreground" />
+                          </a>
+                        ) : null}
+                        {normalizeExternalUrl(c.github_url) ? (
+                          <a
+                            href={normalizeExternalUrl(c.github_url)!}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            aria-label="GitHub profile"
+                          >
+                            <Github className="size-3.5 hover:text-foreground" />
+                          </a>
+                        ) : null}
+                      </div>
                       {r.stalled !== null ? (
                         <div className="mt-1 inline-flex items-center gap-1 text-xs text-amber-600">
                           <AlertTriangle className="size-3.5" /> stalled {r.stalled}d
@@ -712,25 +732,28 @@ function Candidates() {
                       {c.experience_years} yrs
                       <div className="text-xs text-muted-foreground">{c.location ?? "—"}</div>
                     </TableCell>
-                    <TableCell className="max-w-56">
-                      <SkillPills skills={c.skills.slice(0, 4)} />
+                    <TableCell className="w-[200px] text-xs text-muted-foreground">
+                      <span className="line-clamp-2">{c.skills.slice(0, 6).join(" · ") || "—"}</span>
+                      {c.skills.length > 6 ? (
+                        <span className="num block text-[11px]">+{c.skills.length - 6} more</span>
+                      ) : null}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="w-[190px]">
                       {r.stage ? (
                         <>
                           <StageBadge stage={r.stage} />
                           {r.apps.length > 1 ? (
-                            <div className="num mt-1 text-xs text-muted-foreground">
-                              +{r.apps.length - 1} more pipeline{r.apps.length > 2 ? "s" : ""}
-                            </div>
+                            <span className="num ml-1.5 text-[11px] text-muted-foreground">
+                              +{r.apps.length - 1}
+                            </span>
                           ) : null}
                         </>
                       ) : (
                         <span className="text-xs text-muted-foreground">Pool only</span>
                       )}
-                    </TableCell>
-                    <TableCell className="max-w-44 text-xs text-muted-foreground">
-                      {r.stage ? nextAction(r.stage) : "Match against an open requisition"}
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {r.stage ? nextAction(r.stage) : "Match against an open requisition"}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       {r.score !== null ? <ScoreChip score={r.score} size="sm" /> : <span className="text-xs text-muted-foreground">—</span>}
@@ -759,30 +782,6 @@ function Candidates() {
                       ) : (
                         <span className="text-xs text-muted-foreground">not run</span>
                       )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2 text-muted-foreground">
-                        {normalizeExternalUrl(c.linkedin_url) ? (
-                          <a
-                            href={normalizeExternalUrl(c.linkedin_url)!}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            aria-label="LinkedIn profile"
-                          >
-                            <Linkedin className="size-4 hover:text-foreground" />
-                          </a>
-                        ) : null}
-                        {normalizeExternalUrl(c.github_url) ? (
-                          <a
-                            href={normalizeExternalUrl(c.github_url)!}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            aria-label="GitHub profile"
-                          >
-                            <Github className="size-4 hover:text-foreground" />
-                          </a>
-                        ) : null}
-                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       {r.primary ? (
