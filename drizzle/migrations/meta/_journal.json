@@ -29,6 +29,13 @@
       "when": 1788318126340,
       "tag": "0003_create_master_items",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788318815504,
+      "tag": "0004_allow_role_title_master_kind",
+      "breakpoints": true
     }
   ]
 }

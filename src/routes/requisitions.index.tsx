@@ -13,7 +13,7 @@ import {
   requisitionsQuery,
 } from "@/lib/data";
 import { EmptyState, PageHeader, SkillPills, StatusBadge, inr } from "@/components/ats";
-import { MasterSelect, TokenPicker } from "@/components/pickers";
+import { CreatableSelect, MasterSelect, TokenPicker } from "@/components/pickers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -82,6 +82,7 @@ function Requisitions() {
   const skills = byKind(masters.data, "skill");
   const locations = byKind(masters.data, "location");
   const education = byKind(masters.data, "education");
+  const roleTitles = byKind(masters.data, "role_title");
 
   async function createSkill(name: string) {
     try {
@@ -91,6 +92,31 @@ function Requisitions() {
       /* already in the library — the value is still selected */
     }
   }
+
+  async function createRoleTitle(name: string) {
+    try {
+      await addMasterItem("role_title", name);
+      qc.invalidateQueries({ queryKey: ["master_items"] });
+    } catch {
+      /* already in the library */
+    }
+  }
+
+  async function createDepartment(name: string) {
+    const { data, error } = await supabase
+      .from("departments")
+      .insert({ name: name.trim(), budgeted_headcount: 0, budgeted_cost: 0 })
+      .select("id")
+      .maybeSingle();
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    await qc.invalidateQueries({ queryKey: ["departments"] });
+    if (data?.id) setForm((f) => ({ ...f, department_id: data.id }));
+    toast.success(`${name.trim()} added — set its budget below`);
+  }
+
 
   async function create() {
     if (!form.title.trim()) {
@@ -145,34 +171,35 @@ function Requisitions() {
               </DialogHeader>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Role title" className="sm:col-span-2">
-                  <Input
+                  <CreatableSelect
+                    options={roleTitles}
                     value={form.title}
-                    onChange={(e) => setForm({ ...form, title: e.target.value })}
-                    placeholder="Senior Backend Engineer"
+                    onChange={(v) => setForm({ ...form, title: v })}
+                    onCreate={createRoleTitle}
+                    placeholder="Search role titles, or type a new one"
                   />
                 </Field>
                 <Field label="Department">
-                  <Select
-                    value={form.department_id}
-                    onValueChange={(v) => setForm({ ...form, department_id: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select department" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {departments.map((d) => (
-                        <SelectItem key={d.id} value={d.id}>
-                          {d.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {departments.length === 0 && (
-                    <p className="mt-1 text-xs text-destructive">
-                      No departments yet — add one in “Departments &amp; budgeted headcount” below first.
-                    </p>
-                  )}
+                  <CreatableSelect
+                    options={departments.map((d) => ({ id: d.id, name: d.name }))}
+                    value={departments.find((d) => d.id === form.department_id)?.name ?? ""}
+                    onChange={(name) =>
+                      setForm((f) => ({
+                        ...f,
+                        department_id: name
+                          ? (departments.find((d) => d.name === name)?.id ?? f.department_id)
+                          : "",
+                      }))
+                    }
+
+                    onCreate={createDepartment}
+                    placeholder="Search departments, or type a new one"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    New departments start with zero budget — set headcount and cost below.
+                  </p>
                 </Field>
+
                 <Field label="Location">
                   <MasterSelect
                     options={locations}
