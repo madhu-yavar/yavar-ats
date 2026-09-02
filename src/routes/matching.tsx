@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ChevronDown, Github, Linkedin, Loader2, PenLine, Target } from "lucide-react";
+import { ChevronDown, Github, Linkedin, Loader2, PenLine, Target, UserPlus } from "lucide-react";
 import { z } from "zod";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -19,6 +19,7 @@ import {
 import { matchJdToCv, matchPipeline, type MatchResult } from "@/lib/matching.functions";
 import { importCandidates } from "@/lib/integrations.functions";
 import { balanceWeights } from "@/lib/cv-extract";
+import { rankPool } from "@/lib/shortlist";
 
 import { EmptyState, PageHeader, ScoreBar, ScoreChip, SkillPills } from "@/components/ats";
 import { Button } from "@/components/ui/button";
@@ -95,6 +96,7 @@ function Matching() {
   const [rescoreAll, setRescoreAll] = useState(false);
   const [board, setBoard] = useState("");
   const [importing, setImporting] = useState(false);
+  const [addingFromPool, setAddingFromPool] = useState(false);
 
   const effWeights: Weights = weights ?? {
     skills: requisition?.weight_skills ?? 50,
@@ -142,6 +144,36 @@ function Matching() {
       return ys - xs;
     });
   }, [apps.data, cands.data, scoreMap, results, activeId]);
+
+  const suggestedPool = useMemo(() => {
+    if (!requisition) return [];
+    const attached = new Set(pipeline.map((row) => row.app.candidate_id));
+    return rankPool(
+      (cands.data ?? []).filter((candidate) => !attached.has(candidate.id)),
+      requisition,
+    ).slice(0, 20);
+  }, [cands.data, pipeline, requisition]);
+
+  async function addFromTalentPool(candidateIds: string[]) {
+    if (!requisition || candidateIds.length === 0) return;
+    setAddingFromPool(true);
+    try {
+      const { error } = await supabase.from("applications").insert(
+        candidateIds.map((candidateId) => ({
+          requisition_id: requisition.id,
+          candidate_id: candidateId,
+          source: "talent_pool",
+        })),
+      );
+      if (error) throw new Error(error.message);
+      await qc.invalidateQueries({ queryKey: ["applications"] });
+      toast.success(`${candidateIds.length} candidate${candidateIds.length === 1 ? "" : "s"} added to the pipeline`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not add candidates");
+    } finally {
+      setAddingFromPool(false);
+    }
+  }
 
   async function score(applicationId: string) {
     const row = pipeline.find((p) => p.app.id === applicationId);
@@ -467,14 +499,61 @@ function Matching() {
           <section className="panel p-5">
             <h2 className="font-semibold">Source applicants</h2>
             <p className="text-xs text-muted-foreground">
-              Pull candidates from a job board you configured on the Integrations page.
+              Selecting a requisition automatically pre-matches every unattached person in the talent pool. Add the
+              best fits to the pipeline, then run the full AI and social score.
             </p>
-            {(boards.data ?? []).length === 0 ? (
-              <p className="mt-3 text-xs text-muted-foreground">
-                No searchable board is connected yet — configure LinkedIn, Naukri or Indeed under Integrations.
-              </p>
+            {!requisition ? (
+              <p className="mt-3 text-xs text-muted-foreground">Select a requisition first.</p>
+            ) : suggestedPool.length === 0 ? (
+              <p className="mt-3 text-xs text-muted-foreground">Everyone in the talent pool is already attached.</p>
             ) : (
-              <div className="mt-3 space-y-2">
+              <div className="mt-3 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium">Talent pool suggestions</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addFromTalentPool(suggestedPool.slice(0, 10).map((row) => row.candidate.id))}
+                    disabled={addingFromPool}
+                  >
+                    {addingFromPool ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}
+                    Add top {Math.min(10, suggestedPool.length)}
+                  </Button>
+                </div>
+                <ul className="max-h-64 divide-y divide-border overflow-y-auto rounded-md border border-border">
+                  {suggestedPool.map((row) => (
+                    <li key={row.candidate.id} className="flex items-center gap-2 p-2.5">
+                      <ScoreChip score={row.fit} size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-xs font-medium">{row.candidate.full_name}</div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {row.mustHits.length}/{requisition.must_have_skills.length} skills · {row.candidate.experience_years} yrs
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`Add ${row.candidate.full_name} to pipeline`}
+                        onClick={() => addFromTalentPool([row.candidate.id])}
+                        disabled={addingFromPool}
+                      >
+                        <UserPlus className="size-4" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-muted-foreground">Fit is a live skill and experience pre-rank, not the final AI score.</p>
+              </div>
+            )}
+
+            <div className="mt-4 border-t border-border pt-4">
+              <p className="text-xs font-medium">External job boards</p>
+              {(boards.data ?? []).length === 0 ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Optional: connect a licensed LinkedIn, Naukri or Indeed recruiter API to import external applicants.
+                </p>
+              ) : (
+                <div className="mt-2 space-y-2">
                 <Select value={board} onValueChange={setBoard}>
                   <SelectTrigger>
                     <SelectValue placeholder="Choose board" />
@@ -497,7 +576,8 @@ function Matching() {
                   {importing ? <Loader2 className="size-4 animate-spin" /> : null} Import 10 matching CVs
                 </Button>
               </div>
-            )}
+              )}
+            </div>
           </section>
 
           <section className="panel p-5">

@@ -18,6 +18,7 @@ import {
   socialProfilesQuery,
 } from "@/lib/data";
 import { runAiScreening } from "@/lib/matching.functions";
+import { normalizeExternalUrl } from "@/lib/external-links";
 import { EmptyState, PageHeader, ScoreBar, ScoreChip, SkillPills, StageBadge } from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -103,10 +104,10 @@ function CandidateDetail() {
   }
 
   const links = [
-    ["LinkedIn", c.linkedin_url],
-    ["GitHub", c.github_url],
-    ["Portfolio", c.website_url],
-    ["X", c.x_url],
+    ["LinkedIn", normalizeExternalUrl(c.linkedin_url)],
+    ["GitHub", normalizeExternalUrl(c.github_url)],
+    ["Portfolio", normalizeExternalUrl(c.website_url)],
+    ["X", normalizeExternalUrl(c.x_url)],
   ] as const;
 
   return (
@@ -284,7 +285,7 @@ function CandidateDetail() {
                     <a
                       href={url}
                       target="_blank"
-                      rel="noreferrer"
+                      rel="noreferrer noopener"
                       className="inline-flex items-center gap-1.5 hover:underline"
                     >
                       {label} <ExternalLink className="size-3.5" />

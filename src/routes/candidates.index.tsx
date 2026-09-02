@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { applicationsQuery, candidatesQuery, latestScores, matchScoresQuery, requisitionsQuery } from "@/lib/data";
 import { parseResume } from "@/lib/matching.functions";
 import { intakeCvs, type IntakeStatus } from "@/lib/cv-intake";
+import { normalizeExternalUrl } from "@/lib/external-links";
 
 import { EmptyState, PageHeader, ScoreChip, SkillPills } from "@/components/ats";
 import { Button } from "@/components/ui/button";
@@ -430,8 +431,8 @@ function Candidates() {
                 <SkillPills skills={c.skills.slice(0, 5)} />
               </div>
               <div className="mt-3 flex gap-3 text-muted-foreground">
-                {c.linkedin_url ? <Linkedin className="size-4" /> : null}
-                {c.github_url ? <Github className="size-4" /> : null}
+                {normalizeExternalUrl(c.linkedin_url) ? <Linkedin className="size-4" /> : null}
+                {normalizeExternalUrl(c.github_url) ? <Github className="size-4" /> : null}
               </div>
             </Link>
           ))}
