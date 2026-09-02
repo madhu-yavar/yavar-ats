@@ -18,6 +18,8 @@ import {
 } from "@/lib/data";
 import { matchJdToCv, matchPipeline, type MatchResult } from "@/lib/matching.functions";
 import { importCandidates } from "@/lib/integrations.functions";
+import { balanceWeights } from "@/lib/cv-extract";
+
 import { EmptyState, PageHeader, ScoreBar, ScoreChip, SkillPills } from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -502,9 +504,22 @@ function Matching() {
                   />
                 </div>
               ))}
-              <p className={weightTotal === 100 ? "num text-xs text-muted-foreground" : "num text-xs text-destructive"}>
-                Total {weightTotal} / 100
-              </p>
+              <div className="flex items-center justify-between gap-3">
+                <p
+                  className={
+                    weightTotal === 100 ? "num text-xs text-muted-foreground" : "num text-xs text-destructive"
+                  }
+                >
+                  Total {weightTotal} / 100
+                  {weightTotal !== 100 ? " — rebalance to score" : ""}
+                </p>
+                {weightTotal !== 100 && (
+                  <Button size="sm" variant="outline" onClick={() => setWeights(balanceWeights(effWeights))}>
+                    Balance to 100
+                  </Button>
+                )}
+              </div>
+
               <div className="flex items-center justify-between border-t border-border pt-4">
                 <div>
                   <div className="text-sm">Live social profiling</div>

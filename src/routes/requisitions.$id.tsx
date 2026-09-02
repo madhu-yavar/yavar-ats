@@ -16,6 +16,9 @@ import {
   requisitionQuery,
 } from "@/lib/data";
 import { generateJd } from "@/lib/matching.functions";
+import { balanceWeights } from "@/lib/cv-extract";
+import { useRoles } from "@/hooks/useRoles";
+
 import {
   EmptyState,
   PageHeader,
@@ -29,7 +32,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
+
 
 export const Route = createFileRoute("/requisitions/$id")({
   head: () => ({
@@ -69,6 +74,7 @@ function RequisitionDetail() {
   const cands = useQuery(candidatesQuery);
   const scores = useQuery(matchScoresQuery);
   const draftJd = useServerFn(generateJd);
+  const { roles, canApprove, requiredRoleFor } = useRoles();
 
   const [busy, setBusy] = useState(false);
   const [jdText, setJdText] = useState<string | null>(null);
@@ -88,14 +94,26 @@ function RequisitionDetail() {
     education: r.weight_education,
     social: r.weight_social,
   };
+  const weightTotal = Object.values(weights).reduce((a, b) => a + b, 0);
   const step = APPROVALS[r.status];
+  const allowed = step ? canApprove(r.status) : false;
 
   async function advance() {
     if (!step) return;
+    if (!allowed) {
+      toast.error(`Only the ${requiredRoleFor(r!.status)} can action this step`);
+      return;
+    }
     setBusy(true);
     const trail = [
       ...(Array.isArray(r!.approval_trail) ? (r!.approval_trail as unknown[]) : []),
-      { from: r!.status, to: step.next, comment: comment || null, at: new Date().toISOString() },
+      {
+        from: r!.status,
+        to: step.next,
+        comment: comment || null,
+        at: new Date().toISOString(),
+        by_role: roles[0] ?? null,
+      },
     ];
     const { error } = await supabase
       .from("requisitions")
@@ -111,6 +129,26 @@ function RequisitionDetail() {
     qc.invalidateQueries({ queryKey: ["requisition", id] });
     qc.invalidateQueries({ queryKey: ["requisitions"] });
   }
+
+  async function toggleIjp(enabled: boolean) {
+    const { error } = await supabase
+      .from("requisitions")
+      .update({ ijp_enabled: enabled, ijp_posted_at: enabled ? new Date().toISOString() : null })
+      .eq("id", r!.id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(enabled ? "Published to the internal job board" : "Removed from the internal job board");
+    qc.invalidateQueries({ queryKey: ["requisition", id] });
+    qc.invalidateQueries({ queryKey: ["requisitions"] });
+  }
+
+  async function saveIjpNotes(notes: string) {
+    await supabase.from("requisitions").update({ ijp_notes: notes || null }).eq("id", r!.id);
+    qc.invalidateQueries({ queryKey: ["requisition", id] });
+  }
+
 
   async function draft() {
     setBusy(true);
@@ -200,13 +238,21 @@ function RequisitionDetail() {
           <div className="flex items-center gap-2">
             <StatusBadge status={r.status} />
             {step && (
-              <Button onClick={advance} disabled={busy}>
-                {step.label}
-              </Button>
+              <div className="text-right">
+                <Button onClick={advance} disabled={busy || !allowed}>
+                  {step.label}
+                </Button>
+                {!allowed && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Requires the {requiredRoleFor(r.status)} role
+                  </p>
+                )}
+              </div>
             )}
           </div>
         }
       />
+
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
@@ -331,17 +377,55 @@ function RequisitionDetail() {
                   />
                 </div>
               ))}
-              <p
-                className={
-                  Object.values(weights).reduce((a, b) => a + b, 0) === 100
-                    ? "num text-xs text-muted-foreground"
-                    : "num text-xs text-destructive"
-                }
-              >
-                Total {Object.values(weights).reduce((a, b) => a + b, 0)} / 100
-              </p>
+              <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+                <p className={weightTotal === 100 ? "num text-xs text-muted-foreground" : "num text-xs text-destructive"}>
+                  Total {weightTotal} / 100
+                  {weightTotal !== 100 ? " — rebalance before scoring" : ""}
+                </p>
+                {weightTotal !== 100 && (
+                  <Button size="sm" variant="outline" onClick={() => saveWeights(balanceWeights(weights))}>
+                    Balance to 100
+                  </Button>
+                )}
+              </div>
             </div>
           </section>
+
+          <section className="panel p-5">
+            <h2 className="font-semibold">Internal job posting (IJP)</h2>
+            <p className="text-xs text-muted-foreground">
+              Publish an approved requisition to employees first. Internal applicants are scored against the same JD.
+            </p>
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <div className="text-sm">
+                {r.status === "approved"
+                  ? r.ijp_enabled
+                    ? "Live on the internal job board"
+                    : "Not published internally"
+                  : "Available once the requisition is approved"}
+              </div>
+              <Switch
+                checked={r.ijp_enabled}
+                disabled={r.status !== "approved"}
+                onCheckedChange={toggleIjp}
+              />
+            </div>
+            {r.ijp_enabled && (
+              <div className="mt-4">
+                <Label className="mb-1.5 block text-xs text-muted-foreground">Note for employees</Label>
+                <Textarea
+                  rows={3}
+                  defaultValue={r.ijp_notes ?? ""}
+                  onBlur={(e) => saveIjpNotes(e.target.value)}
+                  placeholder="Eligibility, minimum tenure, manager endorsement…"
+                />
+                <Button asChild size="sm" variant="outline" className="mt-3">
+                  <Link to="/ijp">Open internal job board</Link>
+                </Button>
+              </div>
+            )}
+          </section>
+
 
           <section className="panel p-5">
             <h2 className="font-semibold">Approval trail</h2>

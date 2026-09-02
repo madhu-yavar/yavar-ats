@@ -3,11 +3,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Github, Linkedin, Sparkles } from "lucide-react";
+import { Github, Linkedin, Sparkles, Upload } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { applicationsQuery, candidatesQuery, latestScores, matchScoresQuery, requisitionsQuery } from "@/lib/data";
 import { parseResume } from "@/lib/matching.functions";
+import { extractResumeText } from "@/lib/cv-extract";
+
 import { EmptyState, PageHeader, ScoreChip, SkillPills } from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +58,11 @@ function Candidates() {
   const [busy, setBusy] = useState(false);
   const [resume, setResume] = useState("");
   const [reqId, setReqId] = useState("");
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkReqId, setBulkReqId] = useState("");
+  const [bulkSource, setBulkSource] = useState("direct");
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  const [bulkLog, setBulkLog] = useState<{ file: string; ok: boolean; message: string }[]>([]);
   const [form, setForm] = useState({
     full_name: "",
     email: "",
@@ -69,6 +76,56 @@ function Candidates() {
     x_url: "",
     source: "direct",
   });
+
+  /** Bulk CV intake: read each file locally, AI-parse it, then insert the candidate. */
+  async function bulkUpload(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const list = Array.from(files);
+    setBulkProgress({ done: 0, total: list.length });
+    setBulkLog([]);
+    for (const [i, file] of list.entries()) {
+      try {
+        const text = await extractResumeText(file);
+        if (text.length < 20) throw new Error("No readable text found in the file");
+        const p = await parse({ data: { resumeText: text.slice(0, 20000) } });
+        const email = (p.email ?? "").trim() || `unknown+${Date.now()}-${i}@import.local`;
+        const { data, error } = await supabase
+          .from("candidates")
+          .insert({
+            full_name: (p.full_name ?? "").trim() || file.name.replace(/\.[^.]+$/, ""),
+            email,
+            location: p.location || null,
+            experience_years: Number(p.experience_years) || 0,
+            education: p.education || null,
+            skills: p.skills ?? [],
+            linkedin_url: p.linkedin_url || null,
+            github_url: p.github_url || null,
+            website_url: p.website_url || null,
+            source: bulkSource,
+            resume_text: text,
+          })
+          .select("id")
+          .single();
+        if (error || !data) throw new Error(error?.message ?? "Insert failed");
+        if (bulkReqId) {
+          await supabase
+            .from("applications")
+            .insert({ requisition_id: bulkReqId, candidate_id: data.id, source: bulkSource });
+        }
+        setBulkLog((l) => [...l, { file: file.name, ok: true, message: `${p.full_name ?? "parsed"} · ${(p.skills ?? []).length} skills` }]);
+      } catch (e) {
+        setBulkLog((l) => [
+          ...l,
+          { file: file.name, ok: false, message: e instanceof Error ? e.message : "Failed" },
+        ]);
+      }
+      setBulkProgress({ done: i + 1, total: list.length });
+    }
+    qc.invalidateQueries({ queryKey: ["candidates"] });
+    qc.invalidateQueries({ queryKey: ["applications"] });
+    toast.success("Bulk CV parsing finished");
+  }
+
 
   const scoreMap = latestScores(scores.data ?? []);
   const bestScore = useMemo(() => {
@@ -172,10 +229,93 @@ function Candidates() {
         title="Talent pool"
         description="One searchable pool across job boards, referrals and direct applications — with the social handles that feed the social profiling score."
         actions={
+          <div className="flex items-center gap-2">
+          <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Upload className="size-4" /> Bulk upload CVs
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+              <DialogHeader>
+                <DialogTitle>Bulk upload CVs</DialogTitle>
+                <DialogDescription>
+                  Drop in up to a few dozen PDF, DOCX or TXT resumes — each one is read, AI-parsed and added to the
+                  talent pool automatically. No typing.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label className="mb-1.5 block text-xs text-muted-foreground">Source</Label>
+                  <Select value={bulkSource} onValueChange={setBulkSource}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["direct", "naukri", "linkedin", "referral", "consultant", "campus", "ijp"].map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="mb-1.5 block text-xs text-muted-foreground">Apply all to requisition</Label>
+                  <Select value={bulkReqId} onValueChange={setBulkReqId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Optional" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(reqs.data ?? []).map((r) => (
+                        <SelectItem key={r.id} value={r.id}>
+                          {r.code} — {r.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <Label className="mb-1.5 block text-xs text-muted-foreground">Resume files</Label>
+                <Input
+                  type="file"
+                  multiple
+                  accept=".pdf,.docx,.txt,.md"
+                  onChange={(e) => bulkUpload(e.target.files)}
+                />
+              </div>
+
+              {bulkProgress && (
+                <p className="num text-xs text-muted-foreground">
+                  Parsed {bulkProgress.done} / {bulkProgress.total}
+                </p>
+              )}
+              {bulkLog.length > 0 && (
+                <ul className="max-h-56 space-y-1 overflow-y-auto text-xs">
+                  {bulkLog.map((l, i) => (
+                    <li key={i} className={l.ok ? "text-muted-foreground" : "text-destructive"}>
+                      <span className="font-medium">{l.file}</span> — {l.message}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setBulkOpen(false)}>
+                  Done
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button>Add candidate</Button>
             </DialogTrigger>
+
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Add candidate</DialogTitle>
@@ -257,6 +397,8 @@ function Candidates() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          </div>
+
         }
       />
 

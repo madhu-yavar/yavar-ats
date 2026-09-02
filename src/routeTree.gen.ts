@@ -10,12 +10,14 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as IjpRouteImport } from './routes/ijp'
 import { Route as IntegrationsRouteImport } from './routes/integrations'
 import { Route as InterviewsRouteImport } from './routes/interviews'
 import { Route as MastersRouteImport } from './routes/masters'
 import { Route as MatchingRouteImport } from './routes/matching'
 import { Route as OffersRouteImport } from './routes/offers'
 import { Route as ReportsRouteImport } from './routes/reports'
+import { Route as TeamRouteImport } from './routes/team'
 import { Route as CandidatesIndexRouteImport } from './routes/candidates.index'
 import { Route as CandidatesIdRouteImport } from './routes/candidates.$id'
 import { Route as RequisitionsIndexRouteImport } from './routes/requisitions.index'
@@ -24,6 +26,11 @@ import { Route as RequisitionsIdRouteImport } from './routes/requisitions.$id'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IjpRoute = IjpRouteImport.update({
+  id: '/ijp',
+  path: '/ijp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IntegrationsRoute = IntegrationsRouteImport.update({
@@ -56,6 +63,11 @@ const ReportsRoute = ReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TeamRoute = TeamRouteImport.update({
+  id: '/team',
+  path: '/team',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CandidatesIndexRoute = CandidatesIndexRouteImport.update({
   id: '/candidates/',
   path: '/candidates/',
@@ -79,12 +91,14 @@ const RequisitionsIdRoute = RequisitionsIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/ijp': typeof IjpRoute
   '/integrations': typeof IntegrationsRoute
   '/interviews': typeof InterviewsRoute
   '/masters': typeof MastersRoute
   '/matching': typeof MatchingRoute
   '/offers': typeof OffersRoute
   '/reports': typeof ReportsRoute
+  '/team': typeof TeamRoute
   '/candidates/$id': typeof CandidatesIdRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates/': typeof CandidatesIndexRoute
@@ -92,12 +106,14 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/ijp': typeof IjpRoute
   '/integrations': typeof IntegrationsRoute
   '/interviews': typeof InterviewsRoute
   '/masters': typeof MastersRoute
   '/matching': typeof MatchingRoute
   '/offers': typeof OffersRoute
   '/reports': typeof ReportsRoute
+  '/team': typeof TeamRoute
   '/candidates/$id': typeof CandidatesIdRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates': typeof CandidatesIndexRoute
@@ -106,12 +122,14 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/ijp': typeof IjpRoute
   '/integrations': typeof IntegrationsRoute
   '/interviews': typeof InterviewsRoute
   '/masters': typeof MastersRoute
   '/matching': typeof MatchingRoute
   '/offers': typeof OffersRoute
   '/reports': typeof ReportsRoute
+  '/team': typeof TeamRoute
   '/candidates/$id': typeof CandidatesIdRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates/': typeof CandidatesIndexRoute
@@ -121,12 +139,14 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/ijp'
     | '/integrations'
     | '/interviews'
     | '/masters'
     | '/matching'
     | '/offers'
     | '/reports'
+    | '/team'
     | '/candidates/$id'
     | '/requisitions/$id'
     | '/candidates/'
@@ -134,12 +154,14 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/ijp'
     | '/integrations'
     | '/interviews'
     | '/masters'
     | '/matching'
     | '/offers'
     | '/reports'
+    | '/team'
     | '/candidates/$id'
     | '/requisitions/$id'
     | '/candidates'
@@ -147,12 +169,14 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/ijp'
     | '/integrations'
     | '/interviews'
     | '/masters'
     | '/matching'
     | '/offers'
     | '/reports'
+    | '/team'
     | '/candidates/$id'
     | '/requisitions/$id'
     | '/candidates/'
@@ -161,12 +185,14 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  IjpRoute: typeof IjpRoute
   IntegrationsRoute: typeof IntegrationsRoute
   InterviewsRoute: typeof InterviewsRoute
   MastersRoute: typeof MastersRoute
   MatchingRoute: typeof MatchingRoute
   OffersRoute: typeof OffersRoute
   ReportsRoute: typeof ReportsRoute
+  TeamRoute: typeof TeamRoute
   CandidatesIdRoute: typeof CandidatesIdRoute
   RequisitionsIdRoute: typeof RequisitionsIdRoute
   CandidatesIndexRoute: typeof CandidatesIndexRoute
@@ -180,6 +206,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ijp': {
+      id: '/ijp'
+      path: '/ijp'
+      fullPath: '/ijp'
+      preLoaderRoute: typeof IjpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/integrations': {
@@ -224,6 +257,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/team': {
+      id: '/team'
+      path: '/team'
+      fullPath: '/team'
+      preLoaderRoute: typeof TeamRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/candidates/': {
       id: '/candidates/'
       path: '/candidates'
@@ -257,12 +297,14 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  IjpRoute: IjpRoute,
   IntegrationsRoute: IntegrationsRoute,
   InterviewsRoute: InterviewsRoute,
   MastersRoute: MastersRoute,
   MatchingRoute: MatchingRoute,
   OffersRoute: OffersRoute,
   ReportsRoute: ReportsRoute,
+  TeamRoute: TeamRoute,
   CandidatesIdRoute: CandidatesIdRoute,
   RequisitionsIdRoute: RequisitionsIdRoute,
   CandidatesIndexRoute: CandidatesIndexRoute,
