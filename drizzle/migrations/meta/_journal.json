@@ -92,6 +92,13 @@
       "when": 1788353207725,
       "tag": "0012_career_impact_logistics_mindset",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788369473252,
+      "tag": "0013_multi_tenant_organizations",
+      "breakpoints": true
     }
   ]
 }
