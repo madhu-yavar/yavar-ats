@@ -11,6 +11,8 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { useRouterState } from "@tanstack/react-router";
+
 import { AuthGate } from "@/components/AuthGate";
 import { AppShell } from "@/components/AppShell";
 import { Toaster } from "@/components/ui/sonner";
@@ -115,6 +117,18 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  // Candidate-facing questionnaire links are opened by people with no account.
+  const isPublic = pathname.startsWith("/assess/");
+
+  if (isPublic) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <Outlet />
+        <Toaster />
+      </QueryClientProvider>
+    );
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
