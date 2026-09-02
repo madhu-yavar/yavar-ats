@@ -156,8 +156,10 @@ export type Database = {
           consent_given: boolean
           created_at: string
           current_ctc: number | null
+          current_department: string | null
           education: string | null
           email: string
+          employee_id: string | null
           expected_ctc: number | null
           experience_years: number
           external_id: string | null
@@ -165,8 +167,10 @@ export type Database = {
           full_name: string
           github_url: string | null
           id: string
+          is_internal: boolean
           linkedin_url: string | null
           location: string | null
+          manager_endorsed: boolean
           notice_period_days: number | null
           phone: string | null
           resume_text: string | null
@@ -179,8 +183,10 @@ export type Database = {
           consent_given?: boolean
           created_at?: string
           current_ctc?: number | null
+          current_department?: string | null
           education?: string | null
           email: string
+          employee_id?: string | null
           expected_ctc?: number | null
           experience_years?: number
           external_id?: string | null
@@ -188,8 +194,10 @@ export type Database = {
           full_name: string
           github_url?: string | null
           id?: string
+          is_internal?: boolean
           linkedin_url?: string | null
           location?: string | null
+          manager_endorsed?: boolean
           notice_period_days?: number | null
           phone?: string | null
           resume_text?: string | null
@@ -202,8 +210,10 @@ export type Database = {
           consent_given?: boolean
           created_at?: string
           current_ctc?: number | null
+          current_department?: string | null
           education?: string | null
           email?: string
+          employee_id?: string | null
           expected_ctc?: number | null
           experience_years?: number
           external_id?: string | null
@@ -211,8 +221,10 @@ export type Database = {
           full_name?: string
           github_url?: string | null
           id?: string
+          is_internal?: boolean
           linkedin_url?: string | null
           location?: string | null
+          manager_endorsed?: boolean
           notice_period_days?: number | null
           phone?: string | null
           resume_text?: string | null
@@ -582,6 +594,9 @@ export type Database = {
           good_to_have_skills: string[]
           hiring_manager: string | null
           id: string
+          ijp_enabled: boolean
+          ijp_notes: string | null
+          ijp_posted_at: string | null
           location: string | null
           must_have_skills: string[]
           opened_at: string
@@ -611,6 +626,9 @@ export type Database = {
           good_to_have_skills?: string[]
           hiring_manager?: string | null
           id?: string
+          ijp_enabled?: boolean
+          ijp_notes?: string | null
+          ijp_posted_at?: string | null
           location?: string | null
           must_have_skills?: string[]
           opened_at?: string
@@ -640,6 +658,9 @@ export type Database = {
           good_to_have_skills?: string[]
           hiring_manager?: string | null
           id?: string
+          ijp_enabled?: boolean
+          ijp_notes?: string | null
+          ijp_posted_at?: string | null
           location?: string | null
           must_have_skills?: string[]
           opened_at?: string
