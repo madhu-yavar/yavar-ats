@@ -365,6 +365,25 @@ function Requisitions() {
                     <div className="text-sm text-muted-foreground">
                       {dept?.name ?? "Unassigned"} · {r.location}
                     </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+                      <span
+                        className={
+                          r.billing_type === "Billable"
+                            ? "rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary"
+                            : "rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground"
+                        }
+                      >
+                        {r.billing_type}
+                      </span>
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
+                        {r.engagement_type}
+                      </span>
+                      {r.client_name ? (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
+                          {r.client_name}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                   <StatusBadge status={r.status} />
                 </div>
