@@ -137,6 +137,8 @@ function RequisitionDetail() {
   const weights = {
     skills: r.weight_skills,
     experience: r.weight_experience,
+    career: r.weight_career,
+    impact: r.weight_impact,
     education: r.weight_education,
     social: r.weight_social,
   };
@@ -325,6 +327,8 @@ function RequisitionDetail() {
       .update({
         weight_skills: next.skills,
         weight_experience: next.experience,
+        weight_career: next.career,
+        weight_impact: next.impact,
         weight_education: next.education,
         weight_social: next.social,
       })
@@ -812,6 +816,8 @@ function RequisitionDetail() {
                 [
                   ["skills", "Skills fit"],
                   ["experience", "Experience"],
+                  ["career", "Career history"],
+                  ["impact", "Impact & innovation"],
                   ["education", "Education"],
                   ["social", "Social profiling"],
                 ] as const
@@ -849,8 +855,8 @@ function RequisitionDetail() {
                 {advice && (
                   <div className="mt-3 space-y-2 rounded-lg border border-dashed border-border p-3 text-xs">
                     <p className="num font-semibold">
-                      Skills {advice.skills} · Experience {advice.experience} · Education {advice.education} · Social{" "}
-                      {advice.social}
+                      Skills {advice.skills} · Experience {advice.experience} · Career {advice.career} · Impact{" "}
+                      {advice.impact} · Education {advice.education} · Social {advice.social}
                     </p>
                     <p className="text-muted-foreground">{advice.rationale}</p>
                     {advice.notes.length > 0 && (
@@ -867,6 +873,8 @@ function RequisitionDetail() {
                           saveWeights({
                             skills: advice.skills,
                             experience: advice.experience,
+                            career: advice.career,
+                            impact: advice.impact,
                             education: advice.education,
                             social: advice.social,
                           })
