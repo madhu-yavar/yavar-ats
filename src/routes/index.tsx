@@ -21,6 +21,8 @@ import { canonical, stalledDays, STAGE_LABEL, type Stage } from "@/lib/lifecycle
 import { findDuplicateGroups, freshness } from "@/lib/dedupe";
 import { rankPool } from "@/lib/shortlist";
 import { PageHeader, ScoreChip, StageBadge, StatCard, StatusBadge, inr } from "@/components/ats";
+import { LeadershipBoard } from "@/components/LeadershipBoard";
+import { useRoles } from "@/hooks/useRoles";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/")({
