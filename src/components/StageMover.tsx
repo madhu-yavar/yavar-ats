@@ -62,8 +62,16 @@ export function StageMover({
     return Object.keys(STAGE_LABEL).filter((s) => !["offer", "hired"].includes(s)) as Stage[];
   }, [currentStage]);
 
-  const reasons = byKind(masters.data, "rejection_reason");
+  // Reasons are driven by the destination stage, so the two fields stay logically paired.
+  const masterRejectReasons = byKind(masters.data, "rejection_reason").map((r) => r.name);
+  const reasons = useMemo(() => {
+    if (!toStage) return [];
+    const base = reasonsForStage(toStage);
+    const extra = toStage === "rejected" ? masterRejectReasons : [];
+    return Array.from(new Set([...base, ...extra]));
+  }, [toStage, masterRejectReasons.join("|")]);
   const needsReason = toStage ? REASON_REQUIRED.includes(toStage) : false;
+
 
   async function submit() {
     if (!toStage) return;
