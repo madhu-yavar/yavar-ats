@@ -69,6 +69,7 @@ function RequisitionDetail() {
   const cands = useQuery(candidatesQuery);
   const scores = useQuery(matchScoresQuery);
   const draftJd = useServerFn(generateJd);
+  const { roles, canApprove, requiredRoleFor } = useRoles();
 
   const [busy, setBusy] = useState(false);
   const [jdText, setJdText] = useState<string | null>(null);
@@ -88,14 +89,26 @@ function RequisitionDetail() {
     education: r.weight_education,
     social: r.weight_social,
   };
+  const weightTotal = Object.values(weights).reduce((a, b) => a + b, 0);
   const step = APPROVALS[r.status];
+  const allowed = step ? canApprove(r.status) : false;
 
   async function advance() {
     if (!step) return;
+    if (!allowed) {
+      toast.error(`Only the ${requiredRoleFor(r!.status)} can action this step`);
+      return;
+    }
     setBusy(true);
     const trail = [
       ...(Array.isArray(r!.approval_trail) ? (r!.approval_trail as unknown[]) : []),
-      { from: r!.status, to: step.next, comment: comment || null, at: new Date().toISOString() },
+      {
+        from: r!.status,
+        to: step.next,
+        comment: comment || null,
+        at: new Date().toISOString(),
+        by_role: roles[0] ?? null,
+      },
     ];
     const { error } = await supabase
       .from("requisitions")
@@ -111,6 +124,26 @@ function RequisitionDetail() {
     qc.invalidateQueries({ queryKey: ["requisition", id] });
     qc.invalidateQueries({ queryKey: ["requisitions"] });
   }
+
+  async function toggleIjp(enabled: boolean) {
+    const { error } = await supabase
+      .from("requisitions")
+      .update({ ijp_enabled: enabled, ijp_posted_at: enabled ? new Date().toISOString() : null })
+      .eq("id", r!.id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(enabled ? "Published to the internal job board" : "Removed from the internal job board");
+    qc.invalidateQueries({ queryKey: ["requisition", id] });
+    qc.invalidateQueries({ queryKey: ["requisitions"] });
+  }
+
+  async function saveIjpNotes(notes: string) {
+    await supabase.from("requisitions").update({ ijp_notes: notes || null }).eq("id", r!.id);
+    qc.invalidateQueries({ queryKey: ["requisition", id] });
+  }
+
 
   async function draft() {
     setBusy(true);
