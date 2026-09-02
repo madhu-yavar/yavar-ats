@@ -56,6 +56,11 @@ function Candidates() {
   const [busy, setBusy] = useState(false);
   const [resume, setResume] = useState("");
   const [reqId, setReqId] = useState("");
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkReqId, setBulkReqId] = useState("");
+  const [bulkSource, setBulkSource] = useState("direct");
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  const [bulkLog, setBulkLog] = useState<{ file: string; ok: boolean; message: string }[]>([]);
   const [form, setForm] = useState({
     full_name: "",
     email: "",
@@ -69,6 +74,56 @@ function Candidates() {
     x_url: "",
     source: "direct",
   });
+
+  /** Bulk CV intake: read each file locally, AI-parse it, then insert the candidate. */
+  async function bulkUpload(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const list = Array.from(files);
+    setBulkProgress({ done: 0, total: list.length });
+    setBulkLog([]);
+    for (const [i, file] of list.entries()) {
+      try {
+        const text = await extractResumeText(file);
+        if (text.length < 20) throw new Error("No readable text found in the file");
+        const p = await parse({ data: { resumeText: text.slice(0, 20000) } });
+        const email = (p.email ?? "").trim() || `unknown+${Date.now()}-${i}@import.local`;
+        const { data, error } = await supabase
+          .from("candidates")
+          .insert({
+            full_name: (p.full_name ?? "").trim() || file.name.replace(/\.[^.]+$/, ""),
+            email,
+            location: p.location || null,
+            experience_years: Number(p.experience_years) || 0,
+            education: p.education || null,
+            skills: p.skills ?? [],
+            linkedin_url: p.linkedin_url || null,
+            github_url: p.github_url || null,
+            website_url: p.website_url || null,
+            source: bulkSource,
+            resume_text: text,
+          })
+          .select("id")
+          .single();
+        if (error || !data) throw new Error(error?.message ?? "Insert failed");
+        if (bulkReqId) {
+          await supabase
+            .from("applications")
+            .insert({ requisition_id: bulkReqId, candidate_id: data.id, source: bulkSource });
+        }
+        setBulkLog((l) => [...l, { file: file.name, ok: true, message: `${p.full_name ?? "parsed"} · ${(p.skills ?? []).length} skills` }]);
+      } catch (e) {
+        setBulkLog((l) => [
+          ...l,
+          { file: file.name, ok: false, message: e instanceof Error ? e.message : "Failed" },
+        ]);
+      }
+      setBulkProgress({ done: i + 1, total: list.length });
+    }
+    qc.invalidateQueries({ queryKey: ["candidates"] });
+    qc.invalidateQueries({ queryKey: ["applications"] });
+    toast.success("Bulk CV parsing finished");
+  }
+
 
   const scoreMap = latestScores(scores.data ?? []);
   const bestScore = useMemo(() => {
