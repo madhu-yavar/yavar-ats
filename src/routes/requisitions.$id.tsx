@@ -336,10 +336,49 @@ function RequisitionDetail() {
                   {latestJd ? `Version ${latestJd.version} · ${latestJd.status}` : "No JD drafted yet"}
                 </p>
               </div>
-              <Button variant="outline" onClick={draft} disabled={busy}>
-                <Sparkles className="size-4" /> {latestJd ? "Redraft with AI" : "Draft with AI"}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="outline" onClick={() => setShowImport((v) => !v)} disabled={busy}>
+                  <Upload className="size-4" /> I already have a JD
+                </Button>
+                <Button variant="outline" onClick={draft} disabled={busy}>
+                  <Sparkles className="size-4" /> {latestJd ? "Redraft with AI" : "Draft with AI"}
+                </Button>
+              </div>
             </div>
+
+            {showImport && (
+              <div className="mt-4 space-y-3 rounded-lg border border-dashed border-border p-4">
+                <div>
+                  <Label className="text-sm">Upload your existing JD</Label>
+                  <p className="text-xs text-muted-foreground">
+                    PDF, DOCX or TXT. We extract the text, structure it into must-have / good-to-have skills and the
+                    experience band, then file it as the next JD version for approval — nothing is rewritten.
+                  </p>
+                </div>
+                <Input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.txt,.md"
+                  disabled={busy}
+                  onChange={(e) => onJdFile(e.target.files?.[0])}
+                />
+                <Textarea
+                  rows={8}
+                  placeholder="…or paste the JD text here"
+                  value={jdPaste}
+                  onChange={(e) => setJdPaste(e.target.value)}
+                  className="text-xs"
+                />
+                <div className="flex gap-2">
+                  <Button onClick={() => useExistingJd(jdPaste)} disabled={busy}>
+                    {busy ? "Importing…" : "Import this JD"}
+                  </Button>
+                  <Button variant="ghost" onClick={() => setShowImport(false)} disabled={busy}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+
 
             {latestJd ? (
               <div className="mt-4 space-y-4">
