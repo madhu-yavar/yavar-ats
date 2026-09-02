@@ -106,12 +106,14 @@ function MasterCard({
     }
   }
 
-  async function retire(id: string) {
-    const { error } = await supabase.from("master_items").update({ active: false }).eq("id", id);
+  async function remove(id: string, name: string) {
+    if (!confirm(`Delete "${name}"? This permanently removes it from the library.`)) return;
+    const { error } = await supabase.from("master_items").delete().eq("id", id);
     if (error) {
       toast.error(error.message);
       return;
     }
+    toast.success(`${name} deleted`);
     qc.invalidateQueries({ queryKey: ["master_items"] });
   }
 
@@ -143,7 +145,7 @@ function MasterCard({
         {list.map((i) => (
           <Badge key={i.id} variant="secondary" className="gap-1">
             {i.name}
-            <button type="button" onClick={() => retire(i.id)} aria-label={`Retire ${i.name}`}>
+            <button type="button" onClick={() => remove(i.id, i.name)} aria-label={`Delete ${i.name}`}>
               <Trash2 className="h-3 w-3" />
             </button>
           </Badge>
