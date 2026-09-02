@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Sparkles } from "lucide-react";
+import { ArrowLeft, Sparkles, Upload } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -15,8 +15,9 @@ import {
   matchScoresQuery,
   requisitionQuery,
 } from "@/lib/data";
-import { generateJd } from "@/lib/matching.functions";
-import { balanceWeights } from "@/lib/cv-extract";
+import { generateJd, importJd } from "@/lib/matching.functions";
+import { balanceWeights, extractResumeText } from "@/lib/cv-extract";
+
 import { useRoles } from "@/hooks/useRoles";
 
 import {
