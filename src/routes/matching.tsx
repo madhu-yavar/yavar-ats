@@ -28,6 +28,7 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export const Route = createFileRoute("/matching")({
   validateSearch: z.object({ req: z.string().optional() }),
@@ -97,6 +98,11 @@ function Matching() {
   const [board, setBoard] = useState("");
   const [importing, setImporting] = useState(false);
   const [addingFromPool, setAddingFromPool] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+
+  function toggleSelected(applicationId: string, on: boolean) {
+    setSelected((prev) => (on ? [...new Set([...prev, applicationId])] : prev.filter((id) => id !== applicationId)));
+  }
 
   const effWeights: Weights = weights ?? {
     skills: requisition?.weight_skills ?? 50,
@@ -345,19 +351,25 @@ function Matching() {
   }
 
   /** One JD vs many CVs: bounded concurrency, cached social signals, per-row error isolation. */
-  async function scoreAll() {
+  async function scoreAll(applicationIds?: string[]) {
     if (!requisition) return;
     if (weightTotal !== 100) {
       toast.error("Weights must total 100 before scoring");
       return;
     }
-    const targets = pipeline.filter(
-      (r) => r.candidate && (rescoreAll || (!r.live && !r.stored)),
+    const explicit = applicationIds?.length ? new Set(applicationIds) : null;
+    const targets = pipeline.filter((r) =>
+      r.candidate && (explicit ? explicit.has(r.app.id) : rescoreAll || (!r.live && !r.stored)),
     );
     if (!targets.length) {
-      toast.info("Every applicant already has a score — switch on re-score to run them again.");
+      toast.info(
+        explicit
+          ? "Select at least one candidate to score."
+          : "Every applicant already has a score — switch on re-score to run them again.",
+      );
       return;
     }
+
 
     setBulk({ done: 0, total: targets.length });
     try {
@@ -451,7 +463,24 @@ function Matching() {
               <Switch checked={rescoreAll} onCheckedChange={setRescoreAll} />
               Re-score already scored
             </label>
-            <Button onClick={scoreAll} disabled={Boolean(running) || Boolean(bulk) || pipeline.length === 0}>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Checkbox
+                checked={selected.length > 0 && selected.length === pipeline.length}
+                onCheckedChange={(v) => setSelected(v ? pipeline.map((r) => r.app.id) : [])}
+              />
+              Select all
+            </label>
+            {selected.length > 0 && (
+              <Button
+                variant="outline"
+                onClick={() => scoreAll(selected)}
+                disabled={Boolean(running) || Boolean(bulk)}
+              >
+                {bulk ? <Loader2 className="size-4 animate-spin" /> : <Target className="size-4" />}
+                Score selected ({selected.length})
+              </Button>
+            )}
+            <Button onClick={() => scoreAll()} disabled={Boolean(running) || Boolean(bulk) || pipeline.length === 0}>
               {bulk ? <Loader2 className="size-4 animate-spin" /> : <Target className="size-4" />}
               {bulk ? `Scoring ${bulk.done}/${bulk.total}` : "Score whole pipeline"}
             </Button>
@@ -663,6 +692,11 @@ function Matching() {
               return (
                 <article key={app.id} className="panel overflow-hidden">
                   <div className="flex flex-wrap items-center gap-4 p-5">
+                    <Checkbox
+                      checked={selected.includes(app.id)}
+                      onCheckedChange={(v) => toggleSelected(app.id, Boolean(v))}
+                      aria-label={`Select ${candidate?.full_name ?? "candidate"} for matching`}
+                    />
                     {overall !== undefined ? (
                       <ScoreChip score={overall} size="lg" />
                     ) : (
