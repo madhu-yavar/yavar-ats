@@ -167,6 +167,11 @@ function Requisitions() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {departments.length === 0 && (
+                    <p className="mt-1 text-xs text-destructive">
+                      No departments yet — add one in “Departments &amp; budgeted headcount” below first.
+                    </p>
+                  )}
                 </Field>
                 <Field label="Location">
                   <MasterSelect
