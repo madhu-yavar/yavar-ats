@@ -463,7 +463,24 @@ function Matching() {
               <Switch checked={rescoreAll} onCheckedChange={setRescoreAll} />
               Re-score already scored
             </label>
-            <Button onClick={scoreAll} disabled={Boolean(running) || Boolean(bulk) || pipeline.length === 0}>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Checkbox
+                checked={selected.length > 0 && selected.length === pipeline.length}
+                onCheckedChange={(v) => setSelected(v ? pipeline.map((r) => r.app.id) : [])}
+              />
+              Select all
+            </label>
+            {selected.length > 0 && (
+              <Button
+                variant="outline"
+                onClick={() => scoreAll(selected)}
+                disabled={Boolean(running) || Boolean(bulk)}
+              >
+                {bulk ? <Loader2 className="size-4 animate-spin" /> : <Target className="size-4" />}
+                Score selected ({selected.length})
+              </Button>
+            )}
+            <Button onClick={() => scoreAll()} disabled={Boolean(running) || Boolean(bulk) || pipeline.length === 0}>
               {bulk ? <Loader2 className="size-4 animate-spin" /> : <Target className="size-4" />}
               {bulk ? `Scoring ${bulk.done}/${bulk.total}` : "Score whole pipeline"}
             </Button>
