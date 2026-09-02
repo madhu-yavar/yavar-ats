@@ -16,3 +16,13 @@
 - [x] "Merge" bulk action folds duplicates into the oldest record and re-points applications and child records.
 - [x] CV freshness (fresh <90d / aging / stale >1yr) with "Possible duplicates" and "Stale CVs" saved views.
 - [x] Dashboard: pool-health panel, funnel conversion, source mix, skill scarcity, stalled SLA list, and auto-suggested pool candidates per open requisition with one-click add.
+
+## Enterprise readiness — slice 1: organisation onboarding (done)
+- [x] Multi-tenant schema (organizations, org_members, org_id across ATS tables with parent-derived triggers + RLS).
+- [x] Four-step onboarding wizard: org profile, departments, hiring locations, team invitations.
+- [x] Org gate: signed-in users without a membership go through onboarding; paused members are blocked.
+- [x] Users & roles page rebuilt as an org roster with email invitations, role grants, pause/remove.
+
+## Next
+- [ ] Slice 2: role-scoped CHRO / HR-head dashboards.
+- [ ] Slice 3: embedded HR copilot (one conversation, database-backed).
