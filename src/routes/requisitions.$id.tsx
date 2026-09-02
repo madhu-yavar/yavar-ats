@@ -238,13 +238,21 @@ function RequisitionDetail() {
           <div className="flex items-center gap-2">
             <StatusBadge status={r.status} />
             {step && (
-              <Button onClick={advance} disabled={busy}>
-                {step.label}
-              </Button>
+              <div className="text-right">
+                <Button onClick={advance} disabled={busy || !allowed}>
+                  {step.label}
+                </Button>
+                {!allowed && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Requires the {requiredRoleFor(r.status)} role
+                  </p>
+                )}
+              </div>
             )}
           </div>
         }
       />
+
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
