@@ -692,6 +692,11 @@ function Matching() {
               return (
                 <article key={app.id} className="panel overflow-hidden">
                   <div className="flex flex-wrap items-center gap-4 p-5">
+                    <Checkbox
+                      checked={selected.includes(app.id)}
+                      onCheckedChange={(v) => toggleSelected(app.id, Boolean(v))}
+                      aria-label={`Select ${candidate?.full_name ?? "candidate"} for matching`}
+                    />
                     {overall !== undefined ? (
                       <ScoreChip score={overall} size="lg" />
                     ) : (
