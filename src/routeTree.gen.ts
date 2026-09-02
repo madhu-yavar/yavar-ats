@@ -20,6 +20,7 @@ import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as TeamRouteImport } from './routes/team'
 import { Route as CandidatesIndexRouteImport } from './routes/candidates.index'
 import { Route as CandidatesIdRouteImport } from './routes/candidates.$id'
+import { Route as InterviewsMineRouteImport } from './routes/interviews.mine'
 import { Route as RequisitionsIndexRouteImport } from './routes/requisitions.index'
 import { Route as RequisitionsIdRouteImport } from './routes/requisitions.$id'
 import { Route as ApiPublicSyncCandidatesRouteImport } from './routes/api/public/sync-candidates'
@@ -79,6 +80,11 @@ const CandidatesIdRoute = CandidatesIdRouteImport.update({
   path: '/candidates/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InterviewsMineRoute = InterviewsMineRouteImport.update({
+  id: '/mine',
+  path: '/mine',
+  getParentRoute: () => InterviewsRoute,
+} as any)
 const RequisitionsIndexRoute = RequisitionsIndexRouteImport.update({
   id: '/requisitions/',
   path: '/requisitions/',
@@ -99,13 +105,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/ijp': typeof IjpRoute
   '/integrations': typeof IntegrationsRoute
-  '/interviews': typeof InterviewsRoute
+  '/interviews': typeof InterviewsRouteWithChildren
   '/masters': typeof MastersRoute
   '/matching': typeof MatchingRoute
   '/offers': typeof OffersRoute
   '/reports': typeof ReportsRoute
   '/team': typeof TeamRoute
   '/candidates/$id': typeof CandidatesIdRoute
+  '/interviews/mine': typeof InterviewsMineRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates/': typeof CandidatesIndexRoute
   '/requisitions/': typeof RequisitionsIndexRoute
@@ -115,13 +122,14 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/ijp': typeof IjpRoute
   '/integrations': typeof IntegrationsRoute
-  '/interviews': typeof InterviewsRoute
+  '/interviews': typeof InterviewsRouteWithChildren
   '/masters': typeof MastersRoute
   '/matching': typeof MatchingRoute
   '/offers': typeof OffersRoute
   '/reports': typeof ReportsRoute
   '/team': typeof TeamRoute
   '/candidates/$id': typeof CandidatesIdRoute
+  '/interviews/mine': typeof InterviewsMineRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates': typeof CandidatesIndexRoute
   '/requisitions': typeof RequisitionsIndexRoute
@@ -132,13 +140,14 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/ijp': typeof IjpRoute
   '/integrations': typeof IntegrationsRoute
-  '/interviews': typeof InterviewsRoute
+  '/interviews': typeof InterviewsRouteWithChildren
   '/masters': typeof MastersRoute
   '/matching': typeof MatchingRoute
   '/offers': typeof OffersRoute
   '/reports': typeof ReportsRoute
   '/team': typeof TeamRoute
   '/candidates/$id': typeof CandidatesIdRoute
+  '/interviews/mine': typeof InterviewsMineRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates/': typeof CandidatesIndexRoute
   '/requisitions/': typeof RequisitionsIndexRoute
@@ -157,6 +166,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/team'
     | '/candidates/$id'
+    | '/interviews/mine'
     | '/requisitions/$id'
     | '/candidates/'
     | '/requisitions/'
@@ -173,6 +183,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/team'
     | '/candidates/$id'
+    | '/interviews/mine'
     | '/requisitions/$id'
     | '/candidates'
     | '/requisitions'
@@ -189,6 +200,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/team'
     | '/candidates/$id'
+    | '/interviews/mine'
     | '/requisitions/$id'
     | '/candidates/'
     | '/requisitions/'
@@ -199,7 +211,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   IjpRoute: typeof IjpRoute
   IntegrationsRoute: typeof IntegrationsRoute
-  InterviewsRoute: typeof InterviewsRoute
+  InterviewsRoute: typeof InterviewsRouteWithChildren
   MastersRoute: typeof MastersRoute
   MatchingRoute: typeof MatchingRoute
   OffersRoute: typeof OffersRoute
@@ -291,6 +303,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CandidatesIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/interviews/mine': {
+      id: '/interviews/mine'
+      path: '/mine'
+      fullPath: '/interviews/mine'
+      preLoaderRoute: typeof InterviewsMineRouteImport
+      parentRoute: typeof InterviewsRoute
+    }
     '/requisitions/': {
       id: '/requisitions/'
       path: '/requisitions'
@@ -315,11 +334,23 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface InterviewsRouteChildren {
+  InterviewsMineRoute: typeof InterviewsMineRoute
+}
+
+const InterviewsRouteChildren: InterviewsRouteChildren = {
+  InterviewsMineRoute: InterviewsMineRoute,
+}
+
+const InterviewsRouteWithChildren = InterviewsRoute._addFileChildren(
+  InterviewsRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   IjpRoute: IjpRoute,
   IntegrationsRoute: IntegrationsRoute,
-  InterviewsRoute: InterviewsRoute,
+  InterviewsRoute: InterviewsRouteWithChildren,
   MastersRoute: MastersRoute,
   MatchingRoute: MatchingRoute,
   OffersRoute: OffersRoute,
