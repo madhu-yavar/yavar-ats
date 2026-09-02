@@ -331,35 +331,47 @@ export type Database = {
         Row: {
           application_id: string
           comments: string | null
+          competencies: Json
           created_at: string
           evaluator: string | null
           focus_area: string | null
           id: string
+          interview_id: string | null
           level: number
           rating: number | null
           recommendation: Database["public"]["Enums"]["recommendation"]
+          submitted_at: string | null
+          submitted_by: string | null
         }
         Insert: {
           application_id: string
           comments?: string | null
+          competencies?: Json
           created_at?: string
           evaluator?: string | null
           focus_area?: string | null
           id?: string
+          interview_id?: string | null
           level: number
           rating?: number | null
           recommendation?: Database["public"]["Enums"]["recommendation"]
+          submitted_at?: string | null
+          submitted_by?: string | null
         }
         Update: {
           application_id?: string
           comments?: string | null
+          competencies?: Json
           created_at?: string
           evaluator?: string | null
           focus_area?: string | null
           id?: string
+          interview_id?: string | null
           level?: number
           rating?: number | null
           recommendation?: Database["public"]["Enums"]["recommendation"]
+          submitted_at?: string | null
+          submitted_by?: string | null
         }
         Relationships: [
           {
@@ -367,6 +379,13 @@ export type Database = {
             columns: ["application_id"]
             isOneToOne: false
             referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evaluations_interview_id_fkey"
+            columns: ["interview_id"]
+            isOneToOne: false
+            referencedRelation: "interviews"
             referencedColumns: ["id"]
           },
         ]
@@ -399,31 +418,46 @@ export type Database = {
       }
       interviews: {
         Row: {
+          agenda: string | null
           application_id: string
+          completed_at: string | null
           created_at: string
+          duration_mins: number
           id: string
           interviewer: string | null
+          interviewer_email: string | null
           level: number
+          mode: string
           scheduled_at: string | null
           status: string
           teams_link: string | null
         }
         Insert: {
+          agenda?: string | null
           application_id: string
+          completed_at?: string | null
           created_at?: string
+          duration_mins?: number
           id?: string
           interviewer?: string | null
+          interviewer_email?: string | null
           level?: number
+          mode?: string
           scheduled_at?: string | null
           status?: string
           teams_link?: string | null
         }
         Update: {
+          agenda?: string | null
           application_id?: string
+          completed_at?: string | null
           created_at?: string
+          duration_mins?: number
           id?: string
           interviewer?: string | null
+          interviewer_email?: string | null
           level?: number
+          mode?: string
           scheduled_at?: string | null
           status?: string
           teams_link?: string | null

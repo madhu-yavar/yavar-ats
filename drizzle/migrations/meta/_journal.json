@@ -71,6 +71,13 @@
       "when": 1788342176177,
       "tag": "0009_stage_events_and_candidate_verifications",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788346658984,
+      "tag": "0010_interviewer_portal_scorecards",
+      "breakpoints": true
     }
   ]
 }
