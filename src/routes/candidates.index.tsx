@@ -8,6 +8,8 @@ import { Github, Linkedin, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { applicationsQuery, candidatesQuery, latestScores, matchScoresQuery, requisitionsQuery } from "@/lib/data";
 import { parseResume } from "@/lib/matching.functions";
+import { extractResumeText } from "@/lib/cv-extract";
+
 import { EmptyState, PageHeader, ScoreChip, SkillPills } from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
