@@ -184,8 +184,14 @@ function Requisitions() {
                     options={departments.map((d) => ({ id: d.id, name: d.name }))}
                     value={departments.find((d) => d.id === form.department_id)?.name ?? ""}
                     onChange={(name) =>
-                      setForm({ ...form, department_id: departments.find((d) => d.name === name)?.id ?? "" })
+                      setForm((f) => ({
+                        ...f,
+                        department_id: name
+                          ? (departments.find((d) => d.name === name)?.id ?? f.department_id)
+                          : "",
+                      }))
                     }
+
                     onCreate={createDepartment}
                     placeholder="Search departments, or type a new one"
                   />
