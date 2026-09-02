@@ -229,10 +229,93 @@ function Candidates() {
         title="Talent pool"
         description="One searchable pool across job boards, referrals and direct applications — with the social handles that feed the social profiling score."
         actions={
+          <div className="flex items-center gap-2">
+          <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Upload className="size-4" /> Bulk upload CVs
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+              <DialogHeader>
+                <DialogTitle>Bulk upload CVs</DialogTitle>
+                <DialogDescription>
+                  Drop in up to a few dozen PDF, DOCX or TXT resumes — each one is read, AI-parsed and added to the
+                  talent pool automatically. No typing.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label className="mb-1.5 block text-xs text-muted-foreground">Source</Label>
+                  <Select value={bulkSource} onValueChange={setBulkSource}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["direct", "naukri", "linkedin", "referral", "consultant", "campus", "ijp"].map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="mb-1.5 block text-xs text-muted-foreground">Apply all to requisition</Label>
+                  <Select value={bulkReqId} onValueChange={setBulkReqId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Optional" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(reqs.data ?? []).map((r) => (
+                        <SelectItem key={r.id} value={r.id}>
+                          {r.code} — {r.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <Label className="mb-1.5 block text-xs text-muted-foreground">Resume files</Label>
+                <Input
+                  type="file"
+                  multiple
+                  accept=".pdf,.docx,.txt,.md"
+                  onChange={(e) => bulkUpload(e.target.files)}
+                />
+              </div>
+
+              {bulkProgress && (
+                <p className="num text-xs text-muted-foreground">
+                  Parsed {bulkProgress.done} / {bulkProgress.total}
+                </p>
+              )}
+              {bulkLog.length > 0 && (
+                <ul className="max-h-56 space-y-1 overflow-y-auto text-xs">
+                  {bulkLog.map((l, i) => (
+                    <li key={i} className={l.ok ? "text-muted-foreground" : "text-destructive"}>
+                      <span className="font-medium">{l.file}</span> — {l.message}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setBulkOpen(false)}>
+                  Done
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button>Add candidate</Button>
             </DialogTrigger>
+
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Add candidate</DialogTitle>
