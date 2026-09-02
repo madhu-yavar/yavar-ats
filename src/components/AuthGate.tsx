@@ -104,9 +104,13 @@ function SignIn() {
         <form onSubmit={submit} className="panel w-full max-w-sm space-y-5 p-8">
           <div className="space-y-1">
             <h2 className="text-xl font-semibold">
-              {mode === "signin" ? "Sign in" : "Create your account"}
+              {mode === "signin" ? "Sign in" : "Register your organisation"}
             </h2>
-            <p className="text-sm text-muted-foreground">Talent acquisition workspace</p>
+            <p className="text-sm text-muted-foreground">
+              {mode === "signin"
+                ? "Talent acquisition workspace"
+                : "Create the owner account — organisation setup starts right after."}
+            </p>
           </div>
 
           <div className="space-y-2">
