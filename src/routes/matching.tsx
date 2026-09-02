@@ -887,6 +887,87 @@ function Matching() {
                         </div>
                       ) : null}
 
+                      {result?.career ? (
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Career history (measured, not guessed)</Label>
+                            <dl className="num mt-2 space-y-1 text-sm">
+                              {(
+                                [
+                                  ["Employers", String(result.career.metrics.employers)],
+                                  ["Avg tenure", `${result.career.metrics.avg_tenure_years} yrs`],
+                                  [
+                                    "Current tenure",
+                                    result.career.metrics.current_tenure_years === null
+                                      ? "—"
+                                      : `${result.career.metrics.current_tenure_years} yrs`,
+                                  ],
+                                  ["Jobs in last 5 yrs", String(result.career.metrics.jobs_last_5y)],
+                                  ["Longest gap", `${result.career.metrics.longest_gap_months} mo`],
+                                  ["Progression", result.career.metrics.progression],
+                                ] as const
+                              ).map(([k, v]) => (
+                                <div key={k} className="flex justify-between border-b border-border pb-1">
+                                  <dt className="text-muted-foreground">{k}</dt>
+                                  <dd>{v}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                            {result.career.assessment.notes.length ? (
+                              <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                                {result.career.assessment.notes.map((n) => (
+                                  <li key={n}>{n}</li>
+                                ))}
+                              </ul>
+                            ) : null}
+                          </div>
+                          <div className="space-y-3">
+                            <div>
+                              <Label className="text-xs text-muted-foreground">
+                                Impact {result.impact_score} · Innovation {result.innovation_score}
+                              </Label>
+                              <ul className="mt-1.5 space-y-1 text-sm">
+                                {[...result.impact.highlights, ...result.impact.innovation_signals].map((h) => (
+                                  <li key={h} className="text-muted-foreground">
+                                    • {h}
+                                  </li>
+                                ))}
+                              </ul>
+                              {result.impact.rationale ? (
+                                <p className="mt-1.5 text-xs text-muted-foreground">{result.impact.rationale}</p>
+                              ) : null}
+                            </div>
+                            {result.logistics ? (
+                              <div>
+                                <Label className="text-xs text-muted-foreground">
+                                  Logistics — joining risk: {result.logistics.join_risk} (never affects the score)
+                                </Label>
+                                <ul className="mt-1.5 space-y-1 text-sm">
+                                  {result.logistics.blockers.map((b) => (
+                                    <li key={b} className="text-destructive">
+                                      ✕ {b}
+                                    </li>
+                                  ))}
+                                  {result.logistics.flags.map((f) => (
+                                    <li key={f} className="text-muted-foreground">
+                                      ! {f}
+                                    </li>
+                                  ))}
+                                  {!result.logistics.blockers.length && !result.logistics.flags.length ? (
+                                    <li className="text-muted-foreground">No compensation, notice or location issues.</li>
+                                  ) : null}
+                                </ul>
+                                {result.logistics.missing.length ? (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Not captured yet: {result.logistics.missing.join(", ")}
+                                  </p>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
+
                       <div>
                         <Label className="text-xs text-muted-foreground">Social profiling</Label>
                         <p className="mb-2 text-xs text-muted-foreground">
