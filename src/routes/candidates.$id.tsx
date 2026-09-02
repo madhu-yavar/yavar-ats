@@ -3,22 +3,27 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, ExternalLink, Sparkles } from "lucide-react";
+import { ArrowLeft, ExternalLink, ShieldCheck, Sparkles } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import {
   aiInterviewsQuery,
   applicationsQuery,
   candidateQuery,
+  candidateVerificationsQuery,
   evaluationsQuery,
   jdQuery,
   latestScores,
   matchScoresQuery,
   requisitionsQuery,
   socialProfilesQuery,
+  stageEventsQuery,
 } from "@/lib/data";
 import { runAiScreening } from "@/lib/matching.functions";
+import { verifyCandidate } from "@/lib/verification.functions";
 import { normalizeExternalUrl } from "@/lib/external-links";
+import { nextAction, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
+import { StageMover } from "@/components/StageMover";
 import { EmptyState, PageHeader, ScoreBar, ScoreChip, SkillPills, StageBadge } from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -53,7 +58,10 @@ function CandidateDetail() {
   const evals = useQuery(evaluationsQuery);
   const aiRuns = useQuery(aiInterviewsQuery);
   const screen = useServerFn(runAiScreening);
+  const verify = useServerFn(verifyCandidate);
   const [busy, setBusy] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [mover, setMover] = useState<{ id: string; stage: Stage } | null>(null);
 
   const c = cand.data;
   const myApps = (apps.data ?? []).filter((a) => a.candidate_id === id);
@@ -61,6 +69,10 @@ function CandidateDetail() {
   const jds = useQuery({ ...jdQuery(firstReqId), enabled: Boolean(firstReqId) });
   const scoreMap = latestScores(scores.data ?? []);
   const social = (socials.data ?? []).filter((s) => s.candidate_id === id);
+  const verifs = useQuery(candidateVerificationsQuery(id));
+  const verification = (verifs.data ?? [])[0] ?? null;
+  const appIds = myApps.map((a) => a.id);
+  const events = useQuery({ ...stageEventsQuery(appIds), enabled: appIds.length > 0 });
 
   if (cand.isLoading) return <p className="text-sm text-muted-foreground">Loading candidate…</p>;
   if (!c) return <EmptyState title="Candidate not found" />;
@@ -100,6 +112,21 @@ function CandidateDetail() {
       toast.error(e instanceof Error ? e.message : "AI screening failed");
     } finally {
       setBusy(null);
+    }
+  }
+
+  /** Re-run the verification agent against the live public evidence. */
+  async function runVerification() {
+    setVerifying(true);
+    try {
+      const out = await verify({ data: { candidateId: id } });
+      toast.success(`Authenticity ${out.authenticity_score}/100 — ${out.claims.length} claims checked`);
+      qc.invalidateQueries({ queryKey: ["candidate_verifications"] });
+      qc.invalidateQueries({ queryKey: ["candidate", id] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Verification failed");
+    } finally {
+      setVerifying(false);
     }
   }
 
@@ -151,8 +178,20 @@ function CandidateDetail() {
                           </Link>
                           <div className="num text-xs text-muted-foreground">{req?.code}</div>
                         </div>
-                        <StageBadge stage={a.stage} />
+                        <div className="flex items-center gap-2">
+                          <StageBadge stage={a.stage} />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setMover({ id: a.id, stage: a.stage as Stage })}
+                          >
+                            Move
+                          </Button>
+                        </div>
                       </div>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Next action: {nextAction(a.stage as Stage)}
+                      </p>
 
                       {s ? (
                         <>
@@ -252,9 +291,124 @@ function CandidateDetail() {
               </ul>
             )}
           </section>
+
+          <section className="panel p-5">
+            <h2 className="font-semibold">Lifecycle timeline</h2>
+            <p className="text-xs text-muted-foreground">
+              Every stage change, who made it and why — the audit trail behind this candidate.
+            </p>
+            {(events.data ?? []).length === 0 ? (
+              <p className="mt-3 text-sm text-muted-foreground">No stage changes recorded yet.</p>
+            ) : (
+              <ol className="mt-4 space-y-3 border-l border-border pl-4 text-sm">
+                {(events.data ?? []).map((e) => (
+                  <li key={e.id} className="relative">
+                    <span className="absolute -left-[21px] top-1.5 size-2 rounded-full bg-primary" />
+                    <div className="font-medium">
+                      {e.from_stage ? `${STAGE_LABEL[e.from_stage as Stage]} → ` : ""}
+                      {STAGE_LABEL[e.to_stage as Stage] ?? e.to_stage}
+                    </div>
+                    <div className="num text-xs text-muted-foreground">
+                      {new Date(e.created_at).toLocaleString()} · {e.actor ?? "system"}
+                      {e.reason ? ` · ${e.reason}` : ""}
+                    </div>
+                    {e.note ? <p className="mt-1 text-xs">{e.note}</p> : null}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
         </div>
 
         <div className="space-y-6">
+          <section className="panel p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">Authenticity check</h2>
+                <p className="text-xs text-muted-foreground">
+                  The verification agent cross-checks CV claims against live public evidence.
+                </p>
+              </div>
+              {verification ? (
+                <span
+                  className={
+                    "num inline-flex items-center gap-1 text-lg font-semibold " +
+                    (verification.authenticity_score >= 70
+                      ? "text-emerald-600"
+                      : verification.authenticity_score >= 45
+                        ? "text-amber-600"
+                        : "text-destructive")
+                  }
+                >
+                  <ShieldCheck className="size-4" /> {verification.authenticity_score}
+                </span>
+              ) : null}
+            </div>
+
+            <Button size="sm" variant="outline" className="mt-3" onClick={runVerification} disabled={verifying}>
+              <Sparkles className="size-4" /> {verifying ? "Verifying…" : verification ? "Re-verify" : "Run verification"}
+            </Button>
+
+            {verification ? (
+              <div className="mt-4 space-y-3 text-sm">
+                <p>{verification.summary}</p>
+
+                {(verification.red_flags ?? []).length > 0 ? (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Red flags</Label>
+                    <ul className="mt-1.5 space-y-1 text-xs text-destructive">
+                      {(verification.red_flags ?? []).map((f, i) => (
+                        <li key={i}>{f}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                <div>
+                  <Label className="text-xs text-muted-foreground">Claim-by-claim</Label>
+                  <ul className="mt-1.5 space-y-2">
+                    {(Array.isArray(verification.claims)
+                      ? (verification.claims as unknown as {
+                          claim: string;
+                          verdict: string;
+                          confidence: number;
+                          evidence: string;
+                        }[])
+                      : []
+                    ).map((cl, i) => (
+                      <li key={i} className="rounded-lg border border-border p-2.5 text-xs">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="font-medium text-foreground">{cl.claim}</span>
+                          <span
+                            className={
+                              "whitespace-nowrap rounded border px-1.5 py-0.5 " +
+                              (cl.verdict === "supported"
+                                ? "border-emerald-500/30 text-emerald-600"
+                                : cl.verdict === "contradicted"
+                                  ? "border-destructive/30 text-destructive"
+                                  : "border-border text-muted-foreground")
+                            }
+                          >
+                            {cl.verdict}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-muted-foreground">{cl.evidence}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <p className="num text-xs text-muted-foreground">
+                  Last run {new Date(verification.created_at).toLocaleString()} · {verification.model}
+                </p>
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Not verified yet. A verdict of <span className="font-medium">unverified</span> means no public trace was
+                found — not that the claim is false.
+              </p>
+            )}
+          </section>
+
           <section className="panel p-5">
             <h2 className="font-semibold">Social profiling</h2>
             <p className="text-xs text-muted-foreground">Fetched live during scoring; 15% of the default weight.</p>
@@ -307,6 +461,17 @@ function CandidateDetail() {
           </section>
         </div>
       </div>
+
+      <StageMover
+        open={mover !== null}
+        onOpenChange={(v) => !v && setMover(null)}
+        applicationIds={mover ? [mover.id] : []}
+        {...(mover ? { currentStage: mover.stage } : {})}
+        onDone={() => {
+          qc.invalidateQueries({ queryKey: ["applications"] });
+          qc.invalidateQueries({ queryKey: ["stage_events"] });
+        }}
+      />
     </>
   );
 }
