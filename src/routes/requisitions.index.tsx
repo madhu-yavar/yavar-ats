@@ -220,14 +220,22 @@ function Requisitions() {
                   </p>
                 </Field>
 
-                <Field label="Location">
-                  <MasterSelect
+                <Field label="Locations">
+                  <TokenPicker
                     options={locations}
-                    value={form.location}
-                    onChange={(v) => setForm({ ...form, location: v })}
-                    placeholder="Select location"
+                    value={form.location ? form.location.split(",").map((s) => s.trim()).filter(Boolean) : []}
+                    onChange={(next) => setForm({ ...form, location: next.join(", ") })}
+                    onCreate={async (name) => {
+                      await addMasterItem("location", name);
+                      await qc.invalidateQueries({ queryKey: ["master_items"] });
+                    }}
+                    placeholder="Search locations, or type a new one"
                   />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Pick one or more locations for this requisition.
+                  </p>
                 </Field>
+
                 <Field label="Openings">
                   <Input
                     type="number"
