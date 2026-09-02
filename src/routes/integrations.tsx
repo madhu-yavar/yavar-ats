@@ -359,6 +359,8 @@ function IntegrationCard({ row }: { row: Integration }) {
         <p className="mt-2 rounded-md bg-surface-2 p-3 text-xs text-muted-foreground">{row.last_test_message}</p>
       ) : null}
 
+      <SetupHelp provider={provider} label={row.label} />
+
       {row.credential_fields.length ? (
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {row.credential_fields.map((field) => (
@@ -371,8 +373,12 @@ function IntegrationCard({ row }: { row: Integration }) {
                 value={secrets[field] ?? ""}
                 onChange={(e) => setSecrets((p) => ({ ...p, [field]: e.target.value }))}
               />
+              {FIELD_HINT[field] ? (
+                <p className="mt-1 text-xs text-muted-foreground">{FIELD_HINT[field]}</p>
+              ) : null}
             </div>
           ))}
+
           {!isMeeting && provider !== "github" && provider !== "careers" ? (
             <div className="sm:col-span-2">
               <Label className="text-xs text-muted-foreground">Partner API base URL</Label>
