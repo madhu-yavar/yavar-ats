@@ -15,6 +15,7 @@ import {
   requisitionsQuery,
 } from "@/lib/data";
 import { scheduleInterview, submitScorecard } from "@/lib/interviews.functions";
+import { createMeetingLink, meetingProviders } from "@/lib/meetings.functions";
 import { buildIcs, downloadIcs } from "@/lib/ics";
 import { STAGE_LABEL } from "@/lib/lifecycle";
 import { EmptyState, PageHeader, ScoreChip, StageBadge } from "@/components/ats";
@@ -67,8 +68,12 @@ function Interviews() {
 
   const doSchedule = useServerFn(scheduleInterview);
   const doSubmit = useServerFn(submitScorecard);
+  const mintLink = useServerFn(createMeetingLink);
+  const providers = useQuery({ queryKey: ["meeting_providers"], queryFn: () => meetingProviders() });
+  const readyProviders = (providers.data ?? []).filter((p) => p.ready);
 
   const [busy, setBusy] = useState(false);
+  const [minting, setMinting] = useState(false);
   const [slot, setSlot] = useState<{
     applicationId: string;
     interviewId: string | null;
@@ -141,6 +146,33 @@ function Interviews() {
       toast.error(e instanceof Error ? e.message : "Could not schedule the interview");
     } finally {
       setBusy(false);
+    }
+  }
+
+  /** Mint a real join link with the HR-configured conferencing account. */
+  async function generateLink(provider: "zoom" | "google_meet" | "teams") {
+    if (!slot) return;
+    const app = (apps.data ?? []).find((a) => a.id === slot.applicationId);
+    const candidate = (cands.data ?? []).find((c) => c.id === app?.candidate_id);
+    const req = (reqs.data ?? []).find((r) => r.id === app?.requisition_id);
+    setMinting(true);
+    try {
+      const result = await mintLink({
+        data: {
+          provider,
+          topic: `L${slot.level} interview — ${candidate?.full_name ?? "Candidate"} — ${req?.title ?? "Requisition"}`,
+          startIso: new Date(slot.scheduledAt).toISOString(),
+          durationMins: Number(slot.durationMins) || 60,
+          attendees: [slot.interviewerEmail, candidate?.email].filter((e): e is string => Boolean(e)),
+          agenda: slot.agenda || null,
+        },
+      });
+      setSlot({ ...slot, meetingLink: result.joinUrl, mode: "online" });
+      toast.success("Meeting link created — save the slot to store it");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not create the meeting");
+    } finally {
+      setMinting(false);
     }
   }
 
@@ -375,6 +407,34 @@ function Interviews() {
                             onChange={(e) => setSlot({ ...slot, meetingLink: e.target.value })}
                             placeholder="Teams / Meet / Zoom URL"
                           />
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            {readyProviders.length ? (
+                              readyProviders.map((p) => (
+                                <Button
+                                  key={p.id}
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={minting || busy}
+                                  onClick={() => generateLink(p.provider)}
+                                >
+                                  {minting ? (
+                                    <Loader2 className="size-3.5 animate-spin" />
+                                  ) : (
+                                    <Video className="size-3.5" />
+                                  )}
+                                  Generate {p.provider === "google_meet" ? "Meet" : p.provider === "teams" ? "Teams" : "Zoom"} link
+                                </Button>
+                              ))
+                            ) : (
+                              <p className="text-xs text-muted-foreground">
+                                Connect Zoom, Google Meet or Teams on the{" "}
+                                <Link to="/integrations" className="text-primary underline-offset-4 hover:underline">
+                                  Integrations
+                                </Link>{" "}
+                                page to generate links automatically.
+                              </p>
+                            )}
+                          </div>
                         </div>
                         <div>
                           <Label className="mb-1.5 block text-xs text-muted-foreground">Agenda</Label>
