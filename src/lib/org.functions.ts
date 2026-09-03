@@ -223,9 +223,29 @@ export const createOrganization = createServerFn({ method: "POST" })
       .maybeSingle();
     if (existing) throw new Error("You already belong to an organisation.");
 
+    // One company domain = one tenant. Every subdomain of the same company
+    // (abc.as.com, sdf.as.com) collapses to the same registrable domain, so a
+    // second registration is refused and the person must be invited instead.
+    const companyDomain = registrableDomain(email);
+    const { data: claimed } = await db
+      .from("organizations")
+      .select("id, name, status")
+      .eq("email_domain", companyDomain)
+      .in("status", ["pending", "active"])
+      .limit(1)
+      .maybeSingle();
+    if (claimed)
+      throw new Error(
+        claimed.status === "pending"
+          ? `${companyDomain} is already registered as "${claimed.name}" and is awaiting platform approval. Ask that organisation's owner to invite you instead.`
+          : `${companyDomain} already has an organisation on ATSIQ ("${claimed.name}"). Ask its owner to invite you from Users, roles & access control.`,
+      );
+
     const { data: org, error } = await db
       .from("organizations")
       .insert({
+        email_domain: companyDomain,
+
         name: data.name.trim(),
         slug: slugify(data.name),
         legal_name: data.legalName.trim() || null,
