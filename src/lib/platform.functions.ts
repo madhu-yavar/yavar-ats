@@ -289,3 +289,44 @@ export const deleteOrgUserAsSuperUser = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+/**
+ * Approve or reject a freshly registered tenant. Nothing inside a pending organisation
+ * works until a super admin approves it, and only then can it invite internal users.
+ */
+export const reviewOrganization = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) =>
+    z
+      .object({
+        orgId: z.string().uuid(),
+        decision: z.enum(["approve", "reject"]),
+        reason: z.string().max(300).default(""),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    await superEmailOrThrow(context);
+    const db = await admin();
+    const now = new Date().toISOString();
+    const patch =
+      data.decision === "approve"
+        ? {
+            status: "active",
+            approved_at: now,
+            approved_by: context.userId,
+            rejected_at: null,
+            rejection_reason: null,
+            onboarding_step: "done",
+            onboarded_at: now,
+          }
+        : {
+            status: "rejected",
+            rejected_at: now,
+            rejection_reason: data.reason.trim() || "Registration rejected by the platform team.",
+            approved_at: null,
+          };
+    const { error } = await db.from("organizations").update(patch).eq("id", data.orgId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
