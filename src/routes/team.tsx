@@ -11,6 +11,7 @@ import {
   Mail,
   MoreHorizontal,
   Pause,
+  Pencil,
   Play,
   Plus,
   Search,
@@ -24,6 +25,7 @@ import {
   removeMember,
   setMemberRole,
   setMemberStatus,
+  updateMember,
   type AppRole,
   type OrgMember,
 } from "@/lib/org.functions";
@@ -52,6 +54,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/team")({
   head: () => ({
@@ -96,6 +107,7 @@ function Team() {
   const grant = useServerFn(setMemberRole);
   const status = useServerFn(setMemberStatus);
   const remove = useServerFn(removeMember);
+  const editUser = useServerFn(updateMember);
 
   const [busy, setBusy] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
@@ -110,6 +122,13 @@ function Team() {
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [confirmDelete, setConfirmDelete] = useState<{ ids: string[]; label: string } | null>(null);
+  const [edit, setEdit] = useState<{
+    id: string;
+    fullName: string;
+    title: string;
+    email: string;
+    claimed: boolean;
+  } | null>(null);
 
   const members = useQuery({ queryKey: ["org_members"], queryFn: () => fetchMembers({}) });
   const all = members.data ?? [];
@@ -487,7 +506,17 @@ function Team() {
                       <td className="num p-3 text-muted-foreground">
                         {m.joinedAt ? new Date(m.joinedAt).toLocaleDateString() : "—"}
                       </td>
-                      <td className="p-3 text-right">
+                      <td className="p-3">
+                        <div className="flex items-center justify-end gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title={m.isOwner ? "Transfer ownership before deleting the owner" : "Delete user"}
+                          disabled={!isOwner || m.isOwner}
+                          onClick={() => setConfirmDelete({ ids: [m.id], label: m.fullName || m.email })}
+                        >
+                          <Trash2 className="size-4 text-destructive" />
+                        </Button>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm" disabled={!isOwner || m.isOwner}>
@@ -495,7 +524,20 @@ function Team() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-52">
-                            <DropdownMenuLabel className="text-xs">Manage access</DropdownMenuLabel>
+                            <DropdownMenuLabel className="text-xs">Manage user</DropdownMenuLabel>
+                            <DropdownMenuItem
+                              onClick={() =>
+                                setEdit({
+                                  id: m.id,
+                                  fullName: m.fullName ?? "",
+                                  title: m.title ?? "",
+                                  email: m.email,
+                                  claimed: Boolean(m.userId),
+                                })
+                              }
+                            >
+                              <Pencil className="size-4" /> Edit details
+                            </DropdownMenuItem>
                             {m.userId ? (
                               <DropdownMenuItem
                                 onClick={() =>
@@ -532,6 +574,7 @@ function Team() {
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -566,6 +609,68 @@ function Team() {
           </div>
         ) : null}
       </section>
+
+      <Dialog open={Boolean(edit)} onOpenChange={(o) => !o && setEdit(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit user</DialogTitle>
+            <DialogDescription>
+              {edit?.claimed
+                ? "The sign-in email cannot change once the account exists."
+                : "The invitation email can still be corrected until they sign up."}
+            </DialogDescription>
+          </DialogHeader>
+          {edit ? (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Full name</Label>
+                <Input value={edit.fullName} onChange={(e) => setEdit({ ...edit, fullName: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Title</Label>
+                <Input value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Email</Label>
+                <Input
+                  type="email"
+                  disabled={edit.claimed}
+                  value={edit.email}
+                  onChange={(e) => setEdit({ ...edit, email: e.target.value })}
+                />
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEdit(null)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={busy === "edit"}
+              onClick={() =>
+                edit &&
+                run(
+                  "edit",
+                  async () => {
+                    await editUser({
+                      data: {
+                        memberId: edit.id,
+                        fullName: edit.fullName,
+                        title: edit.title,
+                        ...(edit.claimed ? {} : { email: edit.email }),
+                      },
+                    });
+                    setEdit(null);
+                  },
+                  "User updated",
+                )
+              }
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={Boolean(confirmDelete)} onOpenChange={(o) => !o && setConfirmDelete(null)}>
         <AlertDialogContent>
