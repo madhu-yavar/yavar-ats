@@ -127,7 +127,7 @@ export function LeadershipBoard({ scope }: { scope: "CHRO" | "HR head" }) {
         />
       </div>
 
-      <div className="panel p-5">
+      <div className="panel p-4">
         <div className="flex items-baseline justify-between">
           <h2 className="text-sm font-semibold">Demand & supply by department</h2>
           <span className="num text-xs text-muted-foreground">

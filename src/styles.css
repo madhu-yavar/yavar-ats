@@ -153,8 +153,7 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     /* Dotted canvas, as on yavar.ai */
-    background-image: radial-gradient(var(--color-border) 1px, transparent 1px);
-    background-size: 22px 22px;
+    background-image: none;
   }
 
   h1,
@@ -169,7 +168,6 @@
   border: 1px solid var(--color-border);
   background-color: var(--color-card);
   color: var(--color-card-foreground);
-  box-shadow: 0 1px 2px oklch(0.17 0.01 285 / 4%);
 }
 
 @utility num {

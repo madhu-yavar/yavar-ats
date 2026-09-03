@@ -378,7 +378,7 @@ function Reports() {
         </div>
       </section>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Applications in scope" value={applications.length} hint={`${scored.length} AI scored`} />
         <StatCard
           label="Active pipeline"
@@ -398,8 +398,8 @@ function Reports() {
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <section className="panel p-5">
+      <div className="grid gap-4 xl:grid-cols-2">
+        <section className="panel p-4">
           <h2 className="font-semibold">Funnel conversion</h2>
           <p className="text-xs text-muted-foreground">
             Candidates who reached each step, with conversion from the step before.
@@ -432,8 +432,8 @@ function Reports() {
           </ul>
         </section>
 
-        <div className="space-y-6">
-          <section className="panel p-5">
+        <div className="space-y-4">
+          <section className="panel p-4">
             <h2 className="font-semibold">Average score by dimension</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <ScoreBar label="Skills" score={avg((id) => scoreMap.get(id)!.skills_score)} />
@@ -445,7 +445,7 @@ function Reports() {
             </div>
           </section>
 
-          <section className="panel p-5">
+          <section className="panel p-4">
             <h2 className="font-semibold">Scarcest skills (missing must-haves)</h2>
             {skillGaps.length === 0 ? (
               <p className="mt-3 text-sm text-muted-foreground">Nothing scored in this scope yet.</p>
@@ -461,7 +461,7 @@ function Reports() {
             )}
           </section>
 
-          <section className="panel p-5">
+          <section className="panel p-4">
             <h2 className="font-semibold">Source effectiveness</h2>
             {sources.length === 0 ? (
               <p className="mt-3 text-sm text-muted-foreground">No applications in scope.</p>
@@ -480,12 +480,12 @@ function Reports() {
       </div>
 
       <section className="panel">
-        <div className="border-b border-border p-5">
+        <div className="border-b border-border p-4">
           <h2 className="font-semibold">Department scoreboard</h2>
           <p className="text-xs text-muted-foreground">Demand, pipeline and fill rate against budgeted cost.</p>
         </div>
         {deptRows.length === 0 ? (
-          <div className="p-5">
+          <div className="p-4">
             <EmptyState title="No departments yet" hint="Create departments on the Master data page." />
           </div>
         ) : (
@@ -529,12 +529,12 @@ function Reports() {
       </section>
 
       <section className="panel">
-        <div className="border-b border-border p-5">
+        <div className="border-b border-border p-4">
           <h2 className="font-semibold">Requisitions needing attention</h2>
           <p className="text-xs text-muted-foreground">Largest open gap first, then stalled candidates.</p>
         </div>
         {reqRows.length === 0 ? (
-          <div className="p-5">
+          <div className="p-4">
             <EmptyState title="No requisitions in scope" hint="Widen the filters above." />
           </div>
         ) : (
@@ -580,8 +580,8 @@ function Reports() {
         )}
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <section className="panel p-5">
+      <div className="grid gap-4 xl:grid-cols-2">
+        <section className="panel p-4">
           <h2 className="font-semibold">Interviewer load</h2>
           <p className="text-xs text-muted-foreground">Rounds owned, and how many land in the next seven days.</p>
           {panelRows.length === 0 ? (
@@ -600,7 +600,7 @@ function Reports() {
           )}
         </section>
 
-        <section className="panel p-5">
+        <section className="panel p-4">
           <h2 className="font-semibold">Why candidates dropped off</h2>
           <p className="text-xs text-muted-foreground">Audited reasons captured on every closing stage change.</p>
           {dropOff.length === 0 ? (

@@ -27,6 +27,8 @@ export type Organization = {
   careers_email: string | null;
   onboarding_step: string;
   onboarded_at: string | null;
+  status?: string;
+  archived_at?: string | null;
 };
 
 export type OrgMember = {
@@ -449,6 +451,61 @@ export const removeMember = createServerFn({ method: "POST" })
 
     if (member.user_id) await db.from("user_roles").delete().eq("user_id", member.user_id).eq("org_id", orgId);
     const { error } = await db.from("org_members").delete().eq("id", member.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** The owner can correct a member's display name, title and (pre-signup) email. */
+export const updateMember = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) =>
+    z
+      .object({
+        memberId: z.string().uuid(),
+        fullName: z.string().max(120).default(""),
+        title: z.string().max(120).default(""),
+        email: z.string().email().optional(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    const orgId = await assertOwner(context.userId);
+    const db = await admin();
+    const { data: member } = await db
+      .from("org_members")
+      .select("id, user_id")
+      .eq("id", data.memberId)
+      .eq("org_id", orgId)
+      .maybeSingle();
+    if (!member) throw new Error("Member not found in your organisation.");
+
+    const patch: { full_name: string | null; title: string | null; email?: string } = {
+      full_name: data.fullName.trim() || null,
+      title: data.title.trim() || null,
+    };
+    // Changing the email only makes sense while the invitation is unclaimed.
+    if (data.email && !member.user_id) patch.email = data.email.toLowerCase();
+
+    const { error } = await db.from("org_members").update(patch).eq("id", member.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** An owner can archive their own organisation: everyone loses access, records are kept. */
+export const archiveOwnOrganization = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => z.object({ reason: z.string().max(300).default("") }).parse(data))
+  .handler(async ({ data, context }) => {
+    const orgId = await assertOwner(context.userId);
+    const db = await admin();
+    const { error } = await db
+      .from("organizations")
+      .update({
+        status: "archived",
+        archived_at: new Date().toISOString(),
+        archived_reason: data.reason.trim() || null,
+      })
+      .eq("id", orgId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });

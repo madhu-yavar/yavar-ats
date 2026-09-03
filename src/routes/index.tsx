@@ -102,7 +102,7 @@ function Panel({
 }) {
   return (
     <section className={`panel ${className}`}>
-      <div className="flex items-start justify-between gap-3 border-b border-border p-5">
+      <div className="flex items-start justify-between gap-3 border-b border-border p-4">
         <div>
           <h2 className="font-semibold">{title}</h2>
           {subtitle ? <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p> : null}
@@ -284,7 +284,7 @@ function Dashboard() {
 
 
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Open requisitions" value={open.length} hint={`${pending.length} awaiting approval`} />
         <StatCard label="Talent pool" value={candidates.length} hint={`${poolHealth.untapped} not in any pipeline`} />
         <StatCard
@@ -312,14 +312,14 @@ function Dashboard() {
         }
       >
         {suggestions.length === 0 ? (
-          <p className="p-5 text-sm text-muted-foreground">
+          <p className="p-4 text-sm text-muted-foreground">
             No pool matches yet. Add candidates to the talent pool or approve a requisition, and historic matches appear
             here automatically.
           </p>
         ) : (
           <div className="divide-y divide-border">
             {suggestions.map(({ req, ranked }) => (
-              <div key={req.id} className="p-5">
+              <div key={req.id} className="p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="num text-xs text-muted-foreground">{req.code}</div>
@@ -388,9 +388,9 @@ function Dashboard() {
         )}
       </Panel>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3">
         <Panel title="Pipeline funnel" subtitle="Cumulative candidates that reached each stage" className="lg:col-span-1">
-          <div className="space-y-3 p-5">
+          <div className="space-y-3 p-4">
             {funnel.length === 0 ? (
               <p className="text-sm text-muted-foreground">No applications yet.</p>
             ) : (
@@ -420,7 +420,7 @@ function Dashboard() {
             </Button>
           }
         >
-          <div className="space-y-3 p-5">
+          <div className="space-y-3 p-4">
             <Bar label="Fresh (under 90 days)" value={poolHealth.fresh} max={candidates.length || 1} tone="accent" />
             <Bar label="Aging (3–12 months)" value={poolHealth.aging} max={candidates.length || 1} tone="warning" />
             <Bar label="Stale (over a year)" value={poolHealth.stale} max={candidates.length || 1} tone="destructive" />
@@ -442,7 +442,7 @@ function Dashboard() {
         </Panel>
 
         <Panel title="Where candidates come from" subtitle="Source mix across the whole pool">
-          <div className="space-y-3 p-5">
+          <div className="space-y-3 p-4">
             {sourceMix.length === 0 ? (
               <p className="text-sm text-muted-foreground">No candidates yet.</p>
             ) : (
@@ -454,7 +454,7 @@ function Dashboard() {
         </Panel>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-5">
+      <div className="grid gap-4 lg:grid-cols-5">
         <Panel
           title="Requisition pipeline"
           subtitle="Applicants and match quality per requisition"
@@ -474,7 +474,7 @@ function Dashboard() {
                   key={r.id}
                   to="/requisitions/$id"
                   params={{ id: r.id }}
-                  className="flex items-center justify-between gap-4 p-5 transition-colors hover:bg-surface-2"
+                  className="flex items-center justify-between gap-4 p-4 transition-colors hover:bg-surface-2"
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -498,7 +498,7 @@ function Dashboard() {
               );
             })}
             {requisitions.length === 0 ? (
-              <p className="p-5 text-sm text-muted-foreground">No requisitions raised yet.</p>
+              <p className="p-4 text-sm text-muted-foreground">No requisitions raised yet.</p>
             ) : null}
           </div>
         </Panel>
@@ -510,7 +510,7 @@ function Dashboard() {
         >
           <div className="divide-y divide-border">
             {topCandidates.length === 0 ? (
-              <p className="p-5 text-sm text-muted-foreground">No scored candidates yet.</p>
+              <p className="p-4 text-sm text-muted-foreground">No scored candidates yet.</p>
             ) : (
               topCandidates.map(({ app, score }) => (
                 <Link
@@ -532,11 +532,11 @@ function Dashboard() {
         </Panel>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3">
         <Panel title="Needs attention" subtitle="Candidates sitting past the stage SLA">
           <div className="divide-y divide-border">
             {stalled.length === 0 ? (
-              <p className="p-5 text-sm text-muted-foreground">Nothing stalled. Pipeline is moving.</p>
+              <p className="p-4 text-sm text-muted-foreground">Nothing stalled. Pipeline is moving.</p>
             ) : (
               stalled.map(({ app, days }) => (
                 <Link
@@ -559,7 +559,7 @@ function Dashboard() {
         </Panel>
 
         <Panel title="Scarcest must-have skills" subtitle="Most frequently missing across scored CVs">
-          <div className="space-y-3 p-5">
+          <div className="space-y-3 p-4">
             {scarceSkills.length === 0 ? (
               <p className="text-sm text-muted-foreground">Run the matching engine to see skill gaps.</p>
             ) : (
@@ -579,7 +579,7 @@ function Dashboard() {
             </Button>
           }
         >
-          <div className="space-y-4 p-5 text-sm">
+          <div className="space-y-4 p-4 text-sm">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <TrendingUp className="size-3.5" /> {accepted} in flight or accepted
             </div>

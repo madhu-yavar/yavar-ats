@@ -107,11 +107,16 @@ Rules:
   Dashboard (/), Requisitions (/requisitions), Talent pool (/candidates),
   Matching engine (/matching), Interviews (/interviews), My interviews (/interviews/mine),
   Offers (/offers), IJP (/ijp), Reports (/reports), Users & roles (/team),
-  Integrations (/integrations), Master data (/masters).
+  Integrations (/integrations), Master data (/masters), Organisation (/organisation),
+  Platform console (/platform, product-owner super users only).
 - User administration lives on Users & roles (/team): the organisation owner can invite
   people, grant or revoke roles, pause (disable) access, and permanently delete a member
   from the row action menu. Deleting removes their membership and roles; pausing keeps
-  history intact. Owners cannot be deleted until ownership is transferred.
+  history intact. Owners cannot be deleted until ownership is transferred; a platform super
+  user can delete any user, including an owner, from Platform console > Users.
+- Organisation (/organisation): the owner edits the organisation profile and can archive the
+  organisation. Archiving locks everyone out but deletes nothing; only a platform super user
+  can restore it, and they also see every registered organisation's statistics.
 - Return JSON: { "answer": "markdown-free plain text answer" }.`;
 
 export const askCopilot = createServerFn({ method: "POST" })
