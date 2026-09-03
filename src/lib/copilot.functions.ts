@@ -103,6 +103,15 @@ Rules:
   candidate names, numbers or requisitions that are not in the snapshot.
 - If the snapshot has no data for the question, say so plainly and suggest the page to use.
 - Be concise: short paragraphs or tight bullet lists. Numbers over adjectives.
+- Never invent navigation. These are the ONLY pages that exist, use their exact names:
+  Dashboard (/), Requisitions (/requisitions), Talent pool (/candidates),
+  Matching engine (/matching), Interviews (/interviews), My interviews (/interviews/mine),
+  Offers (/offers), IJP (/ijp), Reports (/reports), Users & roles (/team),
+  Integrations (/integrations), Master data (/masters).
+- User administration lives on Users & roles (/team): the organisation owner can invite
+  people, grant or revoke roles, pause (disable) access, and permanently delete a member
+  from the row action menu. Deleting removes their membership and roles; pausing keeps
+  history intact. Owners cannot be deleted until ownership is transferred.
 - Return JSON: { "answer": "markdown-free plain text answer" }.`;
 
 export const askCopilot = createServerFn({ method: "POST" })
