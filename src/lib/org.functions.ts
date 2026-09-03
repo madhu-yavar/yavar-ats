@@ -360,7 +360,11 @@ export const inviteMember = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const orgId = await assertOwner(context.userId);
     const db = await admin();
+    const { data: org } = await db.from("organizations").select("status").eq("id", orgId).maybeSingle();
+    if ((org?.status ?? "active") !== "active")
+      throw new Error("Your organisation is not approved yet — internal users can be added after approval.");
     const email = data.email.toLowerCase();
+
 
     const { data: existingUser } = await db
       .from("org_members")
