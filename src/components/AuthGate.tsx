@@ -11,13 +11,20 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
+  const qc = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       setSession(s);
       setReady(true);
+      // The bearer token is attached per server-function call, so anything fetched
+      // during the sign-in transition must be refetched with the new identity.
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
+        qc.clear();
+        if (s) void qc.invalidateQueries();
+      }
     });
     // Never leave the app stuck on the splash if session restore stalls.
     const bail = setTimeout(() => setReady(true), 4000);
