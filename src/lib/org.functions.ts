@@ -139,23 +139,24 @@ export const myOrg = createServerFn({ method: "GET" })
   });
 
 const CreateInput = z.object({
-  name: z.string().min(2).max(120),
-  legalName: z.string().max(160).default(""),
-  industry: z.string().max(80).default(""),
-  hqCountry: z.string().max(80).default(""),
-  hqCity: z.string().max(80).default(""),
-  employeeBand: z.string().max(40).default(""),
-  currency: z.string().min(1).max(8).default("INR"),
+  name: z.string().trim().min(2).max(120),
+  legalName: z.string().trim().min(2, "Registered legal name is required").max(160),
+  industry: z.string().trim().min(2, "Industry is required").max(80),
+  hqCountry: z.string().trim().min(2, "HQ country is required").max(80),
+  hqCity: z.string().trim().min(2, "HQ city is required").max(80),
+  employeeBand: z.string().trim().min(1, "Headcount band is required").max(40),
+  currency: z.string().trim().min(1).max(8).default("INR"),
   fiscalYearStartMonth: z.number().int().min(1).max(12).default(4),
-  careersEmail: z.string().max(160).default(""),
+  careersEmail: z.string().trim().email("A valid careers inbox is required").max(160),
   departments: z
     .array(z.object({ name: z.string().min(1).max(120), headName: z.string().max(120).default("") }))
-    .default([]),
-  locations: z.array(z.string().min(1).max(120)).default([]),
+    .min(1, "Add at least one department"),
+  locations: z.array(z.string().min(1).max(120)).min(1, "Add at least one hiring location"),
   invites: z
     .array(z.object({ email: z.string().email(), role: z.enum(ROLES), title: z.string().max(120).default("") }))
     .default([]),
 });
+
 
 /**
  * Stand up a brand-new organisation: the creator becomes owner + CHRO admin,
