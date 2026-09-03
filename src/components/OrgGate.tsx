@@ -1,3 +1,5 @@
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
 import { useOrg } from "@/hooks/useOrg";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 
@@ -60,4 +62,19 @@ export function OrgGate({ children }: { children: React.ReactNode }) {
   }
 
   return <>{children}</>;
+}
+
+/** Full-screen status card for tenants that cannot enter the workspace yet. */
+function Waiting({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-4">
+      <div className="panel max-w-md space-y-2 p-6 text-center">
+        <h1 className="text-lg font-semibold">{title}</h1>
+        <p className="text-sm text-muted-foreground">{body}</p>
+      </div>
+      <Button variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}>
+        Sign out
+      </Button>
+    </div>
+  );
 }
