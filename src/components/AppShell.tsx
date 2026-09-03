@@ -19,6 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePlatform } from "@/hooks/usePlatform";
 import { Button } from "@/components/ui/button";
 import { Copilot } from "@/components/Copilot";
+import { NotificationBell } from "@/components/NotificationBell";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
