@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { emailDomain, registrableDomain, workEmailProblem } from "@/lib/work-email";
+import { registrableDomain, workEmailProblem } from "@/lib/work-email";
 
 export type AppRole = "recruiter" | "hiring_manager" | "department_head" | "hr_head" | "president_cbo";
 
