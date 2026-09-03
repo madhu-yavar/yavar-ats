@@ -223,16 +223,17 @@ export function CreatableSelect({
         ))}
       </ul>
       {value && (
-        <div className="flex items-center gap-2 border-t p-2 text-xs">
-          <span className="text-muted-foreground">Selected:</span>
-          <Badge variant="secondary" className="gap-1">
+        <div className="flex items-center gap-2 border-t border-primary/20 bg-primary/10 p-2 text-xs">
+          <span className="font-medium text-primary">Selected</span>
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground">
             {value}
             <button type="button" onClick={() => onChange("")} aria-label="Clear selection">
               <X className="h-3 w-3" />
             </button>
-          </Badge>
+          </span>
         </div>
       )}
+
     </div>
   );
 }
