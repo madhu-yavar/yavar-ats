@@ -74,7 +74,7 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
         },
       });
       await qc.invalidateQueries();
-      toast.success(`${name.trim()} is ready.`);
+      toast.success(`${name.trim()} submitted for platform approval.`);
       onDone();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not create the organisation");
