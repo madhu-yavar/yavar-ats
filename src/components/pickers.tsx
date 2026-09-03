@@ -211,7 +211,11 @@ export function CreatableSelect({
             <button
               type="button"
               onClick={() => onChange(o.name)}
-              className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left hover:bg-accent"
+              className={
+                o.name === value
+                  ? "flex w-full items-center justify-between rounded bg-primary/10 px-2 py-1.5 text-left font-semibold text-primary"
+                  : "flex w-full items-center justify-between rounded px-2 py-1.5 text-left hover:bg-accent"
+              }
             >
               <span>
                 {o.name}
@@ -221,6 +225,7 @@ export function CreatableSelect({
             </button>
           </li>
         ))}
+
       </ul>
       {value && (
         <div className="flex items-center gap-2 border-t border-primary/20 bg-primary/10 p-2 text-xs">
