@@ -29,6 +29,9 @@ export type Organization = {
   onboarded_at: string | null;
   status?: string;
   archived_at?: string | null;
+  rejection_reason?: string | null;
+  approved_at?: string | null;
+
 };
 
 export type OrgMember = {
@@ -96,17 +99,28 @@ export const myOrg = createServerFn({ method: "GET" })
         .maybeSingle();
 
       if (invite) {
-        await db
-          .from("org_members")
-          .update({ user_id: context.userId, status: "active", joined_at: new Date().toISOString() })
-          .eq("id", invite.id);
-        if (invite.invited_role) {
+        // Invitations only convert into real users once the tenant is approved and live.
+        const { data: inviteOrg } = await db
+          .from("organizations")
+          .select("status")
+          .eq("id", invite.org_id)
+          .maybeSingle();
+        if ((inviteOrg?.status ?? "active") === "active") {
           await db
-            .from("user_roles")
-            .insert({ user_id: context.userId, role: invite.invited_role, org_id: invite.org_id });
+            .from("org_members")
+            .update({ user_id: context.userId, status: "active", joined_at: new Date().toISOString() })
+            .eq("id", invite.id);
+          if (invite.invited_role) {
+            await db
+              .from("user_roles")
+              .insert({ user_id: context.userId, role: invite.invited_role, org_id: invite.org_id });
+          }
+          member = { ...invite, status: "active" };
+        } else {
+          member = invite;
         }
-        member = { ...invite, status: "active" };
       }
+
     }
 
     if (!member) return { org: null, membership: null, roles: [] };
@@ -174,9 +188,12 @@ export const createOrganization = createServerFn({ method: "POST" })
         currency: data.currency.trim() || "INR",
         fiscal_year_start_month: data.fiscalYearStartMonth,
         careers_email: data.careersEmail.trim() || null,
-        onboarding_step: "done",
-        onboarded_at: new Date().toISOString(),
+        onboarding_step: "pending_approval",
+        onboarded_at: null,
+        // Every new tenant waits for a platform super admin to approve it.
+        status: "pending",
         created_by: context.userId,
+
       })
       .select("*")
       .single();
@@ -343,7 +360,11 @@ export const inviteMember = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const orgId = await assertOwner(context.userId);
     const db = await admin();
+    const { data: org } = await db.from("organizations").select("status").eq("id", orgId).maybeSingle();
+    if ((org?.status ?? "active") !== "active")
+      throw new Error("Your organisation is not approved yet — internal users can be added after approval.");
     const email = data.email.toLowerCase();
+
 
     const { data: existingUser } = await db
       .from("org_members")

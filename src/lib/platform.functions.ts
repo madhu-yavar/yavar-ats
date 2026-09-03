@@ -25,6 +25,9 @@ export type PlatformOrg = {
   status: string;
   createdAt: string;
   archivedAt: string | null;
+  approvedAt: string | null;
+  rejectionReason: string | null;
+
   members: number;
   requisitions: number;
   openRequisitions: number;
@@ -168,6 +171,9 @@ export const listAllOrganizations = createServerFn({ method: "GET" })
         status: (o as { status?: string }).status ?? "active",
         createdAt: o.created_at,
         archivedAt: (o as { archived_at?: string | null }).archived_at ?? null,
+        approvedAt: (o as { approved_at?: string | null }).approved_at ?? null,
+        rejectionReason: (o as { rejection_reason?: string | null }).rejection_reason ?? null,
+
         members: count(members.data, o.id),
         requisitions: count(reqs.data, o.id),
         openRequisitions: count(reqs.data, o.id, (r) => r.status === "approved"),
@@ -280,6 +286,47 @@ export const deleteOrgUserAsSuperUser = createServerFn({ method: "POST" })
     if (member.user_id)
       await db.from("user_roles").delete().eq("user_id", member.user_id).eq("org_id", member.org_id);
     const { error } = await db.from("org_members").delete().eq("id", member.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/**
+ * Approve or reject a freshly registered tenant. Nothing inside a pending organisation
+ * works until a super admin approves it, and only then can it invite internal users.
+ */
+export const reviewOrganization = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) =>
+    z
+      .object({
+        orgId: z.string().uuid(),
+        decision: z.enum(["approve", "reject"]),
+        reason: z.string().max(300).default(""),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    await superEmailOrThrow(context);
+    const db = await admin();
+    const now = new Date().toISOString();
+    const patch =
+      data.decision === "approve"
+        ? {
+            status: "active",
+            approved_at: now,
+            approved_by: context.userId,
+            rejected_at: null,
+            rejection_reason: null,
+            onboarding_step: "done",
+            onboarded_at: now,
+          }
+        : {
+            status: "rejected",
+            rejected_at: now,
+            rejection_reason: data.reason.trim() || "Registration rejected by the platform team.",
+            approved_at: null,
+          };
+    const { error } = await db.from("organizations").update(patch).eq("id", data.orgId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
