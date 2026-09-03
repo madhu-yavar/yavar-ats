@@ -21,7 +21,7 @@ import { importCandidates } from "@/lib/integrations.functions";
 import { balanceWeights } from "@/lib/cv-extract";
 import { rankPool } from "@/lib/shortlist";
 
-import { EmptyState, PageHeader, ScoreBar, ScoreChip, SkillPills } from "@/components/ats";
+import { EmptyState, PageHeader, ScoreBar, ScoreChip, SkillPills, educationLabel } from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -115,6 +115,8 @@ function Matching() {
   const [importing, setImporting] = useState(false);
   const [addingFromPool, setAddingFromPool] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
+  const [poolQuery, setPoolQuery] = useState("");
+  const [minFit, setMinFit] = useState("60");
 
   function toggleSelected(applicationId: string, on: boolean) {
     setSelected((prev) => (on ? [...new Set([...prev, applicationId])] : prev.filter((id) => id !== applicationId)));
@@ -170,14 +172,32 @@ function Matching() {
     });
   }, [apps.data, cands.data, scoreMap, results, activeId]);
 
-  const suggestedPool = useMemo(() => {
+  /** Every unattached person in the pool, pre-ranked against this JD. */
+  const poolRanked = useMemo(() => {
     if (!requisition) return [];
     const attached = new Set(pipeline.map((row) => row.app.candidate_id));
     return rankPool(
       (cands.data ?? []).filter((candidate) => !attached.has(candidate.id)),
       requisition,
-    ).slice(0, 20);
+    );
   }, [cands.data, pipeline, requisition]);
+
+  /** Only the probable CVs: above the fit floor, optionally narrowed by a keyword. */
+  const suggestedPool = useMemo(() => {
+    const q = poolQuery.trim().toLowerCase();
+    const floor = Number(minFit) || 0;
+    return poolRanked
+      .filter((row) => row.fit >= floor)
+      .filter((row) =>
+        q
+          ? [row.candidate.full_name, row.candidate.location ?? "", (row.candidate.skills ?? []).join(" ")]
+              .join(" ")
+              .toLowerCase()
+              .includes(q)
+          : true,
+      )
+      .slice(0, 50);
+  }, [poolRanked, poolQuery, minFit]);
 
   async function addFromTalentPool(candidateIds: string[]) {
     if (!requisition || candidateIds.length === 0) return;
