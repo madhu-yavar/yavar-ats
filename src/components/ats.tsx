@@ -58,6 +58,27 @@ export function scoreTone(score: number) {
   return "destructive" as const;
 }
 
+/** Education arrives either as prose or as raw parsed JSON — always show readable text. */
+export function educationLabel(raw: string | null | undefined) {
+  const value = (raw ?? "").trim();
+  if (!value) return "";
+  if (!(value.startsWith("[") || value.startsWith("{"))) return value;
+  try {
+    const parsed = JSON.parse(value);
+    const rows = Array.isArray(parsed) ? parsed : [parsed];
+    return rows
+      .map((r: Record<string, unknown>) =>
+        [r?.["degree"], r?.["institution"], r?.["end_date"] ?? r?.["year"]]
+          .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+          .join(", "),
+      )
+      .filter((s) => s.length > 0)
+      .join(" · ");
+  } catch {
+    return value;
+  }
+}
+
 export function ScoreBar({
   label,
   score,
@@ -76,29 +97,24 @@ export function ScoreBar({
     destructive: "bg-destructive",
   }[tone];
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-baseline justify-between gap-3 text-sm">
-        <span className="font-medium">
-          {label}
-          {weight !== undefined ? (
-            <span className="num ml-2 text-xs text-muted-foreground">weight {weight}%</span>
-          ) : null}
-        </span>
-        <span className="num text-sm font-semibold">
-          {score}
-          {weighted !== undefined ? (
-            <span className="ml-2 text-xs font-normal text-muted-foreground">
-              → +{weighted} pts
-            </span>
-          ) : null}
-        </span>
+    <div className="min-w-0 space-y-1.5">
+      <div className="flex min-w-0 items-baseline justify-between gap-2">
+        <span className="truncate text-xs font-medium">{label}</span>
+        <span className="num shrink-0 text-sm font-semibold">{score}</span>
       </div>
+      {weight !== undefined || weighted !== undefined ? (
+        <div className="num truncate text-[11px] text-muted-foreground">
+          {weight !== undefined ? `weight ${weight}%` : null}
+          {weighted !== undefined ? `${weight !== undefined ? " · " : ""}+${weighted} pts` : null}
+        </div>
+      ) : null}
       <div className="h-2 overflow-hidden rounded-full bg-muted">
         <div className={cn("h-full rounded-full transition-all", barClass)} style={{ width: `${score}%` }} />
       </div>
     </div>
   );
 }
+
 
 export function ScoreChip({ score, size = "md" }: { score: number; size?: "sm" | "md" | "lg" }) {
   const tone = scoreTone(score);
