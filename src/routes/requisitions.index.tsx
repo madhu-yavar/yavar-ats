@@ -442,7 +442,13 @@ function Requisitions() {
                   Cancel
                 </Button>
                 <Button onClick={create} disabled={saving}>
-                  {saving ? "Raising…" : "Raise & send for approval"}
+                  {saving
+                    ? "Raising…"
+                    : duplicates.length && !dupAck
+                      ? "Check duplicates"
+                      : duplicates.length
+                        ? "Raise anyway & send for approval"
+                        : "Raise & send for approval"}
                 </Button>
               </DialogFooter>
             </DialogContent>
