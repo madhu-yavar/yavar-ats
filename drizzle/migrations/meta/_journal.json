@@ -120,6 +120,13 @@
       "when": 1788402428032,
       "tag": "0016_platform_admins_and_org_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788409204053,
+      "tag": "0017_org_registration_approval",
+      "breakpoints": true
     }
   ]
 }

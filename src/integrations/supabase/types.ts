@@ -1032,6 +1032,8 @@ export type Database = {
       }
       organizations: {
         Row: {
+          approved_at: string | null
+          approved_by: string | null
           archived_at: string | null
           archived_reason: string | null
           careers_email: string | null
@@ -1048,10 +1050,14 @@ export type Database = {
           name: string
           onboarded_at: string | null
           onboarding_step: string
+          rejected_at: string | null
+          rejection_reason: string | null
           slug: string
           status: string
         }
         Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
           archived_at?: string | null
           archived_reason?: string | null
           careers_email?: string | null
@@ -1068,10 +1074,14 @@ export type Database = {
           name: string
           onboarded_at?: string | null
           onboarding_step?: string
+          rejected_at?: string | null
+          rejection_reason?: string | null
           slug: string
           status?: string
         }
         Update: {
+          approved_at?: string | null
+          approved_by?: string | null
           archived_at?: string | null
           archived_reason?: string | null
           careers_email?: string | null
@@ -1088,6 +1098,8 @@ export type Database = {
           name?: string
           onboarded_at?: string | null
           onboarding_step?: string
+          rejected_at?: string | null
+          rejection_reason?: string | null
           slug?: string
           status?: string
         }
