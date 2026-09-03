@@ -25,6 +25,9 @@ export type PlatformOrg = {
   status: string;
   createdAt: string;
   archivedAt: string | null;
+  approvedAt: string | null;
+  rejectionReason: string | null;
+
   members: number;
   requisitions: number;
   openRequisitions: number;
