@@ -258,6 +258,16 @@ export const deleteOrganizationAsSuperUser = createServerFn({ method: "POST" })
       "org_members",
     ] as const;
 
+    // Capture the sign-in identities before the membership rows disappear, otherwise the
+    // accounts survive the tenant and can still authenticate into an empty shell.
+    const { data: memberRows } = await db
+      .from("org_members")
+      .select("user_id, email")
+      .eq("org_id", data.orgId);
+    const memberUserIds = Array.from(
+      new Set((memberRows ?? []).map((m) => m.user_id).filter((v): v is string => Boolean(v))),
+    );
+
     for (const table of ordered) {
       const { error } = await db.from(table).delete().eq("org_id", data.orgId);
       if (error) throw new Error(`${table}: ${error.message}`);
@@ -265,8 +275,46 @@ export const deleteOrganizationAsSuperUser = createServerFn({ method: "POST" })
 
     const { error } = await db.from("organizations").delete().eq("id", data.orgId);
     if (error) throw new Error(error.message);
-    return { ok: true };
+
+    const removedAccounts = await purgeOrphanAccounts(memberUserIds);
+    return { ok: true, removedAccounts };
   });
+
+/**
+ * Deletes login accounts that no longer belong to any organisation. Platform super users
+ * and anyone still holding an active membership elsewhere are always preserved.
+ */
+async function purgeOrphanAccounts(userIds: string[]) {
+  if (userIds.length === 0) return 0;
+  const db = await admin();
+
+  const { data: stillMembers } = await db
+    .from("org_members")
+    .select("user_id")
+    .in("user_id", userIds);
+  const keep = new Set((stillMembers ?? []).map((m) => m.user_id).filter(Boolean) as string[]);
+
+  let removed = 0;
+  for (const userId of userIds) {
+    if (keep.has(userId)) continue;
+    const { data: authUser } = await db.auth.admin.getUserById(userId);
+    const email = authUser?.user?.email?.toLowerCase() ?? null;
+    if (email) {
+      const { data: isSuper } = await db
+        .from("platform_admins")
+        .select("id")
+        .ilike("email", email)
+        .maybeSingle();
+      if (isSuper) continue; // never delete a product owner's own login
+    }
+    await db.from("user_roles").delete().eq("user_id", userId);
+    const { error } = await db.auth.admin.deleteUser(userId);
+    if (!error) removed += 1;
+  }
+  return removed;
+}
+
+
 
 /** Super users can correct any tenant's profile fields. */
 export const updateOrganizationAsSuperUser = createServerFn({ method: "POST" })
