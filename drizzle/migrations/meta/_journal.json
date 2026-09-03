@@ -141,6 +141,13 @@
       "when": 1788422686227,
       "tag": "0019_org_email_domain_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788422766827,
+      "tag": "0020_org_email_domain_index",
+      "breakpoints": true
     }
   ]
 }
