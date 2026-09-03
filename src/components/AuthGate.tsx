@@ -10,6 +10,38 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { workEmailProblem } from "@/lib/work-email";
+import { BrandLogo } from "@/components/Brand";
+import { CalendarCheck, GitCompareArrows, ShieldCheck, Sparkles, Users } from "lucide-react";
+
+const HIGHLIGHTS = [
+  {
+    icon: GitCompareArrows,
+    title: "Defensible JD ↔ CV matching",
+    body: "Weighted skills, experience, career history, impact, education and social signals — with the rationale attached.",
+  },
+  {
+    icon: Users,
+    title: "Talent pool that stays clean",
+    body: "Bulk CV parsing, duplicate detection, freshness tiers and automatic re-matching against new requisitions.",
+  },
+  {
+    icon: CalendarCheck,
+    title: "Interviews to offer, end to end",
+    body: "Calendar invites, competency scorecards, stage automation and offer tracking in one pipeline.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Enterprise-ready governance",
+    body: "Requisition approvals, role-based access, tenant isolation and a full audit trail on every decision.",
+  },
+] as const;
+
+const STATS = [
+  { value: "6", label: "Weighted scoring dimensions" },
+  { value: "100%", label: "Scores with an evidence trail" },
+  { value: "1 hub", label: "Requisition to joining" },
+] as const;
+
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient();
@@ -95,22 +127,56 @@ function SignIn() {
   }
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-2">
-      <div className="hidden flex-col justify-between bg-sidebar p-12 text-sidebar-foreground lg:flex">
-        <div className="text-sm font-semibold tracking-[0.2em] uppercase text-sidebar-primary">
-          People Excellence
+    <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
+      <div className="hidden flex-col justify-between gap-10 bg-sidebar p-12 text-sidebar-foreground lg:flex">
+        <div className="flex items-center gap-3">
+          <BrandLogo className="h-7" />
+          <span className="text-xs font-semibold tracking-[0.22em] uppercase text-sidebar-primary">ATSIQ</span>
         </div>
-        <div className="max-w-md space-y-5">
-          <h1 className="text-4xl font-semibold leading-tight">
-            Requisition to offer, with the JD&nbsp;↔&nbsp;CV map you can defend.
-          </h1>
-          <p className="text-sm leading-relaxed text-sidebar-foreground/70">
-            Weighted matching (skills 50 / experience 25 / education 10 / social 15), live public-profile
-            signals, and an evidence trail on every score.
-          </p>
+
+        <div className="max-w-xl space-y-8">
+          <div className="space-y-5">
+            <span className="inline-flex items-center gap-2 rounded-full border border-sidebar-border px-3 py-1 text-xs text-sidebar-foreground/80">
+              <Sparkles className="h-3.5 w-3.5 text-sidebar-primary" />
+              AI applicant tracking system
+            </span>
+            <h1 className="text-4xl font-semibold leading-[1.15] xl:text-5xl">
+              Hire faster with an applicant tracking system your team actually trusts.
+            </h1>
+            <p className="text-base leading-relaxed text-sidebar-foreground/75">
+              ATSIQ runs the whole cycle — requisition approvals, sourcing, AI JD&nbsp;↔&nbsp;CV matching,
+              interviews and offers — on one auditable record, so every shortlist can be explained to the
+              business.
+            </p>
+          </div>
+
+          <ul className="grid gap-4 sm:grid-cols-2">
+            {HIGHLIGHTS.map((h) => (
+              <li key={h.title} className="flex gap-3">
+                <h.icon className="mt-0.5 h-4 w-4 shrink-0 text-sidebar-primary" />
+                <div>
+                  <p className="text-sm font-medium">{h.title}</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-sidebar-foreground/65">{h.body}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <div className="grid grid-cols-3 gap-4 border-t border-sidebar-border pt-6">
+            {STATS.map((s) => (
+              <div key={s.label}>
+                <p className="num text-2xl font-semibold text-sidebar-primary">{s.value}</p>
+                <p className="mt-1 text-xs leading-snug text-sidebar-foreground/60">{s.label}</p>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="num text-xs text-sidebar-foreground/50">ATS v1.0 · Internal</div>
+
+        <p className="text-xs text-sidebar-foreground/50">
+          Multi-tenant · role-based access · every score with an evidence trail
+        </p>
       </div>
+
 
       <div className="flex items-center justify-center p-6">
         <form onSubmit={submit} className="panel w-full max-w-sm space-y-5 p-8">
