@@ -73,20 +73,20 @@
   --surface-2: oklch(0.954 0.007 261);
 
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.17 0.01 285);
+  --card-foreground: oklch(0.12 0 0);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.17 0.01 285);
+  --popover-foreground: oklch(0.12 0 0);
 
   /* Electric violet accent from the yavar wordmark & CTA */
-  --primary: oklch(0.53 0.246 276);
-  --primary-foreground: oklch(0.99 0 0);
+  --primary: oklch(0.55 0.252 277);
+  --primary-foreground: oklch(1 0 0);
 
-  --secondary: oklch(0.955 0.005 285);
-  --secondary-foreground: oklch(0.22 0.01 285);
-  --muted: oklch(0.945 0.005 285);
-  --muted-foreground: oklch(0.52 0.015 285);
-  --accent: oklch(0.94 0.03 278);
-  --accent-foreground: oklch(0.35 0.18 276);
+  --secondary: oklch(0.954 0.007 261);
+  --secondary-foreground: oklch(0.18 0 0);
+  --muted: oklch(0.954 0.007 261);
+  --muted-foreground: oklch(0.5 0.005 261);
+  --accent: oklch(0.945 0.028 277);
+  --accent-foreground: oklch(0.4 0.2 277);
 
   --destructive: oklch(0.58 0.22 22);
   --destructive-foreground: oklch(0.99 0 0);
@@ -95,25 +95,25 @@
   --warning: oklch(0.68 0.15 62);
   --warning-foreground: oklch(0.2 0.03 62);
 
-  --border: oklch(0.9 0.006 285);
-  --input: oklch(0.9 0.006 285);
-  --ring: oklch(0.53 0.246 276);
+  --border: oklch(0.905 0.005 261);
+  --input: oklch(0.89 0.005 261);
+  --ring: oklch(0.55 0.252 277);
 
-  --chart-1: oklch(0.53 0.246 276);
+  --chart-1: oklch(0.55 0.252 277);
   --chart-2: oklch(0.58 0.14 158);
   --chart-3: oklch(0.68 0.15 62);
   --chart-4: oklch(0.58 0.22 22);
   --chart-5: oklch(0.45 0.04 285);
 
   /* Application chrome — the ink-black product canvas */
-  --sidebar: oklch(0.16 0.008 285);
+  --sidebar: oklch(0.13 0 0);
   --sidebar-foreground: oklch(0.97 0.002 285);
-  --sidebar-primary: oklch(0.72 0.16 276);
-  --sidebar-primary-foreground: oklch(0.16 0.008 285);
+  --sidebar-primary: oklch(0.72 0.17 277);
+  --sidebar-primary-foreground: oklch(0.13 0 0);
   --sidebar-accent: oklch(0.26 0.02 282);
   --sidebar-accent-foreground: oklch(0.99 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.53 0.246 276);
+  --sidebar-ring: oklch(0.55 0.252 277);
 }
 
 .dark {
@@ -153,7 +153,10 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     /* Dotted canvas, as on yavar.ai */
-    background-image: none;
+    background-image: radial-gradient(var(--color-border) 1px, transparent 1px);
+    background-size: 22px 22px;
+    background-position: -1px -1px;
+    background-attachment: fixed;
   }
 
   h1,
@@ -168,6 +171,13 @@
   border: 1px solid var(--color-border);
   background-color: var(--color-card);
   color: var(--color-card-foreground);
+}
+
+@utility dotted-canvas {
+  background-color: var(--color-background);
+  background-image: radial-gradient(var(--color-border) 1px, transparent 1px);
+  background-size: 22px 22px;
+  background-position: -1px -1px;
 }
 
 @utility num {
