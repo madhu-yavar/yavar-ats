@@ -1032,6 +1032,8 @@ export type Database = {
       }
       organizations: {
         Row: {
+          archived_at: string | null
+          archived_reason: string | null
           careers_email: string | null
           created_at: string
           created_by: string | null
@@ -1047,8 +1049,11 @@ export type Database = {
           onboarded_at: string | null
           onboarding_step: string
           slug: string
+          status: string
         }
         Insert: {
+          archived_at?: string | null
+          archived_reason?: string | null
           careers_email?: string | null
           created_at?: string
           created_by?: string | null
@@ -1064,8 +1069,11 @@ export type Database = {
           onboarded_at?: string | null
           onboarding_step?: string
           slug: string
+          status?: string
         }
         Update: {
+          archived_at?: string | null
+          archived_reason?: string | null
           careers_email?: string | null
           created_at?: string
           created_by?: string | null
@@ -1081,6 +1089,34 @@ export type Database = {
           onboarded_at?: string | null
           onboarding_step?: string
           slug?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      platform_admins: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          email: string
+          id: string
+          note: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          email: string
+          id?: string
+          note?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          email?: string
+          id?: string
+          note?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
