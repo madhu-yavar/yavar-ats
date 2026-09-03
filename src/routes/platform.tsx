@@ -72,6 +72,8 @@ function Platform() {
   const [adminEmail, setAdminEmail] = useState("");
   const [editOrg, setEditOrg] = useState<{ id: string; name: string; industry: string; hqCity: string; hqCountry: string; currency: string } | null>(null);
   const [usersOf, setUsersOf] = useState<{ id: string; name: string } | null>(null);
+  const [deleteOrg, setDeleteOrg] = useState<{ id: string; name: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
 
   const orgs = useQuery({
     queryKey: ["platform_orgs"],
