@@ -48,17 +48,22 @@ export function TokenPicker({
   return (
     <div className="rounded-md border bg-card">
       {value.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 border-b p-2">
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-primary/20 bg-primary/10 p-2">
+          <span className="text-xs font-medium text-primary">Selected</span>
           {value.map((v) => (
-            <Badge key={v} variant="secondary" className="gap-1">
+            <span
+              key={v}
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground"
+            >
               {v}
               <button type="button" onClick={() => toggle(v)} aria-label={`Remove ${v}`}>
                 <X className="h-3 w-3" />
               </button>
-            </Badge>
+            </span>
           ))}
         </div>
       )}
+
       <div className="flex items-center gap-2 border-b p-2">
         <Input
           value={q}
