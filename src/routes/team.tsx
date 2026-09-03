@@ -588,7 +588,6 @@ function Team() {
               Delete permanently
             </AlertDialogAction>
           </AlertDialogFooter>
-        </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </>
