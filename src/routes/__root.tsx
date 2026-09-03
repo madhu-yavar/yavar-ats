@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { useRouterState } from "@tanstack/react-router";
 
+import { BrandFooter } from "@/components/Brand";
 import { AuthGate } from "@/components/AuthGate";
 import { AppShell } from "@/components/AppShell";
 import { OrgGate } from "@/components/OrgGate";
