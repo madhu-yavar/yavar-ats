@@ -37,7 +37,7 @@ export const Route = createFileRoute("/organisation")({
       { name: "twitter:card", content: "summary" },
     ],
   }),
-  component: OrganisationSettings;
+  component: OrganisationSettings,
 });
 
 function OrganisationSettings() {
