@@ -248,18 +248,18 @@ function TopBar() {
 
 function Hero() {
   return (
-    <section className="border-b border-border bg-sidebar text-sidebar-foreground">
+    <section className="dotted-canvas border-b border-border">
       <div className="mx-auto grid max-w-[1200px] gap-12 px-5 py-16 lg:grid-cols-[1.15fr_1fr] lg:py-20">
         <div className="max-w-2xl space-y-7">
-          <span className="inline-flex items-center gap-2 rounded-full border border-sidebar-border px-3 py-1 text-xs text-sidebar-foreground/80">
-            <Sparkles className="h-3.5 w-3.5 text-sidebar-primary" />
+          <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
+            <Sparkles className="h-3.5 w-3.5 text-primary" />
             AI applicant tracking system for enterprise HR
           </span>
           <h1 className="text-4xl font-semibold leading-[1.12] xl:text-5xl">
-            The applicant tracking system that hires faster —{" "}
-            <span className="text-sidebar-primary">and can prove every shortlist.</span>
+            <span className="text-primary">The applicant tracking system</span> that hires faster — and can prove
+            every shortlist.
           </h1>
-          <p className="text-base leading-relaxed text-sidebar-foreground/75">
+          <p className="text-base leading-relaxed text-muted-foreground">
             ATSIQ runs the complete hiring cycle for large, multi-department organisations: budgeted requisitions
             and approvals, sourcing from a deduplicated talent pool, AI JD&nbsp;↔&nbsp;CV matching with an evidence
             trail, panel interviews and scorecards, offers, joining and leadership analytics — on one auditable
@@ -267,17 +267,17 @@ function Hero() {
           </p>
           <ul className="grid gap-2.5">
             {HERO_PROOF.map((p) => (
-              <li key={p} className="flex items-start gap-2.5 text-sm text-sidebar-foreground/85">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-sidebar-primary" />
+              <li key={p} className="flex items-start gap-2.5 text-sm text-foreground/80">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 {p}
               </li>
             ))}
           </ul>
-          <div className="grid grid-cols-3 gap-4 border-t border-sidebar-border pt-6">
+          <div className="grid grid-cols-3 gap-4 border-t border-border pt-6">
             {STATS.map((s) => (
               <div key={s.label}>
-                <p className="num text-2xl font-semibold text-sidebar-primary">{s.value}</p>
-                <p className="mt-1 text-xs leading-snug text-sidebar-foreground/60">{s.label}</p>
+                <p className="num text-2xl font-semibold text-primary">{s.value}</p>
+                <p className="mt-1 text-xs leading-snug text-muted-foreground">{s.label}</p>
               </div>
             ))}
           </div>
