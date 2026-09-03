@@ -382,5 +382,40 @@ export const reviewOrganization = createServerFn({ method: "POST" })
           };
     const { error } = await db.from("organizations").update(patch).eq("id", data.orgId);
     if (error) throw new Error(error.message);
+
+    // Acknowledge the decision to the registering owner, with next steps.
+    try {
+      const { data: org } = await db
+        .from("organizations")
+        .select("name")
+        .eq("id", data.orgId)
+        .maybeSingle();
+      const { data: owner } = await db
+        .from("org_members")
+        .select("email, full_name")
+        .eq("org_id", data.orgId)
+        .eq("is_owner", true)
+        .maybeSingle();
+      if (owner?.email && org?.name) {
+        const { sendTemplateEmail } = await import("@/lib/email-templates/send-email");
+        await sendTemplateEmail(
+          data.decision === "approve" ? "org-approved" : "org-rejected",
+          owner.email,
+          {
+            templateData: {
+              orgName: org.name,
+              ownerName: owner.full_name ?? undefined,
+              ...(data.decision === "reject"
+                ? { reason: patch.rejection_reason ?? undefined }
+                : {}),
+            },
+            idempotencyKey: `org-${data.decision}-${data.orgId}`,
+          },
+        );
+      }
+    } catch (mailError) {
+      console.error("Organisation decision email failed", mailError);
+    }
+
     return { ok: true };
   });
