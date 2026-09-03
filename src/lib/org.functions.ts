@@ -29,6 +29,9 @@ export type Organization = {
   onboarded_at: string | null;
   status?: string;
   archived_at?: string | null;
+  rejection_reason?: string | null;
+  approved_at?: string | null;
+
 };
 
 export type OrgMember = {
