@@ -320,7 +320,7 @@ function SectionHead({
 }) {
   return (
     <div className="mx-auto max-w-2xl text-center">
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">{eyebrow}</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">&bull; {eyebrow}</p>
       <h2 className="mt-3 text-3xl font-semibold">{title}</h2>
       {body ? <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{body}</p> : null}
     </div>
@@ -381,7 +381,7 @@ function ScoringModel() {
     <section id="scoring" className="scroll-mt-20 border-b border-border">
       <div className="mx-auto grid max-w-[1200px] gap-10 px-5 py-16 lg:grid-cols-[0.95fr_1.05fr]">
         <div className="space-y-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Scoring model</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">&bull; Scoring model</p>
           <h2 className="text-3xl font-semibold">A match score you can defend in a review meeting</h2>
           <p className="text-sm leading-relaxed text-muted-foreground">
             Every candidate is scored out of 100 across six dimensions. The weights are visible, configurable per
@@ -429,7 +429,7 @@ function Governance() {
       <div className="mx-auto max-w-[1200px] px-5 py-16">
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sidebar-primary">
-            Security &amp; governance
+            &bull; Security &amp; governance
           </p>
           <h2 className="mt-3 text-3xl font-semibold">Enterprise controls, not bolted-on afterwards</h2>
           <p className="mt-3 text-sm leading-relaxed text-sidebar-foreground/70">
