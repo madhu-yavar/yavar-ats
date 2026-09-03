@@ -13,6 +13,7 @@ import {
   listOrgUsersAsSuperUser,
   listPlatformAdmins,
   removePlatformAdmin,
+  reviewOrganization,
   setOrganizationStatus,
   updateOrganizationAsSuperUser,
 } from "@/lib/platform.functions";
@@ -60,6 +61,7 @@ function Platform() {
   const addAdmin = useServerFn(addPlatformAdmin);
   const dropAdmin = useServerFn(removePlatformAdmin);
   const setStatus = useServerFn(setOrganizationStatus);
+  const review = useServerFn(reviewOrganization);
   const updateOrg = useServerFn(updateOrganizationAsSuperUser);
   const fetchOrgUsers = useServerFn(listOrgUsersAsSuperUser);
   const deleteUser = useServerFn(deleteOrgUserAsSuperUser);
@@ -174,6 +176,18 @@ function Platform() {
         <StatCard label="Super users" value={(admins.data ?? []).length} />
       </div>
 
+      <PendingQueue
+        orgs={(orgs.data ?? []).filter((o) => o.status === "pending")}
+        busy={busy}
+        onDecide={(orgId, decision, reason) =>
+          run(
+            `rev:${orgId}`,
+            () => review({ data: { orgId, decision, reason } }),
+            decision === "approve" ? "Organisation approved" : "Registration rejected",
+          )
+        }
+      />
+
       <section className="panel">
         <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
           <div className="relative min-w-[220px] flex-1">
@@ -222,6 +236,10 @@ function Platform() {
                     <td className="p-2.5">
                       {o.status === "archived" ? (
                         <Badge variant="destructive">Archived</Badge>
+                      ) : o.status === "pending" ? (
+                        <Badge variant="outline">Pending approval</Badge>
+                      ) : o.status === "rejected" ? (
+                        <Badge variant="destructive">Rejected</Badge>
                       ) : (
                         <Badge variant="secondary">Active</Badge>
                       )}
@@ -423,5 +441,59 @@ function Platform() {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** New tenant registrations waiting for a platform super admin decision. */
+function PendingQueue({
+  orgs,
+  busy,
+  onDecide,
+}: {
+  orgs: { id: string; name: string; slug: string; industry: string | null; hqCity: string | null; hqCountry: string | null; createdAt: string; members: number }[];
+  busy: string | null;
+  onDecide: (orgId: string, decision: "approve" | "reject", reason: string) => void;
+}) {
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+  if (orgs.length === 0) return null;
+  return (
+    <section className="panel space-y-3 p-4">
+      <div>
+        <h2 className="text-sm font-semibold">Pending registrations ({orgs.length})</h2>
+        <p className="text-xs text-muted-foreground">
+          A registered organisation stays locked until it is approved. Only then can its owner create internal users.
+        </p>
+      </div>
+      <div className="space-y-2">
+        {orgs.map((o) => (
+          <div key={o.id} className="flex flex-wrap items-center gap-2 rounded-md border border-border p-2.5">
+            <div className="min-w-[200px] flex-1">
+              <div className="text-sm font-medium">{o.name}</div>
+              <div className="num text-xs text-muted-foreground">
+                {[o.industry, o.hqCity, o.hqCountry].filter(Boolean).join(" · ") || o.slug} ·{" "}
+                {new Date(o.createdAt).toLocaleDateString()}
+              </div>
+            </div>
+            <Input
+              value={reasons[o.id] ?? ""}
+              onChange={(e) => setReasons((r) => ({ ...r, [o.id]: e.target.value }))}
+              placeholder="Rejection reason (optional)"
+              className="w-56"
+            />
+            <Button size="sm" disabled={busy === `rev:${o.id}`} onClick={() => onDecide(o.id, "approve", "")}>
+              Approve
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={busy === `rev:${o.id}`}
+              onClick={() => onDecide(o.id, "reject", reasons[o.id] ?? "")}
+            >
+              Reject
+            </Button>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
