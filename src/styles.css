@@ -65,12 +65,12 @@
 }
 
 :root {
-  --radius: 0.75rem;
+  --radius: 0.625rem;
 
-  /* Canvas — yavar's off-white page with ink type */
-  --background: oklch(0.985 0.002 285);
-  --foreground: oklch(0.17 0.01 285);
-  --surface-2: oklch(0.965 0.004 285);
+  /* Canvas — yavar.ai: white dotted page, ink-black type */
+  --background: oklch(0.995 0 0);
+  --foreground: oklch(0.12 0 0);
+  --surface-2: oklch(0.954 0.007 261);
 
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.17 0.01 285);
