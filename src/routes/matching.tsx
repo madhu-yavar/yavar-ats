@@ -21,9 +21,10 @@ import { importCandidates } from "@/lib/integrations.functions";
 import { balanceWeights } from "@/lib/cv-extract";
 import { rankPool } from "@/lib/shortlist";
 
-import { EmptyState, PageHeader, ScoreBar, ScoreChip, SkillPills } from "@/components/ats";
+import { EmptyState, PageHeader, ScoreBar, ScoreChip, SkillPills, educationLabel } from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -115,6 +116,8 @@ function Matching() {
   const [importing, setImporting] = useState(false);
   const [addingFromPool, setAddingFromPool] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
+  const [poolQuery, setPoolQuery] = useState("");
+  const [minFit, setMinFit] = useState("60");
 
   function toggleSelected(applicationId: string, on: boolean) {
     setSelected((prev) => (on ? [...new Set([...prev, applicationId])] : prev.filter((id) => id !== applicationId)));
@@ -170,14 +173,32 @@ function Matching() {
     });
   }, [apps.data, cands.data, scoreMap, results, activeId]);
 
-  const suggestedPool = useMemo(() => {
+  /** Every unattached person in the pool, pre-ranked against this JD. */
+  const poolRanked = useMemo(() => {
     if (!requisition) return [];
     const attached = new Set(pipeline.map((row) => row.app.candidate_id));
     return rankPool(
       (cands.data ?? []).filter((candidate) => !attached.has(candidate.id)),
       requisition,
-    ).slice(0, 20);
+    );
   }, [cands.data, pipeline, requisition]);
+
+  /** Only the probable CVs: above the fit floor, optionally narrowed by a keyword. */
+  const suggestedPool = useMemo(() => {
+    const q = poolQuery.trim().toLowerCase();
+    const floor = Number(minFit) || 0;
+    return poolRanked
+      .filter((row) => row.fit >= floor)
+      .filter((row) =>
+        q
+          ? [row.candidate.full_name, row.candidate.location ?? "", (row.candidate.skills ?? []).join(" ")]
+              .join(" ")
+              .toLowerCase()
+              .includes(q)
+          : true,
+      )
+      .slice(0, 50);
+  }, [poolRanked, poolQuery, minFit]);
 
   async function addFromTalentPool(candidateIds: string[]) {
     if (!requisition || candidateIds.length === 0) return;
@@ -589,54 +610,84 @@ function Matching() {
           </section>
 
           <section className="panel p-5">
-            <h2 className="font-semibold">Source applicants</h2>
+            <h2 className="font-semibold">Probable CVs from the pool</h2>
             <p className="text-xs text-muted-foreground">
-              Selecting a requisition automatically pre-matches every unattached person in the talent pool. Add the
-              best fits to the pipeline, then run the full AI and social score.
+              Ranked against this JD. Only people clearing the fit floor are listed — add the right ones, then run the
+              full AI and social score.
             </p>
             {!requisition ? (
               <p className="mt-3 text-xs text-muted-foreground">Select a requisition first.</p>
-            ) : suggestedPool.length === 0 ? (
+            ) : poolRanked.length === 0 ? (
               <p className="mt-3 text-xs text-muted-foreground">Everyone in the talent pool is already attached.</p>
             ) : (
               <div className="mt-3 space-y-3">
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                  <Input
+                    value={poolQuery}
+                    onChange={(e) => setPoolQuery(e.target.value)}
+                    placeholder="Filter by name, skill or location"
+                    className="h-9"
+                  />
+                  <Select value={minFit} onValueChange={setMinFit}>
+                    <SelectTrigger className="h-9 w-[140px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="75">Strong ≥ 75</SelectItem>
+                      <SelectItem value="60">Probable ≥ 60</SelectItem>
+                      <SelectItem value="40">Possible ≥ 40</SelectItem>
+                      <SelectItem value="0">Everyone</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium">Talent pool suggestions</span>
+                  <span className="num text-xs text-muted-foreground">
+                    {suggestedPool.length} of {poolRanked.length} unattached
+                  </span>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => addFromTalentPool(suggestedPool.slice(0, 10).map((row) => row.candidate.id))}
-                    disabled={addingFromPool}
+                    disabled={addingFromPool || suggestedPool.length === 0}
                   >
                     {addingFromPool ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}
                     Add top {Math.min(10, suggestedPool.length)}
                   </Button>
                 </div>
-                <ul className="max-h-64 divide-y divide-border overflow-y-auto rounded-md border border-border">
-                  {suggestedPool.map((row) => (
-                    <li key={row.candidate.id} className="flex items-center gap-2 p-2.5">
-                      <ScoreChip score={row.fit} size="sm" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-xs font-medium">{row.candidate.full_name}</div>
-                        <div className="truncate text-xs text-muted-foreground">
-                          {row.mustHits.length}/{requisition.must_have_skills.length} skills · {row.candidate.experience_years} yrs
+                {suggestedPool.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Nobody clears this fit floor. Lower it, or source externally below.
+                  </p>
+                ) : (
+                  <ul className="max-h-72 divide-y divide-border overflow-y-auto rounded-md border border-border">
+                    {suggestedPool.map((row) => (
+                      <li key={row.candidate.id} className="flex items-center gap-2 p-2.5">
+                        <ScoreChip score={row.fit} size="sm" />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-medium">{row.candidate.full_name}</div>
+                          <div className="num truncate text-xs text-muted-foreground">
+                            {row.mustHits.length}/{Math.max(1, requisition.must_have_skills.length)} must-haves ·{" "}
+                            {row.candidate.experience_years} yrs
+                            {row.candidate.location ? ` · ${row.candidate.location}` : ""}
+                          </div>
                         </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        aria-label={`Add ${row.candidate.full_name} to pipeline`}
-                        onClick={() => addFromTalentPool([row.candidate.id])}
-                        disabled={addingFromPool}
-                      >
-                        <UserPlus className="size-4" />
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label={`Add ${row.candidate.full_name} to pipeline`}
+                          onClick={() => addFromTalentPool([row.candidate.id])}
+                          disabled={addingFromPool}
+                        >
+                          <UserPlus className="size-4" />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <p className="text-xs text-muted-foreground">Fit is a live skill and experience pre-rank, not the final AI score.</p>
               </div>
             )}
+
 
             <div className="mt-4 border-t border-border pt-4">
               <p className="text-xs font-medium">External job boards</p>
@@ -766,10 +817,11 @@ function Matching() {
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <h3 className="font-semibold">{candidate?.full_name ?? "Unknown candidate"}</h3>
-                      <p className="num text-xs text-muted-foreground">
-                        {candidate?.experience_years} yrs · {candidate?.education ?? "education not captured"}
+                      <h3 className="truncate font-semibold">{candidate?.full_name ?? "Unknown candidate"}</h3>
+                      <p className="num line-clamp-2 text-xs text-muted-foreground">
+                        {candidate?.experience_years} yrs · {educationLabel(candidate?.education) || "education not captured"}
                       </p>
+
                       <div className="mt-2 flex items-center gap-3 text-muted-foreground">
                         {candidate?.linkedin_url ? <Linkedin className="size-4" /> : null}
                         {candidate?.github_url ? <Github className="size-4" /> : null}

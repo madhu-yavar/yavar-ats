@@ -99,10 +99,26 @@ function Interviews() {
     reason: "",
   });
 
+  const [search, setSearch] = useState("");
+  const [stageFilter, setStageFilter] = useState("all");
+
   const scoreMap = latestScores(scores.data ?? []);
   const eligible = (apps.data ?? []).filter((a) =>
     ["shortlisted", "ai_screened", "l1", "l2", "l3", "offer", "offer_pending"].includes(a.stage),
   );
+
+  const filtered = eligible.filter((a) => {
+    const c = (cands.data ?? []).find((x) => x.id === a.candidate_id);
+    const r = (reqs.data ?? []).find((x) => x.id === a.requisition_id);
+    const q = search.trim().toLowerCase();
+    if (q && ![c?.full_name, r?.title, r?.code].join(" ").toLowerCase().includes(q)) return false;
+    if (stageFilter === "all") return true;
+    if (stageFilter === "unscheduled") {
+      return (ivs.data ?? []).filter((i) => i.application_id === a.id && i.scheduled_at).length === 0;
+    }
+    return a.stage === stageFilter;
+  });
+
 
   function openSlot(applicationId: string, level: number, interviewId: string | null) {
     const existing = (ivs.data ?? []).find((i) => i.id === interviewId);
@@ -252,265 +268,317 @@ function Interviews() {
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <section className="panel lg:col-span-2">
-          <div className="border-b border-border p-5">
-            <h2 className="font-semibold">Interview funnel</h2>
-            <p className="text-xs text-muted-foreground">{eligible.length} candidates in play</p>
+      <div className="space-y-6">
+        <section className="panel min-w-0">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border p-4 sm:flex sm:justify-between">
+            <div className="min-w-0">
+              <h2 className="truncate font-semibold">Interview pipeline</h2>
+              <p className="num text-xs text-muted-foreground">
+                {filtered.length} of {eligible.length} candidates in play
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search candidate or role"
+                className="h-9 w-52"
+              />
+              <Select value={stageFilter} onValueChange={setStageFilter}>
+                <SelectTrigger className="h-9 w-[150px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All stages</SelectItem>
+                  <SelectItem value="shortlisted">Shortlisted</SelectItem>
+                  <SelectItem value="l1">L1</SelectItem>
+                  <SelectItem value="l2">L2</SelectItem>
+                  <SelectItem value="l3">L3</SelectItem>
+                  <SelectItem value="unscheduled">Awaiting a slot</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          {eligible.length === 0 ? (
+
+          {slot ? (
+            <div className="grid gap-3 border-b border-border bg-surface-2 p-4 sm:grid-cols-2">
+              <div className="text-xs font-semibold sm:col-span-2">
+                {slot.interviewId ? "Re-schedule" : "Schedule"} L{slot.level} —{" "}
+                {(cands.data ?? []).find(
+                  (c) => c.id === (apps.data ?? []).find((a) => a.id === slot.applicationId)?.candidate_id,
+                )?.full_name ?? "Candidate"}
+              </div>
+              <div className="sm:col-span-2">
+                <Label className="mb-1.5 block text-xs text-muted-foreground">
+                  Candidate email — the invite goes here
+                </Label>
+                <Input
+                  type="email"
+                  value={slot.candidateEmail}
+                  onChange={(e) => setSlot({ ...slot, candidateEmail: e.target.value })}
+                  placeholder="candidate@example.com"
+                />
+              </div>
+              {slot.interviewId ? (
+                <div className="sm:col-span-2">
+                  <Label className="mb-1.5 block text-xs text-muted-foreground">
+                    Reason for re-scheduling (required, audited)
+                  </Label>
+                  <Input
+                    value={slot.rescheduleReason}
+                    onChange={(e) => setSlot({ ...slot, rescheduleReason: e.target.value })}
+                    placeholder="Candidate travelling / panel conflict / client ask…"
+                  />
+                </div>
+              ) : null}
+              <div>
+                <Label className="mb-1.5 block text-xs text-muted-foreground">Interviewer name</Label>
+                <Input
+                  value={slot.interviewer}
+                  onChange={(e) => setSlot({ ...slot, interviewer: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-xs text-muted-foreground">
+                  Interviewer email (gives them the queue)
+                </Label>
+                <Input
+                  type="email"
+                  value={slot.interviewerEmail}
+                  onChange={(e) => setSlot({ ...slot, interviewerEmail: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-xs text-muted-foreground">Date & time</Label>
+                <Input
+                  type="datetime-local"
+                  value={slot.scheduledAt}
+                  onChange={(e) => setSlot({ ...slot, scheduledAt: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="mb-1.5 block text-xs text-muted-foreground">Minutes</Label>
+                  <Input
+                    type="number"
+                    min={15}
+                    max={240}
+                    value={slot.durationMins}
+                    onChange={(e) => setSlot({ ...slot, durationMins: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label className="mb-1.5 block text-xs text-muted-foreground">Mode</Label>
+                  <Select value={slot.mode} onValueChange={(v) => setSlot({ ...slot, mode: v as typeof slot.mode })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="online">Online</SelectItem>
+                      <SelectItem value="onsite">Onsite</SelectItem>
+                      <SelectItem value="phone">Phone</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-xs text-muted-foreground">Meeting link</Label>
+                <Input
+                  value={slot.meetingLink}
+                  onChange={(e) => setSlot({ ...slot, meetingLink: e.target.value })}
+                  placeholder="Teams / Meet / Zoom URL"
+                />
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {readyProviders.length ? (
+                    readyProviders.map((p) => (
+                      <Button
+                        key={p.id}
+                        size="sm"
+                        variant="outline"
+                        disabled={minting || busy}
+                        onClick={() => generateLink(p.provider)}
+                      >
+                        {minting ? <Loader2 className="size-3.5 animate-spin" /> : <Video className="size-3.5" />}
+                        Generate {p.provider === "google_meet" ? "Meet" : p.provider === "teams" ? "Teams" : "Zoom"} link
+                      </Button>
+                    ))
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Connect Zoom, Google Meet or Teams on the{" "}
+                      <Link to="/integrations" className="text-primary underline-offset-4 hover:underline">
+                        Integrations
+                      </Link>{" "}
+                      page to generate links automatically.
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-xs text-muted-foreground">Agenda</Label>
+                <Input
+                  value={slot.agenda}
+                  onChange={(e) => setSlot({ ...slot, agenda: e.target.value })}
+                  placeholder="What this round must establish"
+                />
+              </div>
+              <div className="flex gap-2 sm:col-span-2">
+                <Button size="sm" onClick={saveSlot} disabled={busy}>
+                  {busy ? <Loader2 className="size-4 animate-spin" /> : null} Save slot
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setSlot(null)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {filtered.length === 0 ? (
             <div className="p-5">
               <EmptyState
-                title="Nobody shortlisted yet"
+                title="Nothing matches this view"
                 hint="Run the matching engine — candidates scoring 75+ are auto-shortlisted."
               />
             </div>
           ) : (
-            <ul className="divide-y divide-border">
-              {eligible.map((a) => {
-                const c = (cands.data ?? []).find((x) => x.id === a.candidate_id);
-                const r = (reqs.data ?? []).find((x) => x.id === a.requisition_id);
-                const s = scoreMap.get(a.id);
-                const rounds = (ivs.data ?? []).filter((i) => i.application_id === a.id);
-                const done = (evals.data ?? []).filter((e) => e.application_id === a.id);
-                return (
-                  <li key={a.id} className="p-5">
-                    <div className="flex flex-wrap items-center gap-3">
-                      {s ? <ScoreChip score={s.overall_score} /> : null}
-                      <div className="min-w-0 flex-1">
-                        <Link
-                          to="/candidates/$id"
-                          params={{ id: a.candidate_id }}
-                          className="font-medium hover:underline"
-                        >
-                          {c?.full_name}
-                        </Link>
-                        <div className="text-xs text-muted-foreground">{r?.title}</div>
-                      </div>
-                      <StageBadge stage={a.stage} />
-                    </div>
-
-                    <div className="mt-3 space-y-2">
-                      {LEVELS.map(({ level }) => {
-                        const round = rounds.find((i) => i.level === level);
-                        const evaluation = done.find((e) => e.level === level);
-                        const when = round?.scheduled_at ? new Date(round.scheduled_at) : null;
-                        return (
-                          <div key={level} className="flex flex-wrap items-center gap-2 text-xs">
-                            <span className="num w-8 font-medium">L{level}</span>
-                            <span className="min-w-0 flex-1 text-muted-foreground">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[860px] text-left text-xs">
+                <thead className="border-b border-border bg-surface-2 text-[11px] uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Candidate</th>
+                    <th className="px-3 py-2 font-medium">Requisition</th>
+                    <th className="px-3 py-2 font-medium">Stage</th>
+                    <th className="px-2 py-2 text-right font-medium">Score</th>
+                    <th className="px-2 py-2 font-medium">L1</th>
+                    <th className="px-2 py-2 font-medium">L2</th>
+                    <th className="px-2 py-2 font-medium">L3</th>
+                    <th className="px-3 py-2 text-right font-medium">Feedback</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((a) => {
+                    const c = (cands.data ?? []).find((x) => x.id === a.candidate_id);
+                    const r = (reqs.data ?? []).find((x) => x.id === a.requisition_id);
+                    const s = scoreMap.get(a.id);
+                    const rounds = (ivs.data ?? []).filter((i) => i.application_id === a.id);
+                    const done = (evals.data ?? []).filter((e) => e.application_id === a.id);
+                    return (
+                      <tr key={a.id} className="border-b border-border align-top hover:bg-surface-2/60">
+                        <td className="max-w-[190px] px-3 py-2">
+                          <Link
+                            to="/candidates/$id"
+                            params={{ id: a.candidate_id }}
+                            className="block truncate font-medium hover:underline"
+                          >
+                            {c?.full_name ?? "—"}
+                          </Link>
+                          <div className="num truncate text-[11px] text-muted-foreground">
+                            {c?.experience_years ?? "—"} yrs{c?.location ? ` · ${c.location}` : ""}
+                          </div>
+                        </td>
+                        <td className="max-w-[170px] px-3 py-2">
+                          <div className="truncate">{r?.title ?? "—"}</div>
+                          <div className="num truncate text-[11px] text-muted-foreground">{r?.code}</div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <StageBadge stage={a.stage} />
+                        </td>
+                        <td className="num px-2 py-2 text-right font-semibold">
+                          {s ? s.overall_score : "—"}
+                        </td>
+                        {LEVELS.map(({ level }) => {
+                          const round = rounds.find((i) => i.level === level);
+                          const evaluation = done.find((e) => e.level === level);
+                          const when = round?.scheduled_at ? new Date(round.scheduled_at) : null;
+                          return (
+                            <td key={level} className="px-2 py-2">
                               {evaluation ? (
-                                <span className="inline-flex items-center gap-1">
-                                  <Lock className="size-3" /> {evaluation.recommendation} · rating{" "}
-                                  {evaluation.rating ?? "—"} · {evaluation.evaluator ?? "unattributed"}
+                                <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium">
+                                  <Lock className="size-3" /> {evaluation.recommendation}
+                                  {evaluation.rating ? ` ${evaluation.rating}/5` : ""}
                                 </span>
-                              ) : round ? (
-                                <>
-                                  {when ? when.toLocaleString() : "awaiting a slot"} ·{" "}
-                                  {round.interviewer_email || round.interviewer || "no interviewer assigned"}
-                                </>
                               ) : (
-                                "not scheduled"
+                                <div className="flex flex-col items-start gap-1">
+                                  <span className="num whitespace-nowrap text-[11px] text-muted-foreground">
+                                    {when
+                                      ? when.toLocaleString(undefined, {
+                                          day: "2-digit",
+                                          month: "short",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })
+                                      : round
+                                        ? "awaiting slot"
+                                        : "not scheduled"}
+                                  </span>
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      size="sm"
+                                      variant={round ? "secondary" : "outline"}
+                                      className="h-6 px-2 text-[11px]"
+                                      onClick={() => openSlot(a.id, level, round?.id ?? null)}
+                                    >
+                                      {round ? "Re-sched" : "Schedule"}
+                                    </Button>
+                                    {round?.teams_link ? (
+                                      <Button size="sm" variant="ghost" className="h-6 px-1.5" asChild>
+                                        <a href={round.teams_link} target="_blank" rel="noreferrer noopener">
+                                          <Video className="size-3.5" />
+                                        </a>
+                                      </Button>
+                                    ) : null}
+                                    {round && when ? (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-6 px-1.5"
+                                        aria-label={`Download L${level} invite`}
+                                        onClick={() =>
+                                          downloadIcs(
+                                            `interview-l${level}-${(c?.full_name ?? "candidate").replace(/\s+/g, "-").toLowerCase()}`,
+                                            buildIcs({
+                                              uid: round.id,
+                                              title: `L${level} interview — ${c?.full_name ?? "Candidate"} (${r?.title ?? ""})`,
+                                              description: round.agenda ?? "",
+                                              location: round.teams_link ?? round.mode,
+                                              startsAt: round.scheduled_at!,
+                                              durationMins: round.duration_mins,
+                                              attendees: [round.interviewer_email, c?.email].filter(
+                                                Boolean,
+                                              ) as string[],
+                                            }),
+                                          )
+                                        }
+                                      >
+                                        <CalendarPlus className="size-3.5" />
+                                      </Button>
+                                    ) : null}
+                                  </div>
+                                </div>
                               )}
-                            </span>
-                            {round?.teams_link ? (
-                              <Button size="sm" variant="ghost" asChild>
-                                <a href={round.teams_link} target="_blank" rel="noreferrer noopener">
-                                  <Video className="size-3.5" /> Link
-                                </a>
-                              </Button>
-                            ) : null}
-                            {round && when ? (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() =>
-                                  downloadIcs(
-                                    `interview-l${level}-${(c?.full_name ?? "candidate").replace(/\s+/g, "-").toLowerCase()}`,
-                                    buildIcs({
-                                      uid: round.id,
-                                      title: `L${level} interview — ${c?.full_name ?? "Candidate"} (${r?.title ?? ""})`,
-                                      description: round.agenda ?? "",
-                                      location: round.teams_link ?? round.mode,
-                                      startsAt: round.scheduled_at!,
-                                      durationMins: round.duration_mins,
-                                      attendees: [round.interviewer_email, c?.email].filter(Boolean) as string[],
-                                    }),
-                                  )
-                                }
-                              >
-                                <CalendarPlus className="size-3.5" /> Invite
-                              </Button>
-                            ) : null}
-                            {!evaluation && (
-                              <Button
-                                size="sm"
-                                variant={round ? "secondary" : "outline"}
-                                onClick={() => openSlot(a.id, level, round?.id ?? null)}
-                              >
-                                {round ? "Re-schedule" : "Schedule"}
-                              </Button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <div className="mt-3">
-                      <Button size="sm" variant="ghost" onClick={() => setForm({ ...form, application_id: a.id })}>
-                        Record feedback for this candidate
-                      </Button>
-                    </div>
-
-                    {slot?.applicationId === a.id && (
-                      <div className="mt-3 grid gap-3 rounded-lg border border-border bg-surface-2 p-4 sm:grid-cols-2">
-                        <div className="sm:col-span-2 text-xs font-medium">
-                          {slot.interviewId ? "Re-schedule" : "Schedule"} L{slot.level} — {c?.full_name}
-                        </div>
-                        <div className="sm:col-span-2">
-                          <Label className="mb-1.5 block text-xs text-muted-foreground">
-                            Candidate email — the invite goes here
-                          </Label>
-                          <Input
-                            type="email"
-                            value={slot.candidateEmail}
-                            onChange={(e) => setSlot({ ...slot, candidateEmail: e.target.value })}
-                            placeholder="candidate@example.com"
-                          />
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {c?.email
-                              ? `Taken from the CV parsed into the talent pool (${c.email}). Correcting it here updates the candidate record.`
-                              : "No email was found on this CV — type the correct address; it is saved back to the candidate profile."}
-                          </p>
-                        </div>
-                        {slot.interviewId ? (
-                          <div className="sm:col-span-2">
-                            <Label className="mb-1.5 block text-xs text-muted-foreground">
-                              Reason for re-scheduling (required, audited)
-                            </Label>
-                            <Input
-                              value={slot.rescheduleReason}
-                              onChange={(e) => setSlot({ ...slot, rescheduleReason: e.target.value })}
-                              placeholder="Candidate travelling / panel conflict / client ask…"
-                            />
-                          </div>
-                        ) : null}
-
-                        <div>
-                          <Label className="mb-1.5 block text-xs text-muted-foreground">Interviewer name</Label>
-                          <Input
-                            value={slot.interviewer}
-                            onChange={(e) => setSlot({ ...slot, interviewer: e.target.value })}
-                          />
-                        </div>
-                        <div>
-                          <Label className="mb-1.5 block text-xs text-muted-foreground">
-                            Interviewer email (gives them the queue)
-                          </Label>
-                          <Input
-                            type="email"
-                            value={slot.interviewerEmail}
-                            onChange={(e) => setSlot({ ...slot, interviewerEmail: e.target.value })}
-                          />
-                        </div>
-                        <div>
-                          <Label className="mb-1.5 block text-xs text-muted-foreground">Date & time</Label>
-                          <Input
-                            type="datetime-local"
-                            value={slot.scheduledAt}
-                            onChange={(e) => setSlot({ ...slot, scheduledAt: e.target.value })}
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <Label className="mb-1.5 block text-xs text-muted-foreground">Minutes</Label>
-                            <Input
-                              type="number"
-                              min={15}
-                              max={240}
-                              value={slot.durationMins}
-                              onChange={(e) => setSlot({ ...slot, durationMins: e.target.value })}
-                            />
-                          </div>
-                          <div>
-                            <Label className="mb-1.5 block text-xs text-muted-foreground">Mode</Label>
-                            <Select
-                              value={slot.mode}
-                              onValueChange={(v) => setSlot({ ...slot, mode: v as typeof slot.mode })}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="online">Online</SelectItem>
-                                <SelectItem value="onsite">Onsite</SelectItem>
-                                <SelectItem value="phone">Phone</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="mb-1.5 block text-xs text-muted-foreground">Meeting link</Label>
-                          <Input
-                            value={slot.meetingLink}
-                            onChange={(e) => setSlot({ ...slot, meetingLink: e.target.value })}
-                            placeholder="Teams / Meet / Zoom URL"
-                          />
-                          <div className="mt-2 flex flex-wrap items-center gap-2">
-                            {readyProviders.length ? (
-                              readyProviders.map((p) => (
-                                <Button
-                                  key={p.id}
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={minting || busy}
-                                  onClick={() => generateLink(p.provider)}
-                                >
-                                  {minting ? (
-                                    <Loader2 className="size-3.5 animate-spin" />
-                                  ) : (
-                                    <Video className="size-3.5" />
-                                  )}
-                                  Generate {p.provider === "google_meet" ? "Meet" : p.provider === "teams" ? "Teams" : "Zoom"} link
-                                </Button>
-                              ))
-                            ) : (
-                              <p className="text-xs text-muted-foreground">
-                                Connect Zoom, Google Meet or Teams on the{" "}
-                                <Link to="/integrations" className="text-primary underline-offset-4 hover:underline">
-                                  Integrations
-                                </Link>{" "}
-                                page to generate links automatically.
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="mb-1.5 block text-xs text-muted-foreground">Agenda</Label>
-                          <Input
-                            value={slot.agenda}
-                            onChange={(e) => setSlot({ ...slot, agenda: e.target.value })}
-                            placeholder="What this round must establish"
-                          />
-                        </div>
-                        <div className="flex gap-2 sm:col-span-2">
-                          <Button size="sm" onClick={saveSlot} disabled={busy}>
-                            {busy ? <Loader2 className="size-4 animate-spin" /> : null} Save slot
+                            </td>
+                          );
+                        })}
+                        <td className="px-3 py-2 text-right">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-[11px]"
+                            onClick={() => setForm({ ...form, application_id: a.id })}
+                          >
+                            Record
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setSlot(null)}>
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
 
-        <section className="panel p-5">
+
+        <section className="panel p-5 lg:max-w-xl">
           <h2 className="font-semibold">Record an evaluation</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             Use this when feedback comes to you offline. Panel members should submit their own scorecard from{" "}
