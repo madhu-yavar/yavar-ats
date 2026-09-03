@@ -9,6 +9,7 @@ import {
   addPlatformAdmin,
   claimSuperUser,
   deleteOrgUserAsSuperUser,
+  deleteOrganizationAsSuperUser,
   listAllOrganizations,
   listOrgUsersAsSuperUser,
   listPlatformAdmins,
@@ -65,6 +66,7 @@ function Platform() {
   const updateOrg = useServerFn(updateOrganizationAsSuperUser);
   const fetchOrgUsers = useServerFn(listOrgUsersAsSuperUser);
   const deleteUser = useServerFn(deleteOrgUserAsSuperUser);
+  const dropOrg = useServerFn(deleteOrganizationAsSuperUser);
 
   const [busy, setBusy] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -72,6 +74,8 @@ function Platform() {
   const [adminEmail, setAdminEmail] = useState("");
   const [editOrg, setEditOrg] = useState<{ id: string; name: string; industry: string; hqCity: string; hqCountry: string; currency: string } | null>(null);
   const [usersOf, setUsersOf] = useState<{ id: string; name: string } | null>(null);
+  const [deleteOrg, setDeleteOrg] = useState<{ id: string; name: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
 
   const orgs = useQuery({
     queryKey: ["platform_orgs"],
@@ -304,6 +308,14 @@ function Platform() {
                             </>
                           )}
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          title="Permanently delete this organisation and all of its records"
+                          onClick={() => setDeleteOrg({ id: o.id, name: o.name })}
+                        >
+                          <Trash2 className="size-4" /> Delete
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -438,6 +450,53 @@ function Platform() {
             </table>
             {orgUsers.isLoading ? <p className="py-2 text-sm text-muted-foreground">Loading users…</p> : null}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(deleteOrg)}
+        onOpenChange={(o) => {
+          if (!o) {
+            setDeleteOrg(null);
+            setDeleteConfirm("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {deleteOrg?.name}?</DialogTitle>
+            <DialogDescription>
+              This permanently removes the organisation and every requisition, candidate, interview, offer and user
+              record inside it. This cannot be undone — archive instead if you may need the data later.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={deleteConfirm}
+            onChange={(e) => setDeleteConfirm(e.target.value)}
+            placeholder={`Type "${deleteOrg?.name ?? ""}" to confirm`}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteOrg(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!deleteOrg || deleteConfirm.trim().toLowerCase() !== deleteOrg.name.trim().toLowerCase() || busy === "del-org"}
+              onClick={() =>
+                run(
+                  "del-org",
+                  async () => {
+                    await dropOrg({ data: { orgId: deleteOrg!.id, confirmName: deleteConfirm } });
+                    setDeleteOrg(null);
+                    setDeleteConfirm("");
+                  },
+                  "Organisation deleted permanently",
+                )
+              }
+            >
+              Delete permanently
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

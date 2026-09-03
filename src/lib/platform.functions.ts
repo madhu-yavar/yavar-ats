@@ -214,6 +214,60 @@ export const setOrganizationStatus = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/**
+ * Permanently delete a tenant and every record inside it. Irreversible — the console
+ * requires the exact organisation name to be typed before calling this.
+ */
+export const deleteOrganizationAsSuperUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) =>
+    z.object({ orgId: z.string().uuid(), confirmName: z.string().min(1) }).parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    await superEmailOrThrow(context);
+    const db = await admin();
+
+    const { data: org } = await db.from("organizations").select("id, name").eq("id", data.orgId).maybeSingle();
+    if (!org) throw new Error("Organisation not found.");
+    if (org.name.trim().toLowerCase() !== data.confirmName.trim().toLowerCase())
+      throw new Error("The typed organisation name does not match.");
+
+    // Children first: leaf tables, then their parents, so no foreign key is orphaned.
+    const ordered = [
+      "ai_interviews",
+      "evaluations",
+      "match_scores",
+      "offers",
+      "stage_events",
+      "interviews",
+      "applications",
+      "candidate_assessments",
+      "candidate_verifications",
+      "social_profiles",
+      "candidates",
+      "job_descriptions",
+      "requisitions",
+      "departments",
+      "master_items",
+      "integration_credentials",
+      "source_integrations",
+      "ai_provider_credentials",
+      "ai_settings",
+      "copilot_messages",
+      "user_roles",
+      "org_members",
+    ] as const;
+
+    for (const table of ordered) {
+      const { error } = await db.from(table).delete().eq("org_id", data.orgId);
+      if (error) throw new Error(`${table}: ${error.message}`);
+    }
+
+    const { error } = await db.from("organizations").delete().eq("id", data.orgId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 /** Super users can correct any tenant's profile fields. */
 export const updateOrganizationAsSuperUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

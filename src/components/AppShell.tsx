@@ -19,6 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePlatform } from "@/hooks/usePlatform";
 import { Button } from "@/components/ui/button";
 import { Copilot } from "@/components/Copilot";
+import { NotificationBell } from "@/components/NotificationBell";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -79,6 +80,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-end gap-2 border-b border-border bg-card px-4 py-2">
+          <NotificationBell />
+        </div>
         <div className="flex gap-1 overflow-x-auto border-b border-border bg-card px-4 py-2 lg:hidden">
           {nav.map(({ to, label }) => (
             <Link

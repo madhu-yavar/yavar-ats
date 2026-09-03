@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { emailDomain, workEmailProblem } from "@/lib/work-email";
 
 export type AppRole = "recruiter" | "hiring_manager" | "department_head" | "hr_head" | "president_cbo";
 
@@ -167,6 +168,13 @@ export const createOrganization = createServerFn({ method: "POST" })
     const db = await admin();
     const email = (context.claims?.email as string | undefined) ?? `${context.userId}@user`;
 
+    // Only a verified corporate mailbox can register a tenant: the address must be
+    // confirmed by the auth service and must not be a personal or disposable domain.
+    if (!context.claims?.["email_confirmed_at"] && context.claims?.["email_verified"] === false)
+      throw new Error("Confirm your work email address before registering an organisation.");
+    const problem = workEmailProblem(email);
+    if (problem) throw new Error(problem);
+
     const { data: existing } = await db
       .from("org_members")
       .select("org_id")
@@ -229,6 +237,9 @@ export const createOrganization = createServerFn({ method: "POST" })
 
     for (const invite of data.invites) {
       if (invite.email.toLowerCase() === email.toLowerCase()) continue;
+      // Internal users only: colleagues must be on the organisation's own domain.
+      if (emailDomain(invite.email) !== emailDomain(email))
+        throw new Error(`${invite.email} is not on the ${emailDomain(email)} domain.`);
       await db.from("org_members").insert({
         org_id: org.id,
         email: invite.email.toLowerCase(),
@@ -364,7 +375,19 @@ export const inviteMember = createServerFn({ method: "POST" })
     if ((org?.status ?? "active") !== "active")
       throw new Error("Your organisation is not approved yet — internal users can be added after approval.");
     const email = data.email.toLowerCase();
+    const problem = workEmailProblem(email);
+    if (problem) throw new Error(problem);
 
+    // The owner's verified domain defines who counts as an internal user.
+    const { data: owner } = await db
+      .from("org_members")
+      .select("email")
+      .eq("org_id", orgId)
+      .eq("is_owner", true)
+      .limit(1)
+      .maybeSingle();
+    if (owner?.email && emailDomain(owner.email) !== emailDomain(email))
+      throw new Error(`Only ${emailDomain(owner.email)} addresses can be invited into this organisation.`);
 
     const { data: existingUser } = await db
       .from("org_members")

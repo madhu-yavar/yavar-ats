@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { Session } from "@supabase/supabase-js";
+
 
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
@@ -7,15 +9,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { workEmailProblem } from "@/lib/work-email";
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
+  const qc = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       setSession(s);
       setReady(true);
+      // The bearer token is attached per server-function call, so anything fetched
+      // during the sign-in transition must be refetched with the new identity.
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
+        qc.clear();
+        if (s) void qc.invalidateQueries();
+      }
     });
     // Never leave the app stuck on the splash if session restore stalls.
     const bail = setTimeout(() => setReady(true), 4000);
@@ -31,7 +41,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       clearTimeout(bail);
       sub.subscription.unsubscribe();
     };
-  }, []);
+  }, [qc]);
 
 
   if (!ready) {
@@ -60,13 +70,15 @@ function SignIn() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else {
+        const problem = workEmailProblem(email);
+        if (problem) throw new Error(problem);
         const { error } = await supabase.auth.signUp({
           email,
           password,
           options: { emailRedirectTo: window.location.origin },
         });
         if (error) throw error;
-        toast.success("Owner account created. Let's set up your organisation.");
+        toast.success("Check your inbox to confirm your work email, then continue the setup.");
       }
     } catch (err) {
       toast.error((err as Error).message);
