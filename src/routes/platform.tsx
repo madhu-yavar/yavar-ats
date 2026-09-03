@@ -304,6 +304,14 @@ function Platform() {
                             </>
                           )}
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          title="Permanently delete this organisation and all of its records"
+                          onClick={() => setDeleteOrg({ id: o.id, name: o.name })}
+                        >
+                          <Trash2 className="size-4" /> Delete
+                        </Button>
                       </div>
                     </td>
                   </tr>
