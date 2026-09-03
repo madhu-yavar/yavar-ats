@@ -96,17 +96,28 @@ export const myOrg = createServerFn({ method: "GET" })
         .maybeSingle();
 
       if (invite) {
-        await db
-          .from("org_members")
-          .update({ user_id: context.userId, status: "active", joined_at: new Date().toISOString() })
-          .eq("id", invite.id);
-        if (invite.invited_role) {
+        // Invitations only convert into real users once the tenant is approved and live.
+        const { data: inviteOrg } = await db
+          .from("organizations")
+          .select("status")
+          .eq("id", invite.org_id)
+          .maybeSingle();
+        if ((inviteOrg?.status ?? "active") === "active") {
           await db
-            .from("user_roles")
-            .insert({ user_id: context.userId, role: invite.invited_role, org_id: invite.org_id });
+            .from("org_members")
+            .update({ user_id: context.userId, status: "active", joined_at: new Date().toISOString() })
+            .eq("id", invite.id);
+          if (invite.invited_role) {
+            await db
+              .from("user_roles")
+              .insert({ user_id: context.userId, role: invite.invited_role, org_id: invite.org_id });
+          }
+          member = { ...invite, status: "active" };
+        } else {
+          member = invite;
         }
-        member = { ...invite, status: "active" };
       }
+
     }
 
     if (!member) return { org: null, membership: null, roles: [] };
