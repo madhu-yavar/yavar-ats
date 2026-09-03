@@ -119,17 +119,28 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  // Candidate-facing questionnaire links are opened by people with no account.
-  const isPublic = pathname.startsWith("/assess/");
+  // Candidate-facing questionnaire links and the legal pages are opened by people with no account.
+  const isPublic = pathname.startsWith("/assess/") || pathname === "/privacy" || pathname === "/cookies";
+  const isLegal = pathname === "/privacy" || pathname === "/cookies";
 
   if (isPublic) {
     return (
       <QueryClientProvider client={queryClient}>
-        <Outlet />
+        {isLegal ? (
+          <div className="min-h-screen bg-background">
+            <main className="mx-auto max-w-[1400px] p-6">
+              <Outlet />
+            </main>
+            <BrandFooter />
+          </div>
+        ) : (
+          <Outlet />
+        )}
         <Toaster />
       </QueryClientProvider>
     );
   }
+
 
   return (
     <QueryClientProvider client={queryClient}>
