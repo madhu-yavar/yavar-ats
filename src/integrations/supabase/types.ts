@@ -1040,6 +1040,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           currency: string
+          email_domain: string | null
           employee_band: string | null
           fiscal_year_start_month: number
           hq_city: string | null
@@ -1064,6 +1065,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string
+          email_domain?: string | null
           employee_band?: string | null
           fiscal_year_start_month?: number
           hq_city?: string | null
@@ -1088,6 +1090,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string
+          email_domain?: string | null
           employee_band?: string | null
           fiscal_year_start_month?: number
           hq_city?: string | null
