@@ -12,7 +12,7 @@ import {
   Plug,
   ShieldCheck,
   Target,
-  Users,
+  Users, BookOpen,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -35,6 +35,7 @@ const NAV = [
   { to: "/organisation", label: "Organisation", icon: Building2 },
   { to: "/integrations", label: "Integrations", icon: Plug },
   { to: "/masters", label: "Master data", icon: Database },
+  { to: "/help", label: "User manual", icon: BookOpen },
 ] as const;
 
 

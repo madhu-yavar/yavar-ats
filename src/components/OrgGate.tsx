@@ -50,7 +50,8 @@ export function OrgGate({ children }: { children: React.ReactNode }) {
     return (
       <Waiting
         title="Awaiting platform approval"
-        body={`${org.name} has been registered and is queued for review. Once a platform super admin approves it, you can sign in as the owner and start creating internal users for your organisation.`}
+        body={`${org.name} has been registered and is queued for review. A platform super admin approves or rejects it, and you receive an email either way. This screen updates itself the moment the decision is made — no need to sign out.`}
+        onRefresh={() => refetch()}
       />
     );
   }
@@ -60,6 +61,7 @@ export function OrgGate({ children }: { children: React.ReactNode }) {
       <Waiting
         title="Registration not approved"
         body={org.rejection_reason || "This organisation registration was not approved by the platform team."}
+        onRefresh={() => refetch()}
       />
     );
   }
@@ -91,16 +93,23 @@ export function OrgGate({ children }: { children: React.ReactNode }) {
 }
 
 /** Full-screen status card for tenants that cannot enter the workspace yet. */
-function Waiting({ title, body }: { title: string; body: string }) {
+function Waiting({ title, body, onRefresh }: { title: string; body: string; onRefresh?: () => void }) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-4">
       <div className="panel max-w-md space-y-2 p-6 text-center">
         <h1 className="text-lg font-semibold">{title}</h1>
         <p className="text-sm text-muted-foreground">{body}</p>
       </div>
-      <Button variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}>
-        Sign out
-      </Button>
+      <div className="flex gap-2">
+        {onRefresh && (
+          <Button size="sm" variant="outline" onClick={onRefresh}>
+            Check status
+          </Button>
+        )}
+        <Button variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}>
+          Sign out
+        </Button>
+      </div>
     </div>
   );
 }
