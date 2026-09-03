@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 
+import { template as memberInvitedTemplate } from './member-invited'
 import { template as orgApprovedTemplate } from './org-approved'
 import { template as orgRejectedTemplate } from './org-rejected'
 
@@ -17,6 +18,7 @@ export interface TemplateEntry {
  * Import and register new templates here after creating them in this directory.
  */
 export const TEMPLATES: Record<string, TemplateEntry> = {
+  'member-invited': memberInvitedTemplate,
   'org-approved': orgApprovedTemplate,
   'org-rejected': orgRejectedTemplate,
 }
