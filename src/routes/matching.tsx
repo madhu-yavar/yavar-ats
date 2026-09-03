@@ -766,10 +766,11 @@ function Matching() {
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <h3 className="font-semibold">{candidate?.full_name ?? "Unknown candidate"}</h3>
-                      <p className="num text-xs text-muted-foreground">
-                        {candidate?.experience_years} yrs · {candidate?.education ?? "education not captured"}
+                      <h3 className="truncate font-semibold">{candidate?.full_name ?? "Unknown candidate"}</h3>
+                      <p className="num line-clamp-2 text-xs text-muted-foreground">
+                        {candidate?.experience_years} yrs · {educationLabel(candidate?.education) || "education not captured"}
                       </p>
+
                       <div className="mt-2 flex items-center gap-3 text-muted-foreground">
                         {candidate?.linkedin_url ? <Linkedin className="size-4" /> : null}
                         {candidate?.github_url ? <Github className="size-4" /> : null}
