@@ -13,12 +13,12 @@ export function PageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <header className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-6">
+    <header className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-4">
       <div className="space-y-1">
         {eyebrow ? (
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{eyebrow}</div>
         ) : null}
-        <h1 className="text-2xl font-semibold">{title}</h1>
+        <h1 className="text-xl font-semibold">{title}</h1>
         {description ? <p className="max-w-2xl text-sm text-muted-foreground">{description}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
@@ -44,10 +44,10 @@ export function StatCard({
     destructive: "text-destructive",
   }[tone];
   return (
-    <div className="panel p-5">
-      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className={cn("num mt-2 text-3xl font-semibold", toneClass)}>{value}</div>
-      {hint ? <div className="mt-1 text-xs text-muted-foreground">{hint}</div> : null}
+    <div className="panel p-3.5">
+      <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className={cn("num mt-1 text-2xl font-semibold", toneClass)}>{value}</div>
+      {hint ? <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div> : null}
     </div>
   );
 }
