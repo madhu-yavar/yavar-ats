@@ -268,8 +268,8 @@ function Interviews() {
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <section className="panel min-w-0 lg:col-span-2">
+      <div className="space-y-6">
+        <section className="panel min-w-0">
           <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border p-4 sm:flex sm:justify-between">
             <div className="min-w-0">
               <h2 className="truncate font-semibold">Interview pipeline</h2>
@@ -578,7 +578,7 @@ function Interviews() {
         </section>
 
 
-        <section className="panel p-5">
+        <section className="panel p-5 lg:max-w-xl">
           <h2 className="font-semibold">Record an evaluation</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             Use this when feedback comes to you offline. Panel members should submit their own scorecard from{" "}
