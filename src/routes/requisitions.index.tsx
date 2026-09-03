@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -12,6 +12,7 @@ import {
   masterItemsQuery,
   requisitionsQuery,
 } from "@/lib/data";
+import { findDuplicateRequisitions } from "@/lib/jd-dedupe";
 import { EmptyState, PageHeader, SkillPills, StatusBadge, inr } from "@/components/ats";
 import { CreatableSelect, MasterSelect, TokenPicker } from "@/components/pickers";
 import { Button } from "@/components/ui/button";
@@ -85,6 +86,7 @@ function Requisitions() {
     cost_center: "",
   });
 
+  const [dupAck, setDupAck] = useState(false);
   const requisitions = reqs.data ?? [];
   const departments = depts.data ?? [];
   const skills = byKind(masters.data, "skill");
@@ -148,9 +150,30 @@ function Requisitions() {
   }
 
 
+  // Duplicate-JD guard: an open requisition for the same role in the same
+  // department is almost always a mistake, so we surface it before saving.
+  const duplicates = useMemo(
+    () =>
+      findDuplicateRequisitions(
+        {
+          title: form.title,
+          department_id: form.department_id || null,
+          location: form.location,
+          must_have_skills: form.must,
+        },
+        requisitions,
+      ),
+    [form.title, form.department_id, form.location, form.must, requisitions],
+  );
+
   async function create() {
     if (!form.title.trim()) {
       toast.error("Role title is required");
+      return;
+    }
+    if (duplicates.length && !dupAck) {
+      setDupAck(true);
+      toast.error("A similar open requisition already exists — review it, then confirm to continue.");
       return;
     }
     setSaving(true);
@@ -185,6 +208,7 @@ function Requisitions() {
       return;
     }
     toast.success(`${code} raised and sent for Department Head approval`);
+    setDupAck(false);
     setOpen(false);
     qc.invalidateQueries({ queryKey: ["requisitions"] });
   }
@@ -207,6 +231,32 @@ function Requisitions() {
                   Skills entered here drive the JD draft and the JD↔CV match scoring.
                 </DialogDescription>
               </DialogHeader>
+              {duplicates.length ? (
+                <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
+                  <p className="font-semibold">
+                    Possible duplicate requisition{duplicates.length > 1 ? "s" : ""}
+                  </p>
+                  <ul className="mt-1.5 space-y-1.5">
+                    {duplicates.map((d) => (
+                      <li key={d.req.id} className="text-xs">
+                        <Link
+                          to="/requisitions/$id"
+                          params={{ id: d.req.id }}
+                          className="font-medium underline"
+                          onClick={() => setOpen(false)}
+                        >
+                          {d.req.code} · {d.req.title}
+                        </Link>
+                        <span className="text-muted-foreground"> — {d.reasons.join(" · ")}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Raise this only if it is genuinely a separate hire (extra headcount, different
+                    client or location). Otherwise add openings to the existing requisition.
+                  </p>
+                </div>
+              ) : null}
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Role title" className="sm:col-span-2">
                   <CreatableSelect
@@ -392,7 +442,13 @@ function Requisitions() {
                   Cancel
                 </Button>
                 <Button onClick={create} disabled={saving}>
-                  {saving ? "Raising…" : "Raise & send for approval"}
+                  {saving
+                    ? "Raising…"
+                    : duplicates.length && !dupAck
+                      ? "Check duplicates"
+                      : duplicates.length
+                        ? "Raise anyway & send for approval"
+                        : "Raise & send for approval"}
                 </Button>
               </DialogFooter>
             </DialogContent>

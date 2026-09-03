@@ -55,6 +55,45 @@ export type MyOrg = {
   roles: AppRole[];
 };
 
+const ROLE_LABELS: Record<AppRole, string> = {
+  recruiter: "Recruiter",
+  hiring_manager: "Hiring manager",
+  department_head: "Department head",
+  hr_head: "HR head",
+  president_cbo: "President / CBO",
+};
+
+/**
+ * Tell an invited colleague they now have access. Best-effort: the roster entry
+ * is already saved, so a mail failure must never fail the invitation.
+ */
+async function notifyInvitedMember(args: {
+  email: string;
+  orgName: string;
+  role: AppRole;
+  title?: string | null;
+  inviteeName?: string | null;
+  inviterName?: string | null;
+  memberId?: string | null;
+}) {
+  try {
+    const { sendTemplateEmail } = await import("@/lib/email-templates/send-email");
+    await sendTemplateEmail("member-invited", args.email, {
+      idempotencyKey: `member-invited:${args.memberId ?? args.email}`,
+      templateData: {
+        orgName: args.orgName,
+        roleLabel: ROLE_LABELS[args.role],
+        title: args.title ?? undefined,
+        inviteeName: args.inviteeName ?? undefined,
+        inviterName: args.inviterName ?? undefined,
+        email: args.email,
+      },
+    });
+  } catch (e) {
+    console.error("invitation email failed", args.email, e);
+  }
+}
+
 async function admin() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   return supabaseAdmin;
@@ -241,13 +280,24 @@ export const createOrganization = createServerFn({ method: "POST" })
       // Internal users only: colleagues must be on the organisation's own domain.
       if (emailDomain(invite.email) !== emailDomain(email))
         throw new Error(`${invite.email} is not on the ${emailDomain(email)} domain.`);
-      await db.from("org_members").insert({
-        org_id: org.id,
+      const { data: row } = await db
+        .from("org_members")
+        .insert({
+          org_id: org.id,
+          email: invite.email.toLowerCase(),
+          title: invite.title.trim() || null,
+          invited_role: invite.role,
+          invited_by: context.userId,
+          status: "invited",
+        })
+        .select("id")
+        .maybeSingle();
+      await notifyInvitedMember({
         email: invite.email.toLowerCase(),
+        orgName: org.name as string,
+        role: invite.role,
         title: invite.title.trim() || null,
-        invited_role: invite.role,
-        invited_by: context.userId,
-        status: "invited",
+        memberId: row?.id ?? null,
       });
     }
 
@@ -398,17 +448,35 @@ export const inviteMember = createServerFn({ method: "POST" })
       .maybeSingle();
     if (existingUser) throw new Error("That email is already on the roster.");
 
-    const { error } = await db.from("org_members").insert({
-      org_id: orgId,
-      email,
-      full_name: data.fullName.trim() || null,
-      title: data.title.trim() || null,
-      invited_role: data.role,
-      invited_by: context.userId,
-      status: "invited",
-    });
+    const { data: row, error } = await db
+      .from("org_members")
+      .insert({
+        org_id: orgId,
+        email,
+        full_name: data.fullName.trim() || null,
+        title: data.title.trim() || null,
+        invited_role: data.role,
+        invited_by: context.userId,
+        status: "invited",
+      })
+      .select("id")
+      .maybeSingle();
     if (error) throw new Error(error.message);
-    return { ok: true };
+
+    const [{ data: orgRow }, { data: inviter }] = await Promise.all([
+      db.from("organizations").select("name").eq("id", orgId).maybeSingle(),
+      db.from("org_members").select("full_name, email").eq("user_id", context.userId).eq("org_id", orgId).maybeSingle(),
+    ]);
+    await notifyInvitedMember({
+      email,
+      orgName: (orgRow?.name as string | undefined) ?? "your organisation",
+      role: data.role,
+      title: data.title.trim() || null,
+      inviteeName: data.fullName.trim() || null,
+      inviterName: inviter?.full_name ?? inviter?.email ?? null,
+      memberId: row?.id ?? null,
+    });
+    return { ok: true, notified: true };
   });
 
 export const setMemberRole = createServerFn({ method: "POST" })
