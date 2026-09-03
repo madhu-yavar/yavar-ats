@@ -2,10 +2,26 @@ import { Link } from "@tanstack/react-router";
 
 import logoAsset from "@/assets/yavar-logo.png.asset.json";
 
-/** The Yavar wordmark, sized for a light surface. */
-export function BrandLogo({ className = "h-7" }: { className?: string }) {
-  return <img src={logoAsset.url} alt="Yavar" className={`${className} w-auto`} />;
+/**
+ * The Yavar wordmark. The source artwork is dark, so on dark surfaces pass
+ * tone="onDark" to render it light-on-dark instead of disappearing.
+ */
+export function BrandLogo({
+  className = "h-7",
+  tone = "onLight",
+}: {
+  className?: string;
+  tone?: "onLight" | "onDark";
+}) {
+  return (
+    <img
+      src={logoAsset.url}
+      alt="Yavar"
+      className={`${className} w-auto ${tone === "onDark" ? "brightness-0 invert" : ""}`}
+    />
+  );
 }
+
 
 const LINKEDIN = "https://www.linkedin.com/company/yavar-techworks/";
 

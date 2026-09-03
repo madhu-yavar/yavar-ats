@@ -130,7 +130,7 @@ function SignIn() {
     <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
       <div className="hidden flex-col justify-between gap-10 bg-sidebar p-12 text-sidebar-foreground lg:flex">
         <div className="flex items-center gap-3">
-          <BrandLogo className="h-7" />
+          <BrandLogo className="h-7" tone="onDark" />
           <span className="text-xs font-semibold tracking-[0.22em] uppercase text-sidebar-primary">ATSIQ</span>
         </div>
 
