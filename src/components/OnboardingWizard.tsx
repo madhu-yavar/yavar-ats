@@ -52,7 +52,20 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
   const [inviteRole, setInviteRole] = useState<AppRole>("recruiter");
   const [inviteTitle, setInviteTitle] = useState("");
 
-  const canContinue = step !== 0 || name.trim().length > 1;
+  const step0Missing = [
+    !name.trim() && "Organisation name",
+    !legalName.trim() && "Registered legal name",
+    !industry.trim() && "Industry",
+    !hqCountry.trim() && "HQ country",
+    !hqCity.trim() && "HQ city",
+    !currency.trim() && "Reporting currency",
+    !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(careersEmail.trim()) && "A valid careers inbox",
+  ].filter(Boolean) as string[];
+  const step1Ok = departments.filter((d) => d.name.trim()).length > 0;
+  const step2Ok = locations.filter(Boolean).length > 0;
+  const canContinue =
+    step === 0 ? step0Missing.length === 0 : step === 1 ? step1Ok : step === 2 ? step2Ok : true;
+
 
   async function finish() {
     setBusy(true);
