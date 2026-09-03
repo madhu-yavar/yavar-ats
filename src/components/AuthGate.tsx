@@ -10,6 +10,38 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { workEmailProblem } from "@/lib/work-email";
+import { BrandLogo } from "@/components/Brand";
+import { CalendarCheck, GitCompareArrows, ShieldCheck, Sparkles, Users } from "lucide-react";
+
+const HIGHLIGHTS = [
+  {
+    icon: GitCompareArrows,
+    title: "Defensible JD ↔ CV matching",
+    body: "Weighted skills, experience, career history, impact, education and social signals — with the rationale attached.",
+  },
+  {
+    icon: Users,
+    title: "Talent pool that stays clean",
+    body: "Bulk CV parsing, duplicate detection, freshness tiers and automatic re-matching against new requisitions.",
+  },
+  {
+    icon: CalendarCheck,
+    title: "Interviews to offer, end to end",
+    body: "Calendar invites, competency scorecards, stage automation and offer tracking in one pipeline.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Enterprise-ready governance",
+    body: "Requisition approvals, role-based access, tenant isolation and a full audit trail on every decision.",
+  },
+] as const;
+
+const STATS = [
+  { value: "6", label: "Weighted scoring dimensions" },
+  { value: "100%", label: "Scores with an evidence trail" },
+  { value: "1 hub", label: "Requisition to joining" },
+] as const;
+
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient();
