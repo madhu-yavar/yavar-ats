@@ -185,9 +185,12 @@ export const createOrganization = createServerFn({ method: "POST" })
         currency: data.currency.trim() || "INR",
         fiscal_year_start_month: data.fiscalYearStartMonth,
         careers_email: data.careersEmail.trim() || null,
-        onboarding_step: "done",
-        onboarded_at: new Date().toISOString(),
+        onboarding_step: "pending_approval",
+        onboarded_at: null,
+        // Every new tenant waits for a platform super admin to approve it.
+        status: "pending",
         created_by: context.userId,
+
       })
       .select("*")
       .single();
