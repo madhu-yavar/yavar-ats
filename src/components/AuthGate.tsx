@@ -66,7 +66,7 @@ function SignIn() {
           options: { emailRedirectTo: window.location.origin },
         });
         if (error) throw error;
-        toast.success("Account created. You're signed in.");
+        toast.success("Owner account created. Let's set up your organisation.");
       }
     } catch (err) {
       toast.error((err as Error).message);
@@ -146,7 +146,12 @@ function SignIn() {
           <button
             type="button"
             className="w-full text-center text-sm text-muted-foreground underline-offset-4 hover:underline"
-            onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
+            onClick={async () => {
+              // Registering a new company always starts from a clean session, so the
+              // wizard can never be masked by a previously signed-in workspace.
+              if (mode === "signin") await supabase.auth.signOut().catch(() => undefined);
+              setMode(mode === "signin" ? "signup" : "signin");
+            }}
           >
             {mode === "signin"
               ? "New company? Register your organisation"

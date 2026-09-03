@@ -16,6 +16,7 @@ import { Route as InterviewsRouteImport } from './routes/interviews'
 import { Route as MastersRouteImport } from './routes/masters'
 import { Route as MatchingRouteImport } from './routes/matching'
 import { Route as OffersRouteImport } from './routes/offers'
+import { Route as OrganisationRouteImport } from './routes/organisation'
 import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as TeamRouteImport } from './routes/team'
@@ -60,6 +61,11 @@ const MatchingRoute = MatchingRouteImport.update({
 const OffersRoute = OffersRouteImport.update({
   id: '/offers',
   path: '/offers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OrganisationRoute = OrganisationRouteImport.update({
+  id: '/organisation',
+  path: '/organisation',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PlatformRoute = PlatformRouteImport.update({
@@ -121,6 +127,7 @@ export interface FileRoutesByFullPath {
   '/masters': typeof MastersRoute
   '/matching': typeof MatchingRoute
   '/offers': typeof OffersRoute
+  '/organisation': typeof OrganisationRoute
   '/platform': typeof PlatformRoute
   '/reports': typeof ReportsRoute
   '/team': typeof TeamRoute
@@ -140,6 +147,7 @@ export interface FileRoutesByTo {
   '/masters': typeof MastersRoute
   '/matching': typeof MatchingRoute
   '/offers': typeof OffersRoute
+  '/organisation': typeof OrganisationRoute
   '/platform': typeof PlatformRoute
   '/reports': typeof ReportsRoute
   '/team': typeof TeamRoute
@@ -160,6 +168,7 @@ export interface FileRoutesById {
   '/masters': typeof MastersRoute
   '/matching': typeof MatchingRoute
   '/offers': typeof OffersRoute
+  '/organisation': typeof OrganisationRoute
   '/platform': typeof PlatformRoute
   '/reports': typeof ReportsRoute
   '/team': typeof TeamRoute
@@ -181,6 +190,7 @@ export interface FileRouteTypes {
     | '/masters'
     | '/matching'
     | '/offers'
+    | '/organisation'
     | '/platform'
     | '/reports'
     | '/team'
@@ -200,6 +210,7 @@ export interface FileRouteTypes {
     | '/masters'
     | '/matching'
     | '/offers'
+    | '/organisation'
     | '/platform'
     | '/reports'
     | '/team'
@@ -219,6 +230,7 @@ export interface FileRouteTypes {
     | '/masters'
     | '/matching'
     | '/offers'
+    | '/organisation'
     | '/platform'
     | '/reports'
     | '/team'
@@ -239,6 +251,7 @@ export interface RootRouteChildren {
   MastersRoute: typeof MastersRoute
   MatchingRoute: typeof MatchingRoute
   OffersRoute: typeof OffersRoute
+  OrganisationRoute: typeof OrganisationRoute
   PlatformRoute: typeof PlatformRoute
   ReportsRoute: typeof ReportsRoute
   TeamRoute: typeof TeamRoute
@@ -299,6 +312,13 @@ declare module '@tanstack/react-router' {
       path: '/offers'
       fullPath: '/offers'
       preLoaderRoute: typeof OffersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/organisation': {
+      id: '/organisation'
+      path: '/organisation'
+      fullPath: '/organisation'
+      preLoaderRoute: typeof OrganisationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/platform': {
@@ -394,6 +414,7 @@ const rootRouteChildren: RootRouteChildren = {
   MastersRoute: MastersRoute,
   MatchingRoute: MatchingRoute,
   OffersRoute: OffersRoute,
+  OrganisationRoute: OrganisationRoute,
   PlatformRoute: PlatformRoute,
   ReportsRoute: ReportsRoute,
   TeamRoute: TeamRoute,

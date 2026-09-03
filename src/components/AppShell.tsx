@@ -5,6 +5,7 @@ import {
   Building2,
   CalendarClock,
   Database,
+  Globe2,
   FileSignature,
   LayoutDashboard,
   LogOut,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
+import { usePlatform } from "@/hooks/usePlatform";
 import { Button } from "@/components/ui/button";
 import { Copilot } from "@/components/Copilot";
 
@@ -29,6 +31,7 @@ const NAV = [
   { to: "/offers", label: "Offers", icon: FileSignature },
   { to: "/reports", label: "Reports", icon: BarChart3 },
   { to: "/team", label: "Users & roles", icon: ShieldCheck },
+  { to: "/organisation", label: "Organisation", icon: Building2 },
   { to: "/integrations", label: "Integrations", icon: Plug },
   { to: "/masters", label: "Master data", icon: Database },
 ] as const;
@@ -36,6 +39,8 @@ const NAV = [
 
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const { isSuperUser, claimable } = usePlatform();
+  const nav = [...NAV, ...(isSuperUser || claimable ? [{ to: "/platform", label: "Platform console", icon: Globe2 } as const] : [])];
   return (
     <div className="flex min-h-screen">
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col justify-between bg-sidebar p-5 text-sidebar-foreground lg:flex">
@@ -47,7 +52,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="mt-1 text-lg font-semibold">Talent Acquisition</div>
           </div>
           <nav className="space-y-1">
-            {NAV.map(({ to, label, icon: Icon }) => (
+            {nav.map(({ to, label, icon: Icon }) => (
               <Link
                 key={to}
                 to={to}
@@ -75,7 +80,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="min-w-0 flex-1">
         <div className="flex gap-1 overflow-x-auto border-b border-border bg-card px-4 py-2 lg:hidden">
-          {NAV.map(({ to, label }) => (
+          {nav.map(({ to, label }) => (
             <Link
               key={to}
               to={to}
@@ -87,7 +92,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </div>
-        <main className="mx-auto max-w-7xl space-y-6 p-5 sm:p-8">{children}</main>
+        <main className="mx-auto max-w-[1400px] space-y-4 p-4 sm:p-6">{children}</main>
       </div>
       <Copilot />
     </div>
