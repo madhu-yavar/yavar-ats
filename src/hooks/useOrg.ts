@@ -10,6 +10,13 @@ export function useOrg() {
     queryKey: ["my_org"],
     queryFn: () => fetchOrg({}),
     staleTime: 30_000,
+    // A tenant awaiting platform approval must flip into the workspace on its own the
+    // moment a super admin decides — signing out and back in was never required.
+    refetchInterval: (query) => {
+      const status = query.state.data?.org?.status;
+      return status === "pending" || status === "rejected" ? 10_000 : false;
+    },
+    refetchOnWindowFocus: true,
     // A freshly issued session can lose the first RPC race; never fall through
     // to "you have no organisation" because of a transient 401 or network blip.
     retry: 3,

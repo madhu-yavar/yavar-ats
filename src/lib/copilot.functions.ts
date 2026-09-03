@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { MANUAL_TEXT } from "@/lib/user-manual";
 
 export type CopilotMessage = { id: string; role: "user" | "assistant"; content: string; createdAt: string };
 
@@ -117,7 +118,12 @@ Rules:
 - Organisation (/organisation): the owner edits the organisation profile and can archive the
   organisation. Archiving locks everyone out but deletes nothing; only a platform super user
   can restore it, and they also see every registered organisation's statistics.
-- Return JSON: { "answer": "markdown-free plain text answer" }.`;
+- For "how do I ..." questions, answer strictly from the USER MANUAL below, quoting the
+  real page names and the actual order of steps. Never invent a setting that is not in it.
+- Return JSON: { "answer": "markdown-free plain text answer" }.
+
+USER MANUAL (authoritative product documentation):
+${MANUAL_TEXT}`;
 
 export const askCopilot = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
