@@ -40,7 +40,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       clearTimeout(bail);
       sub.subscription.unsubscribe();
     };
-  }, []);
+  }, [qc]);
 
 
   if (!ready) {
