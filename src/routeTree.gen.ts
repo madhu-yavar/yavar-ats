@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CookiesRouteImport } from './routes/cookies'
 import { Route as HelpRouteImport } from './routes/help'
 import { Route as IjpRouteImport } from './routes/ijp'
 import { Route as IntegrationsRouteImport } from './routes/integrations'
@@ -19,6 +20,7 @@ import { Route as MatchingRouteImport } from './routes/matching'
 import { Route as OffersRouteImport } from './routes/offers'
 import { Route as OrganisationRouteImport } from './routes/organisation'
 import { Route as PlatformRouteImport } from './routes/platform'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as TeamRouteImport } from './routes/team'
 import { Route as AssessTokenRouteImport } from './routes/assess.$token'
@@ -35,6 +37,11 @@ import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/l
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CookiesRoute = CookiesRouteImport.update({
+  id: '/cookies',
+  path: '/cookies',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HelpRoute = HelpRouteImport.update({
@@ -80,6 +87,11 @@ const OrganisationRoute = OrganisationRouteImport.update({
 const PlatformRoute = PlatformRouteImport.update({
   id: '/platform',
   path: '/platform',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportsRoute = ReportsRouteImport.update({
@@ -146,6 +158,7 @@ const LovableEmailTransactionalPreviewRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/cookies': typeof CookiesRoute
   '/help': typeof HelpRoute
   '/ijp': typeof IjpRoute
   '/integrations': typeof IntegrationsRoute
@@ -155,6 +168,7 @@ export interface FileRoutesByFullPath {
   '/offers': typeof OffersRoute
   '/organisation': typeof OrganisationRoute
   '/platform': typeof PlatformRoute
+  '/privacy': typeof PrivacyRoute
   '/reports': typeof ReportsRoute
   '/team': typeof TeamRoute
   '/assess/$token': typeof AssessTokenRoute
@@ -170,6 +184,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/cookies': typeof CookiesRoute
   '/help': typeof HelpRoute
   '/ijp': typeof IjpRoute
   '/integrations': typeof IntegrationsRoute
@@ -179,6 +194,7 @@ export interface FileRoutesByTo {
   '/offers': typeof OffersRoute
   '/organisation': typeof OrganisationRoute
   '/platform': typeof PlatformRoute
+  '/privacy': typeof PrivacyRoute
   '/reports': typeof ReportsRoute
   '/team': typeof TeamRoute
   '/assess/$token': typeof AssessTokenRoute
@@ -195,6 +211,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/cookies': typeof CookiesRoute
   '/help': typeof HelpRoute
   '/ijp': typeof IjpRoute
   '/integrations': typeof IntegrationsRoute
@@ -204,6 +221,7 @@ export interface FileRoutesById {
   '/offers': typeof OffersRoute
   '/organisation': typeof OrganisationRoute
   '/platform': typeof PlatformRoute
+  '/privacy': typeof PrivacyRoute
   '/reports': typeof ReportsRoute
   '/team': typeof TeamRoute
   '/assess/$token': typeof AssessTokenRoute
@@ -221,6 +239,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/cookies'
     | '/help'
     | '/ijp'
     | '/integrations'
@@ -230,6 +249,7 @@ export interface FileRouteTypes {
     | '/offers'
     | '/organisation'
     | '/platform'
+    | '/privacy'
     | '/reports'
     | '/team'
     | '/assess/$token'
@@ -245,6 +265,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/cookies'
     | '/help'
     | '/ijp'
     | '/integrations'
@@ -254,6 +275,7 @@ export interface FileRouteTypes {
     | '/offers'
     | '/organisation'
     | '/platform'
+    | '/privacy'
     | '/reports'
     | '/team'
     | '/assess/$token'
@@ -269,6 +291,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/cookies'
     | '/help'
     | '/ijp'
     | '/integrations'
@@ -278,6 +301,7 @@ export interface FileRouteTypes {
     | '/offers'
     | '/organisation'
     | '/platform'
+    | '/privacy'
     | '/reports'
     | '/team'
     | '/assess/$token'
@@ -294,6 +318,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CookiesRoute: typeof CookiesRoute
   HelpRoute: typeof HelpRoute
   IjpRoute: typeof IjpRoute
   IntegrationsRoute: typeof IntegrationsRoute
@@ -303,6 +328,7 @@ export interface RootRouteChildren {
   OffersRoute: typeof OffersRoute
   OrganisationRoute: typeof OrganisationRoute
   PlatformRoute: typeof PlatformRoute
+  PrivacyRoute: typeof PrivacyRoute
   ReportsRoute: typeof ReportsRoute
   TeamRoute: typeof TeamRoute
   AssessTokenRoute: typeof AssessTokenRoute
@@ -323,6 +349,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cookies': {
+      id: '/cookies'
+      path: '/cookies'
+      fullPath: '/cookies'
+      preLoaderRoute: typeof CookiesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/help': {
@@ -386,6 +419,13 @@ declare module '@tanstack/react-router' {
       path: '/platform'
       fullPath: '/platform'
       preLoaderRoute: typeof PlatformRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reports': {
@@ -489,6 +529,7 @@ const InterviewsRouteWithChildren = InterviewsRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CookiesRoute: CookiesRoute,
   HelpRoute: HelpRoute,
   IjpRoute: IjpRoute,
   IntegrationsRoute: IntegrationsRoute,
@@ -498,6 +539,7 @@ const rootRouteChildren: RootRouteChildren = {
   OffersRoute: OffersRoute,
   OrganisationRoute: OrganisationRoute,
   PlatformRoute: PlatformRoute,
+  PrivacyRoute: PrivacyRoute,
   ReportsRoute: ReportsRoute,
   TeamRoute: TeamRoute,
   AssessTokenRoute: AssessTokenRoute,

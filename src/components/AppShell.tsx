@@ -20,6 +20,7 @@ import { usePlatform } from "@/hooks/usePlatform";
 import { Button } from "@/components/ui/button";
 import { Copilot } from "@/components/Copilot";
 import { NotificationBell } from "@/components/NotificationBell";
+import { BrandFooter, BrandLogo } from "@/components/Brand";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -81,7 +82,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-end gap-2 border-b border-border bg-card px-4 py-2">
+        <div className="flex items-center justify-between gap-2 border-b border-border bg-card px-4 py-2">
+          <Link to="/" className="flex items-center gap-3">
+            <BrandLogo className="h-6" />
+            <span className="hidden text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:inline">
+              ATSIQ
+            </span>
+          </Link>
           <NotificationBell />
         </div>
         <div className="flex gap-1 overflow-x-auto border-b border-border bg-card px-4 py-2 lg:hidden">
@@ -98,6 +105,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ))}
         </div>
         <main className="mx-auto max-w-[1400px] space-y-4 p-4 sm:p-6">{children}</main>
+        <BrandFooter />
       </div>
       <Copilot />
     </div>
