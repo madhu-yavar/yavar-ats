@@ -171,6 +171,9 @@ export const listAllOrganizations = createServerFn({ method: "GET" })
         status: (o as { status?: string }).status ?? "active",
         createdAt: o.created_at,
         archivedAt: (o as { archived_at?: string | null }).archived_at ?? null,
+        approvedAt: (o as { approved_at?: string | null }).approved_at ?? null,
+        rejectionReason: (o as { rejection_reason?: string | null }).rejection_reason ?? null,
+
         members: count(members.data, o.id),
         requisitions: count(reqs.data, o.id),
         openRequisitions: count(reqs.data, o.id, (r) => r.status === "approved"),
