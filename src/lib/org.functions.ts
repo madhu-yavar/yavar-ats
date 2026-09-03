@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { emailDomain, workEmailProblem } from "@/lib/work-email";
+import { emailDomain, registrableDomain, workEmailProblem } from "@/lib/work-email";
 
 export type AppRole = "recruiter" | "hiring_manager" | "department_head" | "hr_head" | "president_cbo";
 
@@ -298,8 +298,8 @@ export const createOrganization = createServerFn({ method: "POST" })
     for (const invite of data.invites) {
       if (invite.email.toLowerCase() === email.toLowerCase()) continue;
       // Internal users only: colleagues must be on the organisation's own domain.
-      if (emailDomain(invite.email) !== emailDomain(email))
-        throw new Error(`${invite.email} is not on the ${emailDomain(email)} domain.`);
+      if (registrableDomain(invite.email) !== registrableDomain(email))
+        throw new Error(`${invite.email} is not on the ${registrableDomain(email)} domain.`);
       const { data: row } = await db
         .from("org_members")
         .insert({
@@ -457,8 +457,8 @@ export const inviteMember = createServerFn({ method: "POST" })
       .eq("is_owner", true)
       .limit(1)
       .maybeSingle();
-    if (owner?.email && emailDomain(owner.email) !== emailDomain(email))
-      throw new Error(`Only ${emailDomain(owner.email)} addresses can be invited into this organisation.`);
+    if (owner?.email && registrableDomain(owner.email) !== registrableDomain(email))
+      throw new Error(`Only ${registrableDomain(owner.email)} addresses can be invited into this organisation.`);
 
     const { data: existingUser } = await db
       .from("org_members")
