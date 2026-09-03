@@ -52,7 +52,20 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
   const [inviteRole, setInviteRole] = useState<AppRole>("recruiter");
   const [inviteTitle, setInviteTitle] = useState("");
 
-  const canContinue = step !== 0 || name.trim().length > 1;
+  const step0Missing = [
+    !name.trim() && "Organisation name",
+    !legalName.trim() && "Registered legal name",
+    !industry.trim() && "Industry",
+    !hqCountry.trim() && "HQ country",
+    !hqCity.trim() && "HQ city",
+    !currency.trim() && "Reporting currency",
+    !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(careersEmail.trim()) && "A valid careers inbox",
+  ].filter(Boolean) as string[];
+  const step1Ok = departments.filter((d) => d.name.trim()).length > 0;
+  const step2Ok = locations.filter(Boolean).length > 0;
+  const canContinue =
+    step === 0 ? step0Missing.length === 0 : step === 1 ? step1Ok : step === 2 ? step2Ok : true;
+
 
   async function finish() {
     setBusy(true);
@@ -126,14 +139,14 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
               <Field label="Organisation name" required>
                 <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Technologies" />
               </Field>
-              <Field label="Registered legal name">
+              <Field label="Registered legal name" required>
                 <Input
                   value={legalName}
                   onChange={(e) => setLegalName(e.target.value)}
                   placeholder="Acme Technologies Pvt Ltd"
                 />
               </Field>
-              <Field label="Industry">
+              <Field label="Industry" required>
                 <Input value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="IT services" />
               </Field>
               <Field label="Headcount band">
@@ -149,13 +162,13 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
                   ))}
                 </select>
               </Field>
-              <Field label="HQ country">
+              <Field label="HQ country" required>
                 <Input value={hqCountry} onChange={(e) => setHqCountry(e.target.value)} />
               </Field>
-              <Field label="HQ city">
+              <Field label="HQ city" required>
                 <Input value={hqCity} onChange={(e) => setHqCity(e.target.value)} placeholder="Chennai" />
               </Field>
-              <Field label="Reporting currency">
+              <Field label="Reporting currency" required>
                 <Input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} />
               </Field>
               <Field label="Financial year starts in">
@@ -171,7 +184,7 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
                   ))}
                 </select>
               </Field>
-              <Field label="Careers inbox (used on job posts)">
+              <Field label="Careers inbox (used on job posts)" required>
                 <Input
                   value={careersEmail}
                   onChange={(e) => setCareersEmail(e.target.value)}
@@ -341,12 +354,21 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
             <Button variant="ghost" disabled={step === 0 || busy} onClick={() => setStep((s) => s - 1)}>
               Back
             </Button>
+            {step === 0 && step0Missing.length ? (
+              <p className="text-xs text-muted-foreground">Still needed: {step0Missing.join(", ")}</p>
+            ) : null}
+            {step === 1 && !step1Ok ? (
+              <p className="text-xs text-muted-foreground">Add at least one department.</p>
+            ) : null}
+            {step === 2 && !step2Ok ? (
+              <p className="text-xs text-muted-foreground">Add at least one hiring location.</p>
+            ) : null}
             {step < STEPS.length - 1 ? (
               <Button disabled={!canContinue} onClick={() => setStep((s) => s + 1)}>
                 Continue
               </Button>
             ) : (
-              <Button disabled={busy || !name.trim()} onClick={finish}>
+              <Button disabled={busy || step0Missing.length > 0 || !step1Ok || !step2Ok} onClick={finish}>
                 {busy ? "Creating…" : "Create organisation"}
               </Button>
             )}
