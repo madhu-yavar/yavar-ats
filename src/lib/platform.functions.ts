@@ -389,8 +389,10 @@ export const deleteOrgUserAsSuperUser = createServerFn({ method: "POST" })
       await db.from("user_roles").delete().eq("user_id", member.user_id).eq("org_id", member.org_id);
     const { error } = await db.from("org_members").delete().eq("id", member.id);
     if (error) throw new Error(error.message);
-    return { ok: true };
+    const removedAccounts = member.user_id ? await purgeOrphanAccounts([member.user_id]) : 0;
+    return { ok: true, removedAccounts };
   });
+
 
 /**
  * Approve or reject a freshly registered tenant. Nothing inside a pending organisation
