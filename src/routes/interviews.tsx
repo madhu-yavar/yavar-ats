@@ -99,10 +99,26 @@ function Interviews() {
     reason: "",
   });
 
+  const [search, setSearch] = useState("");
+  const [stageFilter, setStageFilter] = useState("all");
+
   const scoreMap = latestScores(scores.data ?? []);
   const eligible = (apps.data ?? []).filter((a) =>
     ["shortlisted", "ai_screened", "l1", "l2", "l3", "offer", "offer_pending"].includes(a.stage),
   );
+
+  const filtered = eligible.filter((a) => {
+    const c = (cands.data ?? []).find((x) => x.id === a.candidate_id);
+    const r = (reqs.data ?? []).find((x) => x.id === a.requisition_id);
+    const q = search.trim().toLowerCase();
+    if (q && ![c?.full_name, r?.title, r?.code].join(" ").toLowerCase().includes(q)) return false;
+    if (stageFilter === "all") return true;
+    if (stageFilter === "unscheduled") {
+      return (ivs.data ?? []).filter((i) => i.application_id === a.id && i.scheduled_at).length === 0;
+    }
+    return a.stage === stageFilter;
+  });
+
 
   function openSlot(applicationId: string, level: number, interviewId: string | null) {
     const existing = (ivs.data ?? []).find((i) => i.id === interviewId);
