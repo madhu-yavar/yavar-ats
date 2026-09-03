@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useOrg } from "@/hooks/useOrg";
+import { usePlatform } from "@/hooks/usePlatform";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 
 /**
@@ -8,15 +9,40 @@ import { OnboardingWizard } from "@/components/OnboardingWizard";
  * membership is sent through onboarding before the workspace renders.
  */
 export function OrgGate({ children }: { children: React.ReactNode }) {
-  const { org, membership, isLoading, refetch } = useOrg();
+  const { org, membership, isLoading, isError, error, refetch } = useOrg();
+  const platform = usePlatform();
 
-  if (isLoading) {
+  if (isLoading || platform.isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
         Loading your organisation…
       </div>
     );
   }
+
+  // A failed lookup must never be mistaken for "this user has no organisation" —
+  // that is what used to drop a signed-in super user into the registration wizard.
+  if (isError) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-4 text-center">
+        <div className="panel max-w-md space-y-2 p-6">
+          <h1 className="text-lg font-semibold">Couldn't load your workspace</h1>
+          <p className="text-sm text-muted-foreground">{error?.message ?? "Please try again."}</p>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" onClick={() => refetch()}>
+            Retry
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}>
+            Sign out
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Platform super users administer tenants; they do not belong to one.
+  if ((!org || !membership) && (platform.isSuperUser || platform.claimable)) return <>{children}</>;
 
   if (!org || !membership) return <OnboardingWizard onDone={() => refetch()} />;
 
