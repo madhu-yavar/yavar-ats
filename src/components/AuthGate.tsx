@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { workEmailProblem } from "@/lib/work-email";
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient();
@@ -69,13 +70,15 @@ function SignIn() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else {
+        const problem = workEmailProblem(email);
+        if (problem) throw new Error(problem);
         const { error } = await supabase.auth.signUp({
           email,
           password,
           options: { emailRedirectTo: window.location.origin },
         });
         if (error) throw error;
-        toast.success("Owner account created. Let's set up your organisation.");
+        toast.success("Check your inbox to confirm your work email, then continue the setup.");
       }
     } catch (err) {
       toast.error((err as Error).message);
