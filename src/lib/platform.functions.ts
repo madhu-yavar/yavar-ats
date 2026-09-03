@@ -430,42 +430,43 @@ export const reviewOrganization = createServerFn({ method: "POST" })
             rejection_reason: data.reason.trim() || "Registration rejected by the platform team.",
             approved_at: null,
           };
-    const { error } = await db.from("organizations").update(patch).eq("id", data.orgId);
-    if (error) throw new Error(error.message);
+    // The acknowledgement goes out BEFORE access changes, so an owner is never activated
+    // (or locked out) ahead of being told why. A mail failure must not block the decision.
+    const { data: org } = await db.from("organizations").select("name").eq("id", data.orgId).maybeSingle();
+    const { data: owner } = await db
+      .from("org_members")
+      .select("email, full_name")
+      .eq("org_id", data.orgId)
+      .eq("is_owner", true)
+      .maybeSingle();
 
-    // Acknowledge the decision to the registering owner, with next steps.
-    try {
-      const { data: org } = await db
-        .from("organizations")
-        .select("name")
-        .eq("id", data.orgId)
-        .maybeSingle();
-      const { data: owner } = await db
-        .from("org_members")
-        .select("email, full_name")
-        .eq("org_id", data.orgId)
-        .eq("is_owner", true)
-        .maybeSingle();
-      if (owner?.email && org?.name) {
+    let emailed = false;
+    let emailError: string | null = null;
+    if (owner?.email && org?.name) {
+      try {
         const { sendTemplateEmail } = await import("@/lib/email-templates/send-email");
-        await sendTemplateEmail(
+        const res = await sendTemplateEmail(
           data.decision === "approve" ? "org-approved" : "org-rejected",
           owner.email,
           {
             templateData: {
               orgName: org.name,
               ownerName: owner.full_name ?? undefined,
-              ...(data.decision === "reject"
-                ? { reason: patch.rejection_reason ?? undefined }
-                : {}),
+              ...(data.decision === "reject" ? { reason: patch.rejection_reason ?? undefined } : {}),
             },
-            idempotencyKey: `org-${data.decision}-${data.orgId}`,
+            idempotencyKey: `org-${data.decision}-${data.orgId}-${now}`,
           },
         );
+        emailed = Boolean((res as { sent?: boolean } | undefined)?.sent ?? true);
+      } catch (mailError) {
+        emailError = mailError instanceof Error ? mailError.message : "Acknowledgement email failed";
+        console.error("Organisation decision email failed", mailError);
       }
-    } catch (mailError) {
-      console.error("Organisation decision email failed", mailError);
     }
 
-    return { ok: true };
+    const { error } = await db.from("organizations").update(patch).eq("id", data.orgId);
+    if (error) throw new Error(error.message);
+
+    return { ok: true, emailed, emailError, notifiedAt: emailed ? now : null };
   });
+
