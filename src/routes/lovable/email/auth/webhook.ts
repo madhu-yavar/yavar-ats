@@ -9,7 +9,7 @@ import { EmailChangeEmail } from '@/lib/email-templates/email-change'
 import { ReauthenticationEmail } from '@/lib/email-templates/reauthentication'
 
 // Configuration
-const SITE_NAME = "Profile Matcher Pro"
+const SITE_NAME = "ATSIQ"
 const SENDER_DOMAIN = "notify.atsiq.yavar.ai"
 const ROOT_DOMAIN = "atsiq.yavar.ai"
 const FROM_DOMAIN = "atsiq.yavar.ai"
