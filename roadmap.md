@@ -32,5 +32,5 @@
 - [x] Slice 3: embedded HR copilot — floating panel on every page, one ongoing conversation per user persisted in `copilot_messages` (org-scoped, RLS own-rows), grounded in a live org data snapshot via the configured AI provider.
 - [x] Org registration path made explicit on the sign-in screen ("New company? Register your organisation" → owner account → 4-step setup wizard).
 
-## Landing page (in progress)
-- [ ] Replace the terse split-screen sign-in with an information-rich, Zoho-Recruit-style enterprise landing page (hero + sign-in card, capability grid, module walkthrough, scoring model, governance, FAQ, CTA) while keeping email/Google sign-in and org registration intact.
+## Landing page (done)
+- [x] Replace the terse split-screen sign-in with an information-rich, Zoho-Recruit-style enterprise landing page (hero + sign-in card, capability grid, module walkthrough, scoring model, governance, FAQ, CTA) while keeping email/Google sign-in and org registration intact.
