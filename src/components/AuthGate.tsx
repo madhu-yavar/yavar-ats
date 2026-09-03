@@ -108,9 +108,10 @@ function SignIn() {
             </h2>
             <p className="text-sm text-muted-foreground">
               {mode === "signin"
-                ? "Talent acquisition workspace"
-                : "Create the owner account — organisation setup starts right after."}
+                ? "Talent acquisition workspace — sign in with your invited work email."
+                : "Accounts exist only inside an organisation. Register your company here; a platform super admin approves it, then you invite your internal users."}
             </p>
+
           </div>
 
           <div className="space-y-2">
