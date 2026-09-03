@@ -6,13 +6,23 @@ import { myOrg } from "@/lib/org.functions";
 /** The signed-in user's organisation, membership and granted roles. */
 export function useOrg() {
   const fetchOrg = useServerFn(myOrg);
-  const q = useQuery({ queryKey: ["my_org"], queryFn: () => fetchOrg({}), staleTime: 30_000 });
+  const q = useQuery({
+    queryKey: ["my_org"],
+    queryFn: () => fetchOrg({}),
+    staleTime: 30_000,
+    // A freshly issued session can lose the first RPC race; never fall through
+    // to "you have no organisation" because of a transient 401 or network blip.
+    retry: 3,
+    retryDelay: (attempt) => Math.min(400 * 2 ** attempt, 2000),
+  });
   return {
     org: q.data?.org ?? null,
     membership: q.data?.membership ?? null,
     roles: q.data?.roles ?? [],
     isOwner: Boolean(q.data?.membership?.isOwner),
     isLoading: q.isLoading,
+    isError: q.isError,
+    error: q.error as Error | null,
     refetch: q.refetch,
   };
 }
