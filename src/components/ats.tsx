@@ -63,21 +63,40 @@ export function educationLabel(raw: string | null | undefined) {
   const value = (raw ?? "").trim();
   if (!value) return "";
   if (!(value.startsWith("[") || value.startsWith("{"))) return value;
+
+  const pick = (row: Record<string, unknown>, keys: string[]) => {
+    for (const k of keys) {
+      const v = row?.[k];
+      if (typeof v === "string" && v.trim()) return v.trim();
+      if (typeof v === "number") return String(v);
+    }
+    return "";
+  };
+
   try {
     const parsed = JSON.parse(value);
-    const rows = Array.isArray(parsed) ? parsed : [parsed];
+    const rows: Record<string, unknown>[] = Array.isArray(parsed) ? parsed : [parsed];
     return rows
-      .map((r: Record<string, unknown>) =>
-        [r?.["degree"], r?.["institution"], r?.["end_date"] ?? r?.["year"]]
-          .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
-          .join(", "),
-      )
+      .map((r) => {
+        const degree = pick(r, ["degree", "qualification", "course", "program"]);
+        const field = pick(r, ["field", "specialisation", "specialization", "branch", "major"]);
+        const school = pick(r, ["institution", "college", "school", "university"]);
+        const when = pick(r, ["duration", "end_date", "year", "graduation_year", "completed"]);
+        const gpa = pick(r, ["gpa", "cgpa", "percentage", "score"]);
+
+        const head = [degree, field && !degree.toLowerCase().includes(field.toLowerCase()) ? field : ""]
+          .filter(Boolean)
+          .join(" — ");
+        const tail = [school, when, gpa ? `GPA ${gpa}` : ""].filter(Boolean).join(", ");
+        return [head, tail].filter(Boolean).join(" — ");
+      })
       .filter((s) => s.length > 0)
       .join(" · ");
   } catch {
     return value;
   }
 }
+
 
 export function ScoreBar({
   label,
