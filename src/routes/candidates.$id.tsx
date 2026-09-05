@@ -181,7 +181,7 @@ function CandidateDetail() {
       <PageHeader
         eyebrow={`${c.source} · ${c.experience_years} yrs experience`}
         title={c.full_name}
-        description={`${c.email}${c.location ? ` · ${c.location}` : ""}${c.education ? ` · ${c.education}` : ""}`}
+        description={[c.email, c.location, educationLabel(c.education)].filter(Boolean).join(" · ")}
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
