@@ -26,7 +26,15 @@ import { createAssessment } from "@/lib/assessment.functions";
 import { normalizeExternalUrl } from "@/lib/external-links";
 import { nextAction, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
 import { StageMover } from "@/components/StageMover";
-import { EmptyState, PageHeader, ScoreBar, ScoreChip, SkillPills, StageBadge } from "@/components/ats";
+import {
+  EmptyState,
+  educationLabel,
+  PageHeader,
+  ScoreBar,
+  ScoreChip,
+  SkillPills,
+  StageBadge,
+} from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 
