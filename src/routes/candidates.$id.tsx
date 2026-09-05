@@ -26,7 +26,15 @@ import { createAssessment } from "@/lib/assessment.functions";
 import { normalizeExternalUrl } from "@/lib/external-links";
 import { nextAction, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
 import { StageMover } from "@/components/StageMover";
-import { EmptyState, PageHeader, ScoreBar, ScoreChip, SkillPills, StageBadge } from "@/components/ats";
+import {
+  EmptyState,
+  educationLabel,
+  PageHeader,
+  ScoreBar,
+  ScoreChip,
+  SkillPills,
+  StageBadge,
+} from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 
@@ -173,7 +181,7 @@ function CandidateDetail() {
       <PageHeader
         eyebrow={`${c.source} · ${c.experience_years} yrs experience`}
         title={c.full_name}
-        description={`${c.email}${c.location ? ` · ${c.location}` : ""}${c.education ? ` · ${c.education}` : ""}`}
+        description={[c.email, c.location, educationLabel(c.education)].filter(Boolean).join(" · ")}
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
