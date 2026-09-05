@@ -375,41 +375,43 @@ function IntegrationCard({ row }: { row: Integration }) {
         <p className="mt-2 rounded-md bg-surface-2 p-3 text-xs text-muted-foreground">{row.last_test_message}</p>
       ) : null}
 
+      {provider === "linkedin" ? <LinkedinOneClick /> : null}
+
       <SetupHelp provider={provider} label={row.label} />
 
       {row.credential_fields.length ? (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {row.credential_fields.map((field) => (
-            <div key={field}>
-              <Label className="text-xs text-muted-foreground">{FIELD_LABEL[field] ?? field}</Label>
-              <Input
-                type={field === "organizer_email" ? "email" : "password"}
-                autoComplete="off"
-                placeholder={row.has_credentials ? "•••••• stored — leave blank to keep" : "Paste value"}
-                value={secrets[field] ?? ""}
-                onChange={(e) => setSecrets((p) => ({ ...p, [field]: e.target.value }))}
+        provider === "linkedin" ? (
+          <details className="mt-4 rounded-lg border border-border bg-surface-2 p-3">
+            <summary className="cursor-pointer text-sm font-medium">
+              Use your own LinkedIn app instead (advanced)
+            </summary>
+            <div className="mt-3">
+              <CredentialFields
+                fields={row.credential_fields}
+                hasCredentials={row.has_credentials}
+                secrets={secrets}
+                setSecrets={setSecrets}
+                baseUrl={baseUrl}
+                setBaseUrl={setBaseUrl}
+                showBaseUrl
               />
-              {FIELD_HINT[field] ? (
-                <p className="mt-1 text-xs text-muted-foreground">{FIELD_HINT[field]}</p>
-              ) : null}
             </div>
-          ))}
-
-          {!isMeeting && provider !== "github" && provider !== "careers" ? (
-            <div className="sm:col-span-2">
-              <Label className="text-xs text-muted-foreground">Partner API base URL</Label>
-              <Input
-                placeholder="https://api.partner.example.com"
-                value={baseUrl}
-                onChange={(e) => setBaseUrl(e.target.value)}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Supplied in your partner onboarding pack. Required before search and applicant pulls can run.
-              </p>
-            </div>
-          ) : null}
-        </div>
+          </details>
+        ) : (
+          <div className="mt-4">
+            <CredentialFields
+              fields={row.credential_fields}
+              hasCredentials={row.has_credentials}
+              secrets={secrets}
+              setSecrets={setSecrets}
+              baseUrl={baseUrl}
+              setBaseUrl={setBaseUrl}
+              showBaseUrl={!isMeeting && provider !== "github" && provider !== "careers"}
+            />
+          </div>
+        )
       ) : null}
+
 
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4">
         <Button size="sm" onClick={onSave} disabled={busy !== null}>
