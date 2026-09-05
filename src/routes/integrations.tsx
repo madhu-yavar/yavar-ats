@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { disconnectIntegration, saveIntegration, testIntegration } from "@/lib/integrations.functions";
 import { getAiSettings, removeAiKey, saveAiSettings, testAiModel } from "@/lib/ai-settings.functions";
+import { linkedinManagedStatus } from "@/lib/linkedin.functions";
 import { PageHeader } from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -250,7 +251,109 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
+/** Shared credential inputs (used directly, or tucked away for LinkedIn). */
+function CredentialFields({
+  fields,
+  hasCredentials,
+  secrets,
+  setSecrets,
+  baseUrl,
+  setBaseUrl,
+  showBaseUrl,
+}: {
+  fields: string[];
+  hasCredentials: boolean;
+  secrets: Record<string, string>;
+  setSecrets: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  baseUrl: string;
+  setBaseUrl: (v: string) => void;
+  showBaseUrl: boolean;
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {fields.map((field) => (
+        <div key={field}>
+          <Label className="text-xs text-muted-foreground">{FIELD_LABEL[field] ?? field}</Label>
+          <Input
+            type={field === "organizer_email" ? "email" : "password"}
+            autoComplete="off"
+            placeholder={hasCredentials ? "•••••• stored — leave blank to keep" : "Paste value"}
+            value={secrets[field] ?? ""}
+            onChange={(e) => setSecrets((p) => ({ ...p, [field]: e.target.value }))}
+          />
+          {FIELD_HINT[field] ? <p className="mt-1 text-xs text-muted-foreground">{FIELD_HINT[field]}</p> : null}
+        </div>
+      ))}
+      {showBaseUrl ? (
+        <div className="sm:col-span-2">
+          <Label className="text-xs text-muted-foreground">Partner API base URL</Label>
+          <Input
+            placeholder="https://api.partner.example.com"
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Supplied in your partner onboarding pack. Required before search and applicant pulls can run.
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * One-time LinkedIn sign-in panel: no codes to copy. The session is authorised
+ * once on LinkedIn's own screen and kept alive for the app afterwards.
+ */
+function LinkedinOneClick() {
+  const status = useQuery({
+    queryKey: ["linkedin_managed"],
+    queryFn: () => linkedinManagedStatus({ data: undefined }),
+    refetchOnWindowFocus: false,
+  });
+  const s = status.data;
+
+  return (
+    <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Sparkles className="size-4 text-primary" />
+          One-click LinkedIn sign-in
+        </div>
+        <Button size="sm" variant="outline" onClick={() => status.refetch()} disabled={status.isFetching}>
+          {status.isFetching ? <Loader2 className="size-4 animate-spin" /> : null} Check LinkedIn
+        </Button>
+      </div>
+
+      <p className="mt-2 text-sm text-muted-foreground">
+        {status.isLoading
+          ? "Checking the LinkedIn sign-in…"
+          : s?.connected
+            ? s.message
+            : (s?.message ?? "LinkedIn sign-in has not been completed yet.")}
+      </p>
+
+      {s?.connected ? (
+        <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600">
+          <CheckCircle2 className="size-3.5" /> Signed in{s.member ? ` — ${s.member}` : ""}
+        </p>
+      ) : null}
+
+      <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+        <li>Signing in is a one-time step — the app renews the session by itself, so nobody re-enters anything.</li>
+        <li>Job adverts and company updates can be published from the signed-in account.</li>
+        <li>
+          LinkedIn never lets any tool read other people&apos;s profiles, so candidate LinkedIn scoring stays
+          evidence-based on what the candidate shared with you. Bulk CV pulls still need a paid Recruiter/Talent
+          Solutions agreement with LinkedIn.
+        </li>
+      </ul>
+    </div>
+  );
+}
+
 function IntegrationCard({ row }: { row: Integration }) {
+
   const qc = useQueryClient();
   const save = useServerFn(saveIntegration);
   const test = useServerFn(testIntegration);
@@ -375,41 +478,43 @@ function IntegrationCard({ row }: { row: Integration }) {
         <p className="mt-2 rounded-md bg-surface-2 p-3 text-xs text-muted-foreground">{row.last_test_message}</p>
       ) : null}
 
+      {provider === "linkedin" ? <LinkedinOneClick /> : null}
+
       <SetupHelp provider={provider} label={row.label} />
 
       {row.credential_fields.length ? (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {row.credential_fields.map((field) => (
-            <div key={field}>
-              <Label className="text-xs text-muted-foreground">{FIELD_LABEL[field] ?? field}</Label>
-              <Input
-                type={field === "organizer_email" ? "email" : "password"}
-                autoComplete="off"
-                placeholder={row.has_credentials ? "•••••• stored — leave blank to keep" : "Paste value"}
-                value={secrets[field] ?? ""}
-                onChange={(e) => setSecrets((p) => ({ ...p, [field]: e.target.value }))}
+        provider === "linkedin" ? (
+          <details className="mt-4 rounded-lg border border-border bg-surface-2 p-3">
+            <summary className="cursor-pointer text-sm font-medium">
+              Use your own LinkedIn app instead (advanced)
+            </summary>
+            <div className="mt-3">
+              <CredentialFields
+                fields={row.credential_fields}
+                hasCredentials={row.has_credentials}
+                secrets={secrets}
+                setSecrets={setSecrets}
+                baseUrl={baseUrl}
+                setBaseUrl={setBaseUrl}
+                showBaseUrl
               />
-              {FIELD_HINT[field] ? (
-                <p className="mt-1 text-xs text-muted-foreground">{FIELD_HINT[field]}</p>
-              ) : null}
             </div>
-          ))}
-
-          {!isMeeting && provider !== "github" && provider !== "careers" ? (
-            <div className="sm:col-span-2">
-              <Label className="text-xs text-muted-foreground">Partner API base URL</Label>
-              <Input
-                placeholder="https://api.partner.example.com"
-                value={baseUrl}
-                onChange={(e) => setBaseUrl(e.target.value)}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Supplied in your partner onboarding pack. Required before search and applicant pulls can run.
-              </p>
-            </div>
-          ) : null}
-        </div>
+          </details>
+        ) : (
+          <div className="mt-4">
+            <CredentialFields
+              fields={row.credential_fields}
+              hasCredentials={row.has_credentials}
+              secrets={secrets}
+              setSecrets={setSecrets}
+              baseUrl={baseUrl}
+              setBaseUrl={setBaseUrl}
+              showBaseUrl={!isMeeting && provider !== "github" && provider !== "careers"}
+            />
+          </div>
+        )
       ) : null}
+
 
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4">
         <Button size="sm" onClick={onSave} disabled={busy !== null}>
