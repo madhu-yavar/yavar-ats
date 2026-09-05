@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { disconnectIntegration, saveIntegration, testIntegration } from "@/lib/integrations.functions";
 import { getAiSettings, removeAiKey, saveAiSettings, testAiModel } from "@/lib/ai-settings.functions";
+import { linkedinManagedStatus } from "@/lib/linkedin.functions";
 import { PageHeader } from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
