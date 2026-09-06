@@ -62,20 +62,16 @@ type SetupGuide = {
 /** Step-by-step, non-technical setup instructions per provider. */
 const SETUP_GUIDE: Record<string, SetupGuide> = {
   linkedin: {
-    who: "Needs a LinkedIn Talent Solutions / Recruiter subscription and an admin of your LinkedIn company page.",
-    minutes: "10 min + LinkedIn review (1–5 working days)",
-    links: [
-      { label: "Create a LinkedIn app", href: "https://www.linkedin.com/developers/apps/new" },
-      { label: "Request Talent Solutions access", href: "https://business.linkedin.com/talent-solutions/recruiter" },
-      { label: "LinkedIn API docs", href: "https://learn.microsoft.com/en-us/linkedin/talent/" },
-    ],
+    who: "Nothing for HR to set up. The LinkedIn account is authorised once, centrally, for the whole company.",
+    minutes: "0 min",
+    links: [{ label: "LinkedIn Recruiter", href: "https://business.linkedin.com/talent-solutions/recruiter" }],
     steps: [
-      "Open “Create a LinkedIn app”, sign in, and link it to your company page.",
-      "On the app’s Auth tab, copy the Client ID and Client secret into the boxes below.",
-      "On the Products tab, request the recruiting products you bought (Talent Solutions / Job Posting). LinkedIn reviews this.",
-      "Once approved, press Test connection here. Approval is what unlocks posting jobs.",
+      "Check the panel above says an authorised LinkedIn account is connected.",
+      "Turn Enabled on — job adverts can then be published to LinkedIn from that account.",
+      "If it says no account is connected, ask whoever administers ATSIQ to authorise it once; recruiters never sign in or paste anything here.",
     ],
   },
+
   naukri: {
     who: "Needs a Naukri Resdex / RMS employer subscription. Ask your Naukri account manager for API access.",
     minutes: "5 min once Naukri sends your pack",
@@ -489,23 +485,26 @@ function IntegrationCard({ row }: { row: Integration }) {
 
       {row.credential_fields.length ? (
         provider === "linkedin" ? (
-          <details className="mt-4 rounded-lg border border-border bg-surface-2 p-3">
-            <summary className="cursor-pointer text-sm font-medium">
-              Use your own LinkedIn app instead (advanced)
-            </summary>
-            <div className="mt-3">
-              <CredentialFields
-                fields={row.credential_fields}
-                hasCredentials={row.has_credentials}
-                secrets={secrets}
-                setSecrets={setSecrets}
-                baseUrl={baseUrl}
-                setBaseUrl={setBaseUrl}
-                showBaseUrl
-              />
-            </div>
-          </details>
+          isSuperUser ? (
+            <details className="mt-4 rounded-lg border border-border bg-surface-2 p-3">
+              <summary className="cursor-pointer text-sm font-medium">
+                Platform administrator only — use a custom LinkedIn app
+              </summary>
+              <div className="mt-3">
+                <CredentialFields
+                  fields={row.credential_fields}
+                  hasCredentials={row.has_credentials}
+                  secrets={secrets}
+                  setSecrets={setSecrets}
+                  baseUrl={baseUrl}
+                  setBaseUrl={setBaseUrl}
+                  showBaseUrl
+                />
+              </div>
+            </details>
+          ) : null
         ) : (
+
           <div className="mt-4">
             <CredentialFields
               fields={row.credential_fields}
