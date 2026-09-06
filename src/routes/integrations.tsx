@@ -10,7 +10,9 @@ import type { Tables } from "@/integrations/supabase/types";
 import { disconnectIntegration, saveIntegration, testIntegration } from "@/lib/integrations.functions";
 import { getAiSettings, removeAiKey, saveAiSettings, testAiModel } from "@/lib/ai-settings.functions";
 import { linkedinManagedStatus } from "@/lib/linkedin.functions";
+import { usePlatform } from "@/hooks/usePlatform";
 import { PageHeader } from "@/components/ats";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -62,20 +64,16 @@ type SetupGuide = {
 /** Step-by-step, non-technical setup instructions per provider. */
 const SETUP_GUIDE: Record<string, SetupGuide> = {
   linkedin: {
-    who: "Needs a LinkedIn Talent Solutions / Recruiter subscription and an admin of your LinkedIn company page.",
-    minutes: "10 min + LinkedIn review (1–5 working days)",
-    links: [
-      { label: "Create a LinkedIn app", href: "https://www.linkedin.com/developers/apps/new" },
-      { label: "Request Talent Solutions access", href: "https://business.linkedin.com/talent-solutions/recruiter" },
-      { label: "LinkedIn API docs", href: "https://learn.microsoft.com/en-us/linkedin/talent/" },
-    ],
+    who: "Nothing for HR to set up. The LinkedIn account is authorised once, centrally, for the whole company.",
+    minutes: "0 min",
+    links: [{ label: "LinkedIn Recruiter", href: "https://business.linkedin.com/talent-solutions/recruiter" }],
     steps: [
-      "Open “Create a LinkedIn app”, sign in, and link it to your company page.",
-      "On the app’s Auth tab, copy the Client ID and Client secret into the boxes below.",
-      "On the Products tab, request the recruiting products you bought (Talent Solutions / Job Posting). LinkedIn reviews this.",
-      "Once approved, press Test connection here. Approval is what unlocks posting jobs.",
+      "Check the panel above says an authorised LinkedIn account is connected.",
+      "Turn Enabled on — job adverts can then be published to LinkedIn from that account.",
+      "If it says no account is connected, ask whoever administers ATSIQ to authorise it once; recruiters never sign in or paste anything here.",
     ],
   },
+
   naukri: {
     who: "Needs a Naukri Resdex / RMS employer subscription. Ask your Naukri account manager for API access.",
     minutes: "5 min once Naukri sends your pack",
@@ -330,28 +328,30 @@ function LinkedinOneClick() {
         {status.isLoading
           ? "Checking the LinkedIn account…"
           : s?.connected
-            ? `Posting will happen through ${s.member ?? "the authorised LinkedIn account"}. This account was authorised once for the whole platform — recruiters do not sign in individually, and clearing the boxes below does not change it.`
-            : (s?.message ?? "No LinkedIn account is authorised yet.")}
+            ? `Connected — job adverts go out through ${s.member ?? "the authorised LinkedIn account"}. Nothing to configure here: no app details, no keys, no per-recruiter sign-in.`
+            : (s?.message ?? "No LinkedIn account is connected yet.")}
       </p>
 
       {s?.connected ? (
         <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600">
-          <CheckCircle2 className="size-3.5" /> Authorised account{s.member ? ` — ${s.member}` : ""}
+          <CheckCircle2 className="size-3.5" /> Connected account{s.member ? ` — ${s.member}` : ""}
         </p>
       ) : null}
 
       <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+        <li>Recruiters just use the app — publishing to LinkedIn happens through this one company account.</li>
         <li>
-          To change or remove this account, ask whoever administers ATSIQ to swap the LinkedIn account in the
-          platform&apos;s integration settings — it cannot be changed from this page.
+          To connect or swap the account, whoever administers ATSIQ signs in once with the company LinkedIn login on
+          this page. It cannot be done from a recruiter&apos;s screen.
         </li>
-        <li>Job adverts and company updates can be published from that account.</li>
         <li>
-          LinkedIn Talent Solutions (searching LinkedIn profiles or pulling CVs into the talent pool) is
-          <strong> not active</strong>. LinkedIn only opens that up under a paid Recruiter agreement plus partner
-          approval, so candidate LinkedIn scoring stays based on the links candidates share with you.
+          Searching LinkedIn profiles and pulling CVs (Recruiter / Talent Solutions data) needs LinkedIn to switch
+          your paid Recruiter contract over to data access for ATSIQ and approve it — a LinkedIn Recruiter login on
+          its own does not open that up. Once LinkedIn confirms it for your company, sourcing turns on here with no
+          extra work from HR.
         </li>
       </ul>
+
     </div>
   );
 }
@@ -360,7 +360,9 @@ function LinkedinOneClick() {
 function IntegrationCard({ row }: { row: Integration }) {
 
   const qc = useQueryClient();
+  const { isSuperUser } = usePlatform();
   const save = useServerFn(saveIntegration);
+
   const test = useServerFn(testIntegration);
   const disconnect = useServerFn(disconnectIntegration);
 
@@ -489,23 +491,26 @@ function IntegrationCard({ row }: { row: Integration }) {
 
       {row.credential_fields.length ? (
         provider === "linkedin" ? (
-          <details className="mt-4 rounded-lg border border-border bg-surface-2 p-3">
-            <summary className="cursor-pointer text-sm font-medium">
-              Use your own LinkedIn app instead (advanced)
-            </summary>
-            <div className="mt-3">
-              <CredentialFields
-                fields={row.credential_fields}
-                hasCredentials={row.has_credentials}
-                secrets={secrets}
-                setSecrets={setSecrets}
-                baseUrl={baseUrl}
-                setBaseUrl={setBaseUrl}
-                showBaseUrl
-              />
-            </div>
-          </details>
+          isSuperUser ? (
+            <details className="mt-4 rounded-lg border border-border bg-surface-2 p-3">
+              <summary className="cursor-pointer text-sm font-medium">
+                Platform administrator only — use a custom LinkedIn app
+              </summary>
+              <div className="mt-3">
+                <CredentialFields
+                  fields={row.credential_fields}
+                  hasCredentials={row.has_credentials}
+                  secrets={secrets}
+                  setSecrets={setSecrets}
+                  baseUrl={baseUrl}
+                  setBaseUrl={setBaseUrl}
+                  showBaseUrl
+                />
+              </div>
+            </details>
+          ) : null
         ) : (
+
           <div className="mt-4">
             <CredentialFields
               fields={row.credential_fields}
