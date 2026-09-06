@@ -104,6 +104,18 @@ async function testLinkedin(secrets: Record<string, string>): Promise<TestOutcom
           "third-party candidate profiles are not readable, so LinkedIn scoring stays narrative-based.",
       };
     }
+    // LinkedIn only issues app-only tokens to approved partner programmes. For a
+    // normal app this exact refusal proves the id/secret are real and that a
+    // person must complete the sign-in step instead.
+    if (text.includes("not allowed to create application tokens")) {
+      return {
+        status: "pending",
+        message:
+          "Your LinkedIn app details are valid, but LinkedIn will not let an app act on its own — a person has to " +
+          "sign in once. Use the one-click LinkedIn sign-in above instead of these boxes. Reading other people's " +
+          "profiles or pulling CVs additionally requires an approved LinkedIn Talent Solutions partner agreement.",
+      };
+    }
     if (res.status === 401 || res.status === 400)
       return { status: "failed", message: `LinkedIn rejected the credentials: ${text.slice(0, 200)}` };
     return { status: "pending", message: `LinkedIn returned ${res.status}: ${text.slice(0, 200)}` };
@@ -111,6 +123,7 @@ async function testLinkedin(secrets: Record<string, string>): Promise<TestOutcom
     return { status: "failed", message: `LinkedIn unreachable: ${(e as Error).message}` };
   }
 }
+
 
 async function testTokenEndpoint(
   provider: string,
