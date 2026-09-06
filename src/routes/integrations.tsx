@@ -328,28 +328,30 @@ function LinkedinOneClick() {
         {status.isLoading
           ? "Checking the LinkedIn account…"
           : s?.connected
-            ? `Posting will happen through ${s.member ?? "the authorised LinkedIn account"}. This account was authorised once for the whole platform — recruiters do not sign in individually, and clearing the boxes below does not change it.`
-            : (s?.message ?? "No LinkedIn account is authorised yet.")}
+            ? `Connected — job adverts go out through ${s.member ?? "the authorised LinkedIn account"}. Nothing to configure here: no app details, no keys, no per-recruiter sign-in.`
+            : (s?.message ?? "No LinkedIn account is connected yet.")}
       </p>
 
       {s?.connected ? (
         <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600">
-          <CheckCircle2 className="size-3.5" /> Authorised account{s.member ? ` — ${s.member}` : ""}
+          <CheckCircle2 className="size-3.5" /> Connected account{s.member ? ` — ${s.member}` : ""}
         </p>
       ) : null}
 
       <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+        <li>Recruiters just use the app — publishing to LinkedIn happens through this one company account.</li>
         <li>
-          To change or remove this account, ask whoever administers ATSIQ to swap the LinkedIn account in the
-          platform&apos;s integration settings — it cannot be changed from this page.
+          To connect or swap the account, whoever administers ATSIQ signs in once with the company LinkedIn login on
+          this page. It cannot be done from a recruiter&apos;s screen.
         </li>
-        <li>Job adverts and company updates can be published from that account.</li>
         <li>
-          LinkedIn Talent Solutions (searching LinkedIn profiles or pulling CVs into the talent pool) is
-          <strong> not active</strong>. LinkedIn only opens that up under a paid Recruiter agreement plus partner
-          approval, so candidate LinkedIn scoring stays based on the links candidates share with you.
+          Searching LinkedIn profiles and pulling CVs (Recruiter / Talent Solutions data) needs LinkedIn to switch
+          your paid Recruiter contract over to data access for ATSIQ and approve it — a LinkedIn Recruiter login on
+          its own does not open that up. Once LinkedIn confirms it for your company, sourcing turns on here with no
+          extra work from HR.
         </li>
       </ul>
+
     </div>
   );
 }
