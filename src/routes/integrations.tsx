@@ -10,7 +10,9 @@ import type { Tables } from "@/integrations/supabase/types";
 import { disconnectIntegration, saveIntegration, testIntegration } from "@/lib/integrations.functions";
 import { getAiSettings, removeAiKey, saveAiSettings, testAiModel } from "@/lib/ai-settings.functions";
 import { linkedinManagedStatus } from "@/lib/linkedin.functions";
+import { usePlatform } from "@/hooks/usePlatform";
 import { PageHeader } from "@/components/ats";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -356,7 +358,9 @@ function LinkedinOneClick() {
 function IntegrationCard({ row }: { row: Integration }) {
 
   const qc = useQueryClient();
+  const { isSuperUser } = usePlatform();
   const save = useServerFn(saveIntegration);
+
   const test = useServerFn(testIntegration);
   const disconnect = useServerFn(disconnectIntegration);
 
