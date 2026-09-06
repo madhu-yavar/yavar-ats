@@ -32,4 +32,4 @@ dist-ssr
 *.sw?
 
 # Local environment (holds the service-role key — never commit)
-.env
+#.env
