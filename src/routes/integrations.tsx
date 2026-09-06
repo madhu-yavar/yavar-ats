@@ -302,8 +302,9 @@ function CredentialFields({
 }
 
 /**
- * One-time LinkedIn sign-in panel: no codes to copy. The session is authorised
- * once on LinkedIn's own screen and kept alive for the app afterwards.
+ * Company-wide LinkedIn account panel. This is NOT a per-recruiter sign-in:
+ * one LinkedIn account is authorised once for the whole platform by whoever
+ * administers ATSIQ, and every recruiter posts through that account.
  */
 function LinkedinOneClick() {
   const status = useQuery({
@@ -318,7 +319,7 @@ function LinkedinOneClick() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm font-medium">
           <Sparkles className="size-4 text-primary" />
-          One-click LinkedIn sign-in
+          Company LinkedIn account
         </div>
         <Button size="sm" variant="outline" onClick={() => status.refetch()} disabled={status.isFetching}>
           {status.isFetching ? <Loader2 className="size-4 animate-spin" /> : null} Check LinkedIn
@@ -327,30 +328,34 @@ function LinkedinOneClick() {
 
       <p className="mt-2 text-sm text-muted-foreground">
         {status.isLoading
-          ? "Checking the LinkedIn sign-in…"
+          ? "Checking the LinkedIn account…"
           : s?.connected
-            ? s.message
-            : (s?.message ?? "LinkedIn sign-in has not been completed yet.")}
+            ? `Posting will happen through ${s.member ?? "the authorised LinkedIn account"}. This account was authorised once for the whole platform — recruiters do not sign in individually, and clearing the boxes below does not change it.`
+            : (s?.message ?? "No LinkedIn account is authorised yet.")}
       </p>
 
       {s?.connected ? (
         <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600">
-          <CheckCircle2 className="size-3.5" /> Signed in{s.member ? ` — ${s.member}` : ""}
+          <CheckCircle2 className="size-3.5" /> Authorised account{s.member ? ` — ${s.member}` : ""}
         </p>
       ) : null}
 
       <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
-        <li>Signing in is a one-time step — the app renews the session by itself, so nobody re-enters anything.</li>
-        <li>Job adverts and company updates can be published from the signed-in account.</li>
         <li>
-          LinkedIn never lets any tool read other people&apos;s profiles, so candidate LinkedIn scoring stays
-          evidence-based on what the candidate shared with you. Bulk CV pulls still need a paid Recruiter/Talent
-          Solutions agreement with LinkedIn.
+          To change or remove this account, ask whoever administers ATSIQ to swap the LinkedIn account in the
+          platform&apos;s integration settings — it cannot be changed from this page.
+        </li>
+        <li>Job adverts and company updates can be published from that account.</li>
+        <li>
+          LinkedIn Talent Solutions (searching LinkedIn profiles or pulling CVs into the talent pool) is
+          <strong> not active</strong>. LinkedIn only opens that up under a paid Recruiter agreement plus partner
+          approval, so candidate LinkedIn scoring stays based on the links candidates share with you.
         </li>
       </ul>
     </div>
   );
 }
+
 
 function IntegrationCard({ row }: { row: Integration }) {
 
