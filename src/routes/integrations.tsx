@@ -1,16 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, CircleAlert, CircleDashed, KeyRound, Loader2, Plug, Sparkles } from "lucide-react";
+import { CheckCircle2, CircleAlert, CircleDashed, KeyRound, Linkedin, Loader2, Plug, Sparkles } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { disconnectIntegration, saveIntegration, testIntegration } from "@/lib/integrations.functions";
 import { getAiSettings, removeAiKey, saveAiSettings, testAiModel } from "@/lib/ai-settings.functions";
-import { linkedinManagedStatus } from "@/lib/linkedin.functions";
-import { usePlatform } from "@/hooks/usePlatform";
+import { linkedinConnectStart, linkedinDisconnect, linkedinStatus } from "@/lib/linkedin.functions";
 import { PageHeader } from "@/components/ats";
 
 import { Button } from "@/components/ui/button";
@@ -64,13 +63,14 @@ type SetupGuide = {
 /** Step-by-step, non-technical setup instructions per provider. */
 const SETUP_GUIDE: Record<string, SetupGuide> = {
   linkedin: {
-    who: "Nothing for HR to set up. The LinkedIn account is authorised once, centrally, for the whole company.",
-    minutes: "0 min",
-    links: [{ label: "LinkedIn Recruiter", href: "https://business.linkedin.com/talent-solutions/recruiter" }],
+    who: "Nothing technical for HR. One person connects the company's LinkedIn account; everyone publishes job posts through it.",
+    minutes: "Under a minute",
+    links: [],
     steps: [
-      "Check the panel above says an authorised LinkedIn account is connected.",
-      "Turn Enabled on — job adverts can then be published to LinkedIn from that account.",
-      "If it says no account is connected, ask whoever administers ATSIQ to authorise it once; recruiters never sign in or paste anything here.",
+      "Press “Connect LinkedIn account” in the panel above.",
+      "Sign in on LinkedIn's own page with the company's LinkedIn account and press Allow.",
+      "You come straight back here — done. Everyone on the team can now publish job posts through this account.",
+      "One-time platform note (not for HR): whoever manages the company's app on developer.linkedin.com adds this site's /api/auth/linkedin/callback address as a redirect URL.",
     ],
   },
 
@@ -301,16 +301,83 @@ function CredentialFields({
 
 /**
  * Company-wide LinkedIn account panel. This is NOT a per-recruiter sign-in:
- * one LinkedIn account is authorised once for the whole platform by whoever
- * administers ATSIQ, and every recruiter posts through that account.
+ * one LinkedIn account is authorised once for the whole company — whoever
+ * presses Connect signs in on LinkedIn's own screen — and every recruiter
+ * publishes through that account.
  */
 function LinkedinOneClick() {
+  const qc = useQueryClient();
   const status = useQuery({
-    queryKey: ["linkedin_managed"],
-    queryFn: () => linkedinManagedStatus({ data: undefined }),
+    queryKey: ["linkedin_connect"],
+    queryFn: () => linkedinStatus({ data: undefined }),
     refetchOnWindowFocus: false,
   });
+  const connect = useServerFn(linkedinConnectStart);
+  const disconnect = useServerFn(linkedinDisconnect);
+  const [busy, setBusy] = useState<"connect" | "disconnect" | null>(null);
   const s = status.data;
+
+  // Surface the outcome of LinkedIn's redirect (?linkedin=ok|denied|…) once, then strip it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const flag = params.get("linkedin");
+    if (!flag) return;
+    params.delete("linkedin");
+    window.history.replaceState({}, "", `${window.location.pathname}${params.size ? `?${params}` : ""}`);
+    if (flag === "ok") {
+      toast.success("LinkedIn connected — job posts can now be published through your company account.");
+    } else {
+      const messages: Record<string, string> = {
+        denied: "LinkedIn sign-in was cancelled — nothing was changed.",
+        expired:
+          "The connect link expired before you came back. Press Connect LinkedIn account to try again — it takes under a minute.",
+        setup_pending: "LinkedIn isn't switched on for this platform yet. Ask the platform team to finish setup.",
+        error: "Connecting LinkedIn failed. Please try again — if it keeps failing, contact support.",
+      };
+      toast.error(messages[flag] ?? "Connecting LinkedIn failed. Please try again.");
+    }
+    qc.invalidateQueries({ queryKey: ["linkedin_connect"] });
+  }, [qc]);
+
+  async function onConnect() {
+    setBusy("connect");
+    try {
+      const url = await connect({ data: undefined });
+      window.location.assign(url);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not start the LinkedIn connection");
+      setBusy(null);
+    }
+  }
+
+  async function onDisconnect() {
+    if (
+      !window.confirm(
+        "Disconnect the company LinkedIn account? Job publishing stops until someone connects again.",
+      )
+    )
+      return;
+    setBusy("disconnect");
+    try {
+      await disconnect({ data: undefined });
+      toast.success("LinkedIn disconnected");
+      qc.invalidateQueries({ queryKey: ["linkedin_connect"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const body = status.isLoading
+    ? "Checking the company LinkedIn connection…"
+    : !s?.configured
+      ? "LinkedIn publishing is being set up for your company. It will appear here soon — nothing for you to do."
+      : s.connected
+        ? `Connected as ${s.member ?? "your company's LinkedIn account"}. Everyone on your team publishes job posts through this account.`
+        : s.member
+          ? "The company's LinkedIn connection expired. Press Connect LinkedIn account to renew it — signing in again takes under a minute."
+          : "One connection for the whole company. Press Connect, sign in with your company's LinkedIn account on LinkedIn's own page, and everyone can publish job posts from here. Takes under a minute.";
 
   return (
     <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-4">
@@ -319,39 +386,38 @@ function LinkedinOneClick() {
           <Sparkles className="size-4 text-primary" />
           Company LinkedIn account
         </div>
-        <Button size="sm" variant="outline" onClick={() => status.refetch()} disabled={status.isFetching}>
-          {status.isFetching ? <Loader2 className="size-4 animate-spin" /> : null} Check LinkedIn
-        </Button>
+        {s?.configured ? (
+          s.connected ? (
+            <Button size="sm" variant="outline" onClick={onDisconnect} disabled={busy !== null || status.isFetching}>
+              {busy === "disconnect" ? <Loader2 className="size-4 animate-spin" /> : null} Disconnect
+            </Button>
+          ) : (
+            <Button size="sm" onClick={onConnect} disabled={busy !== null || status.isFetching}>
+              {busy === "connect" ? <Loader2 className="size-4 animate-spin" /> : <Linkedin className="size-4" />} Connect
+              LinkedIn account
+            </Button>
+          )
+        ) : null}
       </div>
 
-      <p className="mt-2 text-sm text-muted-foreground">
-        {status.isLoading
-          ? "Checking the LinkedIn account…"
-          : s?.connected
-            ? `Connected — job adverts go out through ${s.member ?? "the authorised LinkedIn account"}. Nothing to configure here: no app details, no keys, no per-recruiter sign-in.`
-            : (s?.message ?? "No LinkedIn account is connected yet.")}
-      </p>
+      <p className="mt-2 text-sm text-muted-foreground">{body}</p>
 
       {s?.connected ? (
         <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600">
-          <CheckCircle2 className="size-3.5" /> Connected account{s.member ? ` — ${s.member}` : ""}
+          <CheckCircle2 className="size-3.5" /> Connected{s.member ? ` — ${s.member}` : ""}
         </p>
       ) : null}
 
       <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
-        <li>Recruiters just use the app — publishing to LinkedIn happens through this one company account.</li>
         <li>
-          To connect or swap the account, whoever administers ATSIQ signs in once with the company LinkedIn login on
-          this page. It cannot be done from a recruiter&apos;s screen.
+          Recruiters just use the app — publishing happens through this one company account, and the sign-in only
+          needs repeating about once a year.
         </li>
         <li>
-          Searching LinkedIn profiles and pulling CVs (Recruiter / Talent Solutions data) needs LinkedIn to switch
-          your paid Recruiter contract over to data access for ATSIQ and approve it — a LinkedIn Recruiter login on
-          its own does not open that up. Once LinkedIn confirms it for your company, sourcing turns on here with no
-          extra work from HR.
+          Searching other people&apos;s LinkedIn profiles or pulling CVs needs a paid LinkedIn Talent Solutions data
+          agreement — connecting the account does not open that up.
         </li>
       </ul>
-
     </div>
   );
 }
@@ -360,7 +426,6 @@ function LinkedinOneClick() {
 function IntegrationCard({ row }: { row: Integration }) {
 
   const qc = useQueryClient();
-  const { isSuperUser } = usePlatform();
   const save = useServerFn(saveIntegration);
 
   const test = useServerFn(testIntegration);
@@ -489,54 +554,36 @@ function IntegrationCard({ row }: { row: Integration }) {
 
       <SetupHelp provider={provider} label={row.label} />
 
-      {row.credential_fields.length ? (
-        provider === "linkedin" ? (
-          isSuperUser ? (
-            <details className="mt-4 rounded-lg border border-border bg-surface-2 p-3">
-              <summary className="cursor-pointer text-sm font-medium">
-                Platform administrator only — use a custom LinkedIn app
-              </summary>
-              <div className="mt-3">
-                <CredentialFields
-                  fields={row.credential_fields}
-                  hasCredentials={row.has_credentials}
-                  secrets={secrets}
-                  setSecrets={setSecrets}
-                  baseUrl={baseUrl}
-                  setBaseUrl={setBaseUrl}
-                  showBaseUrl
-                />
-              </div>
-            </details>
-          ) : null
-        ) : (
-
-          <div className="mt-4">
-            <CredentialFields
-              fields={row.credential_fields}
-              hasCredentials={row.has_credentials}
-              secrets={secrets}
-              setSecrets={setSecrets}
-              baseUrl={baseUrl}
-              setBaseUrl={setBaseUrl}
-              showBaseUrl={!isMeeting && provider !== "github" && provider !== "careers"}
-            />
-          </div>
-        )
+      {row.credential_fields.length && provider !== "linkedin" ? (
+        <div className="mt-4">
+          <CredentialFields
+            fields={row.credential_fields}
+            hasCredentials={row.has_credentials}
+            secrets={secrets}
+            setSecrets={setSecrets}
+            baseUrl={baseUrl}
+            setBaseUrl={setBaseUrl}
+            showBaseUrl={!isMeeting && provider !== "github" && provider !== "careers"}
+          />
+        </div>
       ) : null}
 
 
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4">
-        <Button size="sm" onClick={onSave} disabled={busy !== null}>
-          {busy === "save" ? <Loader2 className="size-4 animate-spin" /> : null} Save
-        </Button>
-        <Button size="sm" variant="outline" onClick={onTest} disabled={busy !== null}>
-          {busy === "test" ? <Loader2 className="size-4 animate-spin" /> : null} Test connection
-        </Button>
-        {row.has_credentials ? (
-          <Button size="sm" variant="ghost" onClick={onClear} disabled={busy !== null}>
-            Remove credentials
-          </Button>
+        {provider !== "linkedin" ? (
+          <>
+            <Button size="sm" onClick={onSave} disabled={busy !== null}>
+              {busy === "save" ? <Loader2 className="size-4 animate-spin" /> : null} Save
+            </Button>
+            <Button size="sm" variant="outline" onClick={onTest} disabled={busy !== null}>
+              {busy === "test" ? <Loader2 className="size-4 animate-spin" /> : null} Test connection
+            </Button>
+            {row.has_credentials ? (
+              <Button size="sm" variant="ghost" onClick={onClear} disabled={busy !== null}>
+                Remove credentials
+              </Button>
+            ) : null}
+          </>
         ) : null}
         {docs ? (
           <a
@@ -739,9 +786,10 @@ function Integrations() {
         <h2 className="font-semibold">What each channel can actually do</h2>
         <ul className="mt-2 space-y-1.5 text-sm text-muted-foreground">
           <li>
-            <strong className="text-foreground">LinkedIn</strong> — job postings and Recruiter System Connect via a
-            paid Talent Solutions partnership. Arbitrary candidate profiles are not readable through the API, so
-            LinkedIn scoring stays narrative-based on the resume plus recruiter-pasted profile text.
+            <strong className="text-foreground">LinkedIn</strong> — one company account, connected once through
+            LinkedIn's own sign-in screen; designed job posts can then be published straight from a requisition.
+            Reading other people's profiles needs a paid Talent Solutions data agreement, so LinkedIn scoring stays
+            narrative-based on the resume plus recruiter-pasted profile text.
           </li>
           <li>
             <strong className="text-foreground">Naukri</strong> — Resdex resume search and applicant pulls for

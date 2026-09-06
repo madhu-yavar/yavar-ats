@@ -337,7 +337,7 @@ async function assertOwner(userId: string) {
   return data.org_id as string;
 }
 
-async function orgOf(userId: string) {
+export async function orgOf(userId: string) {
   const db = await admin();
   const { data } = await db
     .from("org_members")

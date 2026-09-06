@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Sparkles, Upload } from "lucide-react";
+import { ArrowLeft, Linkedin, Loader2, Sparkles, Upload } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -27,6 +27,7 @@ import {
 import { balanceWeights, extractResumeText } from "@/lib/cv-extract";
 import { intakeCvs, type IntakeStatus } from "@/lib/cv-intake";
 import { rankPool } from "@/lib/shortlist";
+import { publishToLinkedIn } from "@/lib/linkedin.functions";
 
 
 import { useRoles } from "@/hooks/useRoles";
@@ -98,6 +99,7 @@ function RequisitionDetail() {
   const runSuggestWeights = useServerFn(suggestWeights);
   const runParseResume = useServerFn(parseResume);
   const runDraftPost = useServerFn(draftLinkedinPost);
+  const runPublishPost = useServerFn(publishToLinkedIn);
 
   const [advising, setAdvising] = useState(false);
   const [advice, setAdvice] = useState<WeightAdvice | null>(null);
@@ -109,7 +111,9 @@ function RequisitionDetail() {
 
   const [postTone, setPostTone] = useState<"professional" | "warm" | "bold">("professional");
   const [post, setPost] = useState<SocialJobPost | null>(null);
+  const [postText, setPostText] = useState("");
   const [postBusy, setPostBusy] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
 
 
@@ -431,10 +435,26 @@ function RequisitionDetail() {
         },
       });
       setPost(p);
+      setPostText(
+        `${p.headline}\n\n${p.body}\n\n${p.call_to_action}\n\n${p.hashtags.map((h) => `#${h}`).join(" ")}`,
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not draft the post");
     } finally {
       setPostBusy(false);
+    }
+  }
+
+  async function publishPost() {
+    if (!postText.trim()) return;
+    setPublishing(true);
+    try {
+      await runPublishPost({ data: { requisitionId: r!.id, text: postText } });
+      toast.success("Posted to LinkedIn — it is live on the company feed");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not publish to LinkedIn");
+    } finally {
+      setPublishing(false);
     }
   }
 
@@ -729,37 +749,30 @@ function RequisitionDetail() {
                   <Textarea
                     rows={14}
                     className="text-xs leading-relaxed"
-                    value={`${post.headline}\n\n${post.body}\n\n${post.call_to_action}\n\n${post.hashtags
-                      .map((h) => `#${h}`)
-                      .join(" ")}`}
-                    onChange={(e) => setPost({ ...post, body: e.target.value, headline: "", call_to_action: "", hashtags: [] })}
+                    value={postText}
+                    onChange={(e) => setPostText(e.target.value)}
                   />
                   <div className="flex flex-wrap gap-2">
+                    <Button onClick={publishPost} disabled={publishing || !postText.trim()}>
+                      {publishing ? <Loader2 className="size-4 animate-spin" /> : <Linkedin className="size-4" />}
+                      {publishing ? "Publishing…" : "Publish to LinkedIn"}
+                    </Button>
                     <Button
                       variant="outline"
                       onClick={async () => {
-                        await navigator.clipboard.writeText(
-                          `${post.headline}\n\n${post.body}\n\n${post.call_to_action}\n\n${post.hashtags
-                            .map((h) => `#${h}`)
-                            .join(" ")}`,
-                        );
+                        await navigator.clipboard.writeText(postText);
                         toast.success("Post copied — paste it into LinkedIn");
                       }}
                     >
                       Copy post
                     </Button>
-                    <Button asChild variant="outline">
-                      <a href="https://www.linkedin.com/feed/?shareActive=true" target="_blank" rel="noreferrer">
-                        Open LinkedIn composer
-                      </a>
-                    </Button>
                     <Button asChild variant="ghost">
-                      <Link to="/integrations">Configure auto-publishing</Link>
+                      <Link to="/integrations">LinkedIn connection</Link>
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Auto-publishing uses the LinkedIn connection configured by the admin on the Integrations page. Until
-                    a page access token is connected, copy-paste keeps you unblocked.
+                    Publishing posts as your company's connected LinkedIn account — connect it once on the Integrations
+                    page. Copy-paste still works if you prefer.
                   </p>
                 </div>
               </div>

@@ -85,46 +85,6 @@ async function testGithub(secrets: Record<string, string>): Promise<TestOutcome>
   }
 }
 
-async function testLinkedin(secrets: Record<string, string>): Promise<TestOutcome> {
-  const id = secrets["client_id"];
-  const secret = secrets["client_secret"];
-  if (!id || !secret) return { status: "pending", message: "Add the LinkedIn client id and secret." };
-  try {
-    const res = await fetch("https://www.linkedin.com/oauth/v2/accessToken", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ grant_type: "client_credentials", client_id: id, client_secret: secret }),
-    });
-    const text = await res.text();
-    if (res.ok) {
-      return {
-        status: "ok",
-        message:
-          "LinkedIn credentials accepted. Note: the API exposes job postings and Recruiter System Connect data — " +
-          "third-party candidate profiles are not readable, so LinkedIn scoring stays narrative-based.",
-      };
-    }
-    // LinkedIn only issues app-only tokens to approved partner programmes. For a
-    // normal app this exact refusal proves the id/secret are real and that a
-    // person must complete the sign-in step instead.
-    if (text.includes("not allowed to create application tokens")) {
-      return {
-        status: "pending",
-        message:
-          "Your LinkedIn app details are valid, but LinkedIn will not let an app act on its own — a person has to " +
-          "sign in once. Use the one-click LinkedIn sign-in above instead of these boxes. Reading other people's " +
-          "profiles or pulling CVs additionally requires an approved LinkedIn Talent Solutions partner agreement.",
-      };
-    }
-    if (res.status === 401 || res.status === 400)
-      return { status: "failed", message: `LinkedIn rejected the credentials: ${text.slice(0, 200)}` };
-    return { status: "pending", message: `LinkedIn returned ${res.status}: ${text.slice(0, 200)}` };
-  } catch (e) {
-    return { status: "failed", message: `LinkedIn unreachable: ${(e as Error).message}` };
-  }
-}
-
-
 async function testTokenEndpoint(
   provider: string,
   secrets: Record<string, string>,
@@ -169,7 +129,10 @@ export async function testProvider(
     case "github":
       return testGithub(secrets);
     case "linkedin":
-      return testLinkedin(secrets);
+      return {
+        status: "ok",
+        message: "The LinkedIn account connection is managed on the LinkedIn panel above — no boxes to test here.",
+      };
     case "naukri":
       return testTokenEndpoint("Naukri", secrets, config, ["client_id", "client_secret"]);
     case "indeed":

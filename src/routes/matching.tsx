@@ -92,7 +92,7 @@ function Matching() {
         .from("source_integrations")
         .select("provider, label, enabled")
         .eq("enabled", true)
-        .in("provider", ["naukri", "indeed", "linkedin"]);
+        .in("provider", ["naukri", "indeed"]);
       if (error) throw new Error(error.message);
       return data ?? [];
     },

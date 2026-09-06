@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { aiJson } from "./ai-gateway.server";
 import {
   mapWithConcurrency,
@@ -39,6 +40,7 @@ export type GeneratedJd = {
 };
 
 export const generateJd = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => JdInput.parse(data))
   .handler(async ({ data }) => {
     const result = await aiJson<GeneratedJd>({
@@ -65,6 +67,7 @@ const JdImportInput = z.object({
  * same shape as an AI-drafted JD so scoring, must-have coverage and audit stay identical.
  */
 export const importJd = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => JdImportInput.parse(data))
   .handler(async ({ data }) => {
     const result = await aiJson<
@@ -112,6 +115,7 @@ export type WeightAdvice = {
  * for THIS job, then hard-normalise server-side so the total is always exactly 100.
  */
 export const suggestWeights = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => WeightAdviceInput.parse(data))
   .handler(async ({ data }): Promise<WeightAdvice> => {
     const result = await aiJson<WeightAdvice>({
@@ -177,6 +181,7 @@ export type SocialJobPost = {
 
 /** Draft a ready-to-publish LinkedIn job post from the approved requisition + JD. */
 export const draftLinkedinPost = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => PostInput.parse(data))
   .handler(async ({ data }) => {
     const result = await aiJson<SocialJobPost>({
@@ -250,6 +255,7 @@ const MatchInput = z.object({
 
 
 export const matchJdToCv = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => MatchInput.parse(data))
   .handler(async ({ data }): Promise<MatchResult> =>
     scoreCandidate({
@@ -289,6 +295,7 @@ export type PipelineRowResult =
  * resume never kills the whole run.
  */
 export const matchPipeline = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => PipelineInput.parse(data))
   .handler(async ({ data }): Promise<PipelineRowResult[]> =>
     mapWithConcurrency(data.rows, data.concurrency, async (row) => {
@@ -316,6 +323,7 @@ export const matchPipeline = createServerFn({ method: "POST" })
 const ParseInput = z.object({ resumeText: z.string().min(20) });
 
 export const parseResume = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => ParseInput.parse(data))
   .handler(async ({ data }) => {
     const result = await aiJson<{
@@ -351,6 +359,7 @@ const AiInterviewInput = z.object({
 });
 
 export const runAiScreening = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => AiInterviewInput.parse(data))
   .handler(async ({ data }) => {
     const result = await aiJson<{
