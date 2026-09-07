@@ -34,6 +34,7 @@ import { Route as RequisitionsIdRouteImport } from './routes/requisitions.$id'
 import { Route as ApiPublicInboundEmailRouteImport } from './routes/api/public/inbound-email'
 import { Route as ApiPublicInboxSyncRouteImport } from './routes/api/public/inbox-sync'
 import { Route as ApiPublicSyncCandidatesRouteImport } from './routes/api/public/sync-candidates'
+import { Route as ApiPublicLinkedinCallbackRouteImport } from './routes/api/public/linkedin/callback'
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
 import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
 import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
@@ -163,6 +164,12 @@ const ApiPublicSyncCandidatesRoute = ApiPublicSyncCandidatesRouteImport.update({
   path: '/api/public/sync-candidates',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicLinkedinCallbackRoute =
+  ApiPublicLinkedinCallbackRouteImport.update({
+    id: '/api/public/linkedin/callback',
+    path: '/api/public/linkedin/callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const LovableEmailAuthPreviewRoute = LovableEmailAuthPreviewRouteImport.update({
   id: '/lovable/email/auth/preview',
   path: '/lovable/email/auth/preview',
@@ -206,6 +213,7 @@ export interface FileRoutesByFullPath {
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
   '/api/public/sync-candidates': typeof ApiPublicSyncCandidatesRoute
+  '/api/public/linkedin/callback': typeof ApiPublicLinkedinCallbackRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
@@ -236,6 +244,7 @@ export interface FileRoutesByTo {
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
   '/api/public/sync-candidates': typeof ApiPublicSyncCandidatesRoute
+  '/api/public/linkedin/callback': typeof ApiPublicLinkedinCallbackRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
@@ -267,6 +276,7 @@ export interface FileRoutesById {
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
   '/api/public/sync-candidates': typeof ApiPublicSyncCandidatesRoute
+  '/api/public/linkedin/callback': typeof ApiPublicLinkedinCallbackRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
@@ -299,6 +309,7 @@ export interface FileRouteTypes {
     | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
     | '/api/public/sync-candidates'
+    | '/api/public/linkedin/callback'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/transactional/preview'
@@ -329,6 +340,7 @@ export interface FileRouteTypes {
     | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
     | '/api/public/sync-candidates'
+    | '/api/public/linkedin/callback'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/transactional/preview'
@@ -359,6 +371,7 @@ export interface FileRouteTypes {
     | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
     | '/api/public/sync-candidates'
+    | '/api/public/linkedin/callback'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/transactional/preview'
@@ -389,6 +402,7 @@ export interface RootRouteChildren {
   ApiPublicInboundEmailRoute: typeof ApiPublicInboundEmailRoute
   ApiPublicInboxSyncRoute: typeof ApiPublicInboxSyncRoute
   ApiPublicSyncCandidatesRoute: typeof ApiPublicSyncCandidatesRoute
+  ApiPublicLinkedinCallbackRoute: typeof ApiPublicLinkedinCallbackRoute
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
   LovableEmailAuthWebhookRoute: typeof LovableEmailAuthWebhookRoute
   LovableEmailTransactionalPreviewRoute: typeof LovableEmailTransactionalPreviewRoute
@@ -571,6 +585,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicSyncCandidatesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/linkedin/callback': {
+      id: '/api/public/linkedin/callback'
+      path: '/api/public/linkedin/callback'
+      fullPath: '/api/public/linkedin/callback'
+      preLoaderRoute: typeof ApiPublicLinkedinCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/lovable/email/auth/preview': {
       id: '/lovable/email/auth/preview'
       path: '/lovable/email/auth/preview'
@@ -632,6 +653,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicInboundEmailRoute: ApiPublicInboundEmailRoute,
   ApiPublicInboxSyncRoute: ApiPublicInboxSyncRoute,
   ApiPublicSyncCandidatesRoute: ApiPublicSyncCandidatesRoute,
+  ApiPublicLinkedinCallbackRoute: ApiPublicLinkedinCallbackRoute,
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,
   LovableEmailAuthWebhookRoute: LovableEmailAuthWebhookRoute,
   LovableEmailTransactionalPreviewRoute: LovableEmailTransactionalPreviewRoute,
