@@ -16,6 +16,7 @@ import {
   startLinkedInConnect,
 } from "@/lib/linkedin.functions";
 import { careersInboxStatus, importCareersInbox } from "@/lib/inbox.functions";
+import { collectApplicants, type CollectSummary } from "@/lib/collect.functions";
 import { PageHeader } from "@/components/ats";
 
 import { Button } from "@/components/ui/button";
@@ -316,6 +317,28 @@ function LinkedinOneClick() {
   const drop = useServerFn(disconnectLinkedIn);
   const [busy, setBusy] = useState(false);
   const [awaiting, setAwaiting] = useState(false);
+  const collect = useServerFn(collectApplicants);
+  const [collecting, setCollecting] = useState(false);
+  const [summary, setSummary] = useState<CollectSummary | null>(null);
+
+  async function onCollect() {
+    setCollecting(true);
+    setSummary(null);
+    try {
+      const result = await collect({ data: {} });
+      setSummary(result);
+      toast.success(
+        `${result.imported + result.updated} CV(s) filed · ${result.scored} scored and ready`,
+      );
+      qc.invalidateQueries({ queryKey: ["applications"] });
+      qc.invalidateQueries({ queryKey: ["match_scores"] });
+      qc.invalidateQueries({ queryKey: ["candidates"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not collect applicants");
+    } finally {
+      setCollecting(false);
+    }
+  }
 
   const status = useQuery({
     queryKey: ["linkedin_connect"],
@@ -474,11 +497,47 @@ function LinkedinOneClick() {
           {s?.connected ? "Reconnect LinkedIn" : "Connect LinkedIn"}
         </Button>
         {s?.connected ? (
+          <Button size="sm" variant="outline" onClick={onCollect} disabled={collecting}>
+            {collecting ? <Loader2 className="size-4 animate-spin" /> : <Inbox className="size-4" />}
+            {collecting ? "Collecting CVs and scoring…" : "Collect CVs from live posts"}
+          </Button>
+        ) : null}
+        {s?.connected ? (
           <Button size="sm" variant="ghost" onClick={onDisconnect} disabled={busy}>
             Disconnect
           </Button>
         ) : null}
       </div>
+
+      {summary ? (
+        <div className="mt-3 rounded-lg border border-border bg-background p-3 text-sm">
+          <p className="font-medium">
+            {summary.imported} new · {summary.updated} updated · {summary.scored} scored and ready
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Read {summary.scanned} incoming message(s); {summary.skipped} had no readable CV.
+            {summary.importErrors || summary.scoreErrors
+              ? ` ${summary.importErrors + summary.scoreErrors} needed attention.`
+              : ""}
+          </p>
+          {summary.top.length ? (
+            <ul className="mt-2 space-y-1 text-xs">
+              {summary.top.map((t) => (
+                <li key={`${t.candidate}-${t.requisition}`}>
+                  <span className="font-medium">{t.candidate}</span> — {t.requisition} ·{" "}
+                  <span className="text-primary">{t.score}/100</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {summary.mailboxNote ? (
+            <p className="mt-2 text-xs text-amber-600">{summary.mailboxNote}</p>
+          ) : null}
+          {summary.linkedinNote ? (
+            <p className="mt-1 text-xs text-muted-foreground">{summary.linkedinNote}</p>
+          ) : null}
+        </div>
+      ) : null}
 
       <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
         <li>
