@@ -16,6 +16,8 @@ import {
   startLinkedInConnect,
 } from "@/lib/linkedin.functions";
 import { careersInboxStatus, importCareersInbox } from "@/lib/inbox.functions";
+import { orgInbox } from "@/lib/local-inbox.functions";
+
 import { collectApplicants, type CollectSummary } from "@/lib/collect.functions";
 import { PageHeader } from "@/components/ats";
 
