@@ -431,7 +431,7 @@ function RequisitionDetail() {
           goodToHave: r!.good_to_have_skills,
           jdText: latestJd?.full_text ?? null,
           tone: postTone,
-          applyUrl: typeof window === "undefined" ? null : `${window.location.origin}/ijp`,
+          applyUrl: typeof window === "undefined" ? null : `${window.location.origin}/apply/${r!.id}`,
         },
       });
       setPost(p);
@@ -771,8 +771,9 @@ function RequisitionDetail() {
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Publishing posts as your company's connected LinkedIn account — connect it once on the Integrations
-                    page. Copy-paste still works if you prefer.
+                    Publishing as your company's LinkedIn account — nothing to set up here. The post carries your ATSIQ
+                    apply link, so every CV people send from LinkedIn lands in the talent pool and in this pipeline
+                    automatically, already read and scored. Copy-paste still works if you prefer.
                   </p>
                 </div>
               </div>
