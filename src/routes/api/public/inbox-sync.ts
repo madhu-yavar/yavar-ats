@@ -38,12 +38,30 @@ async function run(request: Request) {
       max: opts.max ?? 25,
       ...(opts.query ? { query: opts.query } : {}),
     });
+    // Score whatever just arrived, per organisation, so pipelines are already
+    // ranked before anyone opens them.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { scoreUnscored } = await import("@/lib/autoscore.server");
+    const { data: orgs } = await supabaseAdmin
+      .from("organizations")
+      .select("id")
+      .eq("status", "active");
+    let scored = 0;
+    let scoreErrors = 0;
+    for (const org of orgs ?? []) {
+      const run = await scoreUnscored({ orgId: org.id, limit: 25 });
+      scored += run.scored;
+      scoreErrors += run.errors;
+    }
+
     return Response.json({
       scanned: result.scanned,
       imported: result.imported,
       updated: result.updated,
       skipped: result.skipped,
       errors: result.errors,
+      scored,
+      scoreErrors,
     });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "Failed" }, { status: 500 });
