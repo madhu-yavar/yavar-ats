@@ -153,6 +153,39 @@ function InboxPage() {
       </div>
 
       <div className="panel p-5">
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">Your own careers address</p>
+        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+          If you already advertise an address like <span className="font-mono">careers@yourcompany.com</span>,
+          register it here and set it to forward to the address above. Applications keep arriving at your own
+          address and still file themselves here — candidates never see a different address.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Input
+            value={careers}
+            onChange={(e) => setCareers(e.target.value)}
+            placeholder="careers@yourcompany.com"
+            className="max-w-sm"
+          />
+          <Button onClick={() => saveCareers(careers)} disabled={savingCareers}>
+            {savingCareers ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+            Save address
+          </Button>
+          {inbox.data?.careersEmail ? (
+            <Button variant="ghost" onClick={() => saveCareers("")} disabled={savingCareers}>
+              Remove
+            </Button>
+          ) : null}
+        </div>
+        {inbox.data?.careersEmail ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Registered: <span className="font-mono text-foreground">{inbox.data.careersEmail}</span> — forward
+            it to {address ?? "your ATSIQ address"}.
+          </p>
+        ) : null}
+      </div>
+
+
+      <div className="panel p-5">
         <div className="flex flex-wrap items-center gap-3">
           <Input
             value={search}
