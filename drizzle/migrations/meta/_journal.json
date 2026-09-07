@@ -183,6 +183,13 @@
       "when": 1788780159521,
       "tag": "0025_org_capture_token_and_events",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788785057989,
+      "tag": "0026_org_careers_email",
+      "breakpoints": true
     }
   ]
 }
