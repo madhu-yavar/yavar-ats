@@ -98,17 +98,33 @@ async function matchRequisition(orgId: string, haystack: string): Promise<string
  */
 export async function receiveMail(mail: InboundMail): Promise<InboundResult> {
   const db = await admin();
+  const addresses = recipientAddresses(mail.to ?? "");
   const slug = localPart(mail.to ?? "");
   if (!slug) return { status: "error", detail: "No recipient address on the mail.", messageId: null };
 
-  const { data: org } = await db
-    .from("organizations")
-    .select("id, status, inbox_slug")
-    .ilike("inbox_slug", slug)
-    .maybeSingle();
+  // Mail sent straight to the ATSIQ address, or forwarded from the organisation's
+  // own careers address (careers@company.com) which it registered here.
+  let org: { id: string; status: string | null; inbox_slug: string | null } | null = null;
+  if (addresses.length) {
+    const { data } = await db
+      .from("organizations")
+      .select("id, status, inbox_slug, careers_email")
+      .in("careers_email", addresses)
+      .maybeSingle();
+    org = data ?? null;
+  }
+  if (!org) {
+    const { data } = await db
+      .from("organizations")
+      .select("id, status, inbox_slug")
+      .ilike("inbox_slug", slug)
+      .maybeSingle();
+    org = data ?? null;
+  }
   if (!org) {
     return { status: "error", detail: `No organisation owns the address ${slug}.`, messageId: null };
   }
+
   if (org.status && org.status !== "active") {
     return { status: "error", detail: "That organisation is not active.", messageId: null };
   }
