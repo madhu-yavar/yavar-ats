@@ -96,13 +96,16 @@ export const collectApplicants = createServerFn({ method: "POST" })
         .eq("id", orgId)
         .maybeSingle();
       const address = inboxAddress(org?.inbox_slug);
+      const mailReceivingLive = Boolean(process.env["INBOUND_EMAIL_SECRET"]);
       if (address) {
         const run = await processPendingMail(orgId, data.max ?? 25);
         summary.scanned += run.scanned;
         summary.imported += run.imported;
         summary.updated += run.updated;
         summary.skipped += run.skipped;
-        summary.mailboxNote = `Reading your careers address ${address}. Point your LinkedIn job posts and job-board alerts there and every CV files itself.`;
+        summary.mailboxNote = mailReceivingLive
+          ? `Reading your careers address ${address}. Point your LinkedIn job posts and job-board alerts there and every CV files itself.`
+          : `Your careers address ${address} is reserved but not receiving mail yet — incoming mail still has to be routed to ATSIQ, so nothing can arrive here today. Until that is switched on, CVs come in through your ATSIQ apply link and the browser companion.`;
       } else {
         summary.mailboxNote =
           "Your organisation does not have a careers address yet — ask your ATSIQ administrator to finish onboarding.";
