@@ -241,6 +241,22 @@ export const createOrganization = createServerFn({ method: "POST" })
           : `${companyDomain} already has an organisation on ATSIQ ("${claimed.name}"). Ask its owner to invite you from Users, roles & access control.`,
       );
 
+    // The tenant's own careers address: yavar.ai -> yavar@careers.atsiq.yavar.ai
+    let inboxSlug =
+      companyDomain.split(".")[0]?.replace(/[^a-z0-9-]+/g, "-") ||
+      data.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 28) ||
+      "org";
+    for (let attempt = 2; attempt < 30; attempt++) {
+      const { data: taken } = await db
+        .from("organizations")
+        .select("id")
+        .ilike("inbox_slug", inboxSlug)
+        .limit(1)
+        .maybeSingle();
+      if (!taken) break;
+      inboxSlug = `${inboxSlug.replace(/-\d+$/, "")}-${attempt}`;
+    }
+
     const { data: org, error } = await db
       .from("organizations")
       .insert({
@@ -248,6 +264,8 @@ export const createOrganization = createServerFn({ method: "POST" })
 
         name: data.name.trim(),
         slug: slugify(data.name),
+        inbox_slug: inboxSlug,
+
         legal_name: data.legalName.trim() || null,
         industry: data.industry.trim() || null,
         hq_country: data.hqCountry.trim() || null,

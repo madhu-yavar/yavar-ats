@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as CookiesRouteImport } from './routes/cookies'
 import { Route as HelpRouteImport } from './routes/help'
 import { Route as IjpRouteImport } from './routes/ijp'
+import { Route as InboxRouteImport } from './routes/inbox'
 import { Route as IntegrationsRouteImport } from './routes/integrations'
 import { Route as InterviewsRouteImport } from './routes/interviews'
 import { Route as MastersRouteImport } from './routes/masters'
@@ -30,6 +31,7 @@ import { Route as CandidatesIdRouteImport } from './routes/candidates.$id'
 import { Route as InterviewsMineRouteImport } from './routes/interviews.mine'
 import { Route as RequisitionsIndexRouteImport } from './routes/requisitions.index'
 import { Route as RequisitionsIdRouteImport } from './routes/requisitions.$id'
+import { Route as ApiPublicInboundEmailRouteImport } from './routes/api/public/inbound-email'
 import { Route as ApiPublicInboxSyncRouteImport } from './routes/api/public/inbox-sync'
 import { Route as ApiPublicSyncCandidatesRouteImport } from './routes/api/public/sync-candidates'
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
@@ -54,6 +56,11 @@ const HelpRoute = HelpRouteImport.update({
 const IjpRoute = IjpRouteImport.update({
   id: '/ijp',
   path: '/ijp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InboxRoute = InboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IntegrationsRoute = IntegrationsRouteImport.update({
@@ -141,6 +148,11 @@ const RequisitionsIdRoute = RequisitionsIdRouteImport.update({
   path: '/requisitions/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicInboundEmailRoute = ApiPublicInboundEmailRouteImport.update({
+  id: '/api/public/inbound-email',
+  path: '/api/public/inbound-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicInboxSyncRoute = ApiPublicInboxSyncRouteImport.update({
   id: '/api/public/inbox-sync',
   path: '/api/public/inbox-sync',
@@ -173,6 +185,7 @@ export interface FileRoutesByFullPath {
   '/cookies': typeof CookiesRoute
   '/help': typeof HelpRoute
   '/ijp': typeof IjpRoute
+  '/inbox': typeof InboxRoute
   '/integrations': typeof IntegrationsRoute
   '/interviews': typeof InterviewsRouteWithChildren
   '/masters': typeof MastersRoute
@@ -190,6 +203,7 @@ export interface FileRoutesByFullPath {
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates/': typeof CandidatesIndexRoute
   '/requisitions/': typeof RequisitionsIndexRoute
+  '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
   '/api/public/sync-candidates': typeof ApiPublicSyncCandidatesRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -201,6 +215,7 @@ export interface FileRoutesByTo {
   '/cookies': typeof CookiesRoute
   '/help': typeof HelpRoute
   '/ijp': typeof IjpRoute
+  '/inbox': typeof InboxRoute
   '/integrations': typeof IntegrationsRoute
   '/interviews': typeof InterviewsRouteWithChildren
   '/masters': typeof MastersRoute
@@ -218,6 +233,7 @@ export interface FileRoutesByTo {
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates': typeof CandidatesIndexRoute
   '/requisitions': typeof RequisitionsIndexRoute
+  '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
   '/api/public/sync-candidates': typeof ApiPublicSyncCandidatesRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -230,6 +246,7 @@ export interface FileRoutesById {
   '/cookies': typeof CookiesRoute
   '/help': typeof HelpRoute
   '/ijp': typeof IjpRoute
+  '/inbox': typeof InboxRoute
   '/integrations': typeof IntegrationsRoute
   '/interviews': typeof InterviewsRouteWithChildren
   '/masters': typeof MastersRoute
@@ -247,6 +264,7 @@ export interface FileRoutesById {
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates/': typeof CandidatesIndexRoute
   '/requisitions/': typeof RequisitionsIndexRoute
+  '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
   '/api/public/sync-candidates': typeof ApiPublicSyncCandidatesRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -260,6 +278,7 @@ export interface FileRouteTypes {
     | '/cookies'
     | '/help'
     | '/ijp'
+    | '/inbox'
     | '/integrations'
     | '/interviews'
     | '/masters'
@@ -277,6 +296,7 @@ export interface FileRouteTypes {
     | '/requisitions/$id'
     | '/candidates/'
     | '/requisitions/'
+    | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
     | '/api/public/sync-candidates'
     | '/lovable/email/auth/preview'
@@ -288,6 +308,7 @@ export interface FileRouteTypes {
     | '/cookies'
     | '/help'
     | '/ijp'
+    | '/inbox'
     | '/integrations'
     | '/interviews'
     | '/masters'
@@ -305,6 +326,7 @@ export interface FileRouteTypes {
     | '/requisitions/$id'
     | '/candidates'
     | '/requisitions'
+    | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
     | '/api/public/sync-candidates'
     | '/lovable/email/auth/preview'
@@ -316,6 +338,7 @@ export interface FileRouteTypes {
     | '/cookies'
     | '/help'
     | '/ijp'
+    | '/inbox'
     | '/integrations'
     | '/interviews'
     | '/masters'
@@ -333,6 +356,7 @@ export interface FileRouteTypes {
     | '/requisitions/$id'
     | '/candidates/'
     | '/requisitions/'
+    | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
     | '/api/public/sync-candidates'
     | '/lovable/email/auth/preview'
@@ -345,6 +369,7 @@ export interface RootRouteChildren {
   CookiesRoute: typeof CookiesRoute
   HelpRoute: typeof HelpRoute
   IjpRoute: typeof IjpRoute
+  InboxRoute: typeof InboxRoute
   IntegrationsRoute: typeof IntegrationsRoute
   InterviewsRoute: typeof InterviewsRouteWithChildren
   MastersRoute: typeof MastersRoute
@@ -361,6 +386,7 @@ export interface RootRouteChildren {
   RequisitionsIdRoute: typeof RequisitionsIdRoute
   CandidatesIndexRoute: typeof CandidatesIndexRoute
   RequisitionsIndexRoute: typeof RequisitionsIndexRoute
+  ApiPublicInboundEmailRoute: typeof ApiPublicInboundEmailRoute
   ApiPublicInboxSyncRoute: typeof ApiPublicInboxSyncRoute
   ApiPublicSyncCandidatesRoute: typeof ApiPublicSyncCandidatesRoute
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
@@ -396,6 +422,13 @@ declare module '@tanstack/react-router' {
       path: '/ijp'
       fullPath: '/ijp'
       preLoaderRoute: typeof IjpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inbox': {
+      id: '/inbox'
+      path: '/inbox'
+      fullPath: '/inbox'
+      preLoaderRoute: typeof InboxRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/integrations': {
@@ -517,6 +550,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RequisitionsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/inbound-email': {
+      id: '/api/public/inbound-email'
+      path: '/api/public/inbound-email'
+      fullPath: '/api/public/inbound-email'
+      preLoaderRoute: typeof ApiPublicInboundEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/inbox-sync': {
       id: '/api/public/inbox-sync'
       path: '/api/public/inbox-sync'
@@ -572,6 +612,7 @@ const rootRouteChildren: RootRouteChildren = {
   CookiesRoute: CookiesRoute,
   HelpRoute: HelpRoute,
   IjpRoute: IjpRoute,
+  InboxRoute: InboxRoute,
   IntegrationsRoute: IntegrationsRoute,
   InterviewsRoute: InterviewsRouteWithChildren,
   MastersRoute: MastersRoute,
@@ -588,6 +629,7 @@ const rootRouteChildren: RootRouteChildren = {
   RequisitionsIdRoute: RequisitionsIdRoute,
   CandidatesIndexRoute: CandidatesIndexRoute,
   RequisitionsIndexRoute: RequisitionsIndexRoute,
+  ApiPublicInboundEmailRoute: ApiPublicInboundEmailRoute,
   ApiPublicInboxSyncRoute: ApiPublicInboxSyncRoute,
   ApiPublicSyncCandidatesRoute: ApiPublicSyncCandidatesRoute,
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,
