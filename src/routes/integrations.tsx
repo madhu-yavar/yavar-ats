@@ -313,7 +313,28 @@ function CredentialFields({
  * goes out from that account. Nothing to paste, and no other company's account
  * is ever involved.
  */
+/** Copy-ready note HR can send to their LinkedIn account manager. */
+const LINKEDIN_REQUEST = `Subject: Request to enable Job Posting and Applicant data access on our LinkedIn contract
+
+Hello,
+
+We use an applicant tracking system (ATSIQ) alongside our LinkedIn Recruiter seats. Our LinkedIn account is already
+authorised in the system and we can publish posts from it.
+
+Two products are not on our contract, and LinkedIn currently returns "not found" for both:
+
+1. Job Posting — to publish our roles as structured job listings on the LinkedIn Jobs board.
+2. Applicant / candidate data access (Talent Solutions) — to receive applicants and their CVs directly into our ATS.
+
+Please confirm what is required to add these to our contract: the products, the commercial terms, and any partner
+programme application or security review we need to complete. We are ready to provide company details, use case and
+technical contacts.
+
+Thank you,
+[Your name] — [Company] — [Contact number]`;
+
 function LinkedinOneClick() {
+
   const qc = useQueryClient();
   const start = useServerFn(startLinkedInConnect);
   const drop = useServerFn(disconnectLinkedIn);
