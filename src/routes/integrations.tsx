@@ -9,7 +9,12 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { disconnectIntegration, saveIntegration, testIntegration } from "@/lib/integrations.functions";
 import { getAiSettings, removeAiKey, saveAiSettings, testAiModel } from "@/lib/ai-settings.functions";
-import { disconnectLinkedIn, linkedinStatus, startLinkedInConnect } from "@/lib/linkedin.functions";
+import {
+  disconnectLinkedIn,
+  linkedinCapabilities,
+  linkedinStatus,
+  startLinkedInConnect,
+} from "@/lib/linkedin.functions";
 import { careersInboxStatus, importCareersInbox } from "@/lib/inbox.functions";
 import { PageHeader } from "@/components/ats";
 
@@ -320,6 +325,12 @@ function LinkedinOneClick() {
   });
   const s = status.data;
 
+  const caps = useQuery({
+    queryKey: ["linkedin_caps"],
+    queryFn: () => linkedinCapabilities({ data: undefined }),
+    enabled: Boolean(s?.connected),
+  });
+
   useEffect(() => {
     if (awaiting && s?.connected) {
       setAwaiting(false);
@@ -415,6 +426,47 @@ function LinkedinOneClick() {
         </p>
       ) : null}
 
+
+      {s?.connected ? (
+        <div className="mt-3 rounded-lg border border-border bg-background p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-medium">What this account can do</p>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => caps.refetch()}
+              disabled={caps.isFetching}
+            >
+              {caps.isFetching ? <Loader2 className="size-4 animate-spin" /> : null} Re-check
+            </Button>
+          </div>
+          {caps.isLoading ? (
+            <p className="mt-2 text-sm text-muted-foreground">Asking LinkedIn what your seat allows…</p>
+          ) : caps.error ? (
+            <p className="mt-2 text-sm text-destructive">
+              {caps.error instanceof Error ? caps.error.message : "Could not check this account."}
+            </p>
+          ) : (
+            <ul className="mt-2 space-y-2">
+              {(caps.data ?? []).map((c) => (
+                <li key={c.id} className="flex gap-2 text-sm">
+                  {c.ready === true ? (
+                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                  ) : c.ready === false ? (
+                    <CircleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                  ) : (
+                    <CircleDashed className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                  )}
+                  <span>
+                    <span className="font-medium">{c.label}</span>
+                    <span className="block text-xs text-muted-foreground">{c.detail}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : null}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={onConnect} disabled={busy || !s?.configured}>
