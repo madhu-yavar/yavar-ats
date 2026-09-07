@@ -237,3 +237,33 @@ export async function retryMessage(orgId: string, messageId: string): Promise<In
     return { status: "error", detail, messageId };
   }
 }
+
+/**
+ * Work through the mail that arrived at this organisation's own careers address
+ * but has not yet produced a candidate — anything still "received", "stored" or
+ * in error. Nothing to configure: the address is created with the organisation.
+ */
+export async function processPendingMail(
+  orgId: string,
+  max = 25,
+): Promise<{ scanned: number; imported: number; updated: number; skipped: number; errors: number }> {
+  const db = await admin();
+  const { data: rows } = await db
+    .from("inbox_messages")
+    .select("id")
+    .eq("org_id", orgId)
+    .in("status", ["received", "stored", "error"])
+    .order("received_at", { ascending: false })
+    .limit(max);
+
+  const out = { scanned: 0, imported: 0, updated: 0, skipped: 0, errors: 0 };
+  for (const row of rows ?? []) {
+    out.scanned++;
+    const result = await retryMessage(orgId, row.id);
+    if (result.status === "imported") out.imported++;
+    else if (result.status === "updated") out.updated++;
+    else if (result.status === "error") out.skipped++;
+    else out.skipped++;
+  }
+  return out;
+}
