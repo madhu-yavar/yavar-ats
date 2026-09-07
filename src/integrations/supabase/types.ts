@@ -609,6 +609,71 @@ export type Database = {
           },
         ]
       }
+      inbox_messages: {
+        Row: {
+          attachment_bytes: number | null
+          attachment_name: string | null
+          body: string | null
+          candidate_id: string | null
+          created_at: string
+          detail: string | null
+          from_email: string | null
+          from_name: string | null
+          id: string
+          org_id: string
+          provider_message_id: string | null
+          received_at: string
+          requisition_id: string | null
+          status: string
+          subject: string | null
+          to_address: string | null
+        }
+        Insert: {
+          attachment_bytes?: number | null
+          attachment_name?: string | null
+          body?: string | null
+          candidate_id?: string | null
+          created_at?: string
+          detail?: string | null
+          from_email?: string | null
+          from_name?: string | null
+          id?: string
+          org_id: string
+          provider_message_id?: string | null
+          received_at?: string
+          requisition_id?: string | null
+          status?: string
+          subject?: string | null
+          to_address?: string | null
+        }
+        Update: {
+          attachment_bytes?: number | null
+          attachment_name?: string | null
+          body?: string | null
+          candidate_id?: string | null
+          created_at?: string
+          detail?: string | null
+          from_email?: string | null
+          from_name?: string | null
+          id?: string
+          org_id?: string
+          provider_message_id?: string | null
+          received_at?: string
+          requisition_id?: string | null
+          status?: string
+          subject?: string | null
+          to_address?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inbox_messages_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integration_credentials: {
         Row: {
           integration_id: string
@@ -776,6 +841,44 @@ export type Database = {
             columns: ["requisition_id"]
             isOneToOne: false
             referencedRelation: "requisitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      linkedin_oauth_states: {
+        Row: {
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          org_id: string
+          redirect_uri: string
+          user_id: string
+        }
+        Insert: {
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          org_id: string
+          redirect_uri: string
+          user_id: string
+        }
+        Update: {
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          org_id?: string
+          redirect_uri?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linkedin_oauth_states_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -1046,6 +1149,7 @@ export type Database = {
           hq_city: string | null
           hq_country: string | null
           id: string
+          inbox_slug: string | null
           industry: string | null
           legal_name: string | null
           name: string
@@ -1071,6 +1175,7 @@ export type Database = {
           hq_city?: string | null
           hq_country?: string | null
           id?: string
+          inbox_slug?: string | null
           industry?: string | null
           legal_name?: string | null
           name: string
@@ -1096,6 +1201,7 @@ export type Database = {
           hq_city?: string | null
           hq_country?: string | null
           id?: string
+          inbox_slug?: string | null
           industry?: string | null
           legal_name?: string | null
           name?: string
