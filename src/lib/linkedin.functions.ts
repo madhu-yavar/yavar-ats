@@ -2,12 +2,14 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { LinkedinCapability } from "./linkedin.server";
 import {
   LinkedinAuthError,
   authorizeUrl,
   fetchMember,
   linkedinEnvConfigured,
   postAsMember,
+  probeCapabilities,
   refreshAccessToken,
   signState,
 } from "./linkedin.server";
@@ -160,4 +162,21 @@ export const publishToLinkedIn = createServerFn({ method: "POST" })
     await fetchMember(accessToken);
     const postUrn = await postAsMember(accessToken, memberSub, data.text.trim());
     return { ok: true as const, postUrn };
+  });
+
+/** Ask LinkedIn what this organisation's connection is actually allowed to do. */
+export const linkedinCapabilities = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<LinkedinCapability[]> => {
+    const orgId = await myOrgId(context.userId);
+    if (!orgId) return [];
+    const db = await admin();
+    const { data } = await db
+      .from("org_linkedin_connections")
+      .select("scope")
+      .eq("org_id", orgId)
+      .maybeSingle();
+    if (!data) return [];
+    const { accessToken } = await orgToken(orgId);
+    return probeCapabilities(accessToken, data.scope ?? null);
   });
