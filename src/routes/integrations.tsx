@@ -352,17 +352,148 @@ function LinkedinOneClick() {
           and token refresh automatically.
         </li>
         <li>
-          CVs come back automatically through the apply link inside each post — applicants upload once and land in
-          your talent pool, parsed and scored against the role.
+          CVs come back automatically: through the apply link inside each post, and through the careers mailbox
+          import below, which reads LinkedIn application emails and files the attached CVs on its own.
         </li>
         <li>
-          Reading other people's LinkedIn profiles or their inbox CVs directly needs a paid LinkedIn Talent Solutions
-          data agreement — that is a LinkedIn contract matter, not a setting here.
+          Reading other people's LinkedIn profiles directly needs a paid LinkedIn Talent Solutions data agreement —
+          a Recruiter seat alone does not include it. Use the request below to start that with LinkedIn.
         </li>
       </ul>
+
+      <details className="mt-3 rounded-lg border border-border bg-background p-3">
+        <summary className="cursor-pointer text-xs font-medium">
+          Ask LinkedIn to switch on data access for ATSIQ — ready-to-send request
+        </summary>
+        <pre className="mt-3 whitespace-pre-wrap rounded-md bg-surface-2 p-3 text-[11px] leading-relaxed text-muted-foreground">
+{LINKEDIN_ACCESS_REQUEST}
+        </pre>
+        <Button
+          size="sm"
+          variant="outline"
+          className="mt-3"
+          onClick={() => {
+            void navigator.clipboard.writeText(LINKEDIN_ACCESS_REQUEST);
+            toast.success("Request copied — send it to your LinkedIn account manager");
+          }}
+        >
+          Copy request
+        </Button>
+      </details>
     </div>
   );
 }
+
+const LINKEDIN_ACCESS_REQUEST = `Subject: Recruiter System Connect / Talent Solutions data access for our ATS
+
+Hello,
+
+We run a paid LinkedIn Recruiter contract for our organisation and we have now
+moved our hiring onto ATSIQ, our applicant tracking system.
+
+We would like to enable data access on our contract so that ATSIQ can:
+  - read applications and attached CVs from job posts we publish,
+  - sync candidate stage and status back into Recruiter (Recruiter System Connect),
+  - keep InMail and pipeline activity visible alongside our own records.
+
+Please confirm:
+  1. what is included in our current contract and what needs to be added,
+  2. the approval steps and expected timeline for our ATS to be enabled,
+  3. any partner registration LinkedIn requires on the ATS vendor side.
+
+Our recruiting team is ready to complete whatever LinkedIn needs from our end.
+
+Thank you,
+[Your name] — [Title], [Company]`;
+
+/**
+ * Careers mailbox auto-import. The mailbox is authorised once, centrally; from
+ * then on every application email — LinkedIn, job boards, direct applicants —
+ * has its CV read, parsed and filed against the matching open role by itself.
+ */
+function CareersInboxPanel() {
+  const status = useQuery({
+    queryKey: ["careers_inbox"],
+    queryFn: () => careersInboxStatus({ data: undefined }),
+    refetchOnWindowFocus: false,
+  });
+  const runImport = useServerFn(importCareersInbox);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<Awaited<ReturnType<typeof importCareersInbox>> | null>(null);
+  const s = status.data;
+
+  async function onImport() {
+    setBusy(true);
+    try {
+      const r = await runImport({ data: {} });
+      setResult(r);
+      toast.success(`${r.imported} new, ${r.updated} updated from ${r.scanned} emails`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Inbox className="size-4 text-primary" />
+          Careers mailbox auto-import
+        </div>
+        {status.isLoading ? (
+          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Loader2 className="size-3.5 animate-spin" /> Checking
+          </span>
+        ) : s?.connected ? (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600">
+            <CheckCircle2 className="size-3.5" /> Connected — {s.email}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <CircleDashed className="size-3.5" /> Not connected
+          </span>
+        )}
+      </div>
+
+      <p className="mt-2 text-sm text-muted-foreground">
+        {s?.connected
+          ? "Every hour ATSIQ reads new mail in this inbox, opens the attached CVs, and files each applicant in the talent pool and in the matching open role — read, scored and ready. Nobody downloads anything."
+          : "Connect your careers mailbox once and every application email — LinkedIn, job boards, direct applicants — has its CV read and filed automatically. Ask your platform admin to connect it in Lovable → Settings → Connectors."}
+      </p>
+
+      {s?.error ? <p className="mt-2 text-xs text-amber-600">{s.error}</p> : null}
+
+      {s?.connected ? (
+        <Button size="sm" variant="outline" className="mt-3" onClick={onImport} disabled={busy}>
+          {busy ? <Loader2 className="size-4 animate-spin" /> : null} Import now
+        </Button>
+      ) : null}
+
+      {result ? (
+        <div className="mt-3 rounded-md border border-border bg-background p-3">
+          <p className="num text-xs text-muted-foreground">
+            {result.scanned} emails scanned · {result.imported} new candidates · {result.updated} refreshed ·{" "}
+            {result.skipped} skipped · {result.errors} failed
+          </p>
+          {result.outcomes.length ? (
+            <ul className="mt-2 space-y-1 text-xs">
+              {result.outcomes.slice(0, 20).map((o, i) => (
+                <li key={i} className="flex flex-wrap gap-x-2 text-muted-foreground">
+                  <span className="font-medium text-foreground">{o.status}</span>
+                  <span className="truncate">{o.detail}</span>
+                  {o.requisition ? <span>→ {o.requisition}</span> : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 
 
 function IntegrationCard({ row }: { row: Integration }) {
