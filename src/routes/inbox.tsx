@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Check, Copy, Loader2, RefreshCw, Trash2 } from "lucide-react";
 
@@ -9,6 +9,7 @@ import {
   orgInbox,
   removeInboxMessage,
   retryInboxMessage,
+  saveCareersEmail,
   type InboxRow,
 } from "@/lib/local-inbox.functions";
 import { EmptyState, PageHeader } from "@/components/ats";
@@ -64,6 +65,26 @@ function InboxPage() {
   const [status, setStatus] = useState("all");
   const [busy, setBusy] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [careers, setCareers] = useState("");
+  const [savingCareers, setSavingCareers] = useState(false);
+  const persistCareers = useServerFn(saveCareersEmail);
+
+  useEffect(() => {
+    setCareers(inbox.data?.careersEmail ?? "");
+  }, [inbox.data?.careersEmail]);
+
+  const saveCareers = async (value: string) => {
+    setSavingCareers(true);
+    try {
+      await persistCareers({ data: { email: value.trim() || null } });
+      toast.success(value.trim() ? "Careers address registered." : "Careers address removed.");
+      await qc.invalidateQueries({ queryKey: ["org_inbox"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "That did not work.");
+    } finally {
+      setSavingCareers(false);
+    }
+  };
 
   const address = inbox.data?.address ?? null;
   const counts = inbox.data?.counts;
@@ -151,6 +172,39 @@ function InboxPage() {
           </div>
         ) : null}
       </div>
+
+      <div className="panel p-5">
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">Your own careers address</p>
+        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+          If you already advertise an address like <span className="font-mono">careers@yourcompany.com</span>,
+          register it here and set it to forward to the address above. Applications keep arriving at your own
+          address and still file themselves here — candidates never see a different address.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Input
+            value={careers}
+            onChange={(e) => setCareers(e.target.value)}
+            placeholder="careers@yourcompany.com"
+            className="max-w-sm"
+          />
+          <Button onClick={() => saveCareers(careers)} disabled={savingCareers}>
+            {savingCareers ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+            Save address
+          </Button>
+          {inbox.data?.careersEmail ? (
+            <Button variant="ghost" onClick={() => saveCareers("")} disabled={savingCareers}>
+              Remove
+            </Button>
+          ) : null}
+        </div>
+        {inbox.data?.careersEmail ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Registered: <span className="font-mono text-foreground">{inbox.data.careersEmail}</span> — forward
+            it to {address ?? "your ATSIQ address"}.
+          </p>
+        ) : null}
+      </div>
+
 
       <div className="panel p-5">
         <div className="flex flex-wrap items-center gap-3">
