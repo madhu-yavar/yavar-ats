@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Check, Copy, Loader2, RefreshCw, Trash2 } from "lucide-react";
 
@@ -9,6 +9,7 @@ import {
   orgInbox,
   removeInboxMessage,
   retryInboxMessage,
+  saveCareersEmail,
   type InboxRow,
 } from "@/lib/local-inbox.functions";
 import { EmptyState, PageHeader } from "@/components/ats";
@@ -64,6 +65,26 @@ function InboxPage() {
   const [status, setStatus] = useState("all");
   const [busy, setBusy] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [careers, setCareers] = useState("");
+  const [savingCareers, setSavingCareers] = useState(false);
+  const persistCareers = useServerFn(saveCareersEmail);
+
+  useEffect(() => {
+    setCareers(inbox.data?.careersEmail ?? "");
+  }, [inbox.data?.careersEmail]);
+
+  const saveCareers = async (value: string) => {
+    setSavingCareers(true);
+    try {
+      await persistCareers({ data: { email: value.trim() || null } });
+      toast.success(value.trim() ? "Careers address registered." : "Careers address removed.");
+      await qc.invalidateQueries({ queryKey: ["org_inbox"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "That did not work.");
+    } finally {
+      setSavingCareers(false);
+    }
+  };
 
   const address = inbox.data?.address ?? null;
   const counts = inbox.data?.counts;
