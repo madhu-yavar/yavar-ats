@@ -23,6 +23,18 @@ export function localPart(address: string): string {
   return (at === -1 ? bare : bare.slice(0, at)).replace(/\+.*$/, "");
 }
 
+/** Every plain address found in a recipient header, lower-cased. */
+export function recipientAddresses(header: string): string[] {
+  const out: string[] = [];
+  for (const chunk of (header ?? "").split(",")) {
+    const m = /<([^>]+)>/.exec(chunk);
+    const bare = (m?.[1] ?? chunk).trim().toLowerCase();
+    if (bare.includes("@")) out.push(bare);
+  }
+  return out;
+}
+
+
 export function displayName(from: string): { email: string; name: string | null } {
   const m = /^\s*"?([^"<]*)"?\s*<([^>]+)>\s*$/.exec(from);
   if (m) return { email: (m[2] ?? "").trim().toLowerCase(), name: (m[1] ?? "").trim() || null };
