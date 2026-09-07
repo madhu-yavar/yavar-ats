@@ -19,6 +19,7 @@ import { careersInboxStatus, importCareersInbox } from "@/lib/inbox.functions";
 import { orgInbox } from "@/lib/local-inbox.functions";
 
 import { collectApplicants, type CollectSummary } from "@/lib/collect.functions";
+import { captureSetup, rotateCaptureToken } from "@/lib/capture.functions";
 import { PageHeader } from "@/components/ats";
 
 import { Button } from "@/components/ui/button";
