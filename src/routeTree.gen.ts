@@ -23,6 +23,7 @@ import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as TeamRouteImport } from './routes/team'
+import { Route as ApplyIdRouteImport } from './routes/apply.$id'
 import { Route as AssessTokenRouteImport } from './routes/assess.$token'
 import { Route as CandidatesIndexRouteImport } from './routes/candidates.index'
 import { Route as CandidatesIdRouteImport } from './routes/candidates.$id'
@@ -104,6 +105,11 @@ const TeamRoute = TeamRouteImport.update({
   path: '/team',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApplyIdRoute = ApplyIdRouteImport.update({
+  id: '/apply/$id',
+  path: '/apply/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AssessTokenRoute = AssessTokenRouteImport.update({
   id: '/assess/$token',
   path: '/assess/$token',
@@ -171,6 +177,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/reports': typeof ReportsRoute
   '/team': typeof TeamRoute
+  '/apply/$id': typeof ApplyIdRoute
   '/assess/$token': typeof AssessTokenRoute
   '/candidates/$id': typeof CandidatesIdRoute
   '/interviews/mine': typeof InterviewsMineRoute
@@ -197,6 +204,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/reports': typeof ReportsRoute
   '/team': typeof TeamRoute
+  '/apply/$id': typeof ApplyIdRoute
   '/assess/$token': typeof AssessTokenRoute
   '/candidates/$id': typeof CandidatesIdRoute
   '/interviews/mine': typeof InterviewsMineRoute
@@ -224,6 +232,7 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/reports': typeof ReportsRoute
   '/team': typeof TeamRoute
+  '/apply/$id': typeof ApplyIdRoute
   '/assess/$token': typeof AssessTokenRoute
   '/candidates/$id': typeof CandidatesIdRoute
   '/interviews/mine': typeof InterviewsMineRoute
@@ -252,6 +261,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/reports'
     | '/team'
+    | '/apply/$id'
     | '/assess/$token'
     | '/candidates/$id'
     | '/interviews/mine'
@@ -278,6 +288,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/reports'
     | '/team'
+    | '/apply/$id'
     | '/assess/$token'
     | '/candidates/$id'
     | '/interviews/mine'
@@ -304,6 +315,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/reports'
     | '/team'
+    | '/apply/$id'
     | '/assess/$token'
     | '/candidates/$id'
     | '/interviews/mine'
@@ -331,6 +343,7 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   ReportsRoute: typeof ReportsRoute
   TeamRoute: typeof TeamRoute
+  ApplyIdRoute: typeof ApplyIdRoute
   AssessTokenRoute: typeof AssessTokenRoute
   CandidatesIdRoute: typeof CandidatesIdRoute
   RequisitionsIdRoute: typeof RequisitionsIdRoute
@@ -442,6 +455,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TeamRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/apply/$id': {
+      id: '/apply/$id'
+      path: '/apply/$id'
+      fullPath: '/apply/$id'
+      preLoaderRoute: typeof ApplyIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/assess/$token': {
       id: '/assess/$token'
       path: '/assess/$token'
@@ -542,6 +562,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   ReportsRoute: ReportsRoute,
   TeamRoute: TeamRoute,
+  ApplyIdRoute: ApplyIdRoute,
   AssessTokenRoute: AssessTokenRoute,
   CandidatesIdRoute: CandidatesIdRoute,
   RequisitionsIdRoute: RequisitionsIdRoute,
