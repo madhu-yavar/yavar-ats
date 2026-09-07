@@ -402,6 +402,13 @@ function LinkedinOneClick() {
       </div>
 
       <p className="mt-2 text-sm text-muted-foreground">{body}</p>
+      {awaiting ? (
+        <p className="mt-2 inline-flex items-center gap-2 text-sm text-primary">
+          <Loader2 className="size-4 animate-spin" /> Waiting for you to finish signing in on the LinkedIn tab that
+          just opened — you can close it once LinkedIn says you're done.
+        </p>
+      ) : null}
+
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={onConnect} disabled={busy || !s?.configured}>
