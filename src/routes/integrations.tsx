@@ -903,6 +903,9 @@ function IntegrationCard({ row }: { row: Integration }) {
 
       {provider === "linkedin" ? <LinkedinOneClick /> : null}
       {provider === "linkedin" || provider === "careers" ? <CareersInboxPanel /> : null}
+      {provider === "linkedin" || provider === "careers" ? <CapturePanel /> : null}
+
+
 
       <SetupHelp provider={provider} label={row.label} />
 
