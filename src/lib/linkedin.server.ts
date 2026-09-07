@@ -186,3 +186,106 @@ export async function postAsMember(
     throw new Error("LinkedIn rate limit reached — try again in a little while.");
   throw new Error(`LinkedIn post failed [${res.status}]: ${bodyText.slice(0, 300)}`);
 }
+
+/* ---------------------------------------------------------------- capabilities */
+
+export type LinkedinCapability = {
+  id: "identity" | "publish" | "job_postings" | "applications";
+  label: string;
+  /** true = usable now, false = LinkedIn refused, null = could not be determined. */
+  ready: boolean | null;
+  detail: string;
+};
+
+const REST_VERSION = "202401";
+
+async function probeRest(accessToken: string, path: string): Promise<number> {
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "LinkedIn-Version": REST_VERSION,
+      "X-Restli-Protocol-Version": "2.0.0",
+    },
+  });
+  return res.status;
+}
+
+/**
+ * Asks LinkedIn itself what this organisation's connection is allowed to do,
+ * instead of guessing from the paperwork. Scope strings tell us what was
+ * granted at sign-in; the live probes tell us whether the Recruiter contract
+ * actually opens the job-posting and application endpoints.
+ */
+export async function probeCapabilities(
+  accessToken: string,
+  scope: string | null,
+): Promise<LinkedinCapability[]> {
+  const granted = (scope ?? "").split(/[\s,]+/).filter(Boolean);
+  const out: LinkedinCapability[] = [];
+
+  try {
+    const me = await fetchMember(accessToken);
+    out.push({
+      id: "identity",
+      label: "Sign-in is live",
+      ready: true,
+      detail: `LinkedIn recognises this connection as ${me.name ?? me.sub}.`,
+    });
+  } catch (e) {
+    out.push({
+      id: "identity",
+      label: "Sign-in is live",
+      ready: false,
+      detail: e instanceof Error ? e.message : "LinkedIn did not accept the stored sign-in.",
+    });
+    return out;
+  }
+
+  out.push(
+    granted.includes("w_member_social")
+      ? {
+          id: "publish",
+          label: "Publishing job posts",
+          ready: true,
+          detail: "ATSIQ can publish the designed post to this account's feed.",
+        }
+      : {
+          id: "publish",
+          label: "Publishing job posts",
+          ready: false,
+          detail:
+            "Posting permission was not granted at sign-in. Press Reconnect LinkedIn and accept the posting request.",
+        },
+  );
+
+  const jobStatus = await probeRest(accessToken, "/rest/jobPostings?q=criteria&start=0&count=1").catch(
+    () => 0,
+  );
+  out.push({
+    id: "job_postings",
+    label: "Structured job listings on the Jobs board",
+    ready: jobStatus === 200 ? true : jobStatus === 0 ? null : false,
+    detail:
+      jobStatus === 200
+        ? "Your contract opens the Jobs board, so ATSIQ can file listings there directly."
+        : jobStatus === 0
+          ? "LinkedIn did not answer the check — try again in a moment."
+          : `LinkedIn declined (${jobStatus}). This needs the Job Posting product on your contract; until then posts go out on the feed with your ATSIQ apply link.`,
+  });
+
+  const appStatus = await probeRest(
+    accessToken,
+    "/rest/simpleJobPostings?q=criteria&start=0&count=1",
+  ).catch(() => 0);
+  out.push({
+    id: "applications",
+    label: "Pulling applicants and CVs straight from LinkedIn",
+    ready: appStatus === 200 ? true : appStatus === 0 ? null : false,
+    detail:
+      appStatus === 200
+        ? "ATSIQ can read applicants from your LinkedIn jobs automatically."
+        : `LinkedIn declined (${appStatus || "no answer"}). Until that product is on your contract, CVs still arrive automatically through your ATSIQ apply link and your careers mailbox.`,
+  });
+
+  return out;
+}
