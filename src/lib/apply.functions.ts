@@ -66,7 +66,7 @@ export const publicJob = createServerFn({ method: "GET" })
       goodToHave: r.good_to_have_skills ?? [],
       responsibilities: r.responsibilities,
       company,
-      open: r.status === "approved" || r.status === "sourcing" || r.status === "interviewing",
+      open: r.status === "approved",
     };
   });
 
@@ -96,7 +96,7 @@ export const submitApplication = createServerFn({ method: "POST" })
       .eq("id", data.requisitionId)
       .maybeSingle();
     if (!r) throw new Error("This job link is no longer valid.");
-    if (!(r.status === "approved" || r.status === "sourcing" || r.status === "interviewing"))
+    if (r.status !== "approved")
       throw new Error("This role is no longer accepting applications.");
 
     const parsed = await aiJson<{
