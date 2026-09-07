@@ -67,10 +67,9 @@ const SETUP_GUIDE: Record<string, SetupGuide> = {
     minutes: "Under a minute",
     links: [],
     steps: [
-      "Press “Connect LinkedIn account” in the panel above.",
-      "Sign in on LinkedIn's own page with the company's LinkedIn account and press Allow.",
-      "You come straight back here — done. Everyone on the team can now publish job posts through this account.",
-      "One-time platform note (not for HR): whoever manages the company's app on developer.linkedin.com adds this site's /api/auth/linkedin/callback address as a redirect URL.",
+      "Check that the panel above shows a green “Connected” tick — that is the one-time sign-in, already done for your company.",
+      "Open any approved requisition, press “Design post”, then “Publish to LinkedIn”. That is the whole job.",
+      "Each post carries your ATSIQ apply link, so CVs sent from LinkedIn arrive in the talent pool and the role's pipeline on their own — read, scored and ready, with nothing to download.",
     ],
   },
 
@@ -353,8 +352,12 @@ function LinkedinOneClick() {
           and token refresh automatically.
         </li>
         <li>
-          Searching other people's LinkedIn profiles or pulling CVs needs a paid LinkedIn Talent Solutions data
-          agreement — connecting the account does not open that up.
+          CVs come back automatically through the apply link inside each post — applicants upload once and land in
+          your talent pool, parsed and scored against the role.
+        </li>
+        <li>
+          Reading other people's LinkedIn profiles or their inbox CVs directly needs a paid LinkedIn Talent Solutions
+          data agreement — that is a LinkedIn contract matter, not a setting here.
         </li>
       </ul>
     </div>
