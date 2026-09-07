@@ -1080,6 +1080,56 @@ export type Database = {
           },
         ]
       }
+      org_linkedin_connections: {
+        Row: {
+          access_token: string
+          connected_at: string
+          connected_by: string | null
+          expires_at: string | null
+          member_email: string | null
+          member_name: string | null
+          member_sub: string
+          org_id: string
+          refresh_token: string | null
+          scope: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          connected_at?: string
+          connected_by?: string | null
+          expires_at?: string | null
+          member_email?: string | null
+          member_name?: string | null
+          member_sub: string
+          org_id: string
+          refresh_token?: string | null
+          scope?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          connected_at?: string
+          connected_by?: string | null
+          expires_at?: string | null
+          member_email?: string | null
+          member_name?: string | null
+          member_sub?: string
+          org_id?: string
+          refresh_token?: string | null
+          scope?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_linkedin_connections_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_members: {
         Row: {
           created_at: string

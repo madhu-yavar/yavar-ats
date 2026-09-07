@@ -169,6 +169,13 @@
       "when": 1788759954209,
       "tag": "0023_readable_inbox_slugs",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788762088838,
+      "tag": "0024_org_linkedin_connections",
+      "breakpoints": true
     }
   ]
 }
