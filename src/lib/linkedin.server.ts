@@ -16,9 +16,10 @@ const AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
 const TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
 const API_URL = "https://api.linkedin.com";
 
-/** Overridable so a tenant's LinkedIn app can ask for only the products it has. */
-export const LINKEDIN_SCOPES =
-  process.env["LINKEDIN_SCOPES"] ?? "openid profile email w_member_social";
+/** Overridable so the LinkedIn app only asks for the products it has been granted. */
+export function linkedinScopes(): string {
+  return process.env["LINKEDIN_SCOPES"] ?? "openid profile email w_member_social";
+}
 
 /** Thrown when the organisation's connection is unusable and only a re-connect fixes it. */
 export class LinkedinAuthError extends Error {
