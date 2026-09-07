@@ -83,7 +83,7 @@ export function authorizeUrl(state: string): string {
     client_id: process.env["LINKEDIN_CLIENT_ID"] ?? "",
     redirect_uri: redirectUri(),
     state,
-    scope: LINKEDIN_SCOPES,
+    scope: linkedinScopes(),
   });
   return `${AUTH_URL}?${params.toString()}`;
 }
