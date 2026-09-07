@@ -85,21 +85,51 @@ export const collectApplicants = createServerFn({ method: "POST" })
       summary.linkedinNote = e instanceof Error ? e.message : "Could not check LinkedIn.";
     }
 
-    // 2. The careers mailbox — where LinkedIn application mail and CVs land.
+    // 2a. The organisation's own ATSIQ careers address — always on, nothing to
+    // configure. LinkedIn application mail and direct CVs land here.
     try {
-      const { syncCareersInbox } = await import("./inbox.server");
-      const run = await syncCareersInbox({
-        requisitionId: data.requisitionId ?? null,
-        max: data.max ?? 25,
-      });
-      summary.scanned = run.scanned;
-      summary.imported = run.imported;
-      summary.updated = run.updated;
-      summary.skipped = run.skipped;
-      summary.importErrors = run.errors;
+      const { processPendingMail, inboxAddress } = await import("./local-inbox.server");
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: org } = await supabaseAdmin
+        .from("organizations")
+        .select("inbox_slug")
+        .eq("id", orgId)
+        .maybeSingle();
+      const address = inboxAddress(org?.inbox_slug);
+      if (address) {
+        const run = await processPendingMail(orgId, data.max ?? 25);
+        summary.scanned += run.scanned;
+        summary.imported += run.imported;
+        summary.updated += run.updated;
+        summary.skipped += run.skipped;
+        summary.mailboxNote = `Reading your careers address ${address}. Point your LinkedIn job posts and job-board alerts there and every CV files itself.`;
+      } else {
+        summary.mailboxNote =
+          "Your organisation does not have a careers address yet — ask your ATSIQ administrator to finish onboarding.";
+      }
     } catch (e) {
-      summary.mailboxNote = e instanceof Error ? e.message : "Could not read the careers mailbox.";
+      summary.mailboxNote = e instanceof Error ? e.message : "Could not read your careers mail.";
     }
+
+    // 2b. An optional external mailbox, when one has been connected as well.
+    try {
+      const { inboxConfigured, syncCareersInbox } = await import("./inbox.server");
+      if (inboxConfigured()) {
+        const run = await syncCareersInbox({
+          requisitionId: data.requisitionId ?? null,
+          max: data.max ?? 25,
+        });
+        summary.scanned += run.scanned;
+        summary.imported += run.imported;
+        summary.updated += run.updated;
+        summary.skipped += run.skipped;
+        summary.importErrors += run.errors;
+      }
+    } catch {
+      // The built-in careers address above is the supported path; an extra
+      // mailbox failing must never stop the collect run.
+    }
+
 
     // 3. Score everything still unscored, so HR never has to run matching by hand.
     const { scoreUnscored } = await import("./autoscore.server");
