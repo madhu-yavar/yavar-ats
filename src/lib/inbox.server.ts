@@ -154,3 +154,135 @@ export async function attachmentText(filename: string, bytes: Uint8Array): Promi
 
   return new TextDecoder().decode(bytes).trim();
 }
+
+/* -------------------------------------------------------------- sync engine */
+
+export type SyncOutcome = {
+  message: string;
+  from: string;
+  file: string | null;
+  status: "imported" | "updated" | "skipped" | "error";
+  detail: string;
+  requisition: string | null;
+};
+
+/** Default Gmail search: unread mail from the last month that carries a file. */
+export const DEFAULT_INBOX_QUERY = "has:attachment is:unread newer_than:30d";
+
+function matchRequisition(
+  text: string,
+  reqs: { id: string; title: string; org_id: string | null }[],
+): { id: string; title: string; org_id: string | null } | null {
+  const hay = text.toLowerCase();
+  let best: { id: string; title: string; org_id: string | null } | null = null;
+  for (const r of reqs) {
+    const t = r.title.trim().toLowerCase();
+    if (t.length >= 3 && hay.includes(t) && (!best || t.length > best.title.length)) best = r;
+  }
+  return best;
+}
+
+/**
+ * Read the careers mailbox and file every CV it finds. Safe to run repeatedly:
+ * processed mail is marked read, and re-applying enriches the same candidate.
+ */
+export async function syncCareersInbox(opts?: {
+  query?: string;
+  max?: number;
+  requisitionId?: string | null;
+}): Promise<{ scanned: number; imported: number; updated: number; skipped: number; errors: number; outcomes: SyncOutcome[] }> {
+  if (!inboxConfigured()) throw new Error("The careers inbox is not connected yet.");
+  const { ingestCandidate, parseCv } = await import("./intake.server");
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+  const { data: reqRows } = await supabaseAdmin
+    .from("requisitions")
+    .select("id, title, org_id")
+    .eq("status", "approved");
+  const reqs = (reqRows ?? []) as { id: string; title: string; org_id: string | null }[];
+
+  const ids = await searchInbox(opts?.query ?? DEFAULT_INBOX_QUERY, opts?.max ?? 20);
+  const outcomes: SyncOutcome[] = [];
+
+  for (const id of ids) {
+    let msg: InboxMessage | null = null;
+    try {
+      msg = await readMessage(id);
+      const cvs = msg.attachments.filter((a) => looksLikeCv(a.filename));
+      if (!cvs.length) {
+        outcomes.push({
+          message: msg.subject,
+          from: msg.from,
+          file: null,
+          status: "skipped",
+          detail: "No CV attached",
+          requisition: null,
+        });
+        await markProcessed(id);
+        continue;
+      }
+
+      const target = opts?.requisitionId
+        ? reqs.find((r) => r.id === opts.requisitionId) ?? null
+        : matchRequisition(`${msg.subject}\n${msg.body}`, reqs);
+
+      for (const att of cvs) {
+        const bytes = await readAttachment(id, att.attachmentId);
+        const text = await attachmentText(att.filename, bytes);
+        if (text.length < 80) {
+          outcomes.push({
+            message: msg.subject,
+            from: msg.from,
+            file: att.filename,
+            status: "skipped",
+            detail: "No readable text in the file (scan or image)",
+            requisition: target?.title ?? null,
+          });
+          continue;
+        }
+
+        const parsed = await parseCv(text);
+        // Boards hide the applicant address; fall back to the sender address.
+        const fromEmail = /<([^>]+)>/.exec(msg.from)?.[1] ?? msg.from.trim();
+        const result = await ingestCandidate({
+          resumeText: text,
+          fileName: att.filename,
+          requisitionId: target?.id ?? null,
+          orgId: target?.org_id ?? null,
+          source: "careers_inbox",
+          parsed,
+          email: parsed?.email ?? (fromEmail.includes("@") ? fromEmail : null),
+        });
+
+        outcomes.push({
+          message: msg.subject,
+          from: msg.from,
+          file: att.filename,
+          status: result.merged ? "updated" : "imported",
+          detail: `${result.name} · ${result.email}`,
+          requisition: target?.title ?? null,
+        });
+      }
+
+      await markProcessed(id);
+    } catch (e) {
+      outcomes.push({
+        message: msg?.subject ?? id,
+        from: msg?.from ?? "",
+        file: null,
+        status: "error",
+        detail: e instanceof Error ? e.message : "Failed",
+        requisition: null,
+      });
+    }
+  }
+
+  return {
+    scanned: ids.length,
+    imported: outcomes.filter((o) => o.status === "imported").length,
+    updated: outcomes.filter((o) => o.status === "updated").length,
+    skipped: outcomes.filter((o) => o.status === "skipped").length,
+    errors: outcomes.filter((o) => o.status === "error").length,
+    outcomes,
+  };
+}
