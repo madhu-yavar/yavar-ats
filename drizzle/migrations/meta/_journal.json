@@ -176,6 +176,13 @@
       "when": 1788762088838,
       "tag": "0024_org_linkedin_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1788780159521,
+      "tag": "0025_org_capture_token_and_events",
+      "breakpoints": true
     }
   ]
 }
