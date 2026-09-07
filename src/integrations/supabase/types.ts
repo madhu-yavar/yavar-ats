@@ -460,6 +460,67 @@ export type Database = {
           },
         ]
       }
+      capture_events: {
+        Row: {
+          candidate_id: string | null
+          created_at: string
+          detail: string | null
+          id: string
+          kind: string
+          org_id: string
+          requisition_id: string | null
+          source_url: string | null
+          status: string
+          title: string | null
+        }
+        Insert: {
+          candidate_id?: string | null
+          created_at?: string
+          detail?: string | null
+          id?: string
+          kind: string
+          org_id: string
+          requisition_id?: string | null
+          source_url?: string | null
+          status?: string
+          title?: string | null
+        }
+        Update: {
+          candidate_id?: string | null
+          created_at?: string
+          detail?: string | null
+          id?: string
+          kind?: string
+          org_id?: string
+          requisition_id?: string | null
+          source_url?: string | null
+          status?: string
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "capture_events_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "capture_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "capture_events_requisition_id_fkey"
+            columns: ["requisition_id"]
+            isOneToOne: false
+            referencedRelation: "requisitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       copilot_messages: {
         Row: {
           content: string
@@ -1189,6 +1250,7 @@ export type Database = {
           approved_by: string | null
           archived_at: string | null
           archived_reason: string | null
+          capture_token: string | null
           careers_email: string | null
           created_at: string
           created_by: string | null
@@ -1215,6 +1277,7 @@ export type Database = {
           approved_by?: string | null
           archived_at?: string | null
           archived_reason?: string | null
+          capture_token?: string | null
           careers_email?: string | null
           created_at?: string
           created_by?: string | null
@@ -1241,6 +1304,7 @@ export type Database = {
           approved_by?: string | null
           archived_at?: string | null
           archived_reason?: string | null
+          capture_token?: string | null
           careers_email?: string | null
           created_at?: string
           created_by?: string | null

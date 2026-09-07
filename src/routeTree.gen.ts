@@ -31,6 +31,7 @@ import { Route as CandidatesIdRouteImport } from './routes/candidates.$id'
 import { Route as InterviewsMineRouteImport } from './routes/interviews.mine'
 import { Route as RequisitionsIndexRouteImport } from './routes/requisitions.index'
 import { Route as RequisitionsIdRouteImport } from './routes/requisitions.$id'
+import { Route as ApiPublicCaptureRouteImport } from './routes/api/public/capture'
 import { Route as ApiPublicInboundEmailRouteImport } from './routes/api/public/inbound-email'
 import { Route as ApiPublicInboxSyncRouteImport } from './routes/api/public/inbox-sync'
 import { Route as ApiPublicSyncCandidatesRouteImport } from './routes/api/public/sync-candidates'
@@ -149,6 +150,11 @@ const RequisitionsIdRoute = RequisitionsIdRouteImport.update({
   path: '/requisitions/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicCaptureRoute = ApiPublicCaptureRouteImport.update({
+  id: '/api/public/capture',
+  path: '/api/public/capture',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicInboundEmailRoute = ApiPublicInboundEmailRouteImport.update({
   id: '/api/public/inbound-email',
   path: '/api/public/inbound-email',
@@ -210,6 +216,7 @@ export interface FileRoutesByFullPath {
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates/': typeof CandidatesIndexRoute
   '/requisitions/': typeof RequisitionsIndexRoute
+  '/api/public/capture': typeof ApiPublicCaptureRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
   '/api/public/sync-candidates': typeof ApiPublicSyncCandidatesRoute
@@ -241,6 +248,7 @@ export interface FileRoutesByTo {
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates': typeof CandidatesIndexRoute
   '/requisitions': typeof RequisitionsIndexRoute
+  '/api/public/capture': typeof ApiPublicCaptureRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
   '/api/public/sync-candidates': typeof ApiPublicSyncCandidatesRoute
@@ -273,6 +281,7 @@ export interface FileRoutesById {
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates/': typeof CandidatesIndexRoute
   '/requisitions/': typeof RequisitionsIndexRoute
+  '/api/public/capture': typeof ApiPublicCaptureRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
   '/api/public/sync-candidates': typeof ApiPublicSyncCandidatesRoute
@@ -306,6 +315,7 @@ export interface FileRouteTypes {
     | '/requisitions/$id'
     | '/candidates/'
     | '/requisitions/'
+    | '/api/public/capture'
     | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
     | '/api/public/sync-candidates'
@@ -337,6 +347,7 @@ export interface FileRouteTypes {
     | '/requisitions/$id'
     | '/candidates'
     | '/requisitions'
+    | '/api/public/capture'
     | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
     | '/api/public/sync-candidates'
@@ -368,6 +379,7 @@ export interface FileRouteTypes {
     | '/requisitions/$id'
     | '/candidates/'
     | '/requisitions/'
+    | '/api/public/capture'
     | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
     | '/api/public/sync-candidates'
@@ -399,6 +411,7 @@ export interface RootRouteChildren {
   RequisitionsIdRoute: typeof RequisitionsIdRoute
   CandidatesIndexRoute: typeof CandidatesIndexRoute
   RequisitionsIndexRoute: typeof RequisitionsIndexRoute
+  ApiPublicCaptureRoute: typeof ApiPublicCaptureRoute
   ApiPublicInboundEmailRoute: typeof ApiPublicInboundEmailRoute
   ApiPublicInboxSyncRoute: typeof ApiPublicInboxSyncRoute
   ApiPublicSyncCandidatesRoute: typeof ApiPublicSyncCandidatesRoute
@@ -564,6 +577,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RequisitionsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/capture': {
+      id: '/api/public/capture'
+      path: '/api/public/capture'
+      fullPath: '/api/public/capture'
+      preLoaderRoute: typeof ApiPublicCaptureRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/inbound-email': {
       id: '/api/public/inbound-email'
       path: '/api/public/inbound-email'
@@ -650,6 +670,7 @@ const rootRouteChildren: RootRouteChildren = {
   RequisitionsIdRoute: RequisitionsIdRoute,
   CandidatesIndexRoute: CandidatesIndexRoute,
   RequisitionsIndexRoute: RequisitionsIndexRoute,
+  ApiPublicCaptureRoute: ApiPublicCaptureRoute,
   ApiPublicInboundEmailRoute: ApiPublicInboundEmailRoute,
   ApiPublicInboxSyncRoute: ApiPublicInboxSyncRoute,
   ApiPublicSyncCandidatesRoute: ApiPublicSyncCandidatesRoute,

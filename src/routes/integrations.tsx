@@ -19,6 +19,7 @@ import { careersInboxStatus, importCareersInbox } from "@/lib/inbox.functions";
 import { orgInbox } from "@/lib/local-inbox.functions";
 
 import { collectApplicants, type CollectSummary } from "@/lib/collect.functions";
+import { captureSetup, rotateCaptureToken } from "@/lib/capture.functions";
 import { PageHeader } from "@/components/ats";
 
 import { Button } from "@/components/ui/button";
@@ -771,6 +772,131 @@ function CareersInboxPanel() {
   );
 }
 
+/**
+ * Browser companion. The recruiter stays signed in on the job board in their
+ * own browser; one press sends the page they are reading — a CV or a job
+ * description — into ATSIQ, where it is parsed, filed and scored.
+ */
+function CapturePanel() {
+  const qc = useQueryClient();
+  const setup = useQuery({
+    queryKey: ["capture_setup"],
+    queryFn: () => captureSetup({ data: undefined }),
+    refetchOnWindowFocus: false,
+  });
+  const rotate = useServerFn(rotateCaptureToken);
+  const [reveal, setReveal] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const data = setup.data;
+
+  async function onRotate() {
+    setBusy(true);
+    try {
+      const next = await rotate({ data: undefined });
+      qc.setQueryData(["capture_setup"], next);
+      toast.success("New capture key issued — update it in the companion.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not issue a new key");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function download() {
+    fetch("/atsiq-capture.zip")
+      .then((res) => {
+        if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+        return res.blob();
+      })
+      .then((blob) => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "atsiq-capture.zip";
+        a.click();
+        URL.revokeObjectURL(a.href);
+      })
+      .catch((err) => toast.error(err.message));
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border bg-surface-2/40 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Plug className="size-4 text-primary" />
+          Grab a page from your own browser
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={download}>
+            Download the companion
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onRotate} disabled={busy}>
+            {busy ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : null}
+            New key
+          </Button>
+        </div>
+      </div>
+
+      <p className="mt-2 text-sm text-muted-foreground">
+        Stay signed in to LinkedIn or any job board as you normally do. When you are looking at a CV or a
+        job description, press the companion once: the page comes across, the CV is read and filed in your
+        talent pool, and a job description arrives as a draft role for review. Nothing runs unattended, and
+        your sign-in never leaves your machine.
+      </p>
+
+      <div className="mt-3 grid gap-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-muted-foreground">Capture key</span>
+          <code className="rounded bg-surface-2 px-2 py-1 font-mono">
+            {data?.token ? (reveal ? data.token : "•".repeat(24)) : "—"}
+          </code>
+          <Button size="sm" variant="ghost" onClick={() => setReveal((v) => !v)}>
+            {reveal ? "Hide" : "Show"}
+          </Button>
+          {data?.token ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                void navigator.clipboard.writeText(data.token ?? "");
+                toast.success("Capture key copied");
+              }}
+            >
+              Copy
+            </Button>
+          ) : null}
+        </div>
+        <p className="text-muted-foreground">
+          Paste it into the companion together with your ATSIQ address. Treat it like a password — anyone
+          holding it can add candidates to your workspace.
+        </p>
+      </div>
+
+      <ol className="mt-3 list-decimal space-y-1 pl-5 text-xs text-muted-foreground">
+        <li>Download and unzip the companion.</li>
+        <li>Open chrome://extensions and turn on Developer mode.</li>
+        <li>Choose “Load unpacked” and pick the unzipped folder.</li>
+        <li>Open it once, paste your ATSIQ address and the key above, and save.</li>
+      </ol>
+
+      {data?.events.length ? (
+        <div className="mt-3 rounded-md border bg-background p-3">
+          <p className="text-xs font-medium">Recently captured</p>
+          <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+            {data.events.slice(0, 8).map((e) => (
+              <li key={e.id} className="flex flex-wrap items-center gap-2">
+                <span className="rounded bg-surface-2 px-1.5 py-0.5 uppercase tracking-wide">
+                  {e.kind === "cv" ? "CV" : "Role"}
+                </span>
+                <span className="font-medium text-foreground">{e.title ?? "Untitled"}</span>
+                <span>{e.detail}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 
 function IntegrationCard({ row }: { row: Integration }) {
@@ -902,6 +1028,9 @@ function IntegrationCard({ row }: { row: Integration }) {
 
       {provider === "linkedin" ? <LinkedinOneClick /> : null}
       {provider === "linkedin" || provider === "careers" ? <CareersInboxPanel /> : null}
+      {provider === "linkedin" || provider === "careers" ? <CapturePanel /> : null}
+
+
 
       <SetupHelp provider={provider} label={row.label} />
 
