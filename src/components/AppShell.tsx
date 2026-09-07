@@ -7,6 +7,7 @@ import {
   Database,
   Globe2,
   FileSignature,
+  Inbox,
   LayoutDashboard,
   LogOut,
   Plug,
