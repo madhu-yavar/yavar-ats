@@ -48,7 +48,7 @@ type ParsedJd = {
   location: string | null;
   must_have_skills: string[] | null;
   good_to_have_skills: string[] | null;
-  responsibilities: string | null
+  responsibilities: string | null;
   education_requirement: string | null;
   experience_min: number | null;
   experience_max: number | null;
