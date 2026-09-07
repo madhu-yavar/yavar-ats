@@ -310,13 +310,22 @@ function LinkedinOneClick() {
   const start = useServerFn(startLinkedInConnect);
   const drop = useServerFn(disconnectLinkedIn);
   const [busy, setBusy] = useState(false);
+  const [awaiting, setAwaiting] = useState(false);
 
   const status = useQuery({
     queryKey: ["linkedin_connect"],
     queryFn: () => linkedinStatus({ data: undefined }),
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
+    refetchInterval: awaiting ? 4000 : false,
   });
   const s = status.data;
+
+  useEffect(() => {
+    if (awaiting && s?.connected) {
+      setAwaiting(false);
+      toast.success("LinkedIn connected for your organisation");
+    }
+  }, [awaiting, s?.connected]);
 
   // The sign-in returns to /integrations?linkedin=connected|error
   useEffect(() => {
@@ -331,14 +340,27 @@ function LinkedinOneClick() {
 
   async function onConnect() {
     setBusy(true);
+    // LinkedIn refuses to load inside an embedded frame, so the sign-in must
+    // always happen in a real browser tab of its own.
+    const tab = window.open("about:blank", "_blank", "noopener,noreferrer");
     try {
       const { url } = await start({ data: { origin: window.location.origin } });
-      window.location.href = url;
+      if (tab) {
+        tab.location.href = url;
+        setAwaiting(true);
+      } else if (window.top) {
+        window.top.location.href = url;
+      } else {
+        window.location.href = url;
+      }
     } catch (e) {
+      tab?.close();
       toast.error(e instanceof Error ? e.message : "Could not start LinkedIn sign-in");
+    } finally {
       setBusy(false);
     }
   }
+
 
   async function onDisconnect() {
     setBusy(true);
@@ -380,6 +402,13 @@ function LinkedinOneClick() {
       </div>
 
       <p className="mt-2 text-sm text-muted-foreground">{body}</p>
+      {awaiting ? (
+        <p className="mt-2 inline-flex items-center gap-2 text-sm text-primary">
+          <Loader2 className="size-4 animate-spin" /> Waiting for you to finish signing in on the LinkedIn tab that
+          just opened — you can close it once LinkedIn says you're done.
+        </p>
+      ) : null}
+
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={onConnect} disabled={busy || !s?.configured}>
