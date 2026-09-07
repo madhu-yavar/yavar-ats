@@ -30,6 +30,7 @@ import { Route as CandidatesIdRouteImport } from './routes/candidates.$id'
 import { Route as InterviewsMineRouteImport } from './routes/interviews.mine'
 import { Route as RequisitionsIndexRouteImport } from './routes/requisitions.index'
 import { Route as RequisitionsIdRouteImport } from './routes/requisitions.$id'
+import { Route as ApiPublicInboxSyncRouteImport } from './routes/api/public/inbox-sync'
 import { Route as ApiPublicSyncCandidatesRouteImport } from './routes/api/public/sync-candidates'
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
 import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
@@ -140,6 +141,11 @@ const RequisitionsIdRoute = RequisitionsIdRouteImport.update({
   path: '/requisitions/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicInboxSyncRoute = ApiPublicInboxSyncRouteImport.update({
+  id: '/api/public/inbox-sync',
+  path: '/api/public/inbox-sync',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicSyncCandidatesRoute = ApiPublicSyncCandidatesRouteImport.update({
   id: '/api/public/sync-candidates',
   path: '/api/public/sync-candidates',
@@ -184,6 +190,7 @@ export interface FileRoutesByFullPath {
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates/': typeof CandidatesIndexRoute
   '/requisitions/': typeof RequisitionsIndexRoute
+  '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
   '/api/public/sync-candidates': typeof ApiPublicSyncCandidatesRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
@@ -211,6 +218,7 @@ export interface FileRoutesByTo {
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates': typeof CandidatesIndexRoute
   '/requisitions': typeof RequisitionsIndexRoute
+  '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
   '/api/public/sync-candidates': typeof ApiPublicSyncCandidatesRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
@@ -239,6 +247,7 @@ export interface FileRoutesById {
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates/': typeof CandidatesIndexRoute
   '/requisitions/': typeof RequisitionsIndexRoute
+  '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
   '/api/public/sync-candidates': typeof ApiPublicSyncCandidatesRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
@@ -268,6 +277,7 @@ export interface FileRouteTypes {
     | '/requisitions/$id'
     | '/candidates/'
     | '/requisitions/'
+    | '/api/public/inbox-sync'
     | '/api/public/sync-candidates'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
@@ -295,6 +305,7 @@ export interface FileRouteTypes {
     | '/requisitions/$id'
     | '/candidates'
     | '/requisitions'
+    | '/api/public/inbox-sync'
     | '/api/public/sync-candidates'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
@@ -322,6 +333,7 @@ export interface FileRouteTypes {
     | '/requisitions/$id'
     | '/candidates/'
     | '/requisitions/'
+    | '/api/public/inbox-sync'
     | '/api/public/sync-candidates'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
@@ -349,6 +361,7 @@ export interface RootRouteChildren {
   RequisitionsIdRoute: typeof RequisitionsIdRoute
   CandidatesIndexRoute: typeof CandidatesIndexRoute
   RequisitionsIndexRoute: typeof RequisitionsIndexRoute
+  ApiPublicInboxSyncRoute: typeof ApiPublicInboxSyncRoute
   ApiPublicSyncCandidatesRoute: typeof ApiPublicSyncCandidatesRoute
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
   LovableEmailAuthWebhookRoute: typeof LovableEmailAuthWebhookRoute
@@ -504,6 +517,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RequisitionsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/inbox-sync': {
+      id: '/api/public/inbox-sync'
+      path: '/api/public/inbox-sync'
+      fullPath: '/api/public/inbox-sync'
+      preLoaderRoute: typeof ApiPublicInboxSyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/sync-candidates': {
       id: '/api/public/sync-candidates'
       path: '/api/public/sync-candidates'
@@ -568,6 +588,7 @@ const rootRouteChildren: RootRouteChildren = {
   RequisitionsIdRoute: RequisitionsIdRoute,
   CandidatesIndexRoute: CandidatesIndexRoute,
   RequisitionsIndexRoute: RequisitionsIndexRoute,
+  ApiPublicInboxSyncRoute: ApiPublicInboxSyncRoute,
   ApiPublicSyncCandidatesRoute: ApiPublicSyncCandidatesRoute,
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,
   LovableEmailAuthWebhookRoute: LovableEmailAuthWebhookRoute,
