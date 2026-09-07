@@ -3,13 +3,14 @@ import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, CircleAlert, CircleDashed, KeyRound, Loader2, Plug, Sparkles } from "lucide-react";
+import { CheckCircle2, CircleAlert, CircleDashed, Inbox, KeyRound, Loader2, Plug, Sparkles } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { disconnectIntegration, saveIntegration, testIntegration } from "@/lib/integrations.functions";
 import { getAiSettings, removeAiKey, saveAiSettings, testAiModel } from "@/lib/ai-settings.functions";
 import { linkedinStatus } from "@/lib/linkedin.functions";
+import { careersInboxStatus, importCareersInbox } from "@/lib/inbox.functions";
 import { PageHeader } from "@/components/ats";
 
 import { Button } from "@/components/ui/button";
@@ -624,6 +625,7 @@ function IntegrationCard({ row }: { row: Integration }) {
       ) : null}
 
       {provider === "linkedin" ? <LinkedinOneClick /> : null}
+      {provider === "linkedin" || provider === "careers" ? <CareersInboxPanel /> : null}
 
       <SetupHelp provider={provider} label={row.label} />
 
