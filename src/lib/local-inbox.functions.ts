@@ -23,9 +23,11 @@ export type InboxRow = {
 export type InboxView = {
   address: string | null;
   slug: string | null;
+  careersEmail: string | null;
   messages: InboxRow[];
   counts: { total: number; imported: number; updated: number; skipped: number; errors: number };
 };
+
 
 async function admin() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
