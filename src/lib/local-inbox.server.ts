@@ -34,15 +34,15 @@ async function admin() {
   return supabaseAdmin;
 }
 
-export type InboundAttachment = { filename: string; content: string; contentType?: string };
+export type InboundAttachment = { filename: string; content: string; contentType?: string | undefined };
 
 export type InboundMail = {
   to: string;
   from: string;
-  subject?: string | null;
-  text?: string | null;
-  messageId?: string | null;
-  attachments?: InboundAttachment[];
+  subject?: string | null | undefined;
+  text?: string | null | undefined;
+  messageId?: string | null | undefined;
+  attachments?: InboundAttachment[] | undefined;
 };
 
 export type InboundResult = {
