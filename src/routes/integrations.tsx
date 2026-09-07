@@ -1,15 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, CircleAlert, CircleDashed, KeyRound, Linkedin, Loader2, Plug, Sparkles } from "lucide-react";
+import { CheckCircle2, CircleAlert, CircleDashed, KeyRound, Loader2, Plug, Sparkles } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { disconnectIntegration, saveIntegration, testIntegration } from "@/lib/integrations.functions";
 import { getAiSettings, removeAiKey, saveAiSettings, testAiModel } from "@/lib/ai-settings.functions";
-import { linkedinConnectStart, linkedinDisconnect, linkedinStatus } from "@/lib/linkedin.functions";
+import { linkedinStatus } from "@/lib/linkedin.functions";
 import { PageHeader } from "@/components/ats";
 
 import { Button } from "@/components/ui/button";
@@ -300,84 +300,26 @@ function CredentialFields({
 }
 
 /**
- * Company-wide LinkedIn account panel. This is NOT a per-recruiter sign-in:
- * one LinkedIn account is authorised once for the whole company — whoever
- * presses Connect signs in on LinkedIn's own screen — and every recruiter
- * publishes through that account.
+ * Company-wide LinkedIn account panel. The LinkedIn account is connected once
+ * through Lovable's connector settings (LinkedIn connector, OAuth2). The
+ * gateway injects the member's access token automatically — no per-recruiter
+ * sign-in, no keys to paste. HR just sees "connected" and publishes.
  */
 function LinkedinOneClick() {
-  const qc = useQueryClient();
   const status = useQuery({
     queryKey: ["linkedin_connect"],
     queryFn: () => linkedinStatus({ data: undefined }),
     refetchOnWindowFocus: false,
   });
-  const connect = useServerFn(linkedinConnectStart);
-  const disconnect = useServerFn(linkedinDisconnect);
-  const [busy, setBusy] = useState<"connect" | "disconnect" | null>(null);
   const s = status.data;
-
-  // Surface the outcome of LinkedIn's redirect (?linkedin=ok|denied|…) once, then strip it.
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const flag = params.get("linkedin");
-    if (!flag) return;
-    params.delete("linkedin");
-    window.history.replaceState({}, "", `${window.location.pathname}${params.size ? `?${params}` : ""}`);
-    if (flag === "ok") {
-      toast.success("LinkedIn connected — job posts can now be published through your company account.");
-    } else {
-      const messages: Record<string, string> = {
-        denied: "LinkedIn sign-in was cancelled — nothing was changed.",
-        expired:
-          "The connect link expired before you came back. Press Connect LinkedIn account to try again — it takes under a minute.",
-        setup_pending: "LinkedIn isn't switched on for this platform yet. Ask the platform team to finish setup.",
-        error: "Connecting LinkedIn failed. Please try again — if it keeps failing, contact support.",
-      };
-      toast.error(messages[flag] ?? "Connecting LinkedIn failed. Please try again.");
-    }
-    qc.invalidateQueries({ queryKey: ["linkedin_connect"] });
-  }, [qc]);
-
-  async function onConnect() {
-    setBusy("connect");
-    try {
-      const url = await connect({ data: undefined });
-      window.location.assign(url);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not start the LinkedIn connection");
-      setBusy(null);
-    }
-  }
-
-  async function onDisconnect() {
-    if (
-      !window.confirm(
-        "Disconnect the company LinkedIn account? Job publishing stops until someone connects again.",
-      )
-    )
-      return;
-    setBusy("disconnect");
-    try {
-      await disconnect({ data: undefined });
-      toast.success("LinkedIn disconnected");
-      qc.invalidateQueries({ queryKey: ["linkedin_connect"] });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed");
-    } finally {
-      setBusy(null);
-    }
-  }
 
   const body = status.isLoading
     ? "Checking the company LinkedIn connection…"
     : !s?.configured
-      ? "LinkedIn publishing is being set up for your company. It will appear here soon — nothing for you to do."
+      ? "LinkedIn isn't connected yet. Ask your platform admin to connect the LinkedIn account in Lovable → Settings → Connectors — then everyone can publish job posts from here."
       : s.connected
         ? `Connected as ${s.member ?? "your company's LinkedIn account"}. Everyone on your team publishes job posts through this account.`
-        : s.member
-          ? "The company's LinkedIn connection expired. Press Connect LinkedIn account to renew it — signing in again takes under a minute."
-          : "One connection for the whole company. Press Connect, sign in with your company's LinkedIn account on LinkedIn's own page, and everyone can publish job posts from here. Takes under a minute.";
+        : "The company's LinkedIn connection needs attention. Ask your platform admin to reconnect it in Lovable → Settings → Connectors.";
 
   return (
     <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-4">
@@ -388,33 +330,30 @@ function LinkedinOneClick() {
         </div>
         {s?.configured ? (
           s.connected ? (
-            <Button size="sm" variant="outline" onClick={onDisconnect} disabled={busy !== null || status.isFetching}>
-              {busy === "disconnect" ? <Loader2 className="size-4 animate-spin" /> : null} Disconnect
-            </Button>
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600">
+              <CheckCircle2 className="size-3.5" /> Connected{s.member ? ` — ${s.member}` : ""}
+            </span>
           ) : (
-            <Button size="sm" onClick={onConnect} disabled={busy !== null || status.isFetching}>
-              {busy === "connect" ? <Loader2 className="size-4 animate-spin" /> : <Linkedin className="size-4" />} Connect
-              LinkedIn account
-            </Button>
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600">
+              <CircleAlert className="size-3.5" /> Needs reconnect
+            </span>
           )
-        ) : null}
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <CircleDashed className="size-3.5" /> Not connected
+          </span>
+        )}
       </div>
 
       <p className="mt-2 text-sm text-muted-foreground">{body}</p>
 
-      {s?.connected ? (
-        <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600">
-          <CheckCircle2 className="size-3.5" /> Connected{s.member ? ` — ${s.member}` : ""}
-        </p>
-      ) : null}
-
       <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
         <li>
-          Recruiters just use the app — publishing happens through this one company account, and the sign-in only
-          needs repeating about once a year.
+          One company account, connected once through Lovable's connector settings — the gateway handles sign-in
+          and token refresh automatically.
         </li>
         <li>
-          Searching other people&apos;s LinkedIn profiles or pulling CVs needs a paid LinkedIn Talent Solutions data
+          Searching other people's LinkedIn profiles or pulling CVs needs a paid LinkedIn Talent Solutions data
           agreement — connecting the account does not open that up.
         </li>
       </ul>
