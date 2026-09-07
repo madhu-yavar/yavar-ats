@@ -606,6 +606,11 @@ Thank you,
  * has its CV read, parsed and filed against the matching open role by itself.
  */
 function CareersInboxPanel() {
+  const mine = useQuery({
+    queryKey: ["org_inbox"],
+    queryFn: () => orgInbox({ data: undefined }),
+    refetchOnWindowFocus: false,
+  });
   const status = useQuery({
     queryKey: ["careers_inbox"],
     queryFn: () => careersInboxStatus({ data: undefined }),
@@ -615,6 +620,7 @@ function CareersInboxPanel() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Awaited<ReturnType<typeof importCareersInbox>> | null>(null);
   const s = status.data;
+  const address = mine.data?.address ?? null;
 
   async function onImport() {
     setBusy(true);
@@ -634,36 +640,62 @@ function CareersInboxPanel() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm font-medium">
           <Inbox className="size-4 text-primary" />
-          Careers mailbox auto-import
+          Your careers mailbox
         </div>
-        {status.isLoading ? (
+        {mine.isLoading ? (
           <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
             <Loader2 className="size-3.5 animate-spin" /> Checking
           </span>
-        ) : s?.connected ? (
+        ) : address ? (
           <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600">
-            <CheckCircle2 className="size-3.5" /> Connected — {s.email}
+            <CheckCircle2 className="size-3.5" /> Live
           </span>
         ) : (
           <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <CircleDashed className="size-3.5" /> Not connected
+            <CircleDashed className="size-3.5" /> Not ready
           </span>
         )}
       </div>
 
-      <p className="mt-2 text-sm text-muted-foreground">
-        {s?.connected
-          ? "Every hour ATSIQ reads new mail in this inbox, opens the attached CVs, and files each applicant in the talent pool and in the matching open role — read, scored and ready. Nobody downloads anything."
-          : "Connect your careers mailbox once and every application email — LinkedIn, job boards, direct applicants — has its CV read and filed automatically. Ask your platform admin to connect it in Lovable → Settings → Connectors."}
-      </p>
+      {address ? (
+        <>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Your organisation has its own address. Put it on your LinkedIn posts and job-board alerts, or forward
+            application mail to it, and every attached CV is read, filed against the right role and scored on its own.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <code className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm">{address}</code>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                navigator.clipboard.writeText(address);
+                toast.success("Address copied");
+              }}
+            >
+              Copy address
+            </Button>
+          </div>
+          <p className="num mt-3 text-xs text-muted-foreground">
+            {mine.data?.counts.total ?? 0} mails received · {mine.data?.counts.imported ?? 0} new candidates ·{" "}
+            {mine.data?.counts.updated ?? 0} refreshed · {mine.data?.counts.errors ?? 0} need a look
+          </p>
+        </>
+      ) : (
+        <p className="mt-2 text-sm text-muted-foreground">
+          Your careers address is created with your organisation. If it is missing, ask your ATSIQ administrator to
+          finish onboarding for this workspace.
+        </p>
+      )}
 
       {s?.error ? <p className="mt-2 text-xs text-amber-600">{s.error}</p> : null}
 
       {s?.connected ? (
         <Button size="sm" variant="outline" className="mt-3" onClick={onImport} disabled={busy}>
-          {busy ? <Loader2 className="size-4 animate-spin" /> : null} Import now
+          {busy ? <Loader2 className="size-4 animate-spin" /> : null} Also import from {s.email}
         </Button>
       ) : null}
+
 
       {result ? (
         <div className="mt-3 rounded-md border border-border bg-background p-3">
