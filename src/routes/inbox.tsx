@@ -187,7 +187,7 @@ function InboxPage() {
           {rows.length === 0 ? (
             <EmptyState
               title="No applications here yet"
-              description="Send a test mail with a CV attached to the address above, or forward your careers mailbox to it."
+              hint="Send a test mail with a CV attached to the address above, or forward your careers mailbox to it."
             />
           ) : (
             <table className="w-full text-sm">

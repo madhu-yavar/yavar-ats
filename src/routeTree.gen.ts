@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as CookiesRouteImport } from './routes/cookies'
 import { Route as HelpRouteImport } from './routes/help'
 import { Route as IjpRouteImport } from './routes/ijp'
+import { Route as InboxRouteImport } from './routes/inbox'
 import { Route as IntegrationsRouteImport } from './routes/integrations'
 import { Route as InterviewsRouteImport } from './routes/interviews'
 import { Route as MastersRouteImport } from './routes/masters'
@@ -55,6 +56,11 @@ const HelpRoute = HelpRouteImport.update({
 const IjpRoute = IjpRouteImport.update({
   id: '/ijp',
   path: '/ijp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InboxRoute = InboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IntegrationsRoute = IntegrationsRouteImport.update({
@@ -179,6 +185,7 @@ export interface FileRoutesByFullPath {
   '/cookies': typeof CookiesRoute
   '/help': typeof HelpRoute
   '/ijp': typeof IjpRoute
+  '/inbox': typeof InboxRoute
   '/integrations': typeof IntegrationsRoute
   '/interviews': typeof InterviewsRouteWithChildren
   '/masters': typeof MastersRoute
@@ -208,6 +215,7 @@ export interface FileRoutesByTo {
   '/cookies': typeof CookiesRoute
   '/help': typeof HelpRoute
   '/ijp': typeof IjpRoute
+  '/inbox': typeof InboxRoute
   '/integrations': typeof IntegrationsRoute
   '/interviews': typeof InterviewsRouteWithChildren
   '/masters': typeof MastersRoute
@@ -238,6 +246,7 @@ export interface FileRoutesById {
   '/cookies': typeof CookiesRoute
   '/help': typeof HelpRoute
   '/ijp': typeof IjpRoute
+  '/inbox': typeof InboxRoute
   '/integrations': typeof IntegrationsRoute
   '/interviews': typeof InterviewsRouteWithChildren
   '/masters': typeof MastersRoute
@@ -269,6 +278,7 @@ export interface FileRouteTypes {
     | '/cookies'
     | '/help'
     | '/ijp'
+    | '/inbox'
     | '/integrations'
     | '/interviews'
     | '/masters'
@@ -298,6 +308,7 @@ export interface FileRouteTypes {
     | '/cookies'
     | '/help'
     | '/ijp'
+    | '/inbox'
     | '/integrations'
     | '/interviews'
     | '/masters'
@@ -327,6 +338,7 @@ export interface FileRouteTypes {
     | '/cookies'
     | '/help'
     | '/ijp'
+    | '/inbox'
     | '/integrations'
     | '/interviews'
     | '/masters'
@@ -357,6 +369,7 @@ export interface RootRouteChildren {
   CookiesRoute: typeof CookiesRoute
   HelpRoute: typeof HelpRoute
   IjpRoute: typeof IjpRoute
+  InboxRoute: typeof InboxRoute
   IntegrationsRoute: typeof IntegrationsRoute
   InterviewsRoute: typeof InterviewsRouteWithChildren
   MastersRoute: typeof MastersRoute
@@ -409,6 +422,13 @@ declare module '@tanstack/react-router' {
       path: '/ijp'
       fullPath: '/ijp'
       preLoaderRoute: typeof IjpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inbox': {
+      id: '/inbox'
+      path: '/inbox'
+      fullPath: '/inbox'
+      preLoaderRoute: typeof InboxRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/integrations': {
@@ -592,6 +612,7 @@ const rootRouteChildren: RootRouteChildren = {
   CookiesRoute: CookiesRoute,
   HelpRoute: HelpRoute,
   IjpRoute: IjpRoute,
+  InboxRoute: InboxRoute,
   IntegrationsRoute: IntegrationsRoute,
   InterviewsRoute: InterviewsRouteWithChildren,
   MastersRoute: MastersRoute,

@@ -27,6 +27,7 @@ const NAV = [
   { to: "/requisitions", label: "Requisitions & JD", icon: Briefcase },
   { to: "/ijp", label: "Internal postings", icon: Building2 },
   { to: "/candidates", label: "Talent pool", icon: Users },
+  { to: "/inbox", label: "Careers inbox", icon: Inbox },
   { to: "/matching", label: "JD ↔ CV matching", icon: Target },
   { to: "/interviews", label: "Interviews", icon: CalendarClock },
 
