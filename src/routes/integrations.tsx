@@ -493,6 +493,34 @@ function LinkedinOneClick() {
         </div>
       ) : null}
 
+      {s?.connected && (caps.data ?? []).some((c) => c.ready === false) ? (
+        <details className="mt-3 rounded-lg border border-border bg-background p-3">
+          <summary className="cursor-pointer text-sm font-medium">
+            Ask LinkedIn to switch on the missing pieces — ready-to-send note
+          </summary>
+          <p className="mt-2 text-xs text-muted-foreground">
+            A Recruiter seat on its own does not include the job-posting or applicant products. Only LinkedIn can add
+            them to your contract, so send this to your LinkedIn account manager. Everything else in ATSIQ keeps
+            working while you wait.
+          </p>
+          <pre className="mt-2 whitespace-pre-wrap rounded-md border border-border bg-surface-2 p-3 text-xs">
+{LINKEDIN_REQUEST}
+          </pre>
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-2"
+            onClick={() => {
+              navigator.clipboard.writeText(LINKEDIN_REQUEST);
+              toast.success("Request copied — paste it into your email to LinkedIn");
+            }}
+          >
+            Copy request
+          </Button>
+        </details>
+      ) : null}
+
+
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={onConnect} disabled={busy || !s?.configured}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : null}
