@@ -341,12 +341,18 @@ function LinkedinOneClick() {
   async function onConnect() {
     setBusy(true);
     // LinkedIn refuses to load inside an embedded frame, so the sign-in must
-    // always happen in a real browser tab of its own.
-    const tab = window.open("about:blank", "_blank", "noopener,noreferrer");
+    // always happen in a real browser tab of its own. Do not pass `noopener`
+    // here: browsers then intentionally return `null`, which leaves the newly
+    // opened tab stranded on about:blank before the async URL is available.
+    const tab = window.open("", "atsiq-linkedin-connect");
+    if (tab) {
+      tab.document.title = "Opening LinkedIn…";
+      tab.document.body.textContent = "Opening LinkedIn sign-in…";
+    }
     try {
       const { url } = await start({ data: { origin: window.location.origin } });
       if (tab) {
-        tab.location.href = url;
+        tab.location.replace(url);
         setAwaiting(true);
       } else if (window.top) {
         window.top.location.href = url;
