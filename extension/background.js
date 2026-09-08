@@ -3,11 +3,11 @@
  *
  * Runs in the recruiter's own signed-in browser, at human pace. From the
  * applicant list they already have open it first sends the job description
- * across (so the role exists in ATSIQ), then works through each applicant,
- * grabs the attached resume file itself (the same file the Download button
- * gives) and posts it to ATSIQ, where it is parsed, de-duplicated, matched and
- * scored. It never signs in, stores no credentials, and stops the moment the
- * recruiter presses Stop.
+ * across (so the role exists in ATSIQ), then works through each applicant in
+ * the left-hand list by name, grabs the attached resume file itself (the same
+ * file the Download button gives) and posts it to ATSIQ, where it is parsed,
+ * de-duplicated, matched and scored. It never signs in, stores no credentials,
+ * and stops the moment the recruiter presses Stop.
  */
 
 const MAX_PROFILES = 40;
@@ -41,20 +41,114 @@ function readPage() {
 }
 
 /**
+ * One injected worker for everything to do with the applicant list, so the
+ * same idea of "a row" is used to count, to scroll and to click.
+ *
+ * action: "names" | "click" | "scroll"
+ */
+function rowScan(action, arg) {
+  const mid = window.innerWidth / 2;
+
+  const qualifies = (el) => {
+    const r = el.getBoundingClientRect();
+    if (r.height < 55 || r.height > 460) return false;
+    if (r.width < 180 || r.width > mid + 240) return false;
+    if (r.left > mid + 60) return false;
+    const t = (el.innerText || "").trim();
+    if (t.length < 15 || t.length > 1400) return false;
+    if (!t.includes("\n")) return false;
+    const hasProfile = Boolean(el.querySelector('a[href*="/talent/profile"], a[href*="/in/"]'));
+    const looksApplicant =
+      hasProfile ||
+      Boolean(el.querySelector("img")) ||
+      /applied|·\s*\d(?:st|nd|rd)|qualification|maybe|good fit|not a fit/i.test(t);
+    return looksApplicant;
+  };
+
+  const found = [];
+  for (const el of document.querySelectorAll("li, div, article, tr")) {
+    if (qualifies(el)) found.push(el);
+  }
+  // keep only the innermost matches, so a wrapper around the whole list is dropped
+  const rows = found.filter((el) => !found.some((other) => other !== el && el.contains(other)));
+
+  const nameOf = (el) => {
+    const lines = (el.innerText || "")
+      .trim()
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return (lines[0] || "").replace(/\s*·.*$/, "").slice(0, 120);
+  };
+
+  if (action === "names") {
+    const seen = new Set();
+    const out = [];
+    for (const el of rows) {
+      const n = nameOf(el);
+      if (n.length < 3 || seen.has(n)) continue;
+      seen.add(n);
+      out.push(n);
+    }
+    return out;
+  }
+
+  if (action === "click") {
+    const want = String(arg || "").toLowerCase();
+    const head = want.slice(0, 18);
+    const el =
+      rows.find((r) => nameOf(r).toLowerCase() === want) ||
+      rows.find((r) => nameOf(r).toLowerCase().startsWith(head));
+    if (!el) return { ok: false };
+    el.scrollIntoView({ block: "center" });
+    const target =
+      el.querySelector('a[href*="/talent/"], a[href*="/in/"], a[href], button, [role="button"]') || el;
+    target.click();
+    return { ok: true, name: nameOf(el) };
+  }
+
+  if (action === "scroll") {
+    let node = rows[0] || null;
+    while (node && !(node.scrollHeight > node.clientHeight + 40)) node = node.parentElement;
+    const target = node || document.scrollingElement || document.body;
+    const before = target.scrollTop;
+    target.scrollTop = before + Math.max(300, target.clientHeight * 0.85);
+    return { moved: target.scrollTop > before };
+  }
+
+  return null;
+}
+
+/**
  * Read the applicant currently on screen AND pull the attached resume file the
- * page links to, using the recruiter's own session cookies.
+ * page links to, using the recruiter's own session cookies. Only the detail
+ * panel on the right is read, so the other applicants in the list can never
+ * bleed into one person's record.
  */
 async function grabApplicant() {
-  const main = document.querySelector("main") || document.body;
-  const text = (main.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
+  const mid = window.innerWidth / 2;
+  let panel = null;
+  let best = 0;
+  for (const el of document.querySelectorAll("main div, main section, section, article")) {
+    const r = el.getBoundingClientRect();
+    if (r.left < mid * 0.75 || r.width < 280 || r.height < 240) continue;
+    const len = (el.innerText || "").trim().length;
+    if (len < 200) continue;
+    if (!panel || len < best) {
+      panel = el;
+      best = len;
+    }
+  }
+  const scope = panel || document.querySelector("main") || document.body;
+  const text = (scope.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
 
   const urls = [];
   const add = (u) => {
     if (u && !urls.includes(u)) urls.push(u);
   };
 
-  // Explicit download links first, then anything embedded in a viewer.
-  for (const a of document.querySelectorAll("a[href], a[download]")) {
+  const linkScope = panel && panel.querySelector("a[href], iframe[src]") ? panel : document;
+  for (const a of linkScope.querySelectorAll("a[href], a[download]")) {
     const href = a.href || "";
     const label = (a.innerText || a.getAttribute("aria-label") || "").toLowerCase();
     if (!href) continue;
@@ -62,7 +156,7 @@ async function grabApplicant() {
     else if (/download|resume|cv/.test(label) && /linkedin|licdn|ambry|dms/i.test(href)) add(href);
     else if (/ambry|dms-|media-proxy|attachment|resume/i.test(href) && /licdn|linkedin/i.test(href)) add(href);
   }
-  for (const el of document.querySelectorAll("iframe[src], embed[src], object[data]")) {
+  for (const el of linkScope.querySelectorAll("iframe[src], embed[src], object[data]")) {
     add(el.getAttribute("src") || el.getAttribute("data") || "");
   }
 
@@ -82,7 +176,11 @@ async function grabApplicant() {
         bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
       }
       const stem = decodeURIComponent(u.split("?")[0].split("/").pop() || "resume");
-      const ext = /\.(pdf|docx?|txt|rtf)$/i.test(stem) ? "" : ct.includes("word") || ct.includes("officedocument") ? ".docx" : ".pdf";
+      const ext = /\.(pdf|docx?|txt|rtf)$/i.test(stem)
+        ? ""
+        : ct.includes("word") || ct.includes("officedocument")
+          ? ".docx"
+          : ".pdf";
       resume = { filename: `${stem}${ext}`, content: btoa(bin) };
       break;
     } catch {
@@ -91,44 +189,6 @@ async function grabApplicant() {
   }
 
   return { text, title: document.title || null, url: location.href, resume };
-}
-
-/** Rows in the left-hand applicant list, as the recruiter sees them. */
-function listApplicantRows() {
-  const rows = [];
-  const mid = window.innerWidth / 2;
-  for (const li of document.querySelectorAll("li, div[role='listitem'], article")) {
-    const rect = li.getBoundingClientRect();
-    if (rect.width < 180 || rect.width > mid + 120 || rect.height < 55) continue;
-    if (rect.left > mid) continue;
-    const label = (li.innerText || "").trim();
-    if (label.length < 12) continue;
-    if (!/\n/.test(label)) continue;
-    if (li.querySelector("li")) continue;
-    rows.push(label.split("\n")[0].slice(0, 120));
-  }
-  return rows;
-}
-
-/** Click the nth row of that same list. */
-function clickApplicantRow(n) {
-  const nodes = [];
-  const mid = window.innerWidth / 2;
-  for (const li of document.querySelectorAll("li, div[role='listitem'], article")) {
-    const rect = li.getBoundingClientRect();
-    if (rect.width < 180 || rect.width > mid + 120 || rect.height < 55) continue;
-    if (rect.left > mid) continue;
-    const label = (li.innerText || "").trim();
-    if (label.length < 12 || !/\n/.test(label)) continue;
-    if (li.querySelector("li")) continue;
-    nodes.push(li);
-  }
-  const li = nodes[n];
-  if (!li) return { ok: false, label: null };
-  const target = li.querySelector("a[href], button, [role='button'], [tabindex]") || li;
-  li.scrollIntoView({ block: "center" });
-  target.click();
-  return { ok: true, label: (li.innerText || "").trim().split("\n")[0] || null };
 }
 
 /** Collect applicant/profile links from a Recruiter list page. */
@@ -202,6 +262,27 @@ async function tally(result) {
   });
 }
 
+/** Walk the list, scrolling as we go, and gather every applicant name. */
+async function gatherNames(tabId) {
+  const names = [];
+  const seen = new Set();
+  for (let pass = 0; pass < 12 && names.length < MAX_PROFILES; pass += 1) {
+    const batch = (await run(tabId, rowScan, ["names"]).catch(() => [])) ?? [];
+    let added = 0;
+    for (const n of batch) {
+      if (seen.has(n)) continue;
+      seen.add(n);
+      names.push(n);
+      added += 1;
+    }
+    await setRun({ note: `Reading the applicant list — ${names.length} found so far…` });
+    const scrolled = await run(tabId, rowScan, ["scroll"]).catch(() => null);
+    if (!scrolled?.moved && added === 0) break;
+    await sleep(900);
+  }
+  return names.slice(0, MAX_PROFILES);
+}
+
 /* -------------------------------------------------------------------- sweep */
 
 async function sweep({ site, token, pace, tabId, captureJd }) {
@@ -226,32 +307,31 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
     }
   }
 
-  // Preferred path: the applicant list on screen — click each row, read the
-  // panel that opens and lift the attached resume file.
-  const rows = (await run(tabId, listApplicantRows).catch(() => [])) ?? [];
-  if (rows.length >= 2) {
-    const total = Math.min(rows.length, MAX_PROFILES);
-    await setRun({ total, note: "Working through the applicant list…" });
+  // Preferred path: the applicant list on screen — click each person by name,
+  // read the panel that opens and lift the attached resume file.
+  const names = await gatherNames(tabId);
+  if (names.length >= 2) {
+    await setRun({ total: names.length, note: `${names.length} applicants on this list — starting…` });
 
-    for (let i = 0; i < total; i += 1) {
+    for (let i = 0; i < names.length; i += 1) {
       const state = await getRun();
       if (!state || state.stop) {
         await setRun({ running: false, note: "Stopped." });
         return;
       }
-      await setRun({ index: i + 1, current: rows[i] ?? "Applicant" });
+      await setRun({ index: i + 1, current: names[i] });
       try {
-        const clicked = await run(tabId, clickApplicantRow, [i]);
-        if (!clicked?.ok) throw new Error("that applicant row moved");
-        await sleep(2600);
+        const clicked = await run(tabId, rowScan, ["click", names[i]]);
+        if (!clicked?.ok) throw new Error("that applicant row is no longer on screen");
+        await sleep(3000);
         const page = await run(tabId, grabApplicant);
         if (!page || (!page.resume && page.text.length < 200)) throw new Error("no readable CV on that applicant");
         await tally(await fileApplicant({ site, token, page, requisitionId }));
       } catch (e) {
         const s = await getRun();
-        await setRun({ failed: (s?.failed ?? 0) + 1, note: `Skipped one — ${e.message}.` });
+        await setRun({ failed: (s?.failed ?? 0) + 1, note: `Skipped ${names[i]} — ${e.message}.` });
       }
-      if (i < total - 1) await sleep(jitter(PACE[pace] ?? PACE.safe));
+      if (i < names.length - 1) await sleep(jitter(PACE[pace] ?? PACE.safe));
     }
   } else {
     // Fallback: a page of profile links (search results, saved lists).
@@ -259,7 +339,9 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
     const queue = links.slice(0, MAX_PROFILES);
     await setRun({
       total: queue.length,
-      note: queue.length ? "Opening applicants one at a time…" : "No applicants found on this page.",
+      note: queue.length
+        ? "Opening applicants one at a time…"
+        : "No applicant list was found on this page — open the applicant list for one job and try again.",
     });
 
     for (let i = 0; i < queue.length; i += 1) {
