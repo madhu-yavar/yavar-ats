@@ -19,6 +19,7 @@ export type CaptureInput = {
   file?: { filename: string; content: string } | null;
   sourceUrl?: string | null;
   title?: string | null;
+  candidateName?: string | null;
   requisitionId?: string | null;
 };
 
@@ -151,13 +152,52 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
         requisitionId: input.requisitionId ?? null,
         orgId: org.id,
         source: "browser_capture",
+        fullName: input.candidateName ?? null,
         resumeFile: fileBytes ? { filename: fileName, bytes: fileBytes } : null,
       });
+      if (fileBytes && !ingested.resumeStored) {
+        return log({
+          status: "error",
+          detail: `${ingested.name} was parsed, but the original CV could not be secured. Retry this applicant.`,
+          candidateId: ingested.candidateId,
+          requisitionId: input.requisitionId ?? null,
+          title: ingested.name,
+        });
+      }
+
+      let verificationNote = "verification queued";
+      try {
+        const { verifyClaims } = await import("./verification.server");
+        const verified = await verifyClaims({
+          name: ingested.name,
+          resumeText: text,
+          skills: ingested.skills,
+          linkedinUrl: ingested.linkedinUrl,
+          githubUrl: ingested.githubUrl,
+          websiteUrl: ingested.websiteUrl,
+          linkedinProfileText: pageText || null,
+        });
+        await db.from("candidate_verifications").insert({
+          candidate_id: ingested.candidateId,
+          authenticity_score: verified.authenticity_score,
+          claims: verified.claims as never,
+          red_flags: verified.red_flags,
+          evidence: verified.evidence as never,
+          summary: verified.summary,
+          model: verified.model,
+          status: "ok",
+          org_id: org.id,
+        } as never);
+        verificationNote = `verification ${verified.authenticity_score}/100`;
+      } catch (e) {
+        console.error("capture verification failed", e);
+        verificationNote = "verification needs retry";
+      }
       return log({
         status: ingested.alreadyApplied ? "updated" : "imported",
         detail: `${ingested.name} (${
           ingested.emailMissing ? "no email on the CV — add it later" : ingested.email
-        })${input.requisitionId ? " added to the role" : " filed in the talent pool"}.`,
+        })${input.requisitionId ? " added to the role" : " filed in the talent pool"}; original CV secured; ${verificationNote}.`,
         candidateId: ingested.candidateId,
         requisitionId: input.requisitionId ?? null,
         title: ingested.name,

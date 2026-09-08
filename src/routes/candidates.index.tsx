@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Copy, Github, Linkedin, Merge, RefreshCw, ShieldCheck, Sparkles, Upload } from "lucide-react";
+import { AlertTriangle, Copy, Download, Github, Linkedin, Merge, RefreshCw, ShieldCheck, Sparkles, Upload } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -19,6 +19,7 @@ import {
 } from "@/lib/data";
 import { parseResume } from "@/lib/matching.functions";
 import { verifyCandidates } from "@/lib/verification.functions";
+import { getResumeDownloadUrl } from "@/lib/resume.functions";
 import { intakeCvs, type IntakeStatus } from "@/lib/cv-intake";
 import { normalizeExternalUrl } from "@/lib/external-links";
 import { canonical, nextAction, stalledDays, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
@@ -156,6 +157,7 @@ function Candidates() {
   const verifs = useQuery(verificationsQuery);
   const parse = useServerFn(parseResume);
   const reverify = useServerFn(verifyCandidates);
+  const getResumeUrl = useServerFn(getResumeDownloadUrl);
 
   const [q, setQ] = useState("");
   const [view, setView] = useState<ViewId>("all");
@@ -1032,7 +1034,23 @@ function Candidates() {
                           {missing.length} field{missing.length === 1 ? "" : "s"} missing
                         </span>
                       )}
-                      <div className="text-muted-foreground">{c.resume_text ? "CV on file" : "no CV text"}</div>
+                      <div className="text-muted-foreground">
+                        {c.resume_file_path ? "original CV secured" : c.resume_text ? "text only — no original file" : "no CV"}
+                      </div>
+                      {c.resume_file_path ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="mt-1 h-7 px-1.5 text-xs"
+                          onClick={async () => {
+                            const out = await getResumeUrl({ data: { candidateId: c.id } });
+                            if (out.ok) window.open(out.url, "_blank", "noopener");
+                            else toast.error(out.error);
+                          }}
+                        >
+                          <Download className="size-3.5" /> Open CV
+                        </Button>
+                      ) : null}
                     </TableCell>
 
                     <TableCell className="text-right">
