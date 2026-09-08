@@ -3,7 +3,18 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Copy, Github, Linkedin, Merge, RefreshCw, ShieldCheck, Sparkles, Upload } from "lucide-react";
+import {
+  AlertTriangle,
+  Copy,
+  Download,
+  Github,
+  Linkedin,
+  Merge,
+  RefreshCw,
+  ShieldCheck,
+  Sparkles,
+  Upload,
+} from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -19,12 +30,12 @@ import {
 } from "@/lib/data";
 import { parseResume } from "@/lib/matching.functions";
 import { verifyCandidates } from "@/lib/verification.functions";
+import { getResumeDownloadUrl } from "@/lib/resume.functions";
 import { intakeCvs, type IntakeStatus } from "@/lib/cv-intake";
 import { normalizeExternalUrl } from "@/lib/external-links";
 import { canonical, nextAction, stalledDays, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
 import { computeCareerMetrics, type EmploymentRow } from "@/lib/career";
 import { duplicateIndex, findDuplicateGroups, freshness, mergeCandidates } from "@/lib/dedupe";
-
 
 import { EmptyState, PageHeader, ScoreChip, StageBadge } from "@/components/ats";
 import { StageMover } from "@/components/StageMover";
@@ -42,8 +53,21 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 export const Route = createFileRoute("/candidates/")({
   head: () => ({
@@ -54,7 +78,10 @@ export const Route = createFileRoute("/candidates/")({
         content:
           "Searchable candidate database in a dense table: current pipeline stage, next action, match score, authenticity verdict and stalled-candidate flags.",
       },
-      { property: "og:title", content: "Talent Pool — pipeline states, match scores & authenticity" },
+      {
+        property: "og:title",
+        content: "Talent Pool — pipeline states, match scores & authenticity",
+      },
       {
         property: "og:description",
         content:
@@ -81,7 +108,6 @@ const SAVED_VIEWS = [
   { id: "duplicates", label: "Possible duplicates" },
   { id: "stale", label: "Stale CVs (1yr+)" },
 ] as const;
-
 
 type ViewId = (typeof SAVED_VIEWS)[number]["id"];
 
@@ -114,7 +140,8 @@ function gaps(c: Candidate) {
   if (!c.education?.trim()) out.push("education");
   if (!c.current_employer?.trim()) out.push("employer");
   if (!c.resume_text?.trim()) out.push("resume text");
-  if (!(Array.isArray(c.employment_history) ? c.employment_history.length : 0)) out.push("work history");
+  if (!(Array.isArray(c.employment_history) ? c.employment_history.length : 0))
+    out.push("work history");
   return out;
 }
 
@@ -144,9 +171,6 @@ function educationLabel(raw: string | null | undefined) {
   }
 }
 
-
-
-
 function Candidates() {
   const qc = useQueryClient();
   const cands = useQuery(candidatesQuery);
@@ -156,6 +180,7 @@ function Candidates() {
   const verifs = useQuery(verificationsQuery);
   const parse = useServerFn(parseResume);
   const reverify = useServerFn(verifyCandidates);
+  const getResumeUrl = useServerFn(getResumeDownloadUrl);
 
   const [q, setQ] = useState("");
   const [view, setView] = useState<ViewId>("all");
@@ -212,11 +237,13 @@ function Candidates() {
         parse,
         source: bulkSource,
         requisitionId: bulkReqId || null,
-        onUpdate: (i, patch) => setBulkLog((l) => l.map((row, idx) => (idx === i ? { ...row, ...patch } : row))),
+        onUpdate: (i, patch) =>
+          setBulkLog((l) => l.map((row, idx) => (idx === i ? { ...row, ...patch } : row))),
       });
       await qc.invalidateQueries({ queryKey: ["candidates"] });
       await qc.invalidateQueries({ queryKey: ["applications"] });
-      if (summary.failed === 0) toast.success(`${summary.ok} CV${summary.ok === 1 ? "" : "s"} added to the talent pool`);
+      if (summary.failed === 0)
+        toast.success(`${summary.ok} CV${summary.ok === 1 ? "" : "s"} added to the talent pool`);
       else toast.warning(`${summary.ok} parsed · ${summary.failed} failed — see the list`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Bulk upload failed");
@@ -280,7 +307,9 @@ function Candidates() {
     };
 
     return (cands.data ?? []).map((c) => {
-      const list = (byCandidate.get(c.id) ?? []).slice().sort((a, b) => rank(a.stage) - rank(b.stage));
+      const list = (byCandidate.get(c.id) ?? [])
+        .slice()
+        .sort((a, b) => rank(a.stage) - rank(b.stage));
       const primary = list[0] ?? null;
       const best = list.reduce<number | null>((acc, a) => {
         const s = scoreMap.get(a.id)?.overall_score;
@@ -340,7 +369,6 @@ function Candidates() {
     });
   }, [rows, q, sourceFilter, reqFilter, minScore, expBand, view, verifMap, dupMap]);
 
-
   const selectedRows = filtered.filter((r) => selected.has(r.candidate.id));
   const selectedAppIds = selectedRows.flatMap((r) => (r.primary ? [r.primary.id] : []));
   const allChecked = filtered.length > 0 && filtered.every((r) => selected.has(r.candidate.id));
@@ -362,7 +390,9 @@ function Candidates() {
     if (selectedRows.length === 0) return;
     setSyncing(true);
     try {
-      const out = await reverify({ data: { candidateIds: selectedRows.slice(0, 50).map((r) => r.candidate.id) } });
+      const out = await reverify({
+        data: { candidateIds: selectedRows.slice(0, 50).map((r) => r.candidate.id) },
+      });
       await qc.invalidateQueries({ queryKey: ["candidate_verifications"] });
       await qc.invalidateQueries({ queryKey: ["candidates"] });
       if (out.failed) toast.warning(`${out.ok} verified · ${out.failed} failed`);
@@ -472,7 +502,12 @@ function Candidates() {
     if (reqId) {
       await supabase
         .from("applications")
-        .insert({ requisition_id: reqId, candidate_id: data.id, source: form.source, stage: "sourced" });
+        .insert({
+          requisition_id: reqId,
+          candidate_id: data.id,
+          source: form.source,
+          stage: "sourced",
+        });
     }
     setBusy(false);
     setOpen(false);
@@ -502,15 +537,20 @@ function Candidates() {
                 <DialogHeader>
                   <DialogTitle>Bulk upload CVs</DialogTitle>
                   <DialogDescription>
-                    Drop in up to a few dozen PDF, DOCX or TXT resumes — each one is read, AI-parsed and added to the
-                    talent pool automatically. No typing.
+                    Drop in up to a few dozen PDF, DOCX or TXT resumes — each one is read, AI-parsed
+                    and added to the talent pool automatically. No typing.
                   </DialogDescription>
                 </DialogHeader>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <Label className="mb-1.5 block text-xs text-muted-foreground">Open to relocation</Label>
-                    <Select value={willingToRelocate} onValueChange={(v) => setWillingToRelocate(v as never)}>
+                    <Label className="mb-1.5 block text-xs text-muted-foreground">
+                      Open to relocation
+                    </Label>
+                    <Select
+                      value={willingToRelocate}
+                      onValueChange={(v) => setWillingToRelocate(v as never)}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -528,7 +568,15 @@ function Candidates() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {["direct", "naukri", "linkedin", "referral", "consultant", "campus", "ijp"].map((s) => (
+                        {[
+                          "direct",
+                          "naukri",
+                          "linkedin",
+                          "referral",
+                          "consultant",
+                          "campus",
+                          "ijp",
+                        ].map((s) => (
                           <SelectItem key={s} value={s}>
                             {s}
                           </SelectItem>
@@ -537,7 +585,9 @@ function Candidates() {
                     </Select>
                   </div>
                   <div>
-                    <Label className="mb-1.5 block text-xs text-muted-foreground">Apply all to requisition</Label>
+                    <Label className="mb-1.5 block text-xs text-muted-foreground">
+                      Apply all to requisition
+                    </Label>
                     <Select value={bulkReqId} onValueChange={setBulkReqId}>
                       <SelectTrigger>
                         <SelectValue placeholder="Optional" />
@@ -566,7 +616,8 @@ function Candidates() {
                     }}
                   />
                   <p className="mt-1.5 text-xs text-muted-foreground">
-                    Text-based PDF, DOCX, TXT or MD. Scanned/image-only PDFs cannot be read — export a text PDF.
+                    Text-based PDF, DOCX, TXT or MD. Scanned/image-only PDFs cannot be read — export
+                    a text PDF.
                   </p>
                 </div>
 
@@ -574,7 +625,8 @@ function Candidates() {
                   <>
                     <p className="num text-xs text-muted-foreground">
                       {bulkLog.filter((l) => l.state === "ok").length} parsed ·{" "}
-                      {bulkLog.filter((l) => l.state === "error").length} failed · {bulkLog.length} total
+                      {bulkLog.filter((l) => l.state === "error").length} failed · {bulkLog.length}{" "}
+                      total
                     </p>
                     <ul className="max-h-56 space-y-1 overflow-y-auto text-xs">
                       {bulkLog.map((l, i) => (
@@ -612,7 +664,8 @@ function Candidates() {
                 <DialogHeader>
                   <DialogTitle>Add candidate</DialogTitle>
                   <DialogDescription>
-                    Paste a resume and let AI extract the structured fields, then attach the candidate to a requisition.
+                    Paste a resume and let AI extract the structured fields, then attach the
+                    candidate to a requisition.
                   </DialogDescription>
                 </DialogHeader>
 
@@ -646,26 +699,36 @@ function Candidates() {
                   ).map(([key, label]) => (
                     <div key={key} className={key === "skills" ? "sm:col-span-2" : undefined}>
                       <Label className="mb-1.5 block text-xs text-muted-foreground">{label}</Label>
-                      <Input value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
+                      <Input
+                        value={form[key]}
+                        onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                      />
                     </div>
                   ))}
                   <div>
                     <Label className="mb-1.5 block text-xs text-muted-foreground">Source</Label>
-                    <Select value={form.source} onValueChange={(v) => setForm({ ...form, source: v })}>
+                    <Select
+                      value={form.source}
+                      onValueChange={(v) => setForm({ ...form, source: v })}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {["direct", "naukri", "linkedin", "referral", "consultant", "campus"].map((s) => (
-                          <SelectItem key={s} value={s}>
-                            {s}
-                          </SelectItem>
-                        ))}
+                        {["direct", "naukri", "linkedin", "referral", "consultant", "campus"].map(
+                          (s) => (
+                            <SelectItem key={s} value={s}>
+                              {s}
+                            </SelectItem>
+                          ),
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label className="mb-1.5 block text-xs text-muted-foreground">Apply to requisition</Label>
+                    <Label className="mb-1.5 block text-xs text-muted-foreground">
+                      Apply to requisition
+                    </Label>
                     <Select value={reqId} onValueChange={setReqId}>
                       <SelectTrigger>
                         <SelectValue placeholder="Optional" />
@@ -717,7 +780,11 @@ function Candidates() {
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-56 flex-1">
           <Label className="mb-1.5 block text-xs text-muted-foreground">Search</Label>
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, email, skill or location…" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Name, email, skill or location…"
+          />
         </div>
         <div className="w-44">
           <Label className="mb-1.5 block text-xs text-muted-foreground">Source</Label>
@@ -767,7 +834,6 @@ function Candidates() {
           </Select>
         </div>
         <div className="w-36">
-
           <Label className="mb-1.5 block text-xs text-muted-foreground">Min score</Label>
           <Select value={minScore} onValueChange={setMinScore}>
             <SelectTrigger>
@@ -830,7 +896,11 @@ function Candidates() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10">
-                  <Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all" />
+                  <Checkbox
+                    checked={allChecked}
+                    onCheckedChange={toggleAll}
+                    aria-label="Select all"
+                  />
                 </TableHead>
                 <TableHead className="w-[240px]">Candidate</TableHead>
                 <TableHead className="w-[200px]">Contact</TableHead>
@@ -841,7 +911,9 @@ function Candidates() {
                 <TableHead className="w-[190px]">Stage &amp; next action</TableHead>
                 <TableHead className="w-[120px]">Parsing</TableHead>
                 <TableHead className="w-[90px] whitespace-nowrap text-right">Match</TableHead>
-                <TableHead className="w-[120px] whitespace-nowrap text-right">Authenticity</TableHead>
+                <TableHead className="w-[120px] whitespace-nowrap text-right">
+                  Authenticity
+                </TableHead>
                 <TableHead className="w-[100px] whitespace-nowrap text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -852,7 +924,9 @@ function Candidates() {
                 const v = verifMap.get(c.id);
                 const flags = (v?.red_flags ?? []).length;
                 const missing = gaps(c);
-                const history = (Array.isArray(c.employment_history) ? c.employment_history : []) as EmploymentRow[];
+                const history = (
+                  Array.isArray(c.employment_history) ? c.employment_history : []
+                ) as EmploymentRow[];
                 const metrics = history.length ? computeCareerMetrics(history) : null;
                 const current = history[0] ?? null;
                 const isOpen = expanded === c.id;
@@ -860,283 +934,336 @@ function Candidates() {
                 const dup = dupMap.get(c.id);
                 return (
                   <Fragment key={c.id}>
-                  <TableRow className="align-top">
-                    <TableCell>
-                      <Checkbox
-                        checked={selected.has(c.id)}
-                        onCheckedChange={() => toggleOne(c.id)}
-                        aria-label={`Select ${c.full_name}`}
-                      />
-                    </TableCell>
-                    <TableCell className="w-[240px]">
-                      <Link to="/candidates/$id" params={{ id: c.id }} className="font-medium hover:underline">
-                        {c.full_name}
-                      </Link>
-                      <div className="text-xs text-muted-foreground">
-                        {c.source}
-                        {c.is_internal ? " · internal" : ""} · added{" "}
-                        {new Date(c.created_at).toLocaleDateString()}
-                      </div>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-                        <span
-                          className={
-                            fresh.tier === "stale"
-                              ? "text-destructive"
-                              : fresh.tier === "aging"
-                                ? "text-amber-600"
-                                : "text-muted-foreground"
-                          }
-                          title={`Profile data last refreshed ${fresh.days} days ago`}
+                    <TableRow className="align-top">
+                      <TableCell>
+                        <Checkbox
+                          checked={selected.has(c.id)}
+                          onCheckedChange={() => toggleOne(c.id)}
+                          aria-label={`Select ${c.full_name}`}
+                        />
+                      </TableCell>
+                      <TableCell className="w-[240px]">
+                        <Link
+                          to="/candidates/$id"
+                          params={{ id: c.id }}
+                          className="font-medium hover:underline"
                         >
-                          CV {fresh.label}
-                        </span>
-                        {dup ? (
-                          <span
-                            className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-amber-700 dark:text-amber-400"
-                            title={`Possible duplicate (${dup.confidence}) — matched on ${dup.reasons.join(", ")}`}
-                          >
-                            <Copy className="size-3" /> dup ×{dup.members.length}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="mt-1 flex items-center gap-2 text-muted-foreground">
-                        {normalizeExternalUrl(c.linkedin_url) ? (
-                          <a
-                            href={normalizeExternalUrl(c.linkedin_url)!}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            aria-label="LinkedIn profile"
-                          >
-                            <Linkedin className="size-3.5 hover:text-foreground" />
-                          </a>
-                        ) : null}
-                        {normalizeExternalUrl(c.github_url) ? (
-                          <a
-                            href={normalizeExternalUrl(c.github_url)!}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            aria-label="GitHub profile"
-                          >
-                            <Github className="size-3.5 hover:text-foreground" />
-                          </a>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="text-xs underline-offset-4 hover:underline"
-                          onClick={() => setExpanded(isOpen ? null : c.id)}
-                        >
-                          {isOpen ? "Hide detail" : "Detail"}
-                        </button>
-                      </div>
-                      {r.stalled !== null ? (
-                        <div className="mt-1 inline-flex items-center gap-1 text-xs text-amber-600">
-                          <AlertTriangle className="size-3.5" /> stalled {r.stalled}d
+                          {c.full_name}
+                        </Link>
+                        <div className="text-xs text-muted-foreground">
+                          {c.source}
+                          {c.is_internal ? " · internal" : ""} · added{" "}
+                          {new Date(c.created_at).toLocaleDateString()}
                         </div>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="w-[200px] text-xs">
-                      {c.email ? (
-                        <a href={`mailto:${c.email}`} className="break-all hover:underline">
-                          {c.email}
-                        </a>
-                      ) : (
-                        <span className="text-destructive">no email parsed</span>
-                      )}
-                      <div className="num mt-0.5 text-muted-foreground">{c.phone || "no phone"}</div>
-                      <div className="line-clamp-1 text-muted-foreground" title={c.location ?? ""}>
-                        {c.location ?? "location unknown"}
-                      </div>
-                    </TableCell>
-                    <TableCell className="w-[190px] text-xs">
-                      <div className="line-clamp-1 font-medium text-foreground" title={current?.title ?? ""}>
-                        {current?.title || "—"}
-                      </div>
-                      <div className="line-clamp-1 text-muted-foreground">
-                        {c.current_employer || current?.company || "employer unknown"}
-                      </div>
-                      {metrics ? (
-                        <div className="num mt-0.5 text-muted-foreground">
-                          {metrics.current_tenure_years !== null
-                            ? `${metrics.current_tenure_years.toFixed(1)}y here`
-                            : "tenure n/a"}{" "}
-                          · {metrics.employers} employers · avg {metrics.avg_tenure_years.toFixed(1)}y
-                        </div>
-                      ) : (
-                        <div className="text-muted-foreground">no work history parsed</div>
-                      )}
-                    </TableCell>
-                    <TableCell className="w-[110px] text-sm">
-                      <span className="num">{c.experience_years} yrs</span>
-                      {metrics && metrics.jobs_last_5y > 2 ? (
-                        <div className="num text-xs text-amber-600">{metrics.jobs_last_5y} jobs / 5y</div>
-                      ) : null}
-                      {metrics && metrics.longest_gap_months >= 6 ? (
-                        <div className="num text-xs text-amber-600">{metrics.longest_gap_months}m gap</div>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="w-[200px] text-xs text-muted-foreground">
-                      <span className="line-clamp-2 break-words">
-                        {c.skills.slice(0, 6).join(" · ") || "no skills parsed"}
-                      </span>
-                      {c.skills.length > 6 ? (
-                        <span className="num block text-[11px]">+{c.skills.length - 6} more</span>
-                      ) : null}
-                      <span className="mt-0.5 line-clamp-2 block break-words" title={educationLabel(c.education)}>
-                        {educationLabel(c.education) || "education unknown"}
-                      </span>
-                    </TableCell>
-
-                    <TableCell className="w-[170px] text-xs text-muted-foreground">
-                      <div className="num">
-                        CTC {money(c.current_ctc as number | null)} → exp {money(c.expected_ctc as number | null)}
-                      </div>
-                      <div className="num">
-                        {c.notice_period_days !== null ? `${c.notice_period_days}d notice` : "notice unknown"}
-                      </div>
-                      <div>
-                        {c.willing_to_relocate === null
-                          ? "relocation not asked"
-                          : c.willing_to_relocate
-                            ? "will relocate"
-                            : "no relocation"}
-                        {c.work_authorization ? ` · ${c.work_authorization}` : ""}
-                      </div>
-                    </TableCell>
-                    <TableCell className="w-[190px]">
-                      {r.stage ? (
-                        <>
-                          <StageBadge stage={r.stage} />
-                          {r.apps.length > 1 ? (
-                            <span className="num ml-1.5 text-[11px] text-muted-foreground">
-                              +{r.apps.length - 1}
-                            </span>
-                          ) : null}
-                        </>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Pool only</span>
-                      )}
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {r.stage ? nextAction(r.stage) : "Match against an open requisition"}
-                      </div>
-                      {r.primary ? (
-                        <div className="num mt-0.5 text-[11px] text-muted-foreground">
-                          last activity {new Date(r.primary.last_activity_at).toLocaleDateString()}
-                        </div>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="w-[110px] text-xs">
-                      {missing.length === 0 ? (
-                        <span className="text-emerald-600">complete</span>
-                      ) : (
-                        <span className="text-amber-600" title={`Missing: ${missing.join(", ")}`}>
-                          {missing.length} field{missing.length === 1 ? "" : "s"} missing
-                        </span>
-                      )}
-                      <div className="text-muted-foreground">{c.resume_text ? "CV on file" : "no CV text"}</div>
-                    </TableCell>
-
-                    <TableCell className="text-right">
-                      {r.score !== null ? <ScoreChip score={r.score} size="sm" /> : <span className="text-xs text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {v ? (
-                        <div className="inline-flex flex-col items-end">
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px]">
                           <span
                             className={
-                              "num inline-flex items-center gap-1 text-sm font-semibold " +
-                              (v.authenticity_score >= 70
-                                ? "text-emerald-600"
-                                : v.authenticity_score >= 45
+                              fresh.tier === "stale"
+                                ? "text-destructive"
+                                : fresh.tier === "aging"
                                   ? "text-amber-600"
-                                  : "text-destructive")
+                                  : "text-muted-foreground"
                             }
+                            title={`Profile data last refreshed ${fresh.days} days ago`}
                           >
-                            <ShieldCheck className="size-3.5" /> {v.authenticity_score}
+                            CV {fresh.label}
                           </span>
-                          {flags > 0 ? (
-                            <span className="text-xs text-muted-foreground">
-                              {flags} flag{flags === 1 ? "" : "s"}
+                          {dup ? (
+                            <span
+                              className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-amber-700 dark:text-amber-400"
+                              title={`Possible duplicate (${dup.confidence}) — matched on ${dup.reasons.join(", ")}`}
+                            >
+                              <Copy className="size-3" /> dup ×{dup.members.length}
                             </span>
                           ) : null}
                         </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">not run</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {r.primary ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setMoverStage(r.stage ?? undefined);
-                            setMoverIds([r.primary!.id]);
-                          }}
+                        <div className="mt-1 flex items-center gap-2 text-muted-foreground">
+                          {normalizeExternalUrl(c.linkedin_url) ? (
+                            <a
+                              href={normalizeExternalUrl(c.linkedin_url)!}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              aria-label="LinkedIn profile"
+                            >
+                              <Linkedin className="size-3.5 hover:text-foreground" />
+                            </a>
+                          ) : null}
+                          {normalizeExternalUrl(c.github_url) ? (
+                            <a
+                              href={normalizeExternalUrl(c.github_url)!}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              aria-label="GitHub profile"
+                            >
+                              <Github className="size-3.5 hover:text-foreground" />
+                            </a>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="text-xs underline-offset-4 hover:underline"
+                            onClick={() => setExpanded(isOpen ? null : c.id)}
+                          >
+                            {isOpen ? "Hide detail" : "Detail"}
+                          </button>
+                        </div>
+                        {r.stalled !== null ? (
+                          <div className="mt-1 inline-flex items-center gap-1 text-xs text-amber-600">
+                            <AlertTriangle className="size-3.5" /> stalled {r.stalled}d
+                          </div>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="w-[200px] text-xs">
+                        {c.email ? (
+                          <a href={`mailto:${c.email}`} className="break-all hover:underline">
+                            {c.email}
+                          </a>
+                        ) : (
+                          <span className="text-destructive">no email parsed</span>
+                        )}
+                        <div className="num mt-0.5 text-muted-foreground">
+                          {c.phone || "no phone"}
+                        </div>
+                        <div
+                          className="line-clamp-1 text-muted-foreground"
+                          title={c.location ?? ""}
                         >
-                          Move
-                        </Button>
-                      ) : (
-                        <Link
-                          to="/matching"
-                          className="text-xs text-muted-foreground underline hover:text-foreground"
-                        >
-                          Match
-                        </Link>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                  {isOpen ? (
-                    <TableRow className="bg-surface-2">
-                      <TableCell colSpan={12} className="text-xs">
-                        <div className="grid gap-4 sm:grid-cols-3">
-                          <div>
-                            <div className="mb-1 font-medium">Work history (parsed)</div>
-                            {history.length ? (
-                              <ul className="space-y-1 text-muted-foreground">
-                                {history.map((h, i) => (
-                                  <li key={`${h.company}-${i}`}>
-                                    {h.title || "role"} · {h.company || "employer"} ·{" "}
-                                    <span className="num">
-                                      {h.start ?? "?"} – {h.end ?? "present"}
-                                    </span>
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <p className="text-muted-foreground">
-                                Nothing parsed yet — run matching to extract the history from the CV.
-                              </p>
-                            )}
-                          </div>
-                          <div>
-                            <div className="mb-1 font-medium">All skills</div>
-                            <p className="text-muted-foreground">{c.skills.join(" · ") || "—"}</p>
-                            <div className="mt-2 mb-1 font-medium">Preferred locations</div>
-                            <p className="text-muted-foreground">
-                              {(c.preferred_locations ?? []).join(" · ") || "—"}
-                            </p>
-                          </div>
-                          <div>
-                            <div className="mb-1 font-medium">Missing from the parse</div>
-                            <p className="text-muted-foreground">{missing.join(", ") || "nothing — record is complete"}</p>
-                            <div className="mt-2 mb-1 font-medium">Verification</div>
-                            <p className="text-muted-foreground">
-                              {v ? v.summary || `Authenticity ${v.authenticity_score}` : "not run yet"}
-                            </p>
-                          </div>
+                          {c.location ?? "location unknown"}
                         </div>
                       </TableCell>
+                      <TableCell className="w-[190px] text-xs">
+                        <div
+                          className="line-clamp-1 font-medium text-foreground"
+                          title={current?.title ?? ""}
+                        >
+                          {current?.title || "—"}
+                        </div>
+                        <div className="line-clamp-1 text-muted-foreground">
+                          {c.current_employer || current?.company || "employer unknown"}
+                        </div>
+                        {metrics ? (
+                          <div className="num mt-0.5 text-muted-foreground">
+                            {metrics.current_tenure_years !== null
+                              ? `${metrics.current_tenure_years.toFixed(1)}y here`
+                              : "tenure n/a"}{" "}
+                            · {metrics.employers} employers · avg{" "}
+                            {metrics.avg_tenure_years.toFixed(1)}y
+                          </div>
+                        ) : (
+                          <div className="text-muted-foreground">no work history parsed</div>
+                        )}
+                      </TableCell>
+                      <TableCell className="w-[110px] text-sm">
+                        <span className="num">{c.experience_years} yrs</span>
+                        {metrics && metrics.jobs_last_5y > 2 ? (
+                          <div className="num text-xs text-amber-600">
+                            {metrics.jobs_last_5y} jobs / 5y
+                          </div>
+                        ) : null}
+                        {metrics && metrics.longest_gap_months >= 6 ? (
+                          <div className="num text-xs text-amber-600">
+                            {metrics.longest_gap_months}m gap
+                          </div>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="w-[200px] text-xs text-muted-foreground">
+                        <span className="line-clamp-2 break-words">
+                          {c.skills.slice(0, 6).join(" · ") || "no skills parsed"}
+                        </span>
+                        {c.skills.length > 6 ? (
+                          <span className="num block text-[11px]">+{c.skills.length - 6} more</span>
+                        ) : null}
+                        <span
+                          className="mt-0.5 line-clamp-2 block break-words"
+                          title={educationLabel(c.education)}
+                        >
+                          {educationLabel(c.education) || "education unknown"}
+                        </span>
+                      </TableCell>
+
+                      <TableCell className="w-[170px] text-xs text-muted-foreground">
+                        <div className="num">
+                          CTC {money(c.current_ctc as number | null)} → exp{" "}
+                          {money(c.expected_ctc as number | null)}
+                        </div>
+                        <div className="num">
+                          {c.notice_period_days !== null
+                            ? `${c.notice_period_days}d notice`
+                            : "notice unknown"}
+                        </div>
+                        <div>
+                          {c.willing_to_relocate === null
+                            ? "relocation not asked"
+                            : c.willing_to_relocate
+                              ? "will relocate"
+                              : "no relocation"}
+                          {c.work_authorization ? ` · ${c.work_authorization}` : ""}
+                        </div>
+                      </TableCell>
+                      <TableCell className="w-[190px]">
+                        {r.stage ? (
+                          <>
+                            <StageBadge stage={r.stage} />
+                            {r.apps.length > 1 ? (
+                              <span className="num ml-1.5 text-[11px] text-muted-foreground">
+                                +{r.apps.length - 1}
+                              </span>
+                            ) : null}
+                          </>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Pool only</span>
+                        )}
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {r.stage ? nextAction(r.stage) : "Match against an open requisition"}
+                        </div>
+                        {r.primary ? (
+                          <div className="num mt-0.5 text-[11px] text-muted-foreground">
+                            last activity{" "}
+                            {new Date(r.primary.last_activity_at).toLocaleDateString()}
+                          </div>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="w-[110px] text-xs">
+                        {missing.length === 0 ? (
+                          <span className="text-emerald-600">complete</span>
+                        ) : (
+                          <span className="text-amber-600" title={`Missing: ${missing.join(", ")}`}>
+                            {missing.length} field{missing.length === 1 ? "" : "s"} missing
+                          </span>
+                        )}
+                        <div className="text-muted-foreground">
+                          {c.resume_file_path
+                            ? "original CV secured"
+                            : c.resume_text
+                              ? "text only — no original file"
+                              : "no CV"}
+                        </div>
+                        {c.resume_file_path ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="mt-1 h-7 px-1.5 text-xs"
+                            onClick={async () => {
+                              const out = await getResumeUrl({ data: { candidateId: c.id } });
+                              if (out.ok) window.open(out.url, "_blank", "noopener");
+                              else toast.error(out.error);
+                            }}
+                          >
+                            <Download className="size-3.5" /> Open CV
+                          </Button>
+                        ) : null}
+                      </TableCell>
+
+                      <TableCell className="text-right">
+                        {r.score !== null ? (
+                          <ScoreChip score={r.score} size="sm" />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {v ? (
+                          <div className="inline-flex flex-col items-end">
+                            <span
+                              className={
+                                "num inline-flex items-center gap-1 text-sm font-semibold " +
+                                (v.authenticity_score >= 70
+                                  ? "text-emerald-600"
+                                  : v.authenticity_score >= 45
+                                    ? "text-amber-600"
+                                    : "text-destructive")
+                              }
+                            >
+                              <ShieldCheck className="size-3.5" /> {v.authenticity_score}
+                            </span>
+                            {flags > 0 ? (
+                              <span className="text-xs text-muted-foreground">
+                                {flags} flag{flags === 1 ? "" : "s"}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">not run</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {r.primary ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setMoverStage(r.stage ?? undefined);
+                              if (r.primary) setMoverIds([r.primary.id]);
+                            }}
+                          >
+                            Move
+                          </Button>
+                        ) : (
+                          <Link
+                            to="/matching"
+                            className="text-xs text-muted-foreground underline hover:text-foreground"
+                          >
+                            Match
+                          </Link>
+                        )}
+                      </TableCell>
                     </TableRow>
-                  ) : null}
+                    {isOpen ? (
+                      <TableRow className="bg-surface-2">
+                        <TableCell colSpan={12} className="text-xs">
+                          <div className="grid gap-4 sm:grid-cols-3">
+                            <div>
+                              <div className="mb-1 font-medium">Work history (parsed)</div>
+                              {history.length ? (
+                                <ul className="space-y-1 text-muted-foreground">
+                                  {history.map((h, i) => (
+                                    <li key={`${h.company}-${i}`}>
+                                      {h.title || "role"} · {h.company || "employer"} ·{" "}
+                                      <span className="num">
+                                        {h.start ?? "?"} – {h.end ?? "present"}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p className="text-muted-foreground">
+                                  Nothing parsed yet — run matching to extract the history from the
+                                  CV.
+                                </p>
+                              )}
+                            </div>
+                            <div>
+                              <div className="mb-1 font-medium">All skills</div>
+                              <p className="text-muted-foreground">{c.skills.join(" · ") || "—"}</p>
+                              <div className="mt-2 mb-1 font-medium">Preferred locations</div>
+                              <p className="text-muted-foreground">
+                                {(c.preferred_locations ?? []).join(" · ") || "—"}
+                              </p>
+                            </div>
+                            <div>
+                              <div className="mb-1 font-medium">Missing from the parse</div>
+                              <p className="text-muted-foreground">
+                                {missing.join(", ") || "nothing — record is complete"}
+                              </p>
+                              <div className="mt-2 mb-1 font-medium">Verification</div>
+                              <p className="text-muted-foreground">
+                                {v
+                                  ? v.summary || `Authenticity ${v.authenticity_score}`
+                                  : "not run yet"}
+                              </p>
+                            </div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
                   </Fragment>
                 );
-
               })}
             </TableBody>
           </Table>
           {filtered.length > 300 ? (
             <p className="num border-t border-border p-3 text-xs text-muted-foreground">
-              Showing the first 300 of {filtered.length} matches — narrow the filters to see the rest.
+              Showing the first 300 of {filtered.length} matches — narrow the filters to see the
+              rest.
             </p>
           ) : null}
         </div>
@@ -1155,10 +1282,10 @@ function Candidates() {
       />
 
       <p className="text-xs text-muted-foreground">
-        Stage labels come from the pipeline state machine, so only legal transitions are offered and every change is
-        written to the audit trail with a reason. Authenticity is produced by the verification agent — an{" "}
-        <span className="font-medium">unverified</span> claim means no public trace was found, not that the claim is
-        false.
+        Stage labels come from the pipeline state machine, so only legal transitions are offered and
+        every change is written to the audit trail with a reason. Authenticity is produced by the
+        verification agent — an <span className="font-medium">unverified</span> claim means no
+        public trace was found, not that the claim is false.
       </p>
     </>
   );

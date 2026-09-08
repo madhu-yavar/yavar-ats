@@ -102,7 +102,8 @@ function rowScan(action, arg) {
     if (!el) return { ok: false };
     el.scrollIntoView({ block: "center" });
     const target =
-      el.querySelector('a[href*="/talent/"], a[href*="/in/"], a[href], button, [role="button"]') || el;
+      el.querySelector('a[href*="/talent/"], a[href*="/in/"], a[href], button, [role="button"]') ||
+      el;
     target.click();
     return { ok: true, name: nameOf(el) };
   }
@@ -154,7 +155,8 @@ async function grabApplicant() {
     if (!href) continue;
     if (/\.(pdf|docx?|txt|rtf)(\?|$)/i.test(href)) add(href);
     else if (/download|resume|cv/.test(label) && /linkedin|licdn|ambry|dms/i.test(href)) add(href);
-    else if (/ambry|dms-|media-proxy|attachment|resume/i.test(href) && /licdn|linkedin/i.test(href)) add(href);
+    else if (/ambry|dms-|media-proxy|attachment|resume/i.test(href) && /licdn|linkedin/i.test(href))
+      add(href);
   }
   for (const el of linkScope.querySelectorAll("iframe[src], embed[src], object[data]")) {
     add(el.getAttribute("src") || el.getAttribute("data") || "");
@@ -191,13 +193,93 @@ async function grabApplicant() {
   return { text, title: document.title || null, url: location.href, resume };
 }
 
+/** Click LinkedIn's visible CV download control when no direct file URL exists. */
+function clickResumeDownload() {
+  const visible = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight;
+  };
+  const controls = [...document.querySelectorAll('button, a[href], [role="button"]')].filter(
+    visible,
+  );
+  const target = controls.find((el) => {
+    const text = [el.innerText, el.getAttribute("aria-label"), el.getAttribute("title")]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return /download\s+(resume|cv)|download.*(resume|cv)|(resume|cv).*download/.test(text);
+  });
+  if (!target) return { ok: false, error: "CV Download button was not found" };
+  target.click();
+  return { ok: true };
+}
+
+function bytesToBase64(bytes) {
+  let bin = "";
+  const chunk = 8192;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(bin);
+}
+
+/**
+ * Recruiter uses a real Download button rather than an <a href>. Observe the
+ * browser download it creates, cancel the local copy, then read that same
+ * authenticated URL into the capture payload.
+ */
+async function downloadResumeFromButton(tabId) {
+  let created = null;
+  const waitForDownload = new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      chrome.downloads.onCreated.removeListener(listener);
+      resolve(null);
+    }, 12000);
+    const listener = (item) => {
+      chrome.downloads.onCreated.removeListener(listener);
+      clearTimeout(timer);
+      resolve(item);
+    };
+    chrome.downloads.onCreated.addListener(listener);
+  });
+
+  const clicked = await run(tabId, clickResumeDownload).catch(() => null);
+  if (!clicked?.ok) return null;
+  created = await waitForDownload;
+  if (!created?.id) return null;
+
+  await chrome.downloads.cancel(created.id).catch(() => {});
+  const url = created.finalUrl || created.url;
+  if (!url) return null;
+  const res = await fetch(url, { credentials: "include" });
+  if (!res.ok) throw new Error(`CV download returned ${res.status}`);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.length < 800 || bytes.length > 6000000)
+    throw new Error("downloaded CV has an invalid size");
+  const disposition = res.headers.get("content-disposition") || "";
+  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+  let filename = encoded
+    ? decodeURIComponent(encoded)
+    : plain || created.filename?.split(/[\\/]/).pop() || "resume.pdf";
+  if (!/\.(pdf|docx?|txt|rtf)$/i.test(filename)) {
+    const ct = (res.headers.get("content-type") || created.mime || "").toLowerCase();
+    filename += ct.includes("word") || ct.includes("officedocument") ? ".docx" : ".pdf";
+  }
+  await chrome.downloads.erase({ id: created.id }).catch(() => {});
+  return { filename, content: bytesToBase64(bytes) };
+}
+
 /** Collect applicant/profile links from a Recruiter list page. */
 function collectApplicantLinks() {
   const out = [];
   const seen = new Set();
   for (const a of document.querySelectorAll("a[href]")) {
     const href = a.href;
-    if (!/linkedin\.com\/(talent\/(profile|hire\/[^/]+\/(discover|manage)\/profile)|in\/)/i.test(href)) continue;
+    if (
+      !/linkedin\.com\/(talent\/(profile|hire\/[^/]+\/(discover|manage)\/profile)|in\/)/i.test(href)
+    )
+      continue;
     const clean = href.split("#")[0];
     if (seen.has(clean)) continue;
     seen.add(clean);
@@ -240,12 +322,13 @@ async function send(site, token, payload) {
   return body;
 }
 
-async function fileApplicant({ site, token, page, requisitionId }) {
+async function fileApplicant({ site, token, page, requisitionId, candidateName }) {
   const payload = {
     kind: "cv",
     text: page.text && page.text.length > 80 ? page.text : null,
     title: page.title,
     sourceUrl: page.url,
+    candidateName: candidateName || null,
     ...(page.resume ? { file: page.resume } : {}),
     ...(requisitionId ? { requisitionId } : {}),
   };
@@ -311,7 +394,10 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
   // read the panel that opens and lift the attached resume file.
   const names = await gatherNames(tabId);
   if (names.length >= 2) {
-    await setRun({ total: names.length, note: `${names.length} applicants on this list — starting…` });
+    await setRun({
+      total: names.length,
+      note: `${names.length} applicants on this list — starting…`,
+    });
 
     for (let i = 0; i < names.length; i += 1) {
       const state = await getRun();
@@ -325,8 +411,13 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
         if (!clicked?.ok) throw new Error("that applicant row is no longer on screen");
         await sleep(3000);
         const page = await run(tabId, grabApplicant);
-        if (!page || (!page.resume && page.text.length < 200)) throw new Error("no readable CV on that applicant");
-        await tally(await fileApplicant({ site, token, page, requisitionId }));
+        if (!page) throw new Error("applicant details did not open");
+        if (!page.resume) page.resume = await downloadResumeFromButton(tabId);
+        if (!page.resume)
+          throw new Error("the original CV could not be downloaded — nothing was filed");
+        await tally(
+          await fileApplicant({ site, token, page, requisitionId, candidateName: names[i] }),
+        );
       } catch (e) {
         const s = await getRun();
         await setRun({ failed: (s?.failed ?? 0) + 1, note: `Skipped ${names[i]} — ${e.message}.` });
@@ -360,8 +451,13 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
         if (!ready) throw new Error("the page did not finish loading");
         await sleep(2500);
         const page = await run(tab.id, grabApplicant);
-        if (!page || (!page.resume && page.text.length < 200)) throw new Error("nothing readable on that profile");
-        await tally(await fileApplicant({ site, token, page, requisitionId }));
+        if (!page) throw new Error("applicant details did not open");
+        if (!page.resume) page.resume = await downloadResumeFromButton(tab.id);
+        if (!page.resume)
+          throw new Error("the original CV could not be downloaded — nothing was filed");
+        await tally(
+          await fileApplicant({ site, token, page, requisitionId, candidateName: item.label }),
+        );
       } catch (e) {
         const s = await getRun();
         await setRun({ failed: (s?.failed ?? 0) + 1, note: `Skipped one — ${e.message}.` });

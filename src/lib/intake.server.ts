@@ -4,6 +4,7 @@
  * email, and raise the application against a requisition.
  */
 import { aiJson } from "./ai-gateway.server";
+import { createHash } from "crypto";
 
 export type ParsedCv = {
   full_name: string | null;
@@ -16,13 +17,24 @@ export type ParsedCv = {
   linkedin_url: string | null;
   github_url: string | null;
   website_url: string | null;
+  current_employer: string | null;
+  employment_history:
+    | {
+        company: string | null;
+        title: string | null;
+        start: string | null;
+        end: string | null;
+        level_hint?: string | null;
+      }[]
+    | null;
 };
 
 export async function parseCv(resumeText: string): Promise<ParsedCv | null> {
   const parsed = await aiJson<ParsedCv>({
     system:
       "Extract structured candidate data from a resume. Return ONLY JSON with keys: full_name, email, phone, " +
-      "location, experience_years (number), education, skills (string array), linkedin_url, github_url, website_url. " +
+      "location, experience_years (number), education, skills (string array), linkedin_url, github_url, website_url, " +
+      "current_employer, employment_history (array of {company, title, start, end, level_hint}, newest first). " +
       "Use null when a field is genuinely absent. Never invent values.",
     prompt: resumeText.slice(0, 20000),
   });
@@ -37,8 +49,12 @@ export type IngestResult = {
   merged: boolean;
   /** True when no email could be read and a placeholder was used. */
   emailMissing?: boolean;
+  resumeStored: boolean;
+  skills: string[];
+  linkedinUrl: string | null;
+  githubUrl: string | null;
+  websiteUrl: string | null;
 };
-
 
 /**
  * Keep the original CV file in the private `resumes` bucket, one folder per
@@ -56,18 +72,16 @@ export async function storeResumeFile(input: {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const safeName = input.filename.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "resume.pdf";
     const path = `${input.orgId}/${input.candidateId}/${safeName}`;
-    const { error } = await supabaseAdmin.storage
-      .from("resumes")
-      .upload(path, input.bytes, {
-        upsert: true,
-        contentType: /\.pdf$/i.test(safeName)
-          ? "application/pdf"
-          : /\.docx$/i.test(safeName)
-            ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            : /\.doc$/i.test(safeName)
-              ? "application/msword"
-              : "text/plain",
-      });
+    const { error } = await supabaseAdmin.storage.from("resumes").upload(path, input.bytes, {
+      upsert: true,
+      contentType: /\.pdf$/i.test(safeName)
+        ? "application/pdf"
+        : /\.docx$/i.test(safeName)
+          ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          : /\.doc$/i.test(safeName)
+            ? "application/msword"
+            : "text/plain",
+    });
     if (error) throw new Error(error.message);
     await supabaseAdmin
       .from("candidates")
@@ -91,6 +105,7 @@ export async function ingestCandidate(input: {
   fullName?: string | null;
   phone?: string | null;
   parsed?: ParsedCv | null;
+  identityKey?: string | null;
   /** Original CV file, kept in the private resume vault when provided. */
   resumeFile?: { filename: string; bytes: Uint8Array } | null;
 }): Promise<IngestResult> {
@@ -106,11 +121,19 @@ export async function ingestCandidate(input: {
   let email = (input.email ?? p?.email ?? "").trim().toLowerCase();
   let emailMissing = false;
   if (!email) {
-    const slug = readName.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.|\.$/g, "") || "candidate";
-    email = `${slug}.${Date.now().toString(36)}@no-email.atsiq.local`;
+    const slug =
+      readName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ".")
+        .replace(/^\.|\.$/g, "") || "candidate";
+    const identity = input.identityKey || p?.linkedin_url || `${input.orgId ?? "org"}:${readName}`;
+    const stableId = createHash("sha256")
+      .update(identity.trim().toLowerCase())
+      .digest("hex")
+      .slice(0, 12);
+    email = `${slug}.${stableId}@no-email.atsiq.local`;
     emailMissing = true;
   }
-
 
   const row = {
     full_name: readName,
@@ -124,6 +147,8 @@ export async function ingestCandidate(input: {
     linkedin_url: p?.linkedin_url || null,
     github_url: p?.github_url || null,
     website_url: p?.website_url || null,
+    current_employer: p?.current_employer || p?.employment_history?.[0]?.company || null,
+    employment_history: p?.employment_history ?? [],
     source: input.source,
     resume_text: input.resumeText,
     org_id: input.orgId,
@@ -177,13 +202,16 @@ export async function ingestCandidate(input: {
     }
   }
 
+  let resumeStored = false;
   if (input.resumeFile?.bytes?.length) {
-    await storeResumeFile({
-      orgId: input.orgId,
-      candidateId,
-      filename: input.resumeFile.filename,
-      bytes: input.resumeFile.bytes,
-    });
+    resumeStored = Boolean(
+      await storeResumeFile({
+        orgId: input.orgId,
+        candidateId,
+        filename: input.resumeFile.filename,
+        bytes: input.resumeFile.bytes,
+      }),
+    );
   }
 
   return {
@@ -193,6 +221,10 @@ export async function ingestCandidate(input: {
     alreadyApplied,
     merged: Boolean(existing),
     emailMissing,
+    resumeStored,
+    skills: row.skills,
+    linkedinUrl: row.linkedin_url,
+    githubUrl: row.github_url,
+    websiteUrl: row.website_url,
   };
-
 }
