@@ -4,6 +4,7 @@
  * email, and raise the application against a requisition.
  */
 import { aiJson } from "./ai-gateway.server";
+import { createHash } from "crypto";
 
 export type ParsedCv = {
   full_name: string | null;
@@ -99,6 +100,7 @@ export async function ingestCandidate(input: {
   fullName?: string | null;
   phone?: string | null;
   parsed?: ParsedCv | null;
+  identityKey?: string | null;
   /** Original CV file, kept in the private resume vault when provided. */
   resumeFile?: { filename: string; bytes: Uint8Array } | null;
 }): Promise<IngestResult> {
@@ -115,7 +117,9 @@ export async function ingestCandidate(input: {
   let emailMissing = false;
   if (!email) {
     const slug = readName.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.|\.$/g, "") || "candidate";
-    email = `${slug}.${Date.now().toString(36)}@no-email.atsiq.local`;
+    const identity = input.identityKey || p?.linkedin_url || `${input.orgId ?? "org"}:${readName}`;
+    const stableId = createHash("sha256").update(identity.trim().toLowerCase()).digest("hex").slice(0, 12);
+    email = `${slug}.${stableId}@no-email.atsiq.local`;
     emailMissing = true;
   }
 
