@@ -102,7 +102,8 @@ function rowScan(action, arg) {
     if (!el) return { ok: false };
     el.scrollIntoView({ block: "center" });
     const target =
-      el.querySelector('a[href*="/talent/"], a[href*="/in/"], a[href], button, [role="button"]') || el;
+      el.querySelector('a[href*="/talent/"], a[href*="/in/"], a[href], button, [role="button"]') ||
+      el;
     target.click();
     return { ok: true, name: nameOf(el) };
   }
@@ -154,7 +155,8 @@ async function grabApplicant() {
     if (!href) continue;
     if (/\.(pdf|docx?|txt|rtf)(\?|$)/i.test(href)) add(href);
     else if (/download|resume|cv/.test(label) && /linkedin|licdn|ambry|dms/i.test(href)) add(href);
-    else if (/ambry|dms-|media-proxy|attachment|resume/i.test(href) && /licdn|linkedin/i.test(href)) add(href);
+    else if (/ambry|dms-|media-proxy|attachment|resume/i.test(href) && /licdn|linkedin/i.test(href))
+      add(href);
   }
   for (const el of linkScope.querySelectorAll("iframe[src], embed[src], object[data]")) {
     add(el.getAttribute("src") || el.getAttribute("data") || "");
@@ -197,7 +199,9 @@ function clickResumeDownload() {
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight;
   };
-  const controls = [...document.querySelectorAll('button, a[href], [role="button"]')].filter(visible);
+  const controls = [...document.querySelectorAll('button, a[href], [role="button"]')].filter(
+    visible,
+  );
   const target = controls.find((el) => {
     const text = [el.innerText, el.getAttribute("aria-label"), el.getAttribute("title")]
       .filter(Boolean)
@@ -250,11 +254,14 @@ async function downloadResumeFromButton(tabId) {
   const res = await fetch(url, { credentials: "include" });
   if (!res.ok) throw new Error(`CV download returned ${res.status}`);
   const bytes = new Uint8Array(await res.arrayBuffer());
-  if (bytes.length < 800 || bytes.length > 6000000) throw new Error("downloaded CV has an invalid size");
+  if (bytes.length < 800 || bytes.length > 6000000)
+    throw new Error("downloaded CV has an invalid size");
   const disposition = res.headers.get("content-disposition") || "";
   const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
   const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1];
-  let filename = encoded ? decodeURIComponent(encoded) : plain || created.filename?.split(/[\\/]/).pop() || "resume.pdf";
+  let filename = encoded
+    ? decodeURIComponent(encoded)
+    : plain || created.filename?.split(/[\\/]/).pop() || "resume.pdf";
   if (!/\.(pdf|docx?|txt|rtf)$/i.test(filename)) {
     const ct = (res.headers.get("content-type") || created.mime || "").toLowerCase();
     filename += ct.includes("word") || ct.includes("officedocument") ? ".docx" : ".pdf";
@@ -269,7 +276,10 @@ function collectApplicantLinks() {
   const seen = new Set();
   for (const a of document.querySelectorAll("a[href]")) {
     const href = a.href;
-    if (!/linkedin\.com\/(talent\/(profile|hire\/[^/]+\/(discover|manage)\/profile)|in\/)/i.test(href)) continue;
+    if (
+      !/linkedin\.com\/(talent\/(profile|hire\/[^/]+\/(discover|manage)\/profile)|in\/)/i.test(href)
+    )
+      continue;
     const clean = href.split("#")[0];
     if (seen.has(clean)) continue;
     seen.add(clean);
@@ -384,7 +394,10 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
   // read the panel that opens and lift the attached resume file.
   const names = await gatherNames(tabId);
   if (names.length >= 2) {
-    await setRun({ total: names.length, note: `${names.length} applicants on this list — starting…` });
+    await setRun({
+      total: names.length,
+      note: `${names.length} applicants on this list — starting…`,
+    });
 
     for (let i = 0; i < names.length; i += 1) {
       const state = await getRun();
@@ -400,8 +413,11 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
         const page = await run(tabId, grabApplicant);
         if (!page) throw new Error("applicant details did not open");
         if (!page.resume) page.resume = await downloadResumeFromButton(tabId);
-        if (!page.resume) throw new Error("the original CV could not be downloaded — nothing was filed");
-        await tally(await fileApplicant({ site, token, page, requisitionId, candidateName: names[i] }));
+        if (!page.resume)
+          throw new Error("the original CV could not be downloaded — nothing was filed");
+        await tally(
+          await fileApplicant({ site, token, page, requisitionId, candidateName: names[i] }),
+        );
       } catch (e) {
         const s = await getRun();
         await setRun({ failed: (s?.failed ?? 0) + 1, note: `Skipped ${names[i]} — ${e.message}.` });
@@ -437,8 +453,11 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
         const page = await run(tab.id, grabApplicant);
         if (!page) throw new Error("applicant details did not open");
         if (!page.resume) page.resume = await downloadResumeFromButton(tab.id);
-        if (!page.resume) throw new Error("the original CV could not be downloaded — nothing was filed");
-        await tally(await fileApplicant({ site, token, page, requisitionId, candidateName: item.label }));
+        if (!page.resume)
+          throw new Error("the original CV could not be downloaded — nothing was filed");
+        await tally(
+          await fileApplicant({ site, token, page, requisitionId, candidateName: item.label }),
+        );
       } catch (e) {
         const s = await getRun();
         await setRun({ failed: (s?.failed ?? 0) + 1, note: `Skipped one — ${e.message}.` });

@@ -38,7 +38,8 @@ async function grabPage() {
     if (!href) continue;
     if (/\.(pdf|docx?|txt|rtf)(\?|$)/i.test(href)) add(href);
     else if (/download|resume|cv/.test(label) && /linkedin|licdn|ambry|dms/i.test(href)) add(href);
-    else if (/ambry|dms-|media-proxy|attachment|resume/i.test(href) && /licdn|linkedin/i.test(href)) add(href);
+    else if (/ambry|dms-|media-proxy|attachment|resume/i.test(href) && /licdn|linkedin/i.test(href))
+      add(href);
   }
   for (const el of document.querySelectorAll("iframe[src], embed[src], object[data]")) {
     add(el.getAttribute("src") || el.getAttribute("data") || "");
@@ -56,7 +57,8 @@ async function grabPage() {
       if (bytes.length < 800 || bytes.length > 6000000) continue;
       let bin = "";
       const chunk = 8192;
-      for (let i = 0; i < bytes.length; i += chunk) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+      for (let i = 0; i < bytes.length; i += chunk)
+        bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
       const stem = decodeURIComponent(u.split("?")[0].split("/").pop() || "resume");
       const ext = /\.(pdf|docx?|txt|rtf)$/i.test(stem)
         ? ""
@@ -92,7 +94,10 @@ $("send").addEventListener("click", async () => {
 
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: grabPage });
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: grabPage,
+    });
     if (!result || (!result.resume && result.text.length < 80))
       throw new Error("There was not enough readable text on this page.");
     if (result.resume) status("Found the attached CV — sending it across…");
@@ -118,7 +123,6 @@ $("send").addEventListener("click", async () => {
     $("send").disabled = false;
   }
 });
-
 
 /* ---------------------------------------------------------------- the sweep */
 

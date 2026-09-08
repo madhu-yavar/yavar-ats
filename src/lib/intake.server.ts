@@ -18,15 +18,23 @@ export type ParsedCv = {
   github_url: string | null;
   website_url: string | null;
   current_employer: string | null;
-  employment_history: { company: string | null; title: string | null; start: string | null; end: string | null; level_hint?: string | null }[] | null;
+  employment_history:
+    | {
+        company: string | null;
+        title: string | null;
+        start: string | null;
+        end: string | null;
+        level_hint?: string | null;
+      }[]
+    | null;
 };
 
 export async function parseCv(resumeText: string): Promise<ParsedCv | null> {
   const parsed = await aiJson<ParsedCv>({
     system:
       "Extract structured candidate data from a resume. Return ONLY JSON with keys: full_name, email, phone, " +
-       "location, experience_years (number), education, skills (string array), linkedin_url, github_url, website_url, " +
-       "current_employer, employment_history (array of {company, title, start, end, level_hint}, newest first). " +
+      "location, experience_years (number), education, skills (string array), linkedin_url, github_url, website_url, " +
+      "current_employer, employment_history (array of {company, title, start, end, level_hint}, newest first). " +
       "Use null when a field is genuinely absent. Never invent values.",
     prompt: resumeText.slice(0, 20000),
   });
@@ -48,7 +56,6 @@ export type IngestResult = {
   websiteUrl: string | null;
 };
 
-
 /**
  * Keep the original CV file in the private `resumes` bucket, one folder per
  * organisation (<org>/<candidate>/<file>), and point the candidate row at it.
@@ -65,18 +72,16 @@ export async function storeResumeFile(input: {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const safeName = input.filename.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "resume.pdf";
     const path = `${input.orgId}/${input.candidateId}/${safeName}`;
-    const { error } = await supabaseAdmin.storage
-      .from("resumes")
-      .upload(path, input.bytes, {
-        upsert: true,
-        contentType: /\.pdf$/i.test(safeName)
-          ? "application/pdf"
-          : /\.docx$/i.test(safeName)
-            ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            : /\.doc$/i.test(safeName)
-              ? "application/msword"
-              : "text/plain",
-      });
+    const { error } = await supabaseAdmin.storage.from("resumes").upload(path, input.bytes, {
+      upsert: true,
+      contentType: /\.pdf$/i.test(safeName)
+        ? "application/pdf"
+        : /\.docx$/i.test(safeName)
+          ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          : /\.doc$/i.test(safeName)
+            ? "application/msword"
+            : "text/plain",
+    });
     if (error) throw new Error(error.message);
     await supabaseAdmin
       .from("candidates")
@@ -116,13 +121,19 @@ export async function ingestCandidate(input: {
   let email = (input.email ?? p?.email ?? "").trim().toLowerCase();
   let emailMissing = false;
   if (!email) {
-    const slug = readName.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.|\.$/g, "") || "candidate";
+    const slug =
+      readName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ".")
+        .replace(/^\.|\.$/g, "") || "candidate";
     const identity = input.identityKey || p?.linkedin_url || `${input.orgId ?? "org"}:${readName}`;
-    const stableId = createHash("sha256").update(identity.trim().toLowerCase()).digest("hex").slice(0, 12);
+    const stableId = createHash("sha256")
+      .update(identity.trim().toLowerCase())
+      .digest("hex")
+      .slice(0, 12);
     email = `${slug}.${stableId}@no-email.atsiq.local`;
     emailMissing = true;
   }
-
 
   const row = {
     full_name: readName,
@@ -193,12 +204,14 @@ export async function ingestCandidate(input: {
 
   let resumeStored = false;
   if (input.resumeFile?.bytes?.length) {
-    resumeStored = Boolean(await storeResumeFile({
-      orgId: input.orgId,
-      candidateId,
-      filename: input.resumeFile.filename,
-      bytes: input.resumeFile.bytes,
-    }));
+    resumeStored = Boolean(
+      await storeResumeFile({
+        orgId: input.orgId,
+        candidateId,
+        filename: input.resumeFile.filename,
+        bytes: input.resumeFile.bytes,
+      }),
+    );
   }
 
   return {
@@ -214,5 +227,4 @@ export async function ingestCandidate(input: {
     githubUrl: row.github_url,
     websiteUrl: row.website_url,
   };
-
 }

@@ -131,7 +131,10 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
     } catch (e) {
       return log({
         status: "error",
-        detail: e instanceof Error ? `The downloaded CV could not be read: ${e.message}` : "That file could not be read.",
+        detail:
+          e instanceof Error
+            ? `The downloaded CV could not be read: ${e.message}`
+            : "That file could not be read.",
       });
     }
   }
@@ -139,14 +142,14 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
   if (input.kind === "cv" && !fileBytes) {
     return log({
       status: "error",
-      detail: "The original CV was not downloaded, so this applicant was not filed. Open the applicant and retry.",
+      detail:
+        "The original CV was not downloaded, so this applicant was not filed. Open the applicant and retry.",
     });
   }
 
   if (text.length < 80) {
     return log({ status: "skipped", detail: "There was not enough readable text on that page." });
   }
-
 
   if (input.kind === "cv") {
     try {
@@ -207,7 +210,6 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
         requisitionId: input.requisitionId ?? null,
         title: ingested.name,
       });
-
     } catch (e) {
       return log({
         status: "error",
