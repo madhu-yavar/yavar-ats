@@ -12,6 +12,7 @@ import {
   Merge,
   RefreshCw,
   ShieldCheck,
+  Trash2,
   Sparkles,
   Upload,
 } from "lucide-react";
@@ -31,6 +32,7 @@ import {
 import { parseResume } from "@/lib/matching.functions";
 import { verifyCandidates } from "@/lib/verification.functions";
 import { getResumeDownloadUrl } from "@/lib/resume.functions";
+import { deleteCandidates } from "@/lib/candidates.functions";
 import { intakeCvs, type IntakeStatus } from "@/lib/cv-intake";
 import { normalizeExternalUrl } from "@/lib/external-links";
 import { canonical, nextAction, stalledDays, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
@@ -181,6 +183,7 @@ function Candidates() {
   const parse = useServerFn(parseResume);
   const reverify = useServerFn(verifyCandidates);
   const getResumeUrl = useServerFn(getResumeDownloadUrl);
+  const removeCandidates = useServerFn(deleteCandidates);
 
   const [q, setQ] = useState("");
   const [view, setView] = useState<ViewId>("all");
@@ -195,6 +198,8 @@ function Candidates() {
   const [moverStage, setMoverStage] = useState<Stage | undefined>(undefined);
   const [syncing, setSyncing] = useState(false);
   const [merging, setMerging] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -426,6 +431,25 @@ function Candidates() {
       toast.error(e instanceof Error ? e.message : "Merge failed");
     } finally {
       setMerging(false);
+    }
+  }
+
+  /** Permanent removal: the candidate and every application, score and file attached. */
+  async function removeSelected() {
+    if (selectedRows.length === 0) return;
+    setDeleting(true);
+    try {
+      const out = await removeCandidates({
+        data: { candidateIds: selectedRows.slice(0, 100).map((r) => r.candidate.id) },
+      });
+      await qc.invalidateQueries();
+      setSelected(new Set());
+      setDeleteOpen(false);
+      toast.success(`Deleted ${out.deleted} candidate${out.deleted === 1 ? "" : "s"}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -881,6 +905,15 @@ function Candidates() {
             <Button size="sm" variant="outline" onClick={resyncSelected} disabled={syncing}>
               <RefreshCw className={"size-4" + (syncing ? " animate-spin" : "")} /> Re-verify
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={() => setDeleteOpen(true)}
+              title="Permanently delete the selected candidates"
+            >
+              <Trash2 className="size-4" /> Delete ({selectedRows.length})
+            </Button>
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
               Clear
             </Button>
@@ -1280,6 +1313,32 @@ function Candidates() {
           qc.invalidateQueries({ queryKey: ["stage_events"] });
         }}
       />
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {selectedRows.length} candidate(s)?</DialogTitle>
+            <DialogDescription>
+              This permanently removes the candidate records along with their applications,
+              interviews, scores, assessments and stored CVs. It cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="max-h-40 overflow-y-auto text-sm text-muted-foreground">
+            {selectedRows.slice(0, 20).map((r) => (
+              <li key={r.candidate.id}>{r.candidate.full_name}</li>
+            ))}
+            {selectedRows.length > 20 ? <li>+{selectedRows.length - 20} more</li> : null}
+          </ul>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteOpen(false)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={removeSelected} disabled={deleting}>
+              {deleting ? "Deleting…" : "Delete permanently"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <p className="text-xs text-muted-foreground">
         Stage labels come from the pipeline state machine, so only legal transitions are offered and
