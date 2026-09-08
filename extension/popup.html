@@ -6,7 +6,7 @@
     <style>
       :root { color-scheme: light; }
       body {
-        width: 320px;
+        width: 330px;
         margin: 0;
         padding: 16px;
         font: 13px/1.5 "Space Grotesk", system-ui, sans-serif;
@@ -14,6 +14,8 @@
         background: #fff;
       }
       h1 { font-size: 15px; margin: 0 0 12px; letter-spacing: -0.01em; }
+      h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; margin: 18px 0 6px; }
+      hr { border: 0; border-top: 1px solid #eef0f4; margin: 16px 0 0; }
       label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; margin: 12px 0 4px; }
       input, select {
         width: 100%;
@@ -26,7 +28,7 @@
       }
       button {
         width: 100%;
-        margin-top: 14px;
+        margin-top: 10px;
         padding: 10px;
         border: 0;
         border-radius: 999px;
@@ -37,11 +39,18 @@
         cursor: pointer;
       }
       button.ghost { background: #edf0f5; color: #0b0b0f; margin-top: 8px; }
+      button.stop { background: #b42318; }
       button[disabled] { opacity: 0.6; cursor: default; }
-      #status { margin-top: 12px; font-size: 12px; color: #374151; min-height: 18px; }
+      #status, #runNote { margin-top: 12px; font-size: 12px; color: #374151; min-height: 18px; }
       #status.err { color: #b42318; }
       #status.ok { color: #027a48; }
       .hint { font-size: 11px; color: #6b7280; margin-top: 10px; }
+      .row { display: flex; gap: 8px; align-items: center; }
+      .row input[type="checkbox"] { width: auto; }
+      .counts { display: flex; gap: 10px; font-size: 12px; margin-top: 8px; flex-wrap: wrap; }
+      .counts b { font-weight: 600; }
+      .bar { height: 6px; border-radius: 999px; background: #edf0f5; margin-top: 10px; overflow: hidden; }
+      .bar span { display: block; height: 100%; background: #584dff; width: 0; }
     </style>
   </head>
   <body>
@@ -61,11 +70,42 @@
 
     <button id="send">Capture this page</button>
     <button id="save" class="ghost">Save settings</button>
-
     <div id="status"></div>
+
+    <hr />
+
+    <h2>Guided applicant sweep</h2>
+    <p class="hint" style="margin-top: 0">
+      Open your Recruiter applicant list for one job, then press Start. Each applicant is opened in turn in
+      your own browser, filed in ATSIQ and scored. Up to 25 per run.
+    </p>
+
+    <label for="pace">Pace</label>
+    <select id="pace">
+      <option value="safe">Slow and safe (recommended)</option>
+      <option value="balanced">Balanced</option>
+    </select>
+
+    <div class="row" style="margin-top: 10px">
+      <input id="jd" type="checkbox" checked />
+      <label for="jd" style="margin: 0; text-transform: none; letter-spacing: 0; font-size: 12px; color: #374151">
+        Also create the role from this job
+      </label>
+    </div>
+
+    <div class="bar"><span id="bar"></span></div>
+    <div class="counts">
+      <span><b id="cProg">0/0</b> applicants</span>
+      <span><b id="cFiled">0</b> filed</span>
+      <span><b id="cSkip">0</b> skipped</span>
+    </div>
+    <div id="runNote"></div>
+
+    <button id="start">Start sweep</button>
+    <button id="stop" class="ghost stop" style="display: none">Stop</button>
+
     <p class="hint">
-      Reads only the page you are on, in your own browser, when you press the button.
-      Nothing runs in the background.
+      Everything happens in your own signed-in browser, at human pace. No password ever reaches ATSIQ.
     </p>
 
     <script src="popup.js"></script>
