@@ -35,7 +35,10 @@ export type IngestResult = {
   email: string;
   alreadyApplied: boolean;
   merged: boolean;
+  /** True when no email could be read and a placeholder was used. */
+  emailMissing?: boolean;
 };
+
 
 /** Upsert the candidate and attach them to the requisition. Admin client only. */
 export async function ingestCandidate(input: {
@@ -52,13 +55,25 @@ export async function ingestCandidate(input: {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const p = input.parsed ?? (await parseCv(input.resumeText));
 
-  const email = (input.email ?? p?.email ?? "").trim().toLowerCase();
-  if (!email) throw new Error("No email address could be read from this CV.");
+  const readName =
+    (input.fullName ?? p?.full_name ?? "").trim() || input.fileName.replace(/\.[^.]+$/, "");
+
+  // Some sources (a captured profile page, a CV with only a phone number) carry
+  // no email. Rather than losing the person, file them under a placeholder
+  // address the recruiter can correct later.
+  let email = (input.email ?? p?.email ?? "").trim().toLowerCase();
+  let emailMissing = false;
+  if (!email) {
+    const slug = readName.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.|\.$/g, "") || "candidate";
+    email = `${slug}.${Date.now().toString(36)}@no-email.atsiq.local`;
+    emailMissing = true;
+  }
+
 
   const row = {
-    full_name:
-      (input.fullName ?? p?.full_name ?? "").trim() || input.fileName.replace(/\.[^.]+$/, ""),
+    full_name: readName,
     email,
+
     phone: (input.phone ?? p?.phone) || null,
     location: p?.location || null,
     experience_years: Number(p?.experience_years ?? 0) || 0,
@@ -120,5 +135,13 @@ export async function ingestCandidate(input: {
     }
   }
 
-  return { candidateId, name: row.full_name, email, alreadyApplied, merged: Boolean(existing) };
+  return {
+    candidateId,
+    name: row.full_name,
+    email,
+    alreadyApplied,
+    merged: Boolean(existing),
+    emailMissing,
+  };
+
 }

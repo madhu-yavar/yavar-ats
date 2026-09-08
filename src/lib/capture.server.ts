@@ -113,25 +113,33 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
     return result;
   };
 
-  let text = (input.text ?? "").trim();
+  const pageText = (input.text ?? "").trim();
+  let text = pageText;
   let fileName = input.file?.filename ?? "captured.txt";
 
   if (input.file?.content) {
     try {
       const { attachmentText } = await import("./inbox.server");
-      text = (await attachmentText(input.file.filename, base64ToBytes(input.file.content))).trim();
+      const fromFile = (await attachmentText(input.file.filename, base64ToBytes(input.file.content))).trim();
+      // The attached CV is the better source; the page text stays as a fallback
+      // and as extra context when the file yields little.
+      text = fromFile.length >= 200 ? fromFile : [fromFile, pageText].filter(Boolean).join("\n\n");
       fileName = input.file.filename;
     } catch (e) {
-      return log({
-        status: "error",
-        detail: e instanceof Error ? e.message : "That file could not be read.",
-      });
+      if (pageText.length < 80) {
+        return log({
+          status: "error",
+          detail: e instanceof Error ? e.message : "That file could not be read.",
+        });
+      }
+      text = pageText;
     }
   }
 
   if (text.length < 80) {
     return log({ status: "skipped", detail: "There was not enough readable text on that page." });
   }
+
 
   if (input.kind === "cv") {
     try {
@@ -144,13 +152,14 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
       });
       return log({
         status: ingested.alreadyApplied ? "updated" : "imported",
-        detail: `${ingested.name} (${ingested.email})${
-          input.requisitionId ? " added to the role" : " filed in the talent pool"
-        }.`,
+        detail: `${ingested.name} (${
+          ingested.emailMissing ? "no email on the CV — add it later" : ingested.email
+        })${input.requisitionId ? " added to the role" : " filed in the talent pool"}.`,
         candidateId: ingested.candidateId,
         requisitionId: input.requisitionId ?? null,
         title: ingested.name,
       });
+
     } catch (e) {
       return log({
         status: "error",
