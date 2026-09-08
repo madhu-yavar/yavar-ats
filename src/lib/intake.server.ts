@@ -177,6 +177,15 @@ export async function ingestCandidate(input: {
     }
   }
 
+  if (input.resumeFile?.bytes?.length) {
+    await storeResumeFile({
+      orgId: input.orgId,
+      candidateId,
+      filename: input.resumeFile.filename,
+      bytes: input.resumeFile.bytes,
+    });
+  }
+
   return {
     candidateId,
     name: row.full_name,
