@@ -152,13 +152,14 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
       });
       return log({
         status: ingested.alreadyApplied ? "updated" : "imported",
-        detail: `${ingested.name} (${ingested.email})${
-          input.requisitionId ? " added to the role" : " filed in the talent pool"
-        }.`,
+        detail: `${ingested.name} (${
+          ingested.emailMissing ? "no email on the CV — add it later" : ingested.email
+        })${input.requisitionId ? " added to the role" : " filed in the talent pool"}.`,
         candidateId: ingested.candidateId,
         requisitionId: input.requisitionId ?? null,
         title: ingested.name,
       });
+
     } catch (e) {
       return log({
         status: "error",
