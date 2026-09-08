@@ -115,6 +115,22 @@ export async function intakeCvs(opts: {
       }
 
 
+      // Keep the original file in the private resume vault next to the parsed
+      // profile, so HR can download the real CV again later. Never fatal.
+      try {
+        const { data: cand } = await supabase.from("candidates").select("org_id").eq("id", candidateId).single();
+        if (cand?.org_id) {
+          const safeName = file.name.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "resume.pdf";
+          const path = `${cand.org_id}/${candidateId}/${safeName}`;
+          const { error: upErr } = await supabase.storage.from("resumes").upload(path, file, { upsert: true });
+          if (!upErr) {
+            await supabase.from("candidates").update({ resume_file_path: path } as never).eq("id", candidateId);
+          }
+        }
+      } catch (e) {
+        console.warn(`[cv-intake] could not store ${file.name}:`, e);
+      }
+
       if (requisitionId) {
         const { data: existingApp } = await supabase
           .from("applications")

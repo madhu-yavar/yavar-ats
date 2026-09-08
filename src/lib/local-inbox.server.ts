@@ -200,6 +200,7 @@ export async function receiveMail(mail: InboundMail): Promise<InboundResult> {
       requisitionId,
       orgId: org.id,
       source: "careers_inbox",
+      resumeFile: { filename: cv.filename, bytes },
     });
     await db
       .from("inbox_messages")

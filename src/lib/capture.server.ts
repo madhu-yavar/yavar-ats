@@ -151,6 +151,7 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
         requisitionId: input.requisitionId ?? null,
         orgId: org.id,
         source: "browser_capture",
+        resumeFile: fileBytes ? { filename: fileName, bytes: fileBytes } : null,
       });
       return log({
         status: ingested.alreadyApplied ? "updated" : "imported",
