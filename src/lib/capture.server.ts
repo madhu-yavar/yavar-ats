@@ -116,11 +116,13 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
   const pageText = (input.text ?? "").trim();
   let text = pageText;
   let fileName = input.file?.filename ?? "captured.txt";
+  let fileBytes: Uint8Array | null = null;
 
   if (input.file?.content) {
     try {
       const { attachmentText } = await import("./inbox.server");
-      const fromFile = (await attachmentText(input.file.filename, base64ToBytes(input.file.content))).trim();
+      fileBytes = base64ToBytes(input.file.content);
+      const fromFile = (await attachmentText(input.file.filename, fileBytes)).trim();
       // The attached CV is the better source; the page text stays as a fallback
       // and as extra context when the file yields little.
       text = fromFile.length >= 200 ? fromFile : [fromFile, pageText].filter(Boolean).join("\n\n");
@@ -149,6 +151,7 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
         requisitionId: input.requisitionId ?? null,
         orgId: org.id,
         source: "browser_capture",
+        resumeFile: fileBytes ? { filename: fileName, bytes: fileBytes } : null,
       });
       return log({
         status: ingested.alreadyApplied ? "updated" : "imported",

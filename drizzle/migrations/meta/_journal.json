@@ -190,6 +190,13 @@
       "when": 1788785057989,
       "tag": "0026_org_careers_email",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1788848139120,
+      "tag": "0027_resume_file_vault",
+      "breakpoints": true
     }
   ]
 }

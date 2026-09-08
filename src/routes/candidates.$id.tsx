@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, ExternalLink, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowLeft, Download, ExternalLink, ShieldCheck, Sparkles } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -23,6 +23,7 @@ import {
 import { runAiScreening } from "@/lib/matching.functions";
 import { verifyCandidate } from "@/lib/verification.functions";
 import { createAssessment } from "@/lib/assessment.functions";
+import { getResumeDownloadUrl } from "@/lib/resume.functions";
 import { normalizeExternalUrl } from "@/lib/external-links";
 import { nextAction, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
 import { StageMover } from "@/components/StageMover";
@@ -70,6 +71,8 @@ function CandidateDetail() {
   const screen = useServerFn(runAiScreening);
   const verify = useServerFn(verifyCandidate);
   const makeAssessment = useServerFn(createAssessment);
+  const getResumeUrl = useServerFn(getResumeDownloadUrl);
+  const [downloading, setDownloading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [assessing, setAssessing] = useState(false);
@@ -183,6 +186,29 @@ function CandidateDetail() {
         title={c.full_name}
         description={[c.email, c.location, educationLabel(c.education)].filter(Boolean).join(" · ")}
       />
+
+      {c.resume_file_path ? (
+        <div className="-mt-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={downloading}
+            onClick={async () => {
+              setDownloading(true);
+              try {
+                const out = await getResumeUrl({ data: { candidateId: c.id } });
+                if (out.ok) window.open(out.url, "_blank", "noopener");
+                else toast.error(out.error);
+              } finally {
+                setDownloading(false);
+              }
+            }}
+          >
+            <Download className="mr-1.5 size-3.5" />
+            {downloading ? "Opening…" : "Download original CV"}
+          </Button>
+        </div>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">

@@ -40,6 +40,46 @@ export type IngestResult = {
 };
 
 
+/**
+ * Keep the original CV file in the private `resumes` bucket, one folder per
+ * organisation (<org>/<candidate>/<file>), and point the candidate row at it.
+ * Never throws — a failed store must not lose the candidate.
+ */
+export async function storeResumeFile(input: {
+  orgId: string | null;
+  candidateId: string;
+  filename: string;
+  bytes: Uint8Array;
+}): Promise<string | null> {
+  if (!input.orgId || input.bytes.length === 0) return null;
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const safeName = input.filename.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "resume.pdf";
+    const path = `${input.orgId}/${input.candidateId}/${safeName}`;
+    const { error } = await supabaseAdmin.storage
+      .from("resumes")
+      .upload(path, input.bytes, {
+        upsert: true,
+        contentType: /\.pdf$/i.test(safeName)
+          ? "application/pdf"
+          : /\.docx$/i.test(safeName)
+            ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            : /\.doc$/i.test(safeName)
+              ? "application/msword"
+              : "text/plain",
+      });
+    if (error) throw new Error(error.message);
+    await supabaseAdmin
+      .from("candidates")
+      .update({ resume_file_path: path } as never)
+      .eq("id", input.candidateId);
+    return path;
+  } catch (e) {
+    console.error("[resumes] could not store CV file:", e);
+    return null;
+  }
+}
+
 /** Upsert the candidate and attach them to the requisition. Admin client only. */
 export async function ingestCandidate(input: {
   resumeText: string;
@@ -51,6 +91,8 @@ export async function ingestCandidate(input: {
   fullName?: string | null;
   phone?: string | null;
   parsed?: ParsedCv | null;
+  /** Original CV file, kept in the private resume vault when provided. */
+  resumeFile?: { filename: string; bytes: Uint8Array } | null;
 }): Promise<IngestResult> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const p = input.parsed ?? (await parseCv(input.resumeText));
@@ -133,6 +175,15 @@ export async function ingestCandidate(input: {
       } as never);
       if (error) throw new Error(error.message);
     }
+  }
+
+  if (input.resumeFile?.bytes?.length) {
+    await storeResumeFile({
+      orgId: input.orgId,
+      candidateId,
+      filename: input.resumeFile.filename,
+      bytes: input.resumeFile.bytes,
+    });
   }
 
   return {
