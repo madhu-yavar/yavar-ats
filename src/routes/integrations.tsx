@@ -837,11 +837,14 @@ function CapturePanel() {
       </div>
 
       <p className="mt-2 text-sm text-muted-foreground">
-        Stay signed in to LinkedIn or any job board as you normally do. When you are looking at a CV or a
-        job description, press the companion once: the page comes across, the CV is read and filed in your
-        talent pool, and a job description arrives as a draft role for review. Nothing runs unattended, and
-        your sign-in never leaves your machine.
+        Stay signed in to LinkedIn Recruiter or any job board as you normally do. Looking at a single CV or
+        job description, press the companion once and it comes across. On a Recruiter applicant list, press
+        <span className="font-medium text-foreground"> Start sweep</span> instead: the job becomes a role
+        here, then each applicant is opened in turn in your own browser, read, de-duplicated, matched and
+        scored — up to 25 per run, at a deliberately slow human pace, with a live count and a Stop button.
+        Your sign-in never leaves your machine and nothing runs unattended.
       </p>
+
 
       <div className="mt-3 grid gap-2 text-xs">
         <div className="flex flex-wrap items-center gap-2">
@@ -872,11 +875,16 @@ function CapturePanel() {
       </div>
 
       <ol className="mt-3 list-decimal space-y-1 pl-5 text-xs text-muted-foreground">
-        <li>Download and unzip the companion.</li>
+        <li>Download and unzip the companion (re-download it if you installed an older copy).</li>
         <li>Open chrome://extensions and turn on Developer mode.</li>
         <li>Choose “Load unpacked” and pick the unzipped folder.</li>
         <li>Open it once, paste your ATSIQ address and the key above, and save.</li>
+        <li>
+          In LinkedIn Recruiter open a job, choose the applicants view, then press Start sweep in the
+          companion.
+        </li>
       </ol>
+
 
       {data?.events.length ? (
         <div className="mt-3 rounded-md border bg-background p-3">
