@@ -1,9 +1,15 @@
 {
   "manifest_version": 3,
   "name": "ATSIQ Capture",
-  "version": "1.0.0",
-  "description": "Send the job description or CV you are looking at straight into ATSIQ.",
-  "permissions": ["activeTab", "storage", "scripting"],
-  "host_permissions": ["http://localhost:8080/*", "https://atsiq.yavar.ai/*", "https://yavar-ats.lovable.app/*"],
+  "version": "1.1.0",
+  "description": "Capture the job description or CV you are looking at, or run a guided sweep of a LinkedIn Recruiter applicant list, straight into ATSIQ.",
+  "permissions": ["activeTab", "tabs", "storage", "scripting"],
+  "host_permissions": [
+    "http://localhost:8080/*",
+    "https://atsiq.yavar.ai/*",
+    "https://yavar-ats.lovable.app/*",
+    "https://*.linkedin.com/*"
+  ],
+  "background": { "service_worker": "background.js" },
   "action": { "default_popup": "popup.html", "default_title": "ATSIQ Capture" }
 }
