@@ -35,7 +35,10 @@ export type IngestResult = {
   email: string;
   alreadyApplied: boolean;
   merged: boolean;
+  /** True when no email could be read and a placeholder was used. */
+  emailMissing?: boolean;
 };
+
 
 /** Upsert the candidate and attach them to the requisition. Admin client only. */
 export async function ingestCandidate(input: {
@@ -68,9 +71,9 @@ export async function ingestCandidate(input: {
 
 
   const row = {
-    full_name:
-      (input.fullName ?? p?.full_name ?? "").trim() || input.fileName.replace(/\.[^.]+$/, ""),
+    full_name: readName,
     email,
+
     phone: (input.phone ?? p?.phone) || null,
     location: p?.location || null,
     experience_years: Number(p?.experience_years ?? 0) || 0,
@@ -132,5 +135,13 @@ export async function ingestCandidate(input: {
     }
   }
 
-  return { candidateId, name: row.full_name, email, alreadyApplied, merged: Boolean(existing) };
+  return {
+    candidateId,
+    name: row.full_name,
+    email,
+    alreadyApplied,
+    merged: Boolean(existing),
+    emailMissing,
+  };
+
 }
