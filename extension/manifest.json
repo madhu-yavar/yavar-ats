@@ -8,7 +8,8 @@
     "http://localhost:8080/*",
     "https://atsiq.yavar.ai/*",
     "https://yavar-ats.lovable.app/*",
-    "https://*.linkedin.com/*"
+    "https://*.linkedin.com/*",
+    "https://*.licdn.com/*"
   ],
   "background": { "service_worker": "background.js" },
   "action": { "default_popup": "popup.html", "default_title": "ATSIQ Capture" }
