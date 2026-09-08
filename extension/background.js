@@ -232,7 +232,6 @@ async function downloadResumeFromButton(tabId) {
       resolve(null);
     }, 12000);
     const listener = (item) => {
-      if (item.tabId !== tabId) return;
       chrome.downloads.onCreated.removeListener(listener);
       clearTimeout(timer);
       resolve(item);

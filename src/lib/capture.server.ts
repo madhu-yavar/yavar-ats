@@ -129,14 +129,18 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
       text = fromFile.length >= 200 ? fromFile : [fromFile, pageText].filter(Boolean).join("\n\n");
       fileName = input.file.filename;
     } catch (e) {
-      if (pageText.length < 80) {
-        return log({
-          status: "error",
-          detail: e instanceof Error ? e.message : "That file could not be read.",
-        });
-      }
-      text = pageText;
+      return log({
+        status: "error",
+        detail: e instanceof Error ? `The downloaded CV could not be read: ${e.message}` : "That file could not be read.",
+      });
     }
+  }
+
+  if (input.kind === "cv" && !fileBytes) {
+    return log({
+      status: "error",
+      detail: "The original CV was not downloaded, so this applicant was not filed. Open the applicant and retry.",
+    });
   }
 
   if (text.length < 80) {

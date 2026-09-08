@@ -1088,7 +1088,7 @@ function Candidates() {
                           variant="outline"
                           onClick={() => {
                             setMoverStage(r.stage ?? undefined);
-                            setMoverIds([r.primary!.id]);
+                            if (r.primary) setMoverIds([r.primary.id]);
                           }}
                         >
                           Move
