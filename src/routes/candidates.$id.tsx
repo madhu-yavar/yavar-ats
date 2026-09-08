@@ -71,6 +71,8 @@ function CandidateDetail() {
   const screen = useServerFn(runAiScreening);
   const verify = useServerFn(verifyCandidate);
   const makeAssessment = useServerFn(createAssessment);
+  const getResumeUrl = useServerFn(getResumeDownloadUrl);
+  const [downloading, setDownloading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [assessing, setAssessing] = useState(false);
@@ -184,6 +186,29 @@ function CandidateDetail() {
         title={c.full_name}
         description={[c.email, c.location, educationLabel(c.education)].filter(Boolean).join(" · ")}
       />
+
+      {c.resume_file_path ? (
+        <div className="-mt-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={downloading}
+            onClick={async () => {
+              setDownloading(true);
+              try {
+                const out = await getResumeUrl({ data: { candidateId: c.id } });
+                if (out.ok) window.open(out.url, "_blank", "noopener");
+                else toast.error(out.error);
+              } finally {
+                setDownloading(false);
+              }
+            }}
+          >
+            <Download className="mr-1.5 size-3.5" />
+            {downloading ? "Opening…" : "Download original CV"}
+          </Button>
+        </div>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
