@@ -24,11 +24,53 @@ $("save").addEventListener("click", () => {
   );
 });
 
-function readPage() {
-  const pick = (sel) => document.querySelector(sel);
-  const main = pick("main") || pick("article") || pick("[role=main]") || document.body;
+async function grabPage() {
+  const main = document.querySelector("main") || document.body;
   const text = (main.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
-  return { text, title: document.title || null, url: location.href };
+
+  const urls = [];
+  const add = (u) => {
+    if (u && !urls.includes(u)) urls.push(u);
+  };
+  for (const a of document.querySelectorAll("a[href], a[download]")) {
+    const href = a.href || "";
+    const label = (a.innerText || a.getAttribute("aria-label") || "").toLowerCase();
+    if (!href) continue;
+    if (/\.(pdf|docx?|txt|rtf)(\?|$)/i.test(href)) add(href);
+    else if (/download|resume|cv/.test(label) && /linkedin|licdn|ambry|dms/i.test(href)) add(href);
+    else if (/ambry|dms-|media-proxy|attachment|resume/i.test(href) && /licdn|linkedin/i.test(href)) add(href);
+  }
+  for (const el of document.querySelectorAll("iframe[src], embed[src], object[data]")) {
+    add(el.getAttribute("src") || el.getAttribute("data") || "");
+  }
+
+  let resume = null;
+  for (const raw of urls.slice(0, 8)) {
+    try {
+      const u = new URL(raw, location.href).href;
+      const res = await fetch(u, { credentials: "include" });
+      if (!res.ok) continue;
+      const ct = (res.headers.get("content-type") || "").toLowerCase();
+      if (!/pdf|msword|officedocument|octet-stream|text\/plain/.test(ct)) continue;
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      if (bytes.length < 800 || bytes.length > 6000000) continue;
+      let bin = "";
+      const chunk = 8192;
+      for (let i = 0; i < bytes.length; i += chunk) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+      const stem = decodeURIComponent(u.split("?")[0].split("/").pop() || "resume");
+      const ext = /\.(pdf|docx?|txt|rtf)$/i.test(stem)
+        ? ""
+        : ct.includes("word") || ct.includes("officedocument")
+          ? ".docx"
+          : ".pdf";
+      resume = { filename: `${stem}${ext}`, content: btoa(bin) };
+      break;
+    } catch {
+      /* try the next link */
+    }
+  }
+
+  return { text, title: document.title || null, url: location.href, resume };
 }
 
 function settings() {
@@ -50,13 +92,22 @@ $("send").addEventListener("click", async () => {
 
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: readPage });
-    if (!result || result.text.length < 80) throw new Error("There was not enough readable text on this page.");
+    const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: grabPage });
+    if (!result || (!result.resume && result.text.length < 80))
+      throw new Error("There was not enough readable text on this page.");
+    if (result.resume) status("Found the attached CV — sending it across…");
 
     const res = await fetch(`${site}/api/public/capture`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token, kind, text: result.text, title: result.title, sourceUrl: result.url }),
+      body: JSON.stringify({
+        token,
+        kind,
+        text: result.text || null,
+        title: result.title,
+        sourceUrl: result.url,
+        ...(kind === "cv" && result.resume ? { file: result.resume } : {}),
+      }),
     });
     const body = await res.json().catch(() => null);
     if (!res.ok) throw new Error((body && body.detail) || `Capture failed (${res.status}).`);
@@ -67,6 +118,7 @@ $("send").addEventListener("click", async () => {
     $("send").disabled = false;
   }
 });
+
 
 /* ---------------------------------------------------------------- the sweep */
 
