@@ -367,6 +367,7 @@ export type Database = {
           phone: string | null
           preferred_locations: string[]
           referral_source: string | null
+          resume_file_path: string | null
           resume_text: string | null
           skills: string[]
           source: string
@@ -404,6 +405,7 @@ export type Database = {
           phone?: string | null
           preferred_locations?: string[]
           referral_source?: string | null
+          resume_file_path?: string | null
           resume_text?: string | null
           skills?: string[]
           source?: string
@@ -441,6 +443,7 @@ export type Database = {
           phone?: string | null
           preferred_locations?: string[]
           referral_source?: string | null
+          resume_file_path?: string | null
           resume_text?: string | null
           skills?: string[]
           source?: string
