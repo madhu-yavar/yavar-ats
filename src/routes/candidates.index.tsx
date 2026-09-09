@@ -1005,10 +1005,21 @@ function Candidates() {
                         >
                           {c.full_name}
                         </Link>
-                        <div className="text-xs text-muted-foreground">
-                          {c.source}
-                          {c.is_internal ? " · internal" : ""} · added{" "}
-                          {new Date(c.created_at).toLocaleDateString()}
+                        {c.is_internal ? (
+                          <div className="text-xs text-muted-foreground">internal employee</div>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="w-[180px]">
+                        <div className="text-sm">{sourceLabel(c.source)}</div>
+                        <div
+                          className="text-xs text-muted-foreground"
+                          title={new Date(c.created_at).toLocaleString()}
+                        >
+                          {new Date(c.created_at).toLocaleDateString()}{" "}
+                          {new Date(c.created_at).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </div>
                         <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px]">
                           <span
