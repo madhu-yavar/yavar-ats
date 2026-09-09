@@ -946,7 +946,7 @@ function Candidates() {
         <EmptyState title="No candidates match" hint="Change the view or clear the filters." />
       ) : (
         <div className="panel overflow-x-auto">
-          <Table className="min-w-[1720px] table-fixed">
+          <Table className="min-w-[1900px] table-fixed">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10">
@@ -957,6 +957,7 @@ function Candidates() {
                   />
                 </TableHead>
                 <TableHead className="w-[240px]">Candidate</TableHead>
+                <TableHead className="w-[180px]">Source &amp; added</TableHead>
                 <TableHead className="w-[200px]">Contact</TableHead>
                 <TableHead className="w-[190px]">Current role &amp; tenure</TableHead>
                 <TableHead className="w-[110px]">Experience</TableHead>
