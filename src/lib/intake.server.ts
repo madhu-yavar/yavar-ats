@@ -270,7 +270,7 @@ export async function ingestCandidate(input: {
     emailMissing,
     resumeStored,
     skills: row.skills,
-    linkedinUrl: row.linkedin_url,
+    linkedinUrl: row.linkedin_url ?? null,
     githubUrl: row.github_url,
     websiteUrl: row.website_url,
   };
