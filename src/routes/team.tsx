@@ -101,7 +101,9 @@ function roleLabel(role: AppRole) {
 
 function Team() {
   const qc = useQueryClient();
-  const { org, isOwner, isLoading } = useOrg();
+  const { org, isOwner, roles: myRoles, isLoading } = useOrg();
+  // The owner and any President/CBO admin can invite people and change roles.
+  const canAdmin = isOwner || myRoles.includes("president_cbo");
   const fetchMembers = useServerFn(listMembers);
   const invite = useServerFn(inviteMember);
   const grant = useServerFn(setMemberRole);
@@ -242,7 +244,7 @@ function Team() {
             <Button variant="outline" onClick={exportCsv} disabled={!filtered.length}>
               <Download className="size-4" /> Export CSV
             </Button>
-            {isOwner ? (
+            {canAdmin ? (
               <Button onClick={() => setShowInvite((v) => !v)}>
                 <Plus className="size-4" /> Invite user
               </Button>
@@ -259,7 +261,7 @@ function Team() {
         <StatCard label="No role" value={kpis.unassigned} hint="Cannot approve anything yet" />
       </div>
 
-      {isOwner && showInvite ? (
+      {canAdmin && showInvite ? (
         <section className="panel space-y-3 p-5">
           <h2 className="flex items-center gap-2 text-sm font-semibold">
             <Mail className="size-4 text-muted-foreground" /> Invite a colleague
@@ -467,7 +469,8 @@ function Team() {
                       <td className="p-3">
                         <Popover>
                           <PopoverTrigger asChild>
-                            <Button variant="outline" size="sm" disabled={!isOwner}>
+                            <Button variant="outline" size="sm" disabled={!canAdmin} title={canAdmin ? "Click to grant or revoke roles" : "Only the owner or a President/CBO admin can change roles"}>
+                              <Pencil className="size-3.5 opacity-60" />
                               {rs.length ? rs.map((r) => ROLE_LABELS.find((x) => x.role === r)?.short ?? r).join(" · ") : "No role"}
                             </Button>
                           </PopoverTrigger>
@@ -486,7 +489,7 @@ function Team() {
                                   <Button
                                     size="sm"
                                     variant={has ? "secondary" : "outline"}
-                                    disabled={!isOwner || busy === `${m.id}:${r}`}
+                                    disabled={!canAdmin || busy === `${m.id}:${r}`}
                                     onClick={() =>
                                       run(
                                         `${m.id}:${r}`,
@@ -519,7 +522,7 @@ function Team() {
                         </Button>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" disabled={!isOwner || m.isOwner}>
+                            <Button variant="ghost" size="sm" disabled={!canAdmin || m.isOwner}>
                               <MoreHorizontal className="size-4" />
                             </Button>
                           </DropdownMenuTrigger>
