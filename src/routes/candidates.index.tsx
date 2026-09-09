@@ -520,7 +520,7 @@ function Candidates() {
       }
       return true;
     });
-  }, [rows, q, sourceFilter, reqFilter, minScore, expBand, view, verifMap, dupMap]);
+  }, [rows, q, sourceFilter, reqFilter, minScore, expBand, view, verifMap, dupMap, fSource, fEmployer, fExp, fStage]);
 
   const selectedRows = filtered.filter((r) => selected.has(r.candidate.id));
   const selectedAppIds = selectedRows.flatMap((r) => (r.primary ? [r.primary.id] : []));
@@ -1085,13 +1085,33 @@ function Candidates() {
                   />
                 </TableHead>
                 <TableHead className="w-[240px]">Candidate</TableHead>
-                <TableHead className="w-[180px]">Source &amp; added</TableHead>
+                <TableHead className="w-[180px]">
+                  <span className="inline-flex items-center gap-1">
+                    Source &amp; added
+                    <ColumnFilter title="Source" options={colOptions.sources} selected={fSource} onChange={setFSource} />
+                  </span>
+                </TableHead>
                 <TableHead className="w-[200px]">Contact</TableHead>
-                <TableHead className="w-[190px]">Current role &amp; tenure</TableHead>
-                <TableHead className="w-[110px]">Experience</TableHead>
+                <TableHead className="w-[190px]">
+                  <span className="inline-flex items-center gap-1">
+                    Current role &amp; tenure
+                    <ColumnFilter title="Employer" options={colOptions.employers} selected={fEmployer} onChange={setFEmployer} />
+                  </span>
+                </TableHead>
+                <TableHead className="w-[110px]">
+                  <span className="inline-flex items-center gap-1">
+                    Experience
+                    <ColumnFilter title="Experience" options={colOptions.exps} selected={fExp} onChange={setFExp} />
+                  </span>
+                </TableHead>
                 <TableHead className="w-[200px]">Skills &amp; education</TableHead>
                 <TableHead className="w-[170px]">Comp &amp; availability</TableHead>
-                <TableHead className="w-[190px]">Stage &amp; next action</TableHead>
+                <TableHead className="w-[190px]">
+                  <span className="inline-flex items-center gap-1">
+                    Stage &amp; next action
+                    <ColumnFilter title="Stage" options={colOptions.stages} selected={fStage} onChange={setFStage} />
+                  </span>
+                </TableHead>
                 <TableHead className="w-[120px]">Parsing</TableHead>
                 <TableHead className="w-[90px] whitespace-nowrap text-right">Match</TableHead>
                 <TableHead className="w-[120px] whitespace-nowrap text-right">
