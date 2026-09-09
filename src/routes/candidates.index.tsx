@@ -175,6 +175,100 @@ function sourceLabel(source: string | null | undefined) {
   return SOURCE_LABELS[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase());
 }
 
+/** Experience bucket used for the Excel-style column filter. */
+function expBucket(years: number) {
+  if (years <= 2) return "0–2 yrs";
+  if (years <= 5) return "3–5 yrs";
+  if (years <= 10) return "6–10 yrs";
+  return "10+ yrs";
+}
+
+/**
+ * Excel-style column filter: a funnel icon on the header opens a checklist of
+ * every distinct value in that column. Ticking values narrows the table;
+ * an active filter tints the icon so it is visible at a glance.
+ */
+function ColumnFilter({
+  title,
+  options,
+  selected,
+  onChange,
+}: {
+  title: string;
+  options: string[];
+  selected: Set<string>;
+  onChange: (next: Set<string>) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const active = selected.size > 0;
+  const shown = options.filter((o) => o.toLowerCase().includes(search.toLowerCase().trim()));
+
+  const toggle = (value: string) => {
+    const next = new Set(selected);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    onChange(next);
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          title={active ? `Filtered by ${title} — click to change` : `Filter by ${title}`}
+          className={`inline-flex size-5 items-center justify-center rounded transition-colors ${
+            active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          }`}
+        >
+          <Filter className="size-3" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-60 p-2">
+        <div className="mb-1 flex items-center justify-between px-1">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Filter: {title}
+          </p>
+          {active && (
+            <button
+              type="button"
+              className="text-[11px] font-medium text-primary hover:underline"
+              onClick={() => onChange(new Set())}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        {options.length > 8 && (
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search values…"
+            className="mb-1 h-7 text-xs"
+          />
+        )}
+        <div className="max-h-56 overflow-y-auto">
+          {shown.length === 0 && (
+            <p className="px-1 py-2 text-xs text-muted-foreground">No values match.</p>
+          )}
+          {shown.map((value) => (
+            <label
+              key={value}
+              className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-xs hover:bg-muted"
+            >
+              <Checkbox
+                checked={selected.has(value)}
+                onCheckedChange={() => toggle(value)}
+                className="size-3.5"
+              />
+              <span className="truncate">{value}</span>
+            </label>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 /** Education arrives either as prose or as raw parsed JSON — always show readable text. */
 function educationLabel(raw: string | null | undefined) {
   const value = (raw ?? "").trim();
