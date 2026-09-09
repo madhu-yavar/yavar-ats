@@ -1135,6 +1135,7 @@ function Candidates() {
                 const isOpen = expanded === c.id;
                 const fresh = freshness(c);
                 const dup = dupMap.get(c.id);
+                const linkedInUrl = normalizeExternalUrl(c.linkedin_url);
                 return (
                   <Fragment key={c.id}>
                     <TableRow className="align-top">
@@ -1192,16 +1193,19 @@ function Candidates() {
                           ) : null}
                         </div>
                         <div className="mt-1 flex items-center gap-2 text-muted-foreground">
-                          {normalizeExternalUrl(c.linkedin_url) ? (
+                          {linkedInUrl ? (
                             <a
-                              href={normalizeExternalUrl(c.linkedin_url)!}
+                              href={linkedInUrl}
                               target="_blank"
                               rel="noreferrer noopener"
                               aria-label="LinkedIn profile"
+                              className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
                             >
-                              <Linkedin className="size-3.5 hover:text-foreground" />
+                              <Linkedin className="size-3.5" /> LinkedIn
                             </a>
-                          ) : null}
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground">No profile link</span>
+                          )}
                           {normalizeExternalUrl(c.github_url) ? (
                             <a
                               href={normalizeExternalUrl(c.github_url)!}

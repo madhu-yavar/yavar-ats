@@ -375,25 +375,11 @@ async function gatherNames(tabId) {
 
 async function sweep({ site, token, pace, tabId, captureJd }) {
   let requisitionId = null;
-  let workTabId = tabId;
-
-  // Work in a dedicated inactive copy so the recruiter can continue using the
-  // original tab without changing the page under an in-flight sweep.
-  try {
-    const sourceTab = await chrome.tabs.get(tabId);
-    if (sourceTab.url) {
-      const workTab = await chrome.tabs.create({ url: sourceTab.url, active: false });
-      if (workTab.id && (await waitForTab(workTab.id))) {
-        workTabId = workTab.id;
-        await setRun({ workTabId });
-        await sleep(2500);
-      } else if (workTab.id) {
-        await chrome.tabs.remove(workTab.id).catch(() => {});
-      }
-    }
-  } catch {
-    workTabId = tabId;
-  }
+  // Use the Recruiter tab the HR user opened. LinkedIn changes its address to
+  // the selected applicant, which makes the sweep visible and gives ATSIQ the
+  // exact Recruiter profile link for every candidate.
+  const workTabId = tabId;
+  await chrome.tabs.update(workTabId, { active: true }).catch(() => {});
 
   if (captureJd) {
     await setRun({ note: "Sending the job description across…" });
@@ -494,7 +480,6 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
   }
 
   const done = await getRun();
-  if (workTabId !== tabId) await chrome.tabs.remove(workTabId).catch(() => {});
   await setRun({
     running: false,
     note: `Finished — ${done?.imported ?? 0} filed, ${done?.skipped ?? 0} without a readable CV, ${

@@ -93,13 +93,23 @@ export async function storeResumeFile(input: {
     );
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`vault upload failed [${response.status}]: ${detail}`);
+      console.error(`[resumes] direct upload failed [${response.status}]: ${detail}`);
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { error: fallbackError } = await supabaseAdmin.storage
+        .from("resumes")
+        .upload(path, input.bytes, { contentType, upsert: true });
+      if (fallbackError) {
+        throw new Error(
+          `vault upload failed [${response.status}]: ${detail}; fallback: ${fallbackError.message}`,
+        );
+      }
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin
+    const { error: updateError } = await supabaseAdmin
       .from("candidates")
       .update({ resume_file_path: path } as never)
       .eq("id", input.candidateId);
+    if (updateError) throw new Error(`CV saved but candidate link failed: ${updateError.message}`);
     return path;
   } catch (e) {
     console.error("[resumes] could not store CV file:", e);
@@ -119,8 +129,12 @@ export async function ingestCandidate(input: {
   phone?: string | null;
   parsed?: ParsedCv | null;
   identityKey?: string | null;
+  /** Signed-in source profile shown by the companion, retained for recruiters. */
+  profileUrl?: string | null;
   /** Original CV file, kept in the private resume vault when provided. */
   resumeFile?: { filename: string; bytes: Uint8Array } | null;
+  /** Companion captures must never leave a text-only candidate behind. */
+  requireResumeStored?: boolean;
 }): Promise<IngestResult> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const p = input.parsed ?? (await parseCv(input.resumeText));
@@ -174,7 +188,9 @@ export async function ingestCandidate(input: {
     experience_years: Number(p?.experience_years ?? 0) || 0,
     education: p?.education || null,
     skills: p?.skills ?? [],
-    linkedin_url: p?.linkedin_url || null,
+    linkedin_url:
+      p?.linkedin_url ||
+      (/linkedin\.com\/(?:talent\/|in\/)/i.test(input.profileUrl ?? "") ? input.profileUrl : null),
     github_url: p?.github_url || null,
     website_url: p?.website_url || null,
     current_employer: p?.current_employer || p?.employment_history?.[0]?.company || null,
@@ -246,6 +262,14 @@ export async function ingestCandidate(input: {
       }),
     );
   }
+  if (input.requireResumeStored && !resumeStored) {
+    if (!existing) {
+      await supabaseAdmin.from("candidates").delete().eq("id", candidateId);
+    }
+    throw new Error(
+      "The original CV reached ATSIQ but could not be saved in the private vault. No new text-only candidate was kept; retry after updating the companion.",
+    );
+  }
 
   return {
     candidateId,
@@ -256,7 +280,7 @@ export async function ingestCandidate(input: {
     emailMissing,
     resumeStored,
     skills: row.skills,
-    linkedinUrl: row.linkedin_url,
+    linkedinUrl: row.linkedin_url ?? null,
     githubUrl: row.github_url,
     websiteUrl: row.website_url,
   };
