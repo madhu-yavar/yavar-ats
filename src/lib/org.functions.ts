@@ -485,7 +485,7 @@ export const inviteMember = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
-    const orgId = await assertOwner(context.userId);
+    const orgId = await assertAdmin(context.userId);
     const db = await admin();
     const { data: org } = await db.from("organizations").select("status").eq("id", orgId).maybeSingle();
     if ((org?.status ?? "active") !== "active")
@@ -550,7 +550,7 @@ export const setMemberRole = createServerFn({ method: "POST" })
     z.object({ memberId: z.string().uuid(), role: z.enum(ROLES), grant: z.boolean() }).parse(data),
   )
   .handler(async ({ data, context }) => {
-    const orgId = await assertOwner(context.userId);
+    const orgId = await assertAdmin(context.userId);
     const db = await admin();
     const { data: member } = await db
       .from("org_members")
@@ -594,7 +594,7 @@ export const setMemberStatus = createServerFn({ method: "POST" })
     z.object({ memberId: z.string().uuid(), status: z.enum(["active", "disabled"]) }).parse(data),
   )
   .handler(async ({ data, context }) => {
-    const orgId = await assertOwner(context.userId);
+    const orgId = await assertAdmin(context.userId);
     const db = await admin();
     const { data: member } = await db
       .from("org_members")
@@ -647,7 +647,7 @@ export const updateMember = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
-    const orgId = await assertOwner(context.userId);
+    const orgId = await assertAdmin(context.userId);
     const db = await admin();
     const { data: member } = await db
       .from("org_members")
