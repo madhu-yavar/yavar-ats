@@ -309,6 +309,11 @@ function Candidates() {
   const [minScore, setMinScore] = useState("0");
   const [expBand, setExpBand] = useState("all");
   const [expanded, setExpanded] = useState<string | null>(null);
+  // Excel-style column filters — empty set means "no filter".
+  const [fSource, setFSource] = useState<Set<string>>(new Set());
+  const [fEmployer, setFEmployer] = useState<Set<string>>(new Set());
+  const [fExp, setFExp] = useState<Set<string>>(new Set());
+  const [fStage, setFStage] = useState<Set<string>>(new Set());
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [moverIds, setMoverIds] = useState<string[] | null>(null);
@@ -447,6 +452,22 @@ function Candidates() {
       };
     });
   }, [cands.data, apps.data, scoreMap]);
+
+  /** Distinct values per filterable column, built from the current pool. */
+  const colOptions = useMemo(() => {
+    const sources = new Set<string>();
+    const employers = new Set<string>();
+    const exps = new Set<string>();
+    const stages = new Set<string>();
+    for (const r of rows) {
+      sources.add(sourceLabel(r.candidate.source));
+      employers.add((r.candidate.current_employer ?? "").trim() || "Unknown");
+      exps.add(expBucket(Number(r.candidate.experience_years) || 0));
+      stages.add(r.stage ? STAGE_LABEL[canonical(r.stage)] : "Not in pipeline");
+    }
+    const sort = (s: Set<string>) => Array.from(s).sort((a, b) => a.localeCompare(b));
+    return { sources: sort(sources), employers: sort(employers), exps: sort(exps), stages: sort(stages) };
+  }, [rows]);
 
   const filtered = useMemo(() => {
     const t = q.toLowerCase().trim();
