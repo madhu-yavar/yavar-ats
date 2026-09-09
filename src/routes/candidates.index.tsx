@@ -157,7 +157,7 @@ const SOURCE_LABELS: Record<string, string> = {
   direct: "Manual upload",
   bulk_upload: "Manual upload",
   browser_capture: "LinkedIn companion",
-  inbox: "Careers inbox",
+  careers_inbox: "Careers inbox",
   linkedin: "LinkedIn",
   naukri: "Naukri",
   indeed: "Indeed",
