@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import {
   BarChart3,
   Briefcase,
@@ -10,11 +11,14 @@ import {
   Inbox,
   LayoutDashboard,
   LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plug,
   ShieldCheck,
   Target,
   Users, BookOpen,
 } from "lucide-react";
+
 
 import { supabase } from "@/integrations/supabase/client";
 import { usePlatform } from "@/hooks/usePlatform";
@@ -46,42 +50,82 @@ const NAV = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { isSuperUser, claimable } = usePlatform();
   const nav = [...NAV, ...(isSuperUser || claimable ? [{ to: "/platform", label: "Platform console", icon: Globe2 } as const] : [])];
+
+  // Collapsed state is remembered per browser so the choice survives reloads.
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    setCollapsed(localStorage.getItem("atsiq.sidebar") === "collapsed");
+  }, []);
+  function toggle() {
+    setCollapsed((v) => {
+      const next = !v;
+      localStorage.setItem("atsiq.sidebar", next ? "collapsed" : "expanded");
+      return next;
+    });
+  }
+
   return (
     <div className="flex min-h-screen">
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col justify-between bg-sidebar p-5 text-sidebar-foreground lg:flex">
+      <aside
+        className={`sticky top-0 hidden h-screen shrink-0 flex-col justify-between bg-sidebar text-sidebar-foreground transition-[width] duration-200 lg:flex ${
+          collapsed ? "w-[68px] p-3" : "w-64 p-5"
+        }`}
+      >
         <div>
-          <div className="mb-8 px-1">
-            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-sidebar-primary">
-              People Excellence
-            </div>
-            <div className="mt-1 text-lg font-semibold">Talent Acquisition</div>
+          <div className={`mb-6 flex items-center gap-2 ${collapsed ? "justify-center" : "justify-between px-1"}`}>
+            {collapsed ? null : (
+              <div className="min-w-0">
+                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-sidebar-primary">
+                  People Excellence
+                </div>
+                <div className="mt-1 text-lg font-semibold">Talent Acquisition</div>
+              </div>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggle}
+              aria-label={collapsed ? "Expand menu" : "Collapse menu"}
+              title={collapsed ? "Expand menu" : "Collapse menu"}
+              className="shrink-0 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            >
+              {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+            </Button>
           </div>
           <nav className="space-y-1">
             {nav.map(({ to, label, icon: Icon }) => (
               <Link
                 key={to}
                 to={to}
+                title={label}
                 activeOptions={{ exact: to === "/" }}
-                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                className={`flex items-center gap-3 rounded-md py-2 text-sm text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
+                  collapsed ? "justify-center px-2" : "px-3"
+                }`}
                 activeProps={{
-                  className:
-                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm bg-sidebar-accent text-sidebar-accent-foreground font-medium",
+                  className: `flex items-center gap-3 rounded-md py-2 text-sm bg-sidebar-accent text-sidebar-accent-foreground font-medium ${
+                    collapsed ? "justify-center px-2" : "px-3"
+                  }`,
                 }}
               >
-                <Icon className="size-4" />
-                {label}
+                <Icon className="size-4 shrink-0" />
+                {collapsed ? null : label}
               </Link>
             ))}
           </nav>
         </div>
         <Button
           variant="ghost"
-          className="justify-start text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          title="Sign out"
+          className={`text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
+            collapsed ? "justify-center px-2" : "justify-start"
+          }`}
           onClick={() => supabase.auth.signOut()}
         >
-          <LogOut className="size-4" /> Sign out
+          <LogOut className="size-4" /> {collapsed ? null : "Sign out"}
         </Button>
       </aside>
+
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2 border-b border-border bg-card px-4 py-2">

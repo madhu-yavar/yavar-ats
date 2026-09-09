@@ -3,7 +3,17 @@ import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, CircleAlert, CircleDashed, Inbox, KeyRound, Loader2, Plug, Sparkles } from "lucide-react";
+import {
+  CheckCircle2,
+  ChevronDown,
+  CircleAlert,
+  CircleDashed,
+  Inbox,
+  KeyRound,
+  Loader2,
+  Plug,
+  Sparkles,
+} from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -21,6 +31,7 @@ import { orgInbox } from "@/lib/local-inbox.functions";
 import { collectApplicants, type CollectSummary } from "@/lib/collect.functions";
 import { captureSetup, rotateCaptureToken } from "@/lib/capture.functions";
 import { PageHeader } from "@/components/ats";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -920,6 +931,8 @@ function IntegrationCard({ row }: { row: Integration }) {
   const [baseUrl, setBaseUrl] = useState(typeof cfg["base_url"] === "string" ? (cfg["base_url"] as string) : "");
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<"save" | "test" | "clear" | null>(null);
+  // Collapsed by default so the page reads as a short, calm list.
+  const [expanded, setExpanded] = useState(false);
 
   const provider = row.provider as
     | "linkedin"
@@ -1002,91 +1015,90 @@ function IntegrationCard({ row }: { row: Integration }) {
   }
 
   return (
-    <article className="panel p-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <Plug className="size-4 text-primary" />
-            <h2 className="font-semibold">{row.label}</h2>
-          </div>
-          <div className="mt-1.5 flex flex-wrap items-center gap-3">
-            <StatusPill status={row.last_test_status} />
-            {row.has_credentials ? (
-              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                <KeyRound className="size-3.5" /> credentials stored
-              </span>
-            ) : null}
-            {row.last_tested_at ? (
-              <span className="num text-xs text-muted-foreground">
-                tested {new Date(row.last_tested_at).toLocaleString()}
-              </span>
-            ) : null}
-          </div>
-        </div>
+    <article className="panel p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <button type="button" onClick={() => setExpanded((v) => !v)} className="flex min-w-0 items-center gap-2 text-left">
+          <ChevronDown className={`size-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "" : "-rotate-90"}`} />
+          <Plug className="size-4 shrink-0 text-primary" />
+          <span className="truncate font-medium">{row.label}</span>
+          <StatusPill status={row.last_test_status} />
+        </button>
         <div className="flex items-center gap-2">
-          <Label className="text-xs text-muted-foreground">Enabled</Label>
+          {row.has_credentials ? (
+            <span title="Credentials stored" className="text-muted-foreground">
+              <KeyRound className="size-3.5" />
+            </span>
+          ) : null}
+          <Label className="text-xs text-muted-foreground">On</Label>
           <Switch checked={enabled} onCheckedChange={setEnabled} />
         </div>
       </div>
 
-      {notes ? <p className="mt-3 text-sm text-muted-foreground">{notes}</p> : null}
-      {row.last_test_message ? (
-        <p className="mt-2 rounded-md bg-surface-2 p-3 text-xs text-muted-foreground">{row.last_test_message}</p>
-      ) : null}
+      {expanded ? (
+        <div className="mt-4 border-t border-border pt-4">
+          {notes ? <p className="text-sm text-muted-foreground">{notes}</p> : null}
+          {row.last_test_message ? (
+            <p className="mt-2 rounded-md bg-surface-2 p-3 text-xs text-muted-foreground">{row.last_test_message}</p>
+          ) : null}
+          {row.last_tested_at ? (
+            <p className="num mt-2 text-xs text-muted-foreground">
+              last tested {new Date(row.last_tested_at).toLocaleString()}
+            </p>
+          ) : null}
 
-      {provider === "linkedin" ? <LinkedinOneClick /> : null}
-      {provider === "linkedin" || provider === "careers" ? <CareersInboxPanel /> : null}
-      {provider === "linkedin" || provider === "careers" ? <CapturePanel /> : null}
+          {provider === "linkedin" ? <LinkedinOneClick /> : null}
+          {provider === "linkedin" || provider === "careers" ? <CareersInboxPanel /> : null}
+          {provider === "linkedin" || provider === "careers" ? <CapturePanel /> : null}
 
+          <SetupHelp provider={provider} label={row.label} />
 
+          {row.credential_fields.length && provider !== "linkedin" ? (
+            <div className="mt-4">
+              <CredentialFields
+                fields={row.credential_fields}
+                hasCredentials={row.has_credentials}
+                secrets={secrets}
+                setSecrets={setSecrets}
+                baseUrl={baseUrl}
+                setBaseUrl={setBaseUrl}
+                showBaseUrl={!isMeeting && provider !== "github" && provider !== "careers"}
+              />
+            </div>
+          ) : null}
 
-      <SetupHelp provider={provider} label={row.label} />
-
-      {row.credential_fields.length && provider !== "linkedin" ? (
-        <div className="mt-4">
-          <CredentialFields
-            fields={row.credential_fields}
-            hasCredentials={row.has_credentials}
-            secrets={secrets}
-            setSecrets={setSecrets}
-            baseUrl={baseUrl}
-            setBaseUrl={setBaseUrl}
-            showBaseUrl={!isMeeting && provider !== "github" && provider !== "careers"}
-          />
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4">
+            {provider !== "linkedin" ? (
+              <>
+                <Button size="sm" onClick={onSave} disabled={busy !== null}>
+                  {busy === "save" ? <Loader2 className="size-4 animate-spin" /> : null} Save
+                </Button>
+                <Button size="sm" variant="outline" onClick={onTest} disabled={busy !== null}>
+                  {busy === "test" ? <Loader2 className="size-4 animate-spin" /> : null} Test connection
+                </Button>
+                {row.has_credentials ? (
+                  <Button size="sm" variant="ghost" onClick={onClear} disabled={busy !== null}>
+                    Remove credentials
+                  </Button>
+                ) : null}
+              </>
+            ) : null}
+            {docs ? (
+              <a
+                href={docs}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="ml-auto text-xs text-primary underline-offset-4 hover:underline"
+              >
+                Provider API docs
+              </a>
+            ) : null}
+          </div>
         </div>
       ) : null}
-
-
-      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4">
-        {provider !== "linkedin" ? (
-          <>
-            <Button size="sm" onClick={onSave} disabled={busy !== null}>
-              {busy === "save" ? <Loader2 className="size-4 animate-spin" /> : null} Save
-            </Button>
-            <Button size="sm" variant="outline" onClick={onTest} disabled={busy !== null}>
-              {busy === "test" ? <Loader2 className="size-4 animate-spin" /> : null} Test connection
-            </Button>
-            {row.has_credentials ? (
-              <Button size="sm" variant="ghost" onClick={onClear} disabled={busy !== null}>
-                Remove credentials
-              </Button>
-            ) : null}
-          </>
-        ) : null}
-        {docs ? (
-          <a
-            href={docs}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="ml-auto text-xs text-primary underline-offset-4 hover:underline"
-          >
-            Provider API docs
-          </a>
-        ) : null}
-      </div>
     </article>
   );
 }
+
 
 const PROVIDER_MODELS: Record<string, { id: string; label: string }[]> = {
   lovable: [
@@ -1264,76 +1276,65 @@ function Integrations() {
       <PageHeader
         eyebrow="Settings"
         title="Integrations"
-        description="Store each job board's API credentials, verify the connection live, and switch it on as a sourcing channel. Credentials are held server-side and are never sent to the browser."
+        description="Connect the places your CVs and interviews come from. Open a row only when you need to change it — everything you type is stored securely on the server."
       />
 
-      <AiModelCard />
+      <Tabs defaultValue="sourcing">
+        <TabsList>
+          <TabsTrigger value="sourcing">Candidate sources</TabsTrigger>
+          <TabsTrigger value="meetings">Interview meetings</TabsTrigger>
+          <TabsTrigger value="ai">AI model</TabsTrigger>
+        </TabsList>
 
-      <section className="panel p-5">
-
-        <h2 className="font-semibold">What each channel can actually do</h2>
-        <ul className="mt-2 space-y-1.5 text-sm text-muted-foreground">
-          <li>
-            <strong className="text-foreground">LinkedIn</strong> — one company account, connected once through
-            LinkedIn's own sign-in screen; designed job posts can then be published straight from a requisition.
-            Reading other people's profiles needs a paid Talent Solutions data agreement, so LinkedIn scoring stays
-            narrative-based on the resume plus recruiter-pasted profile text.
-          </li>
-          <li>
-            <strong className="text-foreground">Naukri</strong> — Resdex resume search and applicant pulls for
-            enterprise recruiter subscriptions (client id, secret, account id, partner base URL).
-          </li>
-          <li>
-            <strong className="text-foreground">Indeed</strong> — job feed plus Indeed Apply for inbound applicants.
-          </li>
-          <li>
-            <strong className="text-foreground">GitHub</strong> — fully public API, already live in social scoring. A
-            token only raises the rate limit.
-          </li>
-        </ul>
-      </section>
-
-      {rows.isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading integrations…</p>
-      ) : (
-        <>
-          <div className="grid gap-4">
-            {(rows.data ?? []).filter((r) => r.category !== "meeting").map((row) => (
-              <IntegrationCard key={row.id} row={row} />
-            ))}
-          </div>
-
-          <section className="panel p-5">
-            <h2 className="font-semibold">Interview meeting links</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Connect your own conferencing account and the scheduler will mint a real join link for every interview
-              round — no copy-pasting. Credentials stay server-side.
-            </p>
-            <ul className="mt-2 space-y-1.5 text-sm text-muted-foreground">
+        <TabsContent value="sourcing" className="space-y-3">
+          {rows.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : (
+            (rows.data ?? [])
+              .filter((r) => r.category !== "meeting")
+              .map((row) => <IntegrationCard key={row.id} row={row} />)
+          )}
+          <details className="panel p-4 text-sm text-muted-foreground">
+            <summary className="cursor-pointer font-medium text-foreground">What each source can do</summary>
+            <ul className="mt-3 space-y-1.5">
               <li>
-                <strong className="text-foreground">Zoom</strong> — create a Server-to-Server OAuth app with the
-                <span className="num"> meeting:write:admin</span> scope and paste the account ID, client ID and secret.
+                <strong className="text-foreground">LinkedIn</strong> — sign in once as a company; job posts publish
+                from a requisition and applicants arrive through your apply link.
               </li>
               <li>
-                <strong className="text-foreground">Google Calendar / Meet</strong> — an OAuth client plus a refresh
-                token for the recruiting calendar; events are created with a Meet link and invites are emailed to the
-                panel and candidate.
+                <strong className="text-foreground">Careers inbox</strong> — CVs emailed to your careers address are
+                filed, read and scored automatically.
               </li>
               <li>
-                <strong className="text-foreground">Microsoft Teams</strong> — an Entra app with
-                <span className="num"> OnlineMeetings.ReadWrite.All</span> application permission and the organizer
-                mailbox that hosts the calls.
+                <strong className="text-foreground">Naukri / Indeed</strong> — need an employer subscription; paste the
+                keys your account manager sends.
+              </li>
+              <li>
+                <strong className="text-foreground">GitHub</strong> — works without setup; a token only makes it
+                faster.
               </li>
             </ul>
-          </section>
+          </details>
+        </TabsContent>
 
-          <div className="grid gap-4">
-            {(rows.data ?? []).filter((r) => r.category === "meeting").map((row) => (
-              <IntegrationCard key={row.id} row={row} />
-            ))}
-          </div>
-        </>
-      )}
+        <TabsContent value="meetings" className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Connect one conferencing account and every interview gets a real join link and calendar invite.
+          </p>
+          {rows.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : (
+            (rows.data ?? [])
+              .filter((r) => r.category === "meeting")
+              .map((row) => <IntegrationCard key={row.id} row={row} />)
+          )}
+        </TabsContent>
+
+        <TabsContent value="ai">
+          <AiModelCard />
+        </TabsContent>
+      </Tabs>
     </>
   );
 }
+

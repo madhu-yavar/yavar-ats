@@ -355,6 +355,33 @@ async function assertOwner(userId: string) {
   return data.org_id as string;
 }
 
+/**
+ * User administration is not owner-only: the organisation owner and anyone
+ * holding the President/CBO (CHRO admin) role can invite colleagues and
+ * grant or revoke approval roles.
+ */
+async function assertAdmin(userId: string) {
+  const db = await admin();
+  const { data } = await db
+    .from("org_members")
+    .select("org_id, is_owner")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (!data) throw new Error("You do not belong to an organisation yet.");
+  if (data.is_owner) return data.org_id as string;
+  const { data: role } = await db
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("org_id", data.org_id)
+    .eq("role", "president_cbo")
+    .maybeSingle();
+  if (!role) throw new Error("Only the organisation owner or a President/CBO admin can manage users and roles.");
+  return data.org_id as string;
+}
+
+
 export async function orgOf(userId: string) {
   const db = await admin();
   const { data } = await db
@@ -458,7 +485,7 @@ export const inviteMember = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
-    const orgId = await assertOwner(context.userId);
+    const orgId = await assertAdmin(context.userId);
     const db = await admin();
     const { data: org } = await db.from("organizations").select("status").eq("id", orgId).maybeSingle();
     if ((org?.status ?? "active") !== "active")
@@ -523,7 +550,7 @@ export const setMemberRole = createServerFn({ method: "POST" })
     z.object({ memberId: z.string().uuid(), role: z.enum(ROLES), grant: z.boolean() }).parse(data),
   )
   .handler(async ({ data, context }) => {
-    const orgId = await assertOwner(context.userId);
+    const orgId = await assertAdmin(context.userId);
     const db = await admin();
     const { data: member } = await db
       .from("org_members")
@@ -567,7 +594,7 @@ export const setMemberStatus = createServerFn({ method: "POST" })
     z.object({ memberId: z.string().uuid(), status: z.enum(["active", "disabled"]) }).parse(data),
   )
   .handler(async ({ data, context }) => {
-    const orgId = await assertOwner(context.userId);
+    const orgId = await assertAdmin(context.userId);
     const db = await admin();
     const { data: member } = await db
       .from("org_members")
@@ -620,7 +647,7 @@ export const updateMember = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
-    const orgId = await assertOwner(context.userId);
+    const orgId = await assertAdmin(context.userId);
     const db = await admin();
     const { data: member } = await db
       .from("org_members")
