@@ -86,10 +86,10 @@ export async function storeResumeFile(input: {
       "content-type": contentType,
       "x-upsert": "true",
     };
-    if (!serviceKey.startsWith("sb_secret_")) headers.authorization = `Bearer ${serviceKey}`;
+    if (!serviceKey.startsWith("sb_secret_")) headers["authorization"] = `Bearer ${serviceKey}`;
     const response = await fetch(
       `${baseUrl}/storage/v1/object/resumes/${path.split("/").map(encodeURIComponent).join("/")}`,
-      { method: "POST", headers, body: input.bytes },
+      { method: "POST", headers, body: Uint8Array.from(input.bytes).buffer },
     );
     if (!response.ok) {
       const detail = await response.text();
@@ -185,12 +185,14 @@ export async function ingestCandidate(input: {
     last_synced_at: new Date().toISOString(),
   };
 
-  const { data: existing } = await supabaseAdmin
+  let existingQuery = supabaseAdmin
     .from("candidates")
     .select("id, skills")
-    .eq("email", email)
-    .eq("org_id", input.orgId)
-    .maybeSingle();
+    .eq("email", email);
+  existingQuery = input.orgId
+    ? existingQuery.eq("org_id", input.orgId)
+    : existingQuery.is("org_id", null);
+  const { data: existing } = await existingQuery.maybeSingle();
 
   let candidateId: string;
   if (existing) {
