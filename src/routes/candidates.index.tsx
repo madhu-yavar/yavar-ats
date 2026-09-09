@@ -15,6 +15,7 @@ import {
   Trash2,
   Sparkles,
   Upload,
+  Filter,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -70,6 +71,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export const Route = createFileRoute("/candidates/")({
   head: () => ({
