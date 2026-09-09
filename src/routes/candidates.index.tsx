@@ -15,6 +15,7 @@ import {
   Trash2,
   Sparkles,
   Upload,
+  Filter,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -70,6 +71,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export const Route = createFileRoute("/candidates/")({
   head: () => ({
@@ -173,6 +175,100 @@ function sourceLabel(source: string | null | undefined) {
   return SOURCE_LABELS[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase());
 }
 
+/** Experience bucket used for the Excel-style column filter. */
+function expBucket(years: number) {
+  if (years <= 2) return "0–2 yrs";
+  if (years <= 5) return "3–5 yrs";
+  if (years <= 10) return "6–10 yrs";
+  return "10+ yrs";
+}
+
+/**
+ * Excel-style column filter: a funnel icon on the header opens a checklist of
+ * every distinct value in that column. Ticking values narrows the table;
+ * an active filter tints the icon so it is visible at a glance.
+ */
+function ColumnFilter({
+  title,
+  options,
+  selected,
+  onChange,
+}: {
+  title: string;
+  options: string[];
+  selected: Set<string>;
+  onChange: (next: Set<string>) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const active = selected.size > 0;
+  const shown = options.filter((o) => o.toLowerCase().includes(search.toLowerCase().trim()));
+
+  const toggle = (value: string) => {
+    const next = new Set(selected);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    onChange(next);
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          title={active ? `Filtered by ${title} — click to change` : `Filter by ${title}`}
+          className={`inline-flex size-5 items-center justify-center rounded transition-colors ${
+            active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          }`}
+        >
+          <Filter className="size-3" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-60 p-2">
+        <div className="mb-1 flex items-center justify-between px-1">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Filter: {title}
+          </p>
+          {active && (
+            <button
+              type="button"
+              className="text-[11px] font-medium text-primary hover:underline"
+              onClick={() => onChange(new Set())}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        {options.length > 8 && (
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search values…"
+            className="mb-1 h-7 text-xs"
+          />
+        )}
+        <div className="max-h-56 overflow-y-auto">
+          {shown.length === 0 && (
+            <p className="px-1 py-2 text-xs text-muted-foreground">No values match.</p>
+          )}
+          {shown.map((value) => (
+            <label
+              key={value}
+              className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-xs hover:bg-muted"
+            >
+              <Checkbox
+                checked={selected.has(value)}
+                onCheckedChange={() => toggle(value)}
+                className="size-3.5"
+              />
+              <span className="truncate">{value}</span>
+            </label>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 /** Education arrives either as prose or as raw parsed JSON — always show readable text. */
 function educationLabel(raw: string | null | undefined) {
   const value = (raw ?? "").trim();
@@ -213,6 +309,11 @@ function Candidates() {
   const [minScore, setMinScore] = useState("0");
   const [expBand, setExpBand] = useState("all");
   const [expanded, setExpanded] = useState<string | null>(null);
+  // Excel-style column filters — empty set means "no filter".
+  const [fSource, setFSource] = useState<Set<string>>(new Set());
+  const [fEmployer, setFEmployer] = useState<Set<string>>(new Set());
+  const [fExp, setFExp] = useState<Set<string>>(new Set());
+  const [fStage, setFStage] = useState<Set<string>>(new Set());
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [moverIds, setMoverIds] = useState<string[] | null>(null);
@@ -352,6 +453,22 @@ function Candidates() {
     });
   }, [cands.data, apps.data, scoreMap]);
 
+  /** Distinct values per filterable column, built from the current pool. */
+  const colOptions = useMemo(() => {
+    const sources = new Set<string>();
+    const employers = new Set<string>();
+    const exps = new Set<string>();
+    const stages = new Set<string>();
+    for (const r of rows) {
+      sources.add(sourceLabel(r.candidate.source));
+      employers.add((r.candidate.current_employer ?? "").trim() || "Unknown");
+      exps.add(expBucket(Number(r.candidate.experience_years) || 0));
+      stages.add(r.stage ? STAGE_LABEL[canonical(r.stage)] : "Not in pipeline");
+    }
+    const sort = (s: Set<string>) => Array.from(s).sort((a, b) => a.localeCompare(b));
+    return { sources: sort(sources), employers: sort(employers), exps: sort(exps), stages: sort(stages) };
+  }, [rows]);
+
   const filtered = useMemo(() => {
     const t = q.toLowerCase().trim();
     const weekAgo = Date.now() - 7 * 86_400_000;
@@ -372,6 +489,16 @@ function Candidates() {
       }
       if (sourceFilter !== "all" && c.source !== sourceFilter) return false;
       if (reqFilter !== "all" && !r.apps.some((a) => a.requisition_id === reqFilter)) return false;
+      // Excel-style column filters
+      if (fSource.size > 0 && !fSource.has(sourceLabel(c.source))) return false;
+      if (fEmployer.size > 0 && !fEmployer.has((c.current_employer ?? "").trim() || "Unknown"))
+        return false;
+      if (fExp.size > 0 && !fExp.has(expBucket(Number(c.experience_years) || 0))) return false;
+      if (
+        fStage.size > 0 &&
+        !fStage.has(r.stage ? STAGE_LABEL[canonical(r.stage)] : "Not in pipeline")
+      )
+        return false;
       if (floor > 0 && (r.score ?? 0) < floor) return false;
       if (expBand !== "all") {
         const y = Number(c.experience_years) || 0;
@@ -393,7 +520,7 @@ function Candidates() {
       }
       return true;
     });
-  }, [rows, q, sourceFilter, reqFilter, minScore, expBand, view, verifMap, dupMap]);
+  }, [rows, q, sourceFilter, reqFilter, minScore, expBand, view, verifMap, dupMap, fSource, fEmployer, fExp, fStage]);
 
   const selectedRows = filtered.filter((r) => selected.has(r.candidate.id));
   const selectedAppIds = selectedRows.flatMap((r) => (r.primary ? [r.primary.id] : []));
@@ -958,13 +1085,33 @@ function Candidates() {
                   />
                 </TableHead>
                 <TableHead className="w-[240px]">Candidate</TableHead>
-                <TableHead className="w-[180px]">Source &amp; added</TableHead>
+                <TableHead className="w-[180px]">
+                  <span className="inline-flex items-center gap-1">
+                    Source &amp; added
+                    <ColumnFilter title="Source" options={colOptions.sources} selected={fSource} onChange={setFSource} />
+                  </span>
+                </TableHead>
                 <TableHead className="w-[200px]">Contact</TableHead>
-                <TableHead className="w-[190px]">Current role &amp; tenure</TableHead>
-                <TableHead className="w-[110px]">Experience</TableHead>
+                <TableHead className="w-[190px]">
+                  <span className="inline-flex items-center gap-1">
+                    Current role &amp; tenure
+                    <ColumnFilter title="Employer" options={colOptions.employers} selected={fEmployer} onChange={setFEmployer} />
+                  </span>
+                </TableHead>
+                <TableHead className="w-[110px]">
+                  <span className="inline-flex items-center gap-1">
+                    Experience
+                    <ColumnFilter title="Experience" options={colOptions.exps} selected={fExp} onChange={setFExp} />
+                  </span>
+                </TableHead>
                 <TableHead className="w-[200px]">Skills &amp; education</TableHead>
                 <TableHead className="w-[170px]">Comp &amp; availability</TableHead>
-                <TableHead className="w-[190px]">Stage &amp; next action</TableHead>
+                <TableHead className="w-[190px]">
+                  <span className="inline-flex items-center gap-1">
+                    Stage &amp; next action
+                    <ColumnFilter title="Stage" options={colOptions.stages} selected={fStage} onChange={setFStage} />
+                  </span>
+                </TableHead>
                 <TableHead className="w-[120px]">Parsing</TableHead>
                 <TableHead className="w-[90px] whitespace-nowrap text-right">Match</TableHead>
                 <TableHead className="w-[120px] whitespace-nowrap text-right">
