@@ -33,7 +33,8 @@ export const MANUAL_SECTIONS: ManualSection[] = [
     summary:
       "The registering user becomes the organisation owner. Only the owner invites internal users, and invitations are restricted to your own email domain.",
     steps: [
-      "Invite a colleague from Users & roles (/team) with their work email and the role they should hold.",
+      "Invite a colleague from Users & roles (/team) with their work email and the role they should hold. They receive a branded invitation email immediately.",
+      "Change someone's roles later from the Roles (click to edit) cell in their row: tick to grant, untick to revoke. Both the organisation owner and any President/CBO admin can do this; other roles can view but not change.",
       "Roles available: recruiter, hiring manager, department head, HR head, president/CBO. Roles decide who can approve requisitions, job descriptions and offers.",
       "Grant or revoke roles at any time from the row action menu.",
       "Pause access to suspend someone while keeping all their history; delete removes the membership and roles permanently.",
@@ -46,8 +47,10 @@ export const MANUAL_SECTIONS: ManualSection[] = [
     title: "3. First-time configuration",
     summary: "Three pages get a fresh tenant production-ready.",
     steps: [
+      "Screen space: collapse the left People Excellence menu with the arrow button beside its title. The choice is remembered on that browser, and the icons stay clickable while collapsed.",
       "Master data (/masters): departments, skills, locations, education levels and industries. Everything else picks from these lists, so fill them first.",
-      "Integrations (/integrations): connect sourcing (LinkedIn, GitHub) and meeting providers (Microsoft Teams, Zoom, Google Meet/Calendar). Credentials are stored server-side and never exposed to the browser; use 'Test' to confirm each one.",
+      "Integrations (/integrations) is split into three tabs: Candidate sources, Interview meetings and AI model. Each row is closed until you click it, so the page stays short; open a row to paste credentials, press Save and then Test.",
+      "Credentials are stored on the server and are never sent back to the browser. 'What each source can do' at the bottom of the sources tab explains what LinkedIn, the careers inbox, Naukri, Indeed and GitHub each need.",
       "Organisation (/organisation): keep the organisation profile, currency and careers inbox current. The owner can also archive the organisation here — archiving locks everyone out but deletes nothing.",
       "AI provider: choose Gemini, OpenAI or Claude and the model used for matching, scoring, verification and the copilot. Test the connection before running batches.",
     ],
@@ -72,6 +75,7 @@ export const MANUAL_SECTIONS: ManualSection[] = [
       "Add candidates individually or upload CVs in bulk (PDF/DOCX) on Talent pool (/candidates) — parsing fills name, contact, skills, experience and employment history automatically.",
       "Review parsing quality in the table: filter by skill, experience, location, source, freshness and duplicates.",
       "Freshness: fresh (updated within 90 days), aging (91-365 days), stale (over a year). Refresh or re-sync stale profiles before relying on them.",
+      "Select rows to move stage, merge duplicates, re-run verification, or permanently delete candidates along with their applications, interviews, scores and stored CV files.",
       "Duplicates are grouped by normalised email, phone and name. Merge keeps the richest record and reassigns every application, interview, offer and score.",
       "Social links (LinkedIn, GitHub, X, portfolio, blog) are fetched and verified where the provider allows it; the verification agent scores authenticity and flags contradictions against CV claims.",
     ],
