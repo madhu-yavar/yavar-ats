@@ -133,6 +133,8 @@ export async function ingestCandidate(input: {
   profileUrl?: string | null;
   /** Original CV file, kept in the private resume vault when provided. */
   resumeFile?: { filename: string; bytes: Uint8Array } | null;
+  /** Companion captures must never leave a text-only candidate behind. */
+  requireResumeStored?: boolean;
 }): Promise<IngestResult> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const p = input.parsed ?? (await parseCv(input.resumeText));
@@ -258,6 +260,14 @@ export async function ingestCandidate(input: {
         filename: input.resumeFile.filename,
         bytes: input.resumeFile.bytes,
       }),
+    );
+  }
+  if (input.requireResumeStored && !resumeStored) {
+    if (!existing) {
+      await supabaseAdmin.from("candidates").delete().eq("id", candidateId);
+    }
+    throw new Error(
+      "The original CV reached ATSIQ but could not be saved in the private vault. No new text-only candidate was kept; retry after updating the companion.",
     );
   }
 

@@ -163,6 +163,7 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
         identityKey: input.sourceUrl ?? null,
         profileUrl: input.sourceUrl ?? null,
         resumeFile: fileBytes ? { filename: fileName, bytes: fileBytes } : null,
+        requireResumeStored: true,
       });
       if (fileBytes && !ingested.resumeStored) {
         return log({
