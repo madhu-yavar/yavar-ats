@@ -617,6 +617,7 @@ function Candidates() {
                           "direct",
                           "naukri",
                           "linkedin",
+                          "indeed",
                           "referral",
                           "consultant",
                           "campus",
@@ -760,7 +761,7 @@ function Candidates() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {["direct", "naukri", "linkedin", "referral", "consultant", "campus"].map(
+                        {["direct", "naukri", "linkedin", "indeed", "referral", "consultant", "campus"].map(
                           (s) => (
                             <SelectItem key={s} value={s}>
                               {s}
