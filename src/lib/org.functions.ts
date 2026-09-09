@@ -355,6 +355,33 @@ async function assertOwner(userId: string) {
   return data.org_id as string;
 }
 
+/**
+ * User administration is not owner-only: the organisation owner and anyone
+ * holding the President/CBO (CHRO admin) role can invite colleagues and
+ * grant or revoke approval roles.
+ */
+async function assertAdmin(userId: string) {
+  const db = await admin();
+  const { data } = await db
+    .from("org_members")
+    .select("org_id, is_owner")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (!data) throw new Error("You do not belong to an organisation yet.");
+  if (data.is_owner) return data.org_id as string;
+  const { data: role } = await db
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("org_id", data.org_id)
+    .eq("role", "president_cbo")
+    .maybeSingle();
+  if (!role) throw new Error("Only the organisation owner or a President/CBO admin can manage users and roles.");
+  return data.org_id as string;
+}
+
+
 export async function orgOf(userId: string) {
   const db = await admin();
   const { data } = await db
