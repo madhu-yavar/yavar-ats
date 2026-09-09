@@ -152,6 +152,27 @@ function money(v: number | null) {
   return v >= 100000 ? `${(v / 100000).toFixed(1)}L` : v.toLocaleString();
 }
 
+/** Human-friendly label for how the candidate entered the talent pool. */
+const SOURCE_LABELS: Record<string, string> = {
+  direct: "Manual upload",
+  bulk_upload: "Manual upload",
+  browser_capture: "LinkedIn companion",
+  careers_inbox: "Careers inbox",
+  linkedin: "LinkedIn",
+  naukri: "Naukri",
+  indeed: "Indeed",
+  referral: "Referral",
+  consultant: "Consultant",
+  campus: "Campus",
+  ijp: "Internal job posting",
+};
+
+function sourceLabel(source: string | null | undefined) {
+  const key = (source ?? "").trim();
+  if (!key) return "Unknown";
+  return SOURCE_LABELS[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
 /** Education arrives either as prose or as raw parsed JSON — always show readable text. */
 function educationLabel(raw: string | null | undefined) {
   const value = (raw ?? "").trim();
@@ -596,6 +617,7 @@ function Candidates() {
                           "direct",
                           "naukri",
                           "linkedin",
+                          "indeed",
                           "referral",
                           "consultant",
                           "campus",
@@ -739,7 +761,7 @@ function Candidates() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {["direct", "naukri", "linkedin", "referral", "consultant", "campus"].map(
+                        {["direct", "naukri", "linkedin", "indeed", "referral", "consultant", "campus"].map(
                           (s) => (
                             <SelectItem key={s} value={s}>
                               {s}
@@ -925,7 +947,7 @@ function Candidates() {
         <EmptyState title="No candidates match" hint="Change the view or clear the filters." />
       ) : (
         <div className="panel overflow-x-auto">
-          <Table className="min-w-[1720px] table-fixed">
+          <Table className="min-w-[1900px] table-fixed">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10">
@@ -936,6 +958,7 @@ function Candidates() {
                   />
                 </TableHead>
                 <TableHead className="w-[240px]">Candidate</TableHead>
+                <TableHead className="w-[180px]">Source &amp; added</TableHead>
                 <TableHead className="w-[200px]">Contact</TableHead>
                 <TableHead className="w-[190px]">Current role &amp; tenure</TableHead>
                 <TableHead className="w-[110px]">Experience</TableHead>
@@ -983,10 +1006,21 @@ function Candidates() {
                         >
                           {c.full_name}
                         </Link>
-                        <div className="text-xs text-muted-foreground">
-                          {c.source}
-                          {c.is_internal ? " · internal" : ""} · added{" "}
-                          {new Date(c.created_at).toLocaleDateString()}
+                        {c.is_internal ? (
+                          <div className="text-xs text-muted-foreground">internal employee</div>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="w-[180px]">
+                        <div className="text-sm">{sourceLabel(c.source)}</div>
+                        <div
+                          className="text-xs text-muted-foreground"
+                          title={new Date(c.created_at).toLocaleString()}
+                        >
+                          {new Date(c.created_at).toLocaleDateString()}{" "}
+                          {new Date(c.created_at).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </div>
                         <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px]">
                           <span
