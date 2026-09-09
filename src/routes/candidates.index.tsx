@@ -489,6 +489,16 @@ function Candidates() {
       }
       if (sourceFilter !== "all" && c.source !== sourceFilter) return false;
       if (reqFilter !== "all" && !r.apps.some((a) => a.requisition_id === reqFilter)) return false;
+      // Excel-style column filters
+      if (fSource.size > 0 && !fSource.has(sourceLabel(c.source))) return false;
+      if (fEmployer.size > 0 && !fEmployer.has((c.current_employer ?? "").trim() || "Unknown"))
+        return false;
+      if (fExp.size > 0 && !fExp.has(expBucket(Number(c.experience_years) || 0))) return false;
+      if (
+        fStage.size > 0 &&
+        !fStage.has(r.stage ? STAGE_LABEL[canonical(r.stage)] : "Not in pipeline")
+      )
+        return false;
       if (floor > 0 && (r.score ?? 0) < floor) return false;
       if (expBand !== "all") {
         const y = Number(c.experience_years) || 0;
