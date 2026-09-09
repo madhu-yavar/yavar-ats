@@ -414,7 +414,7 @@ function Team() {
                   <th className="p-3 text-left font-medium">User</th>
                   <th className="p-3 text-left font-medium">Title</th>
                   <th className="p-3 text-left font-medium">Status</th>
-                  <th className="p-3 text-left font-medium">Roles</th>
+                  <th className="p-3 text-left font-medium">Roles (click to edit)</th>
                   <th className="p-3 text-left font-medium">Joined</th>
                   <th className="w-12 p-3" />
                 </tr>
