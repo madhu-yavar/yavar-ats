@@ -69,20 +69,33 @@ export async function storeResumeFile(input: {
 }): Promise<string | null> {
   if (!input.orgId || input.bytes.length === 0) return null;
   try {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const safeName = input.filename.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "resume.pdf";
     const path = `${input.orgId}/${input.candidateId}/${safeName}`;
-    const { error } = await supabaseAdmin.storage.from("resumes").upload(path, input.bytes, {
-      upsert: true,
-      contentType: /\.pdf$/i.test(safeName)
-        ? "application/pdf"
-        : /\.docx$/i.test(safeName)
-          ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          : /\.doc$/i.test(safeName)
-            ? "application/msword"
-            : "text/plain",
-    });
-    if (error) throw new Error(error.message);
+    const contentType = /\.pdf$/i.test(safeName)
+      ? "application/pdf"
+      : /\.docx$/i.test(safeName)
+        ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        : /\.doc$/i.test(safeName)
+          ? "application/msword"
+          : "text/plain";
+    const baseUrl = process.env["SUPABASE_URL"];
+    const serviceKey = process.env["SUPABASE_SERVICE_ROLE_KEY"];
+    if (!baseUrl || !serviceKey) throw new Error("The private CV vault is not configured.");
+    const headers: Record<string, string> = {
+      apikey: serviceKey,
+      "content-type": contentType,
+      "x-upsert": "true",
+    };
+    if (!serviceKey.startsWith("sb_secret_")) headers["authorization"] = `Bearer ${serviceKey}`;
+    const response = await fetch(
+      `${baseUrl}/storage/v1/object/resumes/${path.split("/").map(encodeURIComponent).join("/")}`,
+      { method: "POST", headers, body: Uint8Array.from(input.bytes).buffer },
+    );
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`vault upload failed [${response.status}]: ${detail}`);
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await supabaseAdmin
       .from("candidates")
       .update({ resume_file_path: path } as never)
@@ -111,6 +124,23 @@ export async function ingestCandidate(input: {
 }): Promise<IngestResult> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const p = input.parsed ?? (await parseCv(input.resumeText));
+
+  const normalizedName = (value: string | null | undefined) =>
+    (value ?? "")
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]+/g, " ")
+      .split(/\s+/)
+      .filter((part) => part.length > 1);
+  const expectedParts = normalizedName(input.fullName);
+  const parsedParts = normalizedName(p?.full_name);
+  if (expectedParts.length && parsedParts.length) {
+    const overlap = expectedParts.filter((part) => parsedParts.includes(part)).length;
+    if (overlap === 0) {
+      throw new Error(
+        `The downloaded CV belongs to ${p?.full_name ?? "another applicant"}, not ${input.fullName}. Nothing was filed.`,
+      );
+    }
+  }
 
   const readName =
     (input.fullName ?? p?.full_name ?? "").trim() || input.fileName.replace(/\.[^.]+$/, "");
@@ -155,11 +185,14 @@ export async function ingestCandidate(input: {
     last_synced_at: new Date().toISOString(),
   };
 
-  const { data: existing } = await supabaseAdmin
+  let existingQuery = supabaseAdmin
     .from("candidates")
     .select("id, skills")
-    .eq("email", email)
-    .maybeSingle();
+    .eq("email", email);
+  existingQuery = input.orgId
+    ? existingQuery.eq("org_id", input.orgId)
+    : existingQuery.is("org_id", null);
+  const { data: existing } = await existingQuery.maybeSingle();
 
   let candidateId: string;
   if (existing) {
