@@ -1275,76 +1275,65 @@ function Integrations() {
       <PageHeader
         eyebrow="Settings"
         title="Integrations"
-        description="Store each job board's API credentials, verify the connection live, and switch it on as a sourcing channel. Credentials are held server-side and are never sent to the browser."
+        description="Connect the places your CVs and interviews come from. Open a row only when you need to change it — everything you type is stored securely on the server."
       />
 
-      <AiModelCard />
+      <Tabs defaultValue="sourcing">
+        <TabsList>
+          <TabsTrigger value="sourcing">Candidate sources</TabsTrigger>
+          <TabsTrigger value="meetings">Interview meetings</TabsTrigger>
+          <TabsTrigger value="ai">AI model</TabsTrigger>
+        </TabsList>
 
-      <section className="panel p-5">
-
-        <h2 className="font-semibold">What each channel can actually do</h2>
-        <ul className="mt-2 space-y-1.5 text-sm text-muted-foreground">
-          <li>
-            <strong className="text-foreground">LinkedIn</strong> — one company account, connected once through
-            LinkedIn's own sign-in screen; designed job posts can then be published straight from a requisition.
-            Reading other people's profiles needs a paid Talent Solutions data agreement, so LinkedIn scoring stays
-            narrative-based on the resume plus recruiter-pasted profile text.
-          </li>
-          <li>
-            <strong className="text-foreground">Naukri</strong> — Resdex resume search and applicant pulls for
-            enterprise recruiter subscriptions (client id, secret, account id, partner base URL).
-          </li>
-          <li>
-            <strong className="text-foreground">Indeed</strong> — job feed plus Indeed Apply for inbound applicants.
-          </li>
-          <li>
-            <strong className="text-foreground">GitHub</strong> — fully public API, already live in social scoring. A
-            token only raises the rate limit.
-          </li>
-        </ul>
-      </section>
-
-      {rows.isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading integrations…</p>
-      ) : (
-        <>
-          <div className="grid gap-4">
-            {(rows.data ?? []).filter((r) => r.category !== "meeting").map((row) => (
-              <IntegrationCard key={row.id} row={row} />
-            ))}
-          </div>
-
-          <section className="panel p-5">
-            <h2 className="font-semibold">Interview meeting links</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Connect your own conferencing account and the scheduler will mint a real join link for every interview
-              round — no copy-pasting. Credentials stay server-side.
-            </p>
-            <ul className="mt-2 space-y-1.5 text-sm text-muted-foreground">
+        <TabsContent value="sourcing" className="space-y-3">
+          {rows.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : (
+            (rows.data ?? [])
+              .filter((r) => r.category !== "meeting")
+              .map((row) => <IntegrationCard key={row.id} row={row} />)
+          )}
+          <details className="panel p-4 text-sm text-muted-foreground">
+            <summary className="cursor-pointer font-medium text-foreground">What each source can do</summary>
+            <ul className="mt-3 space-y-1.5">
               <li>
-                <strong className="text-foreground">Zoom</strong> — create a Server-to-Server OAuth app with the
-                <span className="num"> meeting:write:admin</span> scope and paste the account ID, client ID and secret.
+                <strong className="text-foreground">LinkedIn</strong> — sign in once as a company; job posts publish
+                from a requisition and applicants arrive through your apply link.
               </li>
               <li>
-                <strong className="text-foreground">Google Calendar / Meet</strong> — an OAuth client plus a refresh
-                token for the recruiting calendar; events are created with a Meet link and invites are emailed to the
-                panel and candidate.
+                <strong className="text-foreground">Careers inbox</strong> — CVs emailed to your careers address are
+                filed, read and scored automatically.
               </li>
               <li>
-                <strong className="text-foreground">Microsoft Teams</strong> — an Entra app with
-                <span className="num"> OnlineMeetings.ReadWrite.All</span> application permission and the organizer
-                mailbox that hosts the calls.
+                <strong className="text-foreground">Naukri / Indeed</strong> — need an employer subscription; paste the
+                keys your account manager sends.
+              </li>
+              <li>
+                <strong className="text-foreground">GitHub</strong> — works without setup; a token only makes it
+                faster.
               </li>
             </ul>
-          </section>
+          </details>
+        </TabsContent>
 
-          <div className="grid gap-4">
-            {(rows.data ?? []).filter((r) => r.category === "meeting").map((row) => (
-              <IntegrationCard key={row.id} row={row} />
-            ))}
-          </div>
-        </>
-      )}
+        <TabsContent value="meetings" className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Connect one conferencing account and every interview gets a real join link and calendar invite.
+          </p>
+          {rows.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : (
+            (rows.data ?? [])
+              .filter((r) => r.category === "meeting")
+              .map((row) => <IntegrationCard key={row.id} row={row} />)
+          )}
+        </TabsContent>
+
+        <TabsContent value="ai">
+          <AiModelCard />
+        </TabsContent>
+      </Tabs>
     </>
   );
 }
+
