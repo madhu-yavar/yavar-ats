@@ -152,6 +152,27 @@ function money(v: number | null) {
   return v >= 100000 ? `${(v / 100000).toFixed(1)}L` : v.toLocaleString();
 }
 
+/** Human-friendly label for how the candidate entered the talent pool. */
+const SOURCE_LABELS: Record<string, string> = {
+  direct: "Manual upload",
+  bulk_upload: "Manual upload",
+  browser_capture: "LinkedIn companion",
+  inbox: "Careers inbox",
+  linkedin: "LinkedIn",
+  naukri: "Naukri",
+  indeed: "Indeed",
+  referral: "Referral",
+  consultant: "Consultant",
+  campus: "Campus",
+  ijp: "Internal job posting",
+};
+
+function sourceLabel(source: string | null | undefined) {
+  const key = (source ?? "").trim();
+  if (!key) return "Unknown";
+  return SOURCE_LABELS[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
 /** Education arrives either as prose or as raw parsed JSON — always show readable text. */
 function educationLabel(raw: string | null | undefined) {
   const value = (raw ?? "").trim();
