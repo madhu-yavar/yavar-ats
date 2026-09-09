@@ -3,7 +3,17 @@ import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, CircleAlert, CircleDashed, Inbox, KeyRound, Loader2, Plug, Sparkles } from "lucide-react";
+import {
+  CheckCircle2,
+  ChevronDown,
+  CircleAlert,
+  CircleDashed,
+  Inbox,
+  KeyRound,
+  Loader2,
+  Plug,
+  Sparkles,
+} from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -920,6 +930,8 @@ function IntegrationCard({ row }: { row: Integration }) {
   const [baseUrl, setBaseUrl] = useState(typeof cfg["base_url"] === "string" ? (cfg["base_url"] as string) : "");
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<"save" | "test" | "clear" | null>(null);
+  // Collapsed by default so the page reads as a short, calm list.
+  const [expanded, setExpanded] = useState(false);
 
   const provider = row.provider as
     | "linkedin"
@@ -1004,20 +1016,24 @@ function IntegrationCard({ row }: { row: Integration }) {
   return (
     <article className="panel p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <button type="button" onClick={() => setOpen((v) => !v)} className="flex min-w-0 items-center gap-2 text-left">
-          <ChevronDown className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`} />
+        <button type="button" onClick={() => setExpanded((v) => !v)} className="flex min-w-0 items-center gap-2 text-left">
+          <ChevronDown className={`size-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "" : "-rotate-90"}`} />
           <Plug className="size-4 shrink-0 text-primary" />
           <span className="truncate font-medium">{row.label}</span>
           <StatusPill status={row.last_test_status} />
         </button>
         <div className="flex items-center gap-2">
-          {row.has_credentials ? <KeyRound className="size-3.5 text-muted-foreground" title="Credentials stored" /> : null}
+          {row.has_credentials ? (
+            <span title="Credentials stored" className="text-muted-foreground">
+              <KeyRound className="size-3.5" />
+            </span>
+          ) : null}
           <Label className="text-xs text-muted-foreground">On</Label>
           <Switch checked={enabled} onCheckedChange={setEnabled} />
         </div>
       </div>
 
-      {open ? (
+      {expanded ? (
         <div className="mt-4 border-t border-border pt-4">
           {notes ? <p className="text-sm text-muted-foreground">{notes}</p> : null}
           {row.last_test_message ? (
