@@ -161,6 +161,7 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
         source: "browser_capture",
         fullName: input.candidateName ?? null,
         identityKey: input.sourceUrl ?? null,
+        profileUrl: input.sourceUrl ?? null,
         resumeFile: fileBytes ? { filename: fileName, bytes: fileBytes } : null,
       });
       if (fileBytes && !ingested.resumeStored) {

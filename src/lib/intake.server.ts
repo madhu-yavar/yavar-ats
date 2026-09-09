@@ -93,13 +93,23 @@ export async function storeResumeFile(input: {
     );
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`vault upload failed [${response.status}]: ${detail}`);
+      console.error(`[resumes] direct upload failed [${response.status}]: ${detail}`);
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { error: fallbackError } = await supabaseAdmin.storage
+        .from("resumes")
+        .upload(path, input.bytes, { contentType, upsert: true });
+      if (fallbackError) {
+        throw new Error(
+          `vault upload failed [${response.status}]: ${detail}; fallback: ${fallbackError.message}`,
+        );
+      }
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin
+    const { error: updateError } = await supabaseAdmin
       .from("candidates")
       .update({ resume_file_path: path } as never)
       .eq("id", input.candidateId);
+    if (updateError) throw new Error(`CV saved but candidate link failed: ${updateError.message}`);
     return path;
   } catch (e) {
     console.error("[resumes] could not store CV file:", e);
@@ -119,6 +129,8 @@ export async function ingestCandidate(input: {
   phone?: string | null;
   parsed?: ParsedCv | null;
   identityKey?: string | null;
+  /** Signed-in source profile shown by the companion, retained for recruiters. */
+  profileUrl?: string | null;
   /** Original CV file, kept in the private resume vault when provided. */
   resumeFile?: { filename: string; bytes: Uint8Array } | null;
 }): Promise<IngestResult> {
@@ -174,7 +186,9 @@ export async function ingestCandidate(input: {
     experience_years: Number(p?.experience_years ?? 0) || 0,
     education: p?.education || null,
     skills: p?.skills ?? [],
-    linkedin_url: p?.linkedin_url || null,
+    linkedin_url:
+      p?.linkedin_url ||
+      (/linkedin\.com\/(?:talent\/|in\/)/i.test(input.profileUrl ?? "") ? input.profileUrl : null),
     github_url: p?.github_url || null,
     website_url: p?.website_url || null,
     current_employer: p?.current_employer || p?.employment_history?.[0]?.company || null,
