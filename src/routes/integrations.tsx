@@ -31,6 +31,7 @@ import { orgInbox } from "@/lib/local-inbox.functions";
 import { collectApplicants, type CollectSummary } from "@/lib/collect.functions";
 import { captureSetup, rotateCaptureToken } from "@/lib/capture.functions";
 import { PageHeader } from "@/components/ats";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
