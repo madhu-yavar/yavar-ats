@@ -1002,91 +1002,86 @@ function IntegrationCard({ row }: { row: Integration }) {
   }
 
   return (
-    <article className="panel p-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <Plug className="size-4 text-primary" />
-            <h2 className="font-semibold">{row.label}</h2>
-          </div>
-          <div className="mt-1.5 flex flex-wrap items-center gap-3">
-            <StatusPill status={row.last_test_status} />
-            {row.has_credentials ? (
-              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                <KeyRound className="size-3.5" /> credentials stored
-              </span>
-            ) : null}
-            {row.last_tested_at ? (
-              <span className="num text-xs text-muted-foreground">
-                tested {new Date(row.last_tested_at).toLocaleString()}
-              </span>
-            ) : null}
-          </div>
-        </div>
+    <article className="panel p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <button type="button" onClick={() => setOpen((v) => !v)} className="flex min-w-0 items-center gap-2 text-left">
+          <ChevronDown className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`} />
+          <Plug className="size-4 shrink-0 text-primary" />
+          <span className="truncate font-medium">{row.label}</span>
+          <StatusPill status={row.last_test_status} />
+        </button>
         <div className="flex items-center gap-2">
-          <Label className="text-xs text-muted-foreground">Enabled</Label>
+          {row.has_credentials ? <KeyRound className="size-3.5 text-muted-foreground" title="Credentials stored" /> : null}
+          <Label className="text-xs text-muted-foreground">On</Label>
           <Switch checked={enabled} onCheckedChange={setEnabled} />
         </div>
       </div>
 
-      {notes ? <p className="mt-3 text-sm text-muted-foreground">{notes}</p> : null}
-      {row.last_test_message ? (
-        <p className="mt-2 rounded-md bg-surface-2 p-3 text-xs text-muted-foreground">{row.last_test_message}</p>
-      ) : null}
+      {open ? (
+        <div className="mt-4 border-t border-border pt-4">
+          {notes ? <p className="text-sm text-muted-foreground">{notes}</p> : null}
+          {row.last_test_message ? (
+            <p className="mt-2 rounded-md bg-surface-2 p-3 text-xs text-muted-foreground">{row.last_test_message}</p>
+          ) : null}
+          {row.last_tested_at ? (
+            <p className="num mt-2 text-xs text-muted-foreground">
+              last tested {new Date(row.last_tested_at).toLocaleString()}
+            </p>
+          ) : null}
 
-      {provider === "linkedin" ? <LinkedinOneClick /> : null}
-      {provider === "linkedin" || provider === "careers" ? <CareersInboxPanel /> : null}
-      {provider === "linkedin" || provider === "careers" ? <CapturePanel /> : null}
+          {provider === "linkedin" ? <LinkedinOneClick /> : null}
+          {provider === "linkedin" || provider === "careers" ? <CareersInboxPanel /> : null}
+          {provider === "linkedin" || provider === "careers" ? <CapturePanel /> : null}
 
+          <SetupHelp provider={provider} label={row.label} />
 
+          {row.credential_fields.length && provider !== "linkedin" ? (
+            <div className="mt-4">
+              <CredentialFields
+                fields={row.credential_fields}
+                hasCredentials={row.has_credentials}
+                secrets={secrets}
+                setSecrets={setSecrets}
+                baseUrl={baseUrl}
+                setBaseUrl={setBaseUrl}
+                showBaseUrl={!isMeeting && provider !== "github" && provider !== "careers"}
+              />
+            </div>
+          ) : null}
 
-      <SetupHelp provider={provider} label={row.label} />
-
-      {row.credential_fields.length && provider !== "linkedin" ? (
-        <div className="mt-4">
-          <CredentialFields
-            fields={row.credential_fields}
-            hasCredentials={row.has_credentials}
-            secrets={secrets}
-            setSecrets={setSecrets}
-            baseUrl={baseUrl}
-            setBaseUrl={setBaseUrl}
-            showBaseUrl={!isMeeting && provider !== "github" && provider !== "careers"}
-          />
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4">
+            {provider !== "linkedin" ? (
+              <>
+                <Button size="sm" onClick={onSave} disabled={busy !== null}>
+                  {busy === "save" ? <Loader2 className="size-4 animate-spin" /> : null} Save
+                </Button>
+                <Button size="sm" variant="outline" onClick={onTest} disabled={busy !== null}>
+                  {busy === "test" ? <Loader2 className="size-4 animate-spin" /> : null} Test connection
+                </Button>
+                {row.has_credentials ? (
+                  <Button size="sm" variant="ghost" onClick={onClear} disabled={busy !== null}>
+                    Remove credentials
+                  </Button>
+                ) : null}
+              </>
+            ) : null}
+            {docs ? (
+              <a
+                href={docs}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="ml-auto text-xs text-primary underline-offset-4 hover:underline"
+              >
+                Provider API docs
+              </a>
+            ) : null}
+          </div>
         </div>
       ) : null}
-
-
-      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4">
-        {provider !== "linkedin" ? (
-          <>
-            <Button size="sm" onClick={onSave} disabled={busy !== null}>
-              {busy === "save" ? <Loader2 className="size-4 animate-spin" /> : null} Save
-            </Button>
-            <Button size="sm" variant="outline" onClick={onTest} disabled={busy !== null}>
-              {busy === "test" ? <Loader2 className="size-4 animate-spin" /> : null} Test connection
-            </Button>
-            {row.has_credentials ? (
-              <Button size="sm" variant="ghost" onClick={onClear} disabled={busy !== null}>
-                Remove credentials
-              </Button>
-            ) : null}
-          </>
-        ) : null}
-        {docs ? (
-          <a
-            href={docs}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="ml-auto text-xs text-primary underline-offset-4 hover:underline"
-          >
-            Provider API docs
-          </a>
-        ) : null}
-      </div>
     </article>
   );
 }
+
 
 const PROVIDER_MODELS: Record<string, { id: string; label: string }[]> = {
   lovable: [
