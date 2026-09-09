@@ -897,22 +897,9 @@ function CapturePanel() {
       </ol>
 
 
-      {data?.events.length ? (
-        <div className="mt-3 rounded-md border bg-background p-3">
-          <p className="text-xs font-medium">Recently captured</p>
-          <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-            {data.events.slice(0, 8).map((e) => (
-              <li key={e.id} className="flex flex-wrap items-center gap-2">
-                <span className="rounded bg-surface-2 px-1.5 py-0.5 uppercase tracking-wide">
-                  {e.kind === "cv" ? "CV" : "Role"}
-                </span>
-                <span className="font-medium text-foreground">{e.title ?? "Untitled"}</span>
-                <span>{e.detail}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+      <p className="mt-3 text-xs text-muted-foreground">
+        Captured CVs and roles appear in the Talent pool and Requisitions pages.
+      </p>
     </div>
   );
 }
@@ -928,6 +915,8 @@ function IntegrationCard({ row }: { row: Integration }) {
 
   const cfg = (row.config ?? {}) as Record<string, unknown>;
   const [enabled, setEnabled] = useState(row.enabled);
+  // Keep the switch in sync with the saved value after any refetch.
+  useEffect(() => setEnabled(row.enabled), [row.enabled]);
   const [baseUrl, setBaseUrl] = useState(typeof cfg["base_url"] === "string" ? (cfg["base_url"] as string) : "");
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<"save" | "test" | "clear" | null>(null);
@@ -1029,8 +1018,32 @@ function IntegrationCard({ row }: { row: Integration }) {
               <KeyRound className="size-3.5" />
             </span>
           ) : null}
-          <Label className="text-xs text-muted-foreground">On</Label>
-          <Switch checked={enabled} onCheckedChange={setEnabled} />
+          <Label className="text-xs text-muted-foreground">{enabled ? "On" : "Off"}</Label>
+          <Switch
+            checked={enabled}
+            disabled={busy === "save"}
+            onCheckedChange={async (next) => {
+              setEnabled(next);
+              setBusy("save");
+              try {
+                await save({
+                  data: {
+                    integrationId: row.id,
+                    provider,
+                    enabled: next,
+                    config: { ...cfg, base_url: baseUrl } as Record<string, string>,
+                    secrets: {},
+                  },
+                });
+                qc.invalidateQueries({ queryKey: ["source_integrations"] });
+              } catch (e) {
+                setEnabled(!next);
+                toast.error(e instanceof Error ? e.message : "Could not update the switch");
+              } finally {
+                setBusy(null);
+              }
+            }}
+          />
         </div>
       </div>
 
