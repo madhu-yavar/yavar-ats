@@ -207,7 +207,11 @@ function clickResumeDownload() {
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
-    return /download\s+(resume|cv)|download.*(resume|cv)|(resume|cv).*download/.test(text);
+    const context = (el.closest("li, tr, article, section, div")?.innerText || "").toLowerCase();
+    return (
+      /download\s+(resume|cv)|download.*(resume|cv)|(resume|cv).*download/.test(text) ||
+      (/download/.test(text) && /\.pdf|\.docx?|resume|curriculum|attachment/.test(context))
+    );
   });
   if (!target) return { ok: false, error: "CV Download button was not found" };
   target.click();
@@ -236,6 +240,7 @@ async function downloadResumeFromButton(tabId) {
       resolve(null);
     }, 12000);
     const listener = (item) => {
+      if (item.byExtensionId && item.byExtensionId !== chrome.runtime.id) return;
       chrome.downloads.onCreated.removeListener(listener);
       clearTimeout(timer);
       resolve(item);
@@ -370,11 +375,30 @@ async function gatherNames(tabId) {
 
 async function sweep({ site, token, pace, tabId, captureJd }) {
   let requisitionId = null;
+  let workTabId = tabId;
+
+  // Work in a dedicated inactive copy so the recruiter can continue using the
+  // original tab without changing the page under an in-flight sweep.
+  try {
+    const sourceTab = await chrome.tabs.get(tabId);
+    if (sourceTab.url) {
+      const workTab = await chrome.tabs.create({ url: sourceTab.url, active: false });
+      if (workTab.id && (await waitForTab(workTab.id))) {
+        workTabId = workTab.id;
+        await setRun({ workTabId });
+        await sleep(2500);
+      } else if (workTab.id) {
+        await chrome.tabs.remove(workTab.id).catch(() => {});
+      }
+    }
+  } catch {
+    workTabId = tabId;
+  }
 
   if (captureJd) {
     await setRun({ note: "Sending the job description across…" });
     try {
-      const page = await run(tabId, readPage);
+      const page = await run(workTabId, readPage);
       if (page && page.text.length > 200) {
         const jd = await send(site, token, {
           kind: "jd",
@@ -392,7 +416,7 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
 
   // Preferred path: the applicant list on screen — click each person by name,
   // read the panel that opens and lift the attached resume file.
-  const names = await gatherNames(tabId);
+  const names = await gatherNames(workTabId);
   if (names.length >= 2) {
     await setRun({
       total: names.length,
@@ -407,12 +431,12 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
       }
       await setRun({ index: i + 1, current: names[i] });
       try {
-        const clicked = await run(tabId, rowScan, ["click", names[i]]);
+        const clicked = await run(workTabId, rowScan, ["click", names[i]]);
         if (!clicked?.ok) throw new Error("that applicant row is no longer on screen");
         await sleep(3000);
-        const page = await run(tabId, grabApplicant);
+        const page = await run(workTabId, grabApplicant);
         if (!page) throw new Error("applicant details did not open");
-        if (!page.resume) page.resume = await downloadResumeFromButton(tabId);
+        if (!page.resume) page.resume = await downloadResumeFromButton(workTabId);
         if (!page.resume)
           throw new Error("the original CV could not be downloaded — nothing was filed");
         await tally(
@@ -426,7 +450,7 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
     }
   } else {
     // Fallback: a page of profile links (search results, saved lists).
-    const links = (await run(tabId, collectApplicantLinks).catch(() => [])) ?? [];
+    const links = (await run(workTabId, collectApplicantLinks).catch(() => [])) ?? [];
     const queue = links.slice(0, MAX_PROFILES);
     await setRun({
       total: queue.length,
@@ -470,6 +494,7 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
   }
 
   const done = await getRun();
+  if (workTabId !== tabId) await chrome.tabs.remove(workTabId).catch(() => {});
   await setRun({
     running: false,
     note: `Finished — ${done?.imported ?? 0} filed, ${done?.skipped ?? 0} without a readable CV, ${
