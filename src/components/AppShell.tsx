@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import {
   BarChart3,
   Briefcase,
@@ -10,11 +11,14 @@ import {
   Inbox,
   LayoutDashboard,
   LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plug,
   ShieldCheck,
   Target,
   Users, BookOpen,
 } from "lucide-react";
+
 
 import { supabase } from "@/integrations/supabase/client";
 import { usePlatform } from "@/hooks/usePlatform";
