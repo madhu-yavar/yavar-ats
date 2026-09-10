@@ -324,7 +324,9 @@ function collectApplicantLinks() {
   for (const a of document.querySelectorAll("a[href]")) {
     const href = a.href;
     if (
-      !/linkedin\.com\/(talent\/(profile|hire\/[^/]+\/(discover|manage)\/profile)|in\/)/i.test(href)
+      !/linkedin\.com\/(talent\/(profile|hire\/[^/]+\/(?:discover|manage)(?:\/[^/?#]+)*\/profile)|in\/)/i.test(
+        href,
+      )
     )
       continue;
     const clean = href.split("#")[0];
