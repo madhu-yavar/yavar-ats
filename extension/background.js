@@ -190,18 +190,60 @@ async function grabApplicant() {
     }
   }
 
-  return { text, title: document.title || null, url: location.href, resume };
+  const genericHeading =
+    /^(applicant|applicants|profile|activity|inbox|projects?|pipeline|recruiter|linkedin|messages?|notifications?)$/i;
+  const headingScope = panel || document.querySelector("main") || document.body;
+  const candidateName = [...headingScope.querySelectorAll('h1, h2, h3, [role="heading"]')]
+    .map((el) => (el.innerText || el.textContent || "").trim().split("\n")[0])
+    .find(
+      (value) =>
+        value &&
+        value.length >= 3 &&
+        value.length <= 120 &&
+        !genericHeading.test(value) &&
+        !/profile activity|row decorations|candidate details/i.test(value),
+    );
+
+  return {
+    text,
+    title: document.title || null,
+    url: location.href,
+    resume,
+    candidateName: candidateName || null,
+  };
 }
 
 /** Click LinkedIn's visible CV download control when no direct file URL exists. */
-function clickResumeDownload() {
+function clickResumeDownload(expectedName) {
   const visible = (el) => {
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight;
   };
-  const controls = [...document.querySelectorAll('button, a[href], [role="button"]')].filter(
-    visible,
-  );
+  const normalise = (value) =>
+    String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const wanted = normalise(expectedName);
+  const rightSide = [...document.querySelectorAll("main section, main article, main div, section, article")]
+    .filter((el) => {
+      const r = el.getBoundingClientRect();
+      const text = normalise(el.innerText);
+      return (
+        r.left >= window.innerWidth * 0.35 &&
+        r.width >= 280 &&
+        r.height >= 180 &&
+        (!wanted || text.includes(wanted)) &&
+        /resume|curriculum|attachment|download/.test(text)
+      );
+    })
+    .sort((a, b) => a.innerText.length - b.innerText.length)[0];
+  const scope = rightSide || document.querySelector("main") || document.body;
+  if (wanted && !normalise(scope.innerText).includes(wanted)) {
+    return { ok: false, error: `LinkedIn did not finish opening ${expectedName}` };
+  }
+  const controls = [...scope.querySelectorAll('button, a[href], [role="button"]')].filter(visible);
   const target = controls.find((el) => {
     const text = [el.innerText, el.getAttribute("aria-label"), el.getAttribute("title")]
       .filter(Boolean)
@@ -232,7 +274,7 @@ function bytesToBase64(bytes) {
  * browser download it creates, cancel the local copy, then read that same
  * authenticated URL into the capture payload.
  */
-async function downloadResumeFromButton(tabId) {
+async function downloadResumeFromButton(tabId, expectedName) {
   let created = null;
   const waitForDownload = new Promise((resolve) => {
     const timer = setTimeout(() => {
@@ -248,8 +290,8 @@ async function downloadResumeFromButton(tabId) {
     chrome.downloads.onCreated.addListener(listener);
   });
 
-  const clicked = await run(tabId, clickResumeDownload).catch(() => null);
-  if (!clicked?.ok) return null;
+  const clicked = await run(tabId, clickResumeDownload, [expectedName]).catch(() => null);
+  if (!clicked?.ok) throw new Error(clicked?.error || "CV Download button was not found");
   created = await waitForDownload;
   if (!created?.id) return null;
 
@@ -288,7 +330,18 @@ function collectApplicantLinks() {
     const clean = href.split("#")[0];
     if (seen.has(clean)) continue;
     seen.add(clean);
-    const label = (a.innerText || "").trim().split("\n")[0] || null;
+    const row = a.closest("li, tr, article, [role=row], [data-test-applicant-row]");
+    const candidates = [a.innerText || "", row?.innerText || ""]
+      .flatMap((value) => value.split("\n"))
+      .map((value) => value.trim().replace(/^view\s+/i, "").replace(/\s+profile$/i, ""))
+      .filter(
+        (value) =>
+          value.length >= 3 &&
+          value.length <= 120 &&
+          !/^(profile|applicant|applied|view profile|profile activity row decorations)$/i.test(value) &&
+          !/ago$|qualification|good fit|not a fit|maybe|pipeline|message/i.test(value),
+      );
+    const label = candidates[0] || null;
     out.push({ url: clean, label });
   }
   return out;
@@ -350,25 +403,25 @@ async function tally(result) {
   });
 }
 
-/** Walk the list, scrolling as we go, and gather every applicant name. */
-async function gatherNames(tabId) {
-  const names = [];
+/** Walk LinkedIn's virtual list and retain each applicant's exact profile URL. */
+async function gatherApplicantLinks(tabId) {
+  const links = [];
   const seen = new Set();
-  for (let pass = 0; pass < 12 && names.length < MAX_PROFILES; pass += 1) {
-    const batch = (await run(tabId, rowScan, ["names"]).catch(() => [])) ?? [];
+  for (let pass = 0; pass < 16 && links.length < MAX_PROFILES; pass += 1) {
+    const batch = (await run(tabId, collectApplicantLinks).catch(() => [])) ?? [];
     let added = 0;
-    for (const n of batch) {
-      if (seen.has(n)) continue;
-      seen.add(n);
-      names.push(n);
+    for (const item of batch) {
+      if (!item?.url || seen.has(item.url)) continue;
+      seen.add(item.url);
+      links.push(item);
       added += 1;
     }
-    await setRun({ note: `Reading the applicant list — ${names.length} found so far…` });
+    await setRun({ note: `Reading the applicant list — ${links.length} found so far…` });
     const scrolled = await run(tabId, rowScan, ["scroll"]).catch(() => null);
     if (!scrolled?.moved && added === 0) break;
     await sleep(900);
   }
-  return names.slice(0, MAX_PROFILES);
+  return links.slice(0, MAX_PROFILES);
 }
 
 /* -------------------------------------------------------------------- sweep */
@@ -400,52 +453,18 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
     }
   }
 
-  // Preferred path: the applicant list on screen — click each person by name,
-  // read the panel that opens and lift the attached resume file.
-  const names = await gatherNames(workTabId);
-  if (names.length >= 2) {
-    await setRun({
-      total: names.length,
-      note: `${names.length} applicants on this list — starting…`,
-    });
+  // Keep exact profile URLs before leaving the virtualised applicant list. A
+  // hard navigation per person prevents LinkedIn's previous detail panel (and
+  // its CV button) from being reused for the next applicant.
+  const queue = await gatherApplicantLinks(workTabId);
+  await setRun({
+    total: queue.length,
+    note: queue.length
+      ? `${queue.length} applicants found — opening each profile directly…`
+      : "No applicant profile links were found — open the applicant list for one job and try again.",
+  });
 
-    for (let i = 0; i < names.length; i += 1) {
-      const state = await getRun();
-      if (!state || state.stop) {
-        await setRun({ running: false, note: "Stopped." });
-        return;
-      }
-      await setRun({ index: i + 1, current: names[i] });
-      try {
-        const clicked = await run(workTabId, rowScan, ["click", names[i]]);
-        if (!clicked?.ok) throw new Error("that applicant row is no longer on screen");
-        await sleep(3000);
-        const page = await run(workTabId, grabApplicant);
-        if (!page) throw new Error("applicant details did not open");
-        if (!page.resume) page.resume = await downloadResumeFromButton(workTabId);
-        if (!page.resume)
-          throw new Error("the original CV could not be downloaded — nothing was filed");
-        await tally(
-          await fileApplicant({ site, token, page, requisitionId, candidateName: names[i] }),
-        );
-      } catch (e) {
-        const s = await getRun();
-        await setRun({ failed: (s?.failed ?? 0) + 1, note: `Skipped ${names[i]} — ${e.message}.` });
-      }
-      if (i < names.length - 1) await sleep(jitter(PACE[pace] ?? PACE.safe));
-    }
-  } else {
-    // Fallback: a page of profile links (search results, saved lists).
-    const links = (await run(workTabId, collectApplicantLinks).catch(() => [])) ?? [];
-    const queue = links.slice(0, MAX_PROFILES);
-    await setRun({
-      total: queue.length,
-      note: queue.length
-        ? "Opening applicants one at a time…"
-        : "No applicant list was found on this page — open the applicant list for one job and try again.",
-    });
-
-    for (let i = 0; i < queue.length; i += 1) {
+  for (let i = 0; i < queue.length; i += 1) {
       const state = await getRun();
       if (!state || state.stop) {
         await setRun({ running: false, note: "Stopped." });
@@ -454,29 +473,31 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
       const item = queue[i];
       await setRun({ index: i + 1, current: item.label ?? "Applicant" });
 
-      let tab = null;
       try {
-        tab = await chrome.tabs.create({ url: item.url, active: false });
-        const ready = await waitForTab(tab.id);
+        await chrome.tabs.update(workTabId, { url: item.url, active: true });
+        const ready = await waitForTab(workTabId);
         if (!ready) throw new Error("the page did not finish loading");
-        await sleep(2500);
-        const page = await run(tab.id, grabApplicant);
+        await sleep(4000);
+        const page = await run(workTabId, grabApplicant);
         if (!page) throw new Error("applicant details did not open");
-        if (!page.resume) page.resume = await downloadResumeFromButton(tab.id);
+        const candidateName = page.candidateName || item.label;
+        if (!candidateName) throw new Error("the applicant name could not be confirmed");
+        if (!page.resume)
+          page.resume = await downloadResumeFromButton(workTabId, candidateName);
         if (!page.resume)
           throw new Error("the original CV could not be downloaded — nothing was filed");
         await tally(
-          await fileApplicant({ site, token, page, requisitionId, candidateName: item.label }),
+          await fileApplicant({ site, token, page, requisitionId, candidateName }),
         );
       } catch (e) {
         const s = await getRun();
-        await setRun({ failed: (s?.failed ?? 0) + 1, note: `Skipped one — ${e.message}.` });
-      } finally {
-        if (tab?.id) await chrome.tabs.remove(tab.id).catch(() => {});
+        await setRun({
+          failed: (s?.failed ?? 0) + 1,
+          note: `Skipped ${item.label || "one applicant"} — ${e.message}.`,
+        });
       }
 
       if (i < queue.length - 1) await sleep(jitter(PACE[pace] ?? PACE.safe));
-    }
   }
 
   const done = await getRun();
