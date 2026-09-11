@@ -28,8 +28,8 @@
 
 ## Next
 
-- [ ] Slice 2: role-scoped CHRO / HR-head dashboards.
-- [ ] Slice 3: embedded HR copilot (one conversation, database-backed).
+- [x] Slice 2: role-scoped CHRO / HR-head dashboards.
+- [x] Slice 3: embedded HR copilot (one conversation, database-backed).
 
 ## LinkedIn Recruiter capture repair
 
