@@ -100,8 +100,13 @@ function inspectActiveProfile(expectedName) {
   const headerMatchesExpected = Boolean(
     expected && header && normalise(header.innerText).includes(expected),
   );
+  const candidateMatchesExpected = Boolean(
+    expected &&
+      candidateName &&
+      (normalise(candidateName).includes(expected) || expected.includes(normalise(candidateName))),
+  );
   const identityConfirmed = Boolean(
-    candidateName && (!expected || headerMatchesExpected || normalise(candidateName) === expected),
+    candidateName && (!expected || headerMatchesExpected || candidateMatchesExpected),
   );
   return {
     ready: Boolean(candidateName && text.length > 200),
@@ -362,16 +367,7 @@ function discoverResumeActions(expectedName) {
         el.querySelector('button, a[href], [role="button"]')
       );
     })
-    .filter(
-      (el, index, all) =>
-        !all.some(
-          (other, i) =>
-            i !== index &&
-            el.contains(other) &&
-            /\.(?:pdf|docx?|rtf)\b/i.test(other.innerText || other.textContent || "") &&
-            other.querySelector('button, a[href], [role="button"]'),
-        ),
-    )
+    .filter((el, index, all) => !all.some((other, i) => i !== index && el.contains(other)))
     .sort((a, b) => a.innerText.length - b.innerText.length);
 
   const actions = [];
@@ -540,22 +536,31 @@ function collectApplicantLinks() {
   const currentProject = current.searchParams.get("project");
   for (const a of document.querySelectorAll("a[href]")) {
     const href = a.href;
-    if (
-      !/linkedin\.com\/talent\/(profile|hire\/[^/]+\/(?:discover|manage)(?:\/[^/?#]+)*\/profile)/i.test(
+    const recruiterProfile =
+      /linkedin\.com\/talent\/(profile|hire\/[^/]+\/(?:discover|manage)(?:\/[^/?#]+)*\/profile)/i.test(
         href,
-      )
-    )
-      continue;
+      );
+    const publicProfile = /linkedin\.com\/in\//i.test(href);
+    if (!recruiterProfile && !publicProfile) continue;
+    const row = a.closest("li, tr, article, [role=row], [data-test-applicant-row]");
+    if (publicProfile) {
+      const explicitApplicantRow = Boolean(
+        row &&
+          !row.closest("aside") &&
+          (row.matches('[role="row"], [data-test-applicant-row], li, tr') ||
+            /applicant|applied|qualification|good fit|not a fit|maybe/i.test(row.innerText || "")),
+      );
+      if (!explicitApplicantRow) continue;
+    }
     const target = new URL(href, location.href);
     const targetProject = target.searchParams.get("project");
     if (currentProject && targetProject && targetProject !== currentProject) continue;
-    if (currentProject && !targetProject) continue;
+    if (recruiterProfile && currentProject && !targetProject) continue;
     if (/recommended|suggested|similar/i.test(a.closest("section, aside")?.innerText || ""))
       continue;
     const clean = href.split("#")[0];
     if (seen.has(clean)) continue;
     seen.add(clean);
-    const row = a.closest("li, tr, article, [role=row], [data-test-applicant-row]");
     const candidates = [a.innerText || "", row?.innerText || ""]
       .flatMap((value) => value.split("\n"))
       .map((value) =>
