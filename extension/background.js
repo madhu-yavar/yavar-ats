@@ -219,11 +219,13 @@ async function grabApplicant(expectedName) {
     .sort((a, b) => a.innerText.length - b.innerText.length);
   const scope = candidates[0] || main;
   const text = (scope.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
-  const publicAnchor = [...scope.querySelectorAll('a[href*="linkedin.com/in/"], a[href*="/in/"]')]
-    .find((el) => {
-      const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height > 0;
-    });
+  const publicAnchor = [
+    ...scope.querySelectorAll('a[href*="linkedin.com/in/"], a[href*="/in/"]'),
+    ...main.querySelectorAll('a[href*="linkedin.com/in/"], a[href*="/in/"]'),
+  ].find((el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  });
   const publicProfileUrl = publicAnchor?.href ? publicAnchor.href.split(/[?#]/)[0] : null;
 
   const urls = [];
