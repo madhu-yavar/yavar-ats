@@ -39,6 +39,7 @@
 - [x] Replace label-based scraping with structure-aware profile, attachment and icon-control discovery.
 - [x] Capture each applicant's public LinkedIn profile separately from the Recruiter-only URL.
 - [x] Report the exact failed stage: navigation, identity, attachment, control, download, storage or analysis.
+- [x] Verify active-profile identity, Highlights CV discovery, Attachments CV discovery, public-profile capture and applicant-queue filtering against screenshot-shaped browser fixtures.
 
 ## Enterprise readiness — slice 2 & 3 (done)
 

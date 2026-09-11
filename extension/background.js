@@ -42,7 +42,10 @@ function readPage() {
 }
 
 function inspectActiveProfile(expectedName) {
-  const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
+  const clean = (value) =>
+    String(value || "")
+      .replace(/\s+/g, " ")
+      .trim();
   const normalise = (value) =>
     clean(value)
       .toLowerCase()
@@ -51,6 +54,17 @@ function inspectActiveProfile(expectedName) {
       .replace(/[^a-z0-9 ]+/g, " ")
       .replace(/\s+/g, " ")
       .trim();
+  const namesMatch = (left, right) => {
+    const a = normalise(left);
+    const b = normalise(right);
+    if (!a || !b) return false;
+    if (a.includes(b) || b.includes(a)) return true;
+    const aTokens = new Set(a.split(" ").filter((token) => token.length > 1));
+    const bTokens = new Set(b.split(" ").filter((token) => token.length > 1));
+    const smaller = aTokens.size <= bTokens.size ? aTokens : bTokens;
+    const larger = smaller === aTokens ? bTokens : aTokens;
+    return smaller.size >= 2 && [...smaller].every((token) => larger.has(token));
+  };
   const expected = normalise(expectedName);
   const main = document.querySelector("main, [role=main]") || document.body;
   const visible = (el) => {
@@ -67,26 +81,36 @@ function inspectActiveProfile(expectedName) {
           value,
         ),
     );
-  const candidateName =
-    headings.find((value) => {
-      const current = normalise(value);
-      return expected && (current.includes(expected) || expected.includes(current));
-    }) || headings[0] || null;
-  const header = [...main.querySelectorAll("header, section, article, div")]
+  const headingName = headings.find((value) => expected && namesMatch(value, expected)) || null;
+  const publicAnchors = [
+    ...main.querySelectorAll(
+      'a[href*="linkedin.com/in/"], a[href*="/in/"], a[href*="public-profile"]',
+    ),
+  ].filter(visible);
+  const profileContainers = [...main.querySelectorAll("header, section, article, div")]
     .filter(visible)
-    .filter((el) => candidateName && normalise(el.innerText).includes(normalise(candidateName)))
-    .filter((el) => el.querySelector('a[href*="/in/"], a[href*="public-profile"]'))
-    .sort((a, b) => clean(a.innerText).length - clean(b.innerText).length)[0];
+    .filter((el) => publicAnchors.some((anchor) => el.contains(anchor)))
+    .filter((el) => !expected || namesMatch(el.innerText, expected))
+    .sort((a, b) => clean(a.innerText).length - clean(b.innerText).length);
+  const header = profileContainers[0] || publicAnchors[0]?.closest("header, section, article, div");
+  const headerLines = clean(header?.innerText).split(/\n+/).map(clean).filter(Boolean);
+  const headerName = headerLines.find((value) => {
+    return expected && namesMatch(value.replace(/\s*[·|].*$/, ""), expected);
+  });
+  const candidateName = headingName || headerName?.replace(/\s*[·|].*$/, "").trim() || null;
   const publicAnchor =
     header?.querySelector('a[href*="linkedin.com/in/"], a[href*="/in/"]') ||
-    [...main.querySelectorAll('a[href*="linkedin.com/in/"], a[href*="/in/"]')].find(visible);
+    publicAnchors.find((anchor) => /linkedin\.com\/in\/|\/in\//i.test(anchor.href));
   const publicProfileUrl = publicAnchor?.href ? publicAnchor.href.split(/[?#]/)[0] : null;
   const text = (main.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
+  const headerMatchesExpected = Boolean(
+    expected && header && namesMatch(header.innerText, expected),
+  );
+  const candidateMatchesExpected = Boolean(
+    expected && candidateName && namesMatch(candidateName, expected),
+  );
   const identityConfirmed = Boolean(
-    candidateName &&
-      (!expected ||
-        normalise(candidateName).includes(expected) ||
-        expected.includes(normalise(candidateName))),
+    candidateName && (!expected || headerMatchesExpected || candidateMatchesExpected),
   );
   return {
     ready: Boolean(candidateName && text.length > 200),
@@ -293,10 +317,25 @@ function discoverResumeActions(expectedName) {
       .replace(/[^a-z0-9 ]+/g, " ")
       .replace(/\s+/g, " ")
       .trim();
+  const namesMatch = (left, right) => {
+    const a = normalise(left);
+    const b = normalise(right);
+    if (!a || !b) return false;
+    if (a.includes(b) || b.includes(a)) return true;
+    const aTokens = new Set(a.split(" ").filter((token) => token.length > 1));
+    const bTokens = new Set(b.split(" ").filter((token) => token.length > 1));
+    const smaller = aTokens.size <= bTokens.size ? aTokens : bTokens;
+    const larger = smaller === aTokens ? bTokens : aTokens;
+    return smaller.size >= 2 && [...smaller].every((token) => larger.has(token));
+  };
   const wanted = normalise(expectedName);
   const main = document.querySelector("main, [role=main]") || document.body;
-  if (wanted && !normalise(main.innerText).includes(wanted)) {
-    return { stage: "identity", error: `LinkedIn did not finish opening ${expectedName}`, actions: [] };
+  if (wanted && !namesMatch(main.innerText, wanted)) {
+    return {
+      stage: "identity",
+      error: `LinkedIn did not finish opening ${expectedName}`,
+      actions: [],
+    };
   }
   const visible = (el) => {
     const r = el.getBoundingClientRect();
@@ -322,18 +361,24 @@ function discoverResumeActions(expectedName) {
   const panel = panelId ? document.getElementById(panelId) : null;
   const roots = [panel, main].filter(Boolean);
   const attachmentRows = [
-    ...new Set(roots.flatMap((root) => [...root.querySelectorAll("li, tr, article, section, div")])),
+    ...new Set(
+      roots.flatMap((root) => [...root.querySelectorAll("li, tr, article, section, div")]),
+    ),
   ]
     .filter((el) => {
       const r = el.getBoundingClientRect();
-      const text = normalise(el.innerText);
+      const rawText = String(el.innerText || el.textContent || "");
+      const text = normalise(rawText);
       return (
         visible(el) &&
         r.width >= 260 &&
         r.height >= 28 &&
         r.height <= 260 &&
-        (/\.pdf\b|\.docx?\b|\.rtf\b|\(resume\)|\bcv\b/.test(text) ||
-          Boolean(el.querySelector('[data-test-icon*="document" i], [data-test-icon*="file" i]'))) &&
+        (/\.(?:pdf|docx?|rtf)\b/i.test(rawText) ||
+          /\b(?:resume|curriculum vitae|cv)\b/.test(text) ||
+          Boolean(
+            el.querySelector('[data-test-icon*="document" i], [data-test-icon*="file" i]'),
+          )) &&
         el.querySelector('button, a[href], [role="button"]')
       );
     })
@@ -347,7 +392,8 @@ function discoverResumeActions(expectedName) {
     controls.forEach((control, controlIndex) => {
       const semantic = valueOf(control).toLowerCase();
       const href = control.href || "";
-      if (/preview|open viewer/.test(semantic) || control.getAttribute("aria-haspopup") === "menu") return;
+      if (/preview|open viewer/.test(semantic) || control.getAttribute("aria-haspopup") === "menu")
+        return;
       let score = 0;
       if (control.hasAttribute("download")) score += 100;
       if (/download|save|arrow-down|download-small/.test(semantic)) score += 90;
@@ -369,7 +415,9 @@ function discoverResumeActions(expectedName) {
         ? "CV attachment was found, but its download control could not be identified"
         : "No CV file row was found in Highlights, Attachments, or recent activity",
     actions,
-    canOpenAttachments: Boolean(attachmentsTab && attachmentsTab.getAttribute("aria-selected") !== "true"),
+    canOpenAttachments: Boolean(
+      attachmentsTab && attachmentsTab.getAttribute("aria-selected") !== "true",
+    ),
   };
 }
 
@@ -377,7 +425,9 @@ function openAttachmentsTab() {
   const main = document.querySelector("main, [role=main]") || document.body;
   const tab = [...main.querySelectorAll('[role="tab"], button, a')].find((el) =>
     /attachments?/i.test(
-      [el.innerText, el.getAttribute("aria-label"), el.getAttribute("title")].filter(Boolean).join(" "),
+      [el.innerText, el.getAttribute("aria-label"), el.getAttribute("title")]
+        .filter(Boolean)
+        .join(" "),
     ),
   );
   if (!tab) return false;
@@ -468,7 +518,9 @@ async function downloadResumeFromButton(tabId, expectedName) {
 
   for (const action of discovery.actions.slice(0, 4)) {
     if (action.href && /\.(pdf|docx?|rtf)(\?|$)/i.test(action.href)) {
-      const direct = await run(tabId, fetchResumeUrl, [action.href, action.filename]).catch(() => null);
+      const direct = await run(tabId, fetchResumeUrl, [action.href, action.filename]).catch(
+        () => null,
+      );
       if (direct) return direct;
     }
     const waiting = waitForDownloadEvent();
@@ -486,25 +538,44 @@ async function downloadResumeFromButton(tabId, expectedName) {
     await chrome.downloads.erase({ id: created.id }).catch(() => {});
     if (resume) return resume;
   }
-  throw new Error("[download] CV controls were tried, but LinkedIn did not deliver a readable file");
+  throw new Error(
+    "[download] CV controls were tried, but LinkedIn did not deliver a readable file",
+  );
 }
 
 /** Collect applicant/profile links from a Recruiter list page. */
 function collectApplicantLinks() {
   const out = [];
   const seen = new Set();
+  const current = new URL(location.href);
+  const currentProject = current.searchParams.get("project");
   for (const a of document.querySelectorAll("a[href]")) {
     const href = a.href;
-    if (
-      !/linkedin\.com\/(talent\/(profile|hire\/[^/]+\/(?:discover|manage)(?:\/[^/?#]+)*\/profile)|in\/)/i.test(
+    const recruiterProfile =
+      /linkedin\.com\/talent\/(profile|hire\/[^/]+\/(?:discover|manage)(?:\/[^/?#]+)*\/profile)/i.test(
         href,
-      )
-    )
+      );
+    const publicProfile = /linkedin\.com\/in\//i.test(href);
+    if (!recruiterProfile && !publicProfile) continue;
+    const row = a.closest("li, tr, article, [role=row], [data-test-applicant-row]");
+    if (publicProfile) {
+      const explicitApplicantRow = Boolean(
+        row &&
+        !row.closest("aside") &&
+        (row.matches('[role="row"], [data-test-applicant-row], li, tr') ||
+          /applicant|applied|qualification|good fit|not a fit|maybe/i.test(row.innerText || "")),
+      );
+      if (!explicitApplicantRow) continue;
+    }
+    const target = new URL(href, location.href);
+    const targetProject = target.searchParams.get("project");
+    if (currentProject && targetProject && targetProject !== currentProject) continue;
+    if (recruiterProfile && currentProject && !targetProject) continue;
+    if (/recommended|suggested|similar/i.test(a.closest("section, aside")?.innerText || ""))
       continue;
     const clean = href.split("#")[0];
     if (seen.has(clean)) continue;
     seen.add(clean);
-    const row = a.closest("li, tr, article, [role=row], [data-test-applicant-row]");
     const candidates = [a.innerText || "", row?.innerText || ""]
       .flatMap((value) => value.split("\n"))
       .map((value) =>
@@ -667,7 +738,8 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
         if (snapshot?.ready && snapshot.identityConfirmed) break;
         await sleep(500);
       }
-      if (!snapshot?.ready) throw new Error("[navigation] the active profile did not finish rendering");
+      if (!snapshot?.ready)
+        throw new Error("[navigation] the active profile did not finish rendering");
       if (!snapshot.identityConfirmed)
         throw new Error(
           `[identity] the opened profile did not match ${item.label || "the queued applicant"}`,
@@ -700,38 +772,39 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
   });
 }
 
-chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
-  if (msg?.type === "status") {
-    getRun().then((r) => respond({ run: r }));
-    return true;
-  }
-  if (msg?.type === "stop") {
-    setRun({ stop: true }).then(() => respond({ ok: true }));
-    return true;
-  }
-  if (msg?.type === "start") {
-    (async () => {
-      const existing = await getRun();
-      if (existing?.running) return respond({ ok: false, error: "A sweep is already running." });
-      await chrome.storage.local.set({
-        run: {
-          running: true,
-          stop: false,
-          index: 0,
-          total: 0,
-          imported: 0,
-          skipped: 0,
-          failed: 0,
-          note: "Reading the applicant list…",
-          startedAt: Date.now(),
-        },
-      });
-      respond({ ok: true });
-      sweep(msg.payload).catch(async (e) => {
-        await setRun({ running: false, note: e.message || "The sweep stopped unexpectedly." });
-      });
-    })();
-    return true;
-  }
-  return false;
-});
+if (typeof chrome !== "undefined" && chrome.runtime?.onMessage)
+  chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
+    if (msg?.type === "status") {
+      getRun().then((r) => respond({ run: r }));
+      return true;
+    }
+    if (msg?.type === "stop") {
+      setRun({ stop: true }).then(() => respond({ ok: true }));
+      return true;
+    }
+    if (msg?.type === "start") {
+      (async () => {
+        const existing = await getRun();
+        if (existing?.running) return respond({ ok: false, error: "A sweep is already running." });
+        await chrome.storage.local.set({
+          run: {
+            running: true,
+            stop: false,
+            index: 0,
+            total: 0,
+            imported: 0,
+            skipped: 0,
+            failed: 0,
+            note: "Reading the applicant list…",
+            startedAt: Date.now(),
+          },
+        });
+        respond({ ok: true });
+        sweep(msg.payload).catch(async (e) => {
+          await setRun({ running: false, note: e.message || "The sweep stopped unexpectedly." });
+        });
+      })();
+      return true;
+    }
+    return false;
+  });
