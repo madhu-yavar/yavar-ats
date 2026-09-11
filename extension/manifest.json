@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ATSIQ Capture",
-  "version": "1.12.0",
+  "version": "1.13.0",
   "description": "Capture the job description or CV you are looking at, or run a guided sweep of a LinkedIn Recruiter applicant list, straight into ATSIQ.",
   "permissions": ["activeTab", "tabs", "storage", "scripting", "downloads"],
   "host_permissions": [

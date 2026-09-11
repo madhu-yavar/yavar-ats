@@ -590,6 +590,42 @@ async function waitForDownloadEvent(timeoutMs = 6500) {
   });
 }
 
+/**
+ * Read an attachment URL from the extension's own context. LinkedIn's
+ * attachment hosts send no CORS headers, so a page-context fetch of the
+ * intercepted download URL is blocked even though the file is right there —
+ * the extension has host permission for those hosts and is not.
+ */
+async function fetchResumeInBackground(url, fallbackName) {
+  const res = await fetch(url, { credentials: "include" });
+  if (!res.ok) throw new Error(`CV download returned ${res.status}`);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.length < 800 || bytes.length > 6000000)
+    throw new Error("downloaded CV has an invalid size");
+  const disposition = res.headers.get("content-disposition") || "";
+  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+  let filename = encoded
+    ? decodeURIComponent(encoded)
+    : plain ||
+      String(fallbackName || "")
+        .split(/[\\/]/)
+        .pop() ||
+      "resume.pdf";
+  if (!/\.(pdf|docx?|txt|rtf)$/i.test(filename)) {
+    const ct = (res.headers.get("content-type") || "").toLowerCase();
+    filename += ct.includes("word") || ct.includes("officedocument") ? ".docx" : ".pdf";
+  }
+  return { filename, content: bytesToBase64(bytes) };
+}
+
+/** Try the signed-in page first, then the extension context (no CORS limits). */
+async function readResumeUrl(tabId, url, fallbackName) {
+  const viaPage = await run(tabId, fetchResumeUrl, [url, fallbackName]).catch(() => null);
+  if (viaPage) return viaPage;
+  return await fetchResumeInBackground(url, fallbackName).catch(() => null);
+}
+
 async function downloadResumeFromButton(tabId, expectedName) {
   let discovery = await run(tabId, discoverResumeActions, [expectedName]).catch(() => null);
   if (discovery?.canOpenAttachments && !discovery.actions?.length) {
@@ -603,14 +639,14 @@ async function downloadResumeFromButton(tabId, expectedName) {
     );
   }
 
+  const failures = [];
   for (const action of discovery.actions.slice(0, 4)) {
     if (action.href && /\.(pdf|docx?|rtf)(\?|$)/i.test(action.href)) {
-      const direct = await run(tabId, fetchResumeUrl, [action.href, action.filename]).catch(
-        () => null,
-      );
+      const direct = await readResumeUrl(tabId, action.href, action.filename);
       if (direct) return direct;
+      failures.push("direct link unreadable");
     }
-    const waiting = waitForDownloadEvent();
+    const waiting = waitForDownloadEvent(12000);
     const clicked = await run(tabId, clickMarkedResumeAction, [action.token]).catch(() => false);
     if (!clicked) {
       await waiting;
@@ -618,26 +654,28 @@ async function downloadResumeFromButton(tabId, expectedName) {
     }
     const created = await waiting;
     if (!created?.id) {
-      await sleep(700);
-      const previewUrls =
-        (await run(tabId, discoverPreviewResumeUrls).catch(() => [])) ?? [];
+      await sleep(1200);
+      const previewUrls = (await run(tabId, discoverPreviewResumeUrls).catch(() => [])) ?? [];
       for (const previewUrl of previewUrls) {
-        const previewResume = await run(tabId, fetchResumeUrl, [previewUrl, action.filename]).catch(
-          () => null,
-        );
+        const previewResume = await readResumeUrl(tabId, previewUrl, action.filename);
         if (previewResume) return previewResume;
       }
+      failures.push("no browser download and no readable preview file");
       continue;
     }
-    await chrome.downloads.cancel(created.id).catch(() => {});
     const url = created.finalUrl || created.url;
-    if (!url) continue;
-    const resume = await run(tabId, fetchResumeUrl, [url, created.filename]).catch(() => null);
+    // Read the same authenticated URL before releasing LinkedIn's own copy: a
+    // cancelled item can invalidate the single-use attachment link.
+    const resume = url ? await readResumeUrl(tabId, url, created.filename) : null;
+    await chrome.downloads.cancel(created.id).catch(() => {});
     await chrome.downloads.erase({ id: created.id }).catch(() => {});
     if (resume) return resume;
+    failures.push(url ? "attachment link refused the read" : "download carried no URL");
   }
   throw new Error(
-    "[download] CV controls were tried, but LinkedIn did not deliver a readable file",
+    `[download] CV controls were tried, but LinkedIn did not deliver a readable file${
+      failures.length ? ` (${[...new Set(failures)].join("; ")})` : ""
+    }`,
   );
 }
 
