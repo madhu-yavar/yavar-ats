@@ -312,6 +312,7 @@ export async function ingestCandidate(input: {
     merged: Boolean(existing),
     emailMissing,
     resumeStored,
+    resumeError,
     skills: row.skills,
     linkedinUrl: row.linkedin_url ?? null,
     githubUrl: row.github_url,
