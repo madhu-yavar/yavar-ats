@@ -24,6 +24,7 @@ import { runAiScreening } from "@/lib/matching.functions";
 import { verifyCandidate } from "@/lib/verification.functions";
 import { createAssessment } from "@/lib/assessment.functions";
 import { getResumeDownloadUrl } from "@/lib/resume.functions";
+import { downloadResume } from "@/lib/resume-download";
 import { normalizeExternalUrl } from "@/lib/external-links";
 import { nextAction, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
 import { StageMover } from "@/components/StageMover";
@@ -51,7 +52,8 @@ export const Route = createFileRoute("/candidates/$id")({
       { property: "og:title", content: "Candidate profile — match, social score & interviews" },
       {
         property: "og:description",
-        content: "Evidence-backed match detail, AI screening results and L1–L3 evaluation history for one candidate.",
+        content:
+          "Evidence-backed match detail, AI screening results and L1–L3 evaluation history for one candidate.",
       },
     ],
   }),
@@ -155,7 +157,9 @@ function CandidateDetail() {
     setVerifying(true);
     try {
       const out = await verify({ data: { candidateId: id } });
-      toast.success(`Authenticity ${out.authenticity_score}/100 — ${out.claims.length} claims checked`);
+      toast.success(
+        `Authenticity ${out.authenticity_score}/100 — ${out.claims.length} claims checked`,
+      );
       qc.invalidateQueries({ queryKey: ["candidate_verifications"] });
       qc.invalidateQueries({ queryKey: ["candidate", id] });
     } catch (e) {
@@ -197,7 +201,7 @@ function CandidateDetail() {
               setDownloading(true);
               try {
                 const out = await getResumeUrl({ data: { candidateId: c.id } });
-                if (out.ok) window.open(out.url, "_blank", "noopener");
+                if (out.ok) downloadResume(out);
                 else toast.error(out.error);
               } finally {
                 setDownloading(false);
@@ -215,7 +219,9 @@ function CandidateDetail() {
           <section className="panel p-5">
             <h2 className="font-semibold">Applications & match scores</h2>
             {myApps.length === 0 ? (
-              <p className="mt-3 text-sm text-muted-foreground">Not attached to any requisition yet.</p>
+              <p className="mt-3 text-sm text-muted-foreground">
+                Not attached to any requisition yet.
+              </p>
             ) : (
               <ul className="mt-4 space-y-4">
                 {myApps.map((a) => {
@@ -280,7 +286,11 @@ function CandidateDetail() {
                       ) : (
                         <p className="mt-3 text-sm text-muted-foreground">
                           Not scored yet —{" "}
-                          <Link to="/matching" search={{ req: a.requisition_id }} className="underline">
+                          <Link
+                            to="/matching"
+                            search={{ req: a.requisition_id }}
+                            className="underline"
+                          >
                             run the matching engine
                           </Link>
                           .
@@ -294,7 +304,8 @@ function CandidateDetail() {
                           onClick={() => aiScreen(a.id, a.requisition_id)}
                           disabled={busy === a.id}
                         >
-                          <Sparkles className="size-4" /> {ai ? "Re-run AI screening" : "Run AI screening"}
+                          <Sparkles className="size-4" />{" "}
+                          {ai ? "Re-run AI screening" : "Run AI screening"}
                         </Button>
                       </div>
 
@@ -309,11 +320,15 @@ function CandidateDetail() {
                           <p className="mt-3 text-sm">{ai.summary}</p>
                           <ol className="mt-3 space-y-2 text-xs text-muted-foreground">
                             {(Array.isArray(ai.transcript)
-                              ? (ai.transcript as unknown as { question: string; expected_signal: string }[])
+                              ? (ai.transcript as unknown as {
+                                  question: string;
+                                  expected_signal: string;
+                                }[])
                               : []
                             ).map((t, i) => (
                               <li key={i}>
-                                <span className="text-foreground">{t.question}</span> — {t.expected_signal}
+                                <span className="text-foreground">{t.question}</span> —{" "}
+                                {t.expected_signal}
                               </li>
                             ))}
                           </ol>
@@ -328,8 +343,11 @@ function CandidateDetail() {
 
           <section className="panel p-5">
             <h2 className="font-semibold">Interview evaluations</h2>
-            {(evals.data ?? []).filter((e) => myApps.some((a) => a.id === e.application_id)).length === 0 ? (
-              <p className="mt-3 text-sm text-muted-foreground">No L1–L3 evaluations recorded yet.</p>
+            {(evals.data ?? []).filter((e) => myApps.some((a) => a.id === e.application_id))
+              .length === 0 ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                No L1–L3 evaluations recorded yet.
+              </p>
             ) : (
               <ul className="mt-3 space-y-3 text-sm">
                 {(evals.data ?? [])
@@ -405,8 +423,15 @@ function CandidateDetail() {
               ) : null}
             </div>
 
-            <Button size="sm" variant="outline" className="mt-3" onClick={runVerification} disabled={verifying}>
-              <Sparkles className="size-4" /> {verifying ? "Verifying…" : verification ? "Re-verify" : "Run verification"}
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-3"
+              onClick={runVerification}
+              disabled={verifying}
+            >
+              <Sparkles className="size-4" />{" "}
+              {verifying ? "Verifying…" : verification ? "Re-verify" : "Run verification"}
             </Button>
 
             {verification ? (
@@ -458,20 +483,23 @@ function CandidateDetail() {
                   </ul>
                 </div>
                 <p className="num text-xs text-muted-foreground">
-                  Last run {new Date(verification.created_at).toLocaleString()} · {verification.model}
+                  Last run {new Date(verification.created_at).toLocaleString()} ·{" "}
+                  {verification.model}
                 </p>
               </div>
             ) : (
               <p className="mt-3 text-xs text-muted-foreground">
-                Not verified yet. A verdict of <span className="font-medium">unverified</span> means no public trace was
-                found — not that the claim is false.
+                Not verified yet. A verdict of <span className="font-medium">unverified</span> means
+                no public trace was found — not that the claim is false.
               </p>
             )}
           </section>
 
           <section className="panel p-5">
             <h2 className="font-semibold">Social profiling</h2>
-            <p className="text-xs text-muted-foreground">Fetched live during scoring; 15% of the default weight.</p>
+            <p className="text-xs text-muted-foreground">
+              Fetched live during scoring; 15% of the default weight.
+            </p>
             <div className="mt-4 space-y-3">
               {social.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No signals captured yet.</p>
@@ -480,9 +508,13 @@ function CandidateDetail() {
                   <div key={s.id} className="rounded-lg border border-border p-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium capitalize">{s.provider}</span>
-                      <span className="num text-sm font-semibold">{s.status === "ok" ? s.score : "n/a"}</span>
+                      <span className="num text-sm font-semibold">
+                        {s.status === "ok" ? s.score : "n/a"}
+                      </span>
                     </div>
-                    {s.handle ? <p className="num text-xs text-muted-foreground">@{s.handle}</p> : null}
+                    {s.handle ? (
+                      <p className="num text-xs text-muted-foreground">@{s.handle}</p>
+                    ) : null}
                     <p className="mt-1 text-xs text-muted-foreground">{s.rationale}</p>
                   </div>
                 ))
@@ -518,26 +550,36 @@ function CandidateDetail() {
               <div>
                 <h2 className="font-semibold">Mindset & ways of working</h2>
                 <p className="text-xs text-muted-foreground">
-                  Measured from the candidate&apos;s own situational answers — never inferred from the CV.
+                  Measured from the candidate&apos;s own situational answers — never inferred from
+                  the CV.
                 </p>
               </div>
               <Button size="sm" variant="outline" onClick={sendAssessment} disabled={assessing}>
-                {assessing ? "Writing questions…" : assessment ? "New questionnaire" : "Send questionnaire"}
+                {assessing
+                  ? "Writing questions…"
+                  : assessment
+                    ? "New questionnaire"
+                    : "Send questionnaire"}
               </Button>
             </div>
 
             {!assessment ? (
               <p className="mt-3 text-sm text-muted-foreground">
-                No questionnaire sent yet. Creating one copies a private link you can email to the candidate.
+                No questionnaire sent yet. Creating one copies a private link you can email to the
+                candidate.
               </p>
             ) : assessment.status !== "completed" ? (
               <div className="mt-3 space-y-2 text-sm">
-                <p className="text-muted-foreground">Sent, awaiting the candidate&apos;s answers.</p>
+                <p className="text-muted-foreground">
+                  Sent, awaiting the candidate&apos;s answers.
+                </p>
                 <button
                   type="button"
                   className="text-xs underline"
                   onClick={() => {
-                    navigator.clipboard?.writeText(`${window.location.origin}/assess/${assessment.token}`);
+                    navigator.clipboard?.writeText(
+                      `${window.location.origin}/assess/${assessment.token}`,
+                    );
                     toast.success("Link copied");
                   }}
                 >
@@ -550,8 +592,13 @@ function CandidateDetail() {
                   <span className="text-2xl font-semibold">{assessment.mindset_score ?? 0}</span>
                   <span className="text-xs text-muted-foreground">/ 100 mindset</span>
                 </div>
-                {((assessment.dimensions as unknown as { dimension: string; score: number; evidence: string }[]) ??
-                  []).map((d) => (
+                {(
+                  (assessment.dimensions as unknown as {
+                    dimension: string;
+                    score: number;
+                    evidence: string;
+                  }[]) ?? []
+                ).map((d) => (
                   <div key={d.dimension}>
                     <ScoreBar label={d.dimension} score={d.score} />
                     <p className="mt-1 text-xs text-muted-foreground">{d.evidence}</p>
@@ -577,7 +624,9 @@ function CandidateDetail() {
                     </ul>
                   </div>
                 ) : null}
-                {assessment.summary ? <p className="text-sm text-muted-foreground">{assessment.summary}</p> : null}
+                {assessment.summary ? (
+                  <p className="text-sm text-muted-foreground">{assessment.summary}</p>
+                ) : null}
               </div>
             )}
           </section>

@@ -1,7 +1,6 @@
 /**
- * Signed, short-lived download links for the original CV files kept in the
- * private resume vault. The signed URL expires in two minutes and can only be
- * minted by a signed-in member of the organisation that owns the candidate.
+ * Authenticated CV delivery from the private resume vault. The bytes travel
+ * through ATSIQ so browser privacy tools never need to open the vault host.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -13,17 +12,33 @@ export const getResumeDownloadUrl = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     const { data: candidate } = await context.supabase
       .from("candidates")
-      .select("id, resume_file_path")
+      .select("id, full_name, resume_file_path")
       .eq("id", data.candidateId)
       .maybeSingle();
     if (!candidate?.resume_file_path) {
       return { ok: false as const, error: "No original CV file is stored for this candidate." };
     }
-    const { data: signed, error } = await context.supabase.storage
+    const { data: file, error } = await context.supabase.storage
       .from("resumes")
-      .createSignedUrl(candidate.resume_file_path, 120);
-    if (error || !signed?.signedUrl) {
+      .download(candidate.resume_file_path);
+    if (error || !file) {
       return { ok: false as const, error: "That CV file could not be opened." };
     }
-    return { ok: true as const, url: signed.signedUrl };
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (bytes.byteLength > 20 * 1024 * 1024) {
+      return { ok: false as const, error: "That CV is too large to download through ATSIQ." };
+    }
+    const storedName = candidate.resume_file_path.split("/").pop() ?? "resume.pdf";
+    let filename = storedName;
+    try {
+      filename = decodeURIComponent(storedName);
+    } catch {
+      // Keep the stored name when it is not URI encoded.
+    }
+    return {
+      ok: true as const,
+      base64: Buffer.from(bytes).toString("base64"),
+      contentType: file.type || "application/octet-stream",
+      filename: filename || `${candidate.full_name || "candidate"}-CV.pdf`,
+    };
   });
