@@ -164,7 +164,7 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
         profileUrl: input.publicProfileUrl ?? input.sourceUrl ?? null,
         resumeFile: fileBytes ? { filename: fileName, bytes: fileBytes } : null,
         requireResumeStored: false,
-        profileOnly: Boolean(input.profileOnly),
+        profileOnly: profileOnly || Boolean(input.profileOnly),
       });
       // A vault problem must never lose the person: keep the parsed profile and
       // say plainly why the original file is still missing.
