@@ -69,8 +69,13 @@ export async function storeResumeFile(input: {
   filename: string;
   bytes: Uint8Array;
 }): Promise<{ path: string | null; error: string | null }> {
-  if (!input.orgId || input.bytes.length === 0) {
-    return { path: null, error: !input.orgId ? "no organisation on the candidate" : "empty file" };
+  if (!input.orgId || input.bytes.byteLength === 0) {
+    return {
+      path: null,
+      error: !input.orgId
+        ? "no organisation on the candidate"
+        : "the CV file buffer was empty after parsing",
+    };
   }
   try {
     const safeName = input.filename.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "resume.pdf";
@@ -233,13 +238,8 @@ export async function ingestCandidate(input: {
     existing = data;
   }
   if (!existing) {
-    let emailQuery = supabaseAdmin
-      .from("candidates")
-      .select("id, skills")
-      .eq("email", email);
-    emailQuery = input.orgId
-      ? emailQuery.eq("org_id", input.orgId)
-      : emailQuery.is("org_id", null);
+    let emailQuery = supabaseAdmin.from("candidates").select("id, skills").eq("email", email);
+    emailQuery = input.orgId ? emailQuery.eq("org_id", input.orgId) : emailQuery.is("org_id", null);
     const { data } = await emailQuery.maybeSingle();
     existing = data;
   }
@@ -309,7 +309,6 @@ export async function ingestCandidate(input: {
     resumeStored = Boolean(stored.path);
     resumeError = stored.error;
   }
-
 
   return {
     candidateId,
