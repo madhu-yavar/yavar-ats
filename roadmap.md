@@ -33,9 +33,9 @@
 
 ## LinkedIn Recruiter capture repair
 
-- [ ] Read the active applicant profile rather than the recommendations panel.
-- [ ] Download the CV from the project Highlights attachment row.
-- [ ] Persist LinkedIn profile analysis and background JD/CV scoring after capture.
+- [x] Read the active applicant profile rather than the recommendations panel.
+- [x] Download the CV from the project Highlights attachment row.
+- [x] Persist LinkedIn profile analysis and background JD/CV scoring after capture.
 
 ## Enterprise readiness — slice 2 & 3 (done)
 

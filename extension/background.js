@@ -133,7 +133,17 @@ async function grabApplicant(expectedName) {
       .replace(/[^a-z0-9 ]+/g, " ")
       .replace(/\s+/g, " ")
       .trim();
-  const wanted = normalise(expectedName);
+  const usableName = (value) => {
+    const clean = String(value || "")
+      .replace(/\s*[|–-]\s*(LinkedIn|Recruiter).*$/i, "")
+      .trim();
+    if (clean.length < 3 || clean.length > 120) return null;
+    if (/notifications? total|profile activity|row decorations|linkedin recruiter/i.test(clean))
+      return null;
+    return clean;
+  };
+  const candidateName = usableName(document.title) || usableName(expectedName);
+  const wanted = normalise(candidateName);
   const main =
     document.querySelector("main") || document.querySelector("[role=main]") || document.body;
   const candidates = [...main.querySelectorAll("section, article, div")]
@@ -203,7 +213,7 @@ async function grabApplicant(expectedName) {
     title: document.title || null,
     url: location.href,
     resume,
-    candidateName: expectedName || null,
+    candidateName,
   };
 }
 
@@ -355,7 +365,9 @@ function collectApplicantLinks() {
           !/^(profile|applicant|applied|view profile|profile activity row decorations)$/i.test(
             value,
           ) &&
-          !/ago$|qualification|good fit|not a fit|maybe|pipeline|message/i.test(value),
+          !/notifications? total|ago$|qualification|good fit|not a fit|maybe|pipeline|message/i.test(
+            value,
+          ),
       );
     const label = candidates[0] || null;
     out.push({ url: clean, label });
@@ -496,7 +508,7 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
       await sleep(4000);
       const page = await run(workTabId, grabApplicant, [item.label]);
       if (!page) throw new Error("applicant details did not open");
-      const candidateName = item.label || page.candidateName;
+        const candidateName = page.candidateName || item.label;
       if (!candidateName) throw new Error("the applicant name could not be confirmed");
       if (!page.resume) page.resume = await downloadResumeFromButton(workTabId, candidateName);
       if (!page.resume)
