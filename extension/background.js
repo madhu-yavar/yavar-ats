@@ -134,7 +134,8 @@ async function grabApplicant(expectedName) {
       .replace(/\s+/g, " ")
       .trim();
   const wanted = normalise(expectedName);
-  const main = document.querySelector("main") || document.querySelector("[role=main]") || document.body;
+  const main =
+    document.querySelector("main") || document.querySelector("[role=main]") || document.body;
   const candidates = [...main.querySelectorAll("section, article, div")]
     .filter((el) => {
       const r = el.getBoundingClientRect();
@@ -219,7 +220,9 @@ function clickResumeDownload(expectedName) {
       .replace(/\s+/g, " ")
       .trim();
   const wanted = normalise(expectedName);
-  const attachmentRows = [...document.querySelectorAll("main li, main tr, main article, main section, main div")]
+  const attachmentRows = [
+    ...document.querySelectorAll("main li, main tr, main article, main section, main div"),
+  ]
     .filter((el) => {
       const r = el.getBoundingClientRect();
       const text = normalise(el.innerText);
@@ -232,12 +235,15 @@ function clickResumeDownload(expectedName) {
       );
     })
     .sort((a, b) => a.innerText.length - b.innerText.length)[0];
-  const profile = document.querySelector("main") || document.querySelector("[role=main]") || document.body;
+  const profile =
+    document.querySelector("main") || document.querySelector("[role=main]") || document.body;
   if (wanted && !normalise(profile.innerText).includes(wanted)) {
     return { ok: false, error: `LinkedIn did not finish opening ${expectedName}` };
   }
   if (!attachmentRows) return { ok: false, error: "CV attachment row was not found" };
-  const controls = [...attachmentRows.querySelectorAll('button, a[href], [role="button"]')].filter(visible);
+  const controls = [...attachmentRows.querySelectorAll('button, a[href], [role="button"]')].filter(
+    visible,
+  );
   const labelled = controls.find((el) => {
     const text = [el.innerText, el.getAttribute("aria-label"), el.getAttribute("title")]
       .filter(Boolean)
@@ -247,7 +253,14 @@ function clickResumeDownload(expectedName) {
   });
   const iconOnly = [...controls]
     .reverse()
-    .find((el) => !/preview/i.test([el.innerText, el.getAttribute("aria-label"), el.getAttribute("title")].filter(Boolean).join(" ")));
+    .find(
+      (el) =>
+        !/preview/i.test(
+          [el.innerText, el.getAttribute("aria-label"), el.getAttribute("title")]
+            .filter(Boolean)
+            .join(" "),
+        ),
+    );
   const target = labelled || iconOnly;
   if (!target) return { ok: false, error: "CV Download button was not found" };
   target.click();
@@ -329,12 +342,19 @@ function collectApplicantLinks() {
     const row = a.closest("li, tr, article, [role=row], [data-test-applicant-row]");
     const candidates = [a.innerText || "", row?.innerText || ""]
       .flatMap((value) => value.split("\n"))
-      .map((value) => value.trim().replace(/^view\s+/i, "").replace(/\s+profile$/i, ""))
+      .map((value) =>
+        value
+          .trim()
+          .replace(/^view\s+/i, "")
+          .replace(/\s+profile$/i, ""),
+      )
       .filter(
         (value) =>
           value.length >= 3 &&
           value.length <= 120 &&
-          !/^(profile|applicant|applied|view profile|profile activity row decorations)$/i.test(value) &&
+          !/^(profile|applicant|applied|view profile|profile activity row decorations)$/i.test(
+            value,
+          ) &&
           !/ago$|qualification|good fit|not a fit|maybe|pipeline|message/i.test(value),
       );
     const label = candidates[0] || null;
@@ -461,39 +481,36 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
   });
 
   for (let i = 0; i < queue.length; i += 1) {
-      const state = await getRun();
-      if (!state || state.stop) {
-        await setRun({ running: false, note: "Stopped." });
-        return;
-      }
-      const item = queue[i];
-      await setRun({ index: i + 1, current: item.label ?? "Applicant" });
+    const state = await getRun();
+    if (!state || state.stop) {
+      await setRun({ running: false, note: "Stopped." });
+      return;
+    }
+    const item = queue[i];
+    await setRun({ index: i + 1, current: item.label ?? "Applicant" });
 
-      try {
-        await chrome.tabs.update(workTabId, { url: item.url, active: true });
-        const ready = await waitForTab(workTabId);
-        if (!ready) throw new Error("the page did not finish loading");
-        await sleep(4000);
-        const page = await run(workTabId, grabApplicant, [item.label]);
-        if (!page) throw new Error("applicant details did not open");
-        const candidateName = item.label || page.candidateName;
-        if (!candidateName) throw new Error("the applicant name could not be confirmed");
-        if (!page.resume)
-          page.resume = await downloadResumeFromButton(workTabId, candidateName);
-        if (!page.resume)
-          throw new Error("the original CV could not be downloaded — nothing was filed");
-        await tally(
-          await fileApplicant({ site, token, page, requisitionId, candidateName }),
-        );
-      } catch (e) {
-        const s = await getRun();
-        await setRun({
-          failed: (s?.failed ?? 0) + 1,
-          note: `Skipped ${item.label || "one applicant"} — ${e.message}.`,
-        });
-      }
+    try {
+      await chrome.tabs.update(workTabId, { url: item.url, active: true });
+      const ready = await waitForTab(workTabId);
+      if (!ready) throw new Error("the page did not finish loading");
+      await sleep(4000);
+      const page = await run(workTabId, grabApplicant, [item.label]);
+      if (!page) throw new Error("applicant details did not open");
+      const candidateName = item.label || page.candidateName;
+      if (!candidateName) throw new Error("the applicant name could not be confirmed");
+      if (!page.resume) page.resume = await downloadResumeFromButton(workTabId, candidateName);
+      if (!page.resume)
+        throw new Error("the original CV could not be downloaded — nothing was filed");
+      await tally(await fileApplicant({ site, token, page, requisitionId, candidateName }));
+    } catch (e) {
+      const s = await getRun();
+      await setRun({
+        failed: (s?.failed ?? 0) + 1,
+        note: `Skipped ${item.label || "one applicant"} — ${e.message}.`,
+      });
+    }
 
-      if (i < queue.length - 1) await sleep(jitter(PACE[pace] ?? PACE.safe));
+    if (i < queue.length - 1) await sleep(jitter(PACE[pace] ?? PACE.safe));
   }
 
   const done = await getRun();
