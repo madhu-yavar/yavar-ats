@@ -299,6 +299,31 @@ function bytesToBase64(bytes) {
   return btoa(bin);
 }
 
+/** Read an intercepted attachment URL inside LinkedIn's signed-in page. */
+async function fetchResumeUrl(url, fallbackName) {
+  const res = await fetch(url, { credentials: "include" });
+  if (!res.ok) throw new Error(`CV download returned ${res.status}`);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.length < 800 || bytes.length > 6000000)
+    throw new Error("downloaded CV has an invalid size");
+  const disposition = res.headers.get("content-disposition") || "";
+  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+  let filename = encoded
+    ? decodeURIComponent(encoded)
+    : plain || String(fallbackName || "").split(/[\\/]/).pop() || "resume.pdf";
+  if (!/\.(pdf|docx?|txt|rtf)$/i.test(filename)) {
+    const ct = (res.headers.get("content-type") || "").toLowerCase();
+    filename += ct.includes("word") || ct.includes("officedocument") ? ".docx" : ".pdf";
+  }
+  let bin = "";
+  const chunk = 8192;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return { filename, content: btoa(bin) };
+}
+
 /**
  * Recruiter uses a real Download button rather than an <a href>. Observe the
  * browser download it creates, cancel the local copy, then read that same
@@ -328,23 +353,11 @@ async function downloadResumeFromButton(tabId, expectedName) {
   await chrome.downloads.cancel(created.id).catch(() => {});
   const url = created.finalUrl || created.url;
   if (!url) return null;
-  const res = await fetch(url, { credentials: "include" });
-  if (!res.ok) throw new Error(`CV download returned ${res.status}`);
-  const bytes = new Uint8Array(await res.arrayBuffer());
-  if (bytes.length < 800 || bytes.length > 6000000)
-    throw new Error("downloaded CV has an invalid size");
-  const disposition = res.headers.get("content-disposition") || "";
-  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
-  const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1];
-  let filename = encoded
-    ? decodeURIComponent(encoded)
-    : plain || created.filename?.split(/[\\/]/).pop() || "resume.pdf";
-  if (!/\.(pdf|docx?|txt|rtf)$/i.test(filename)) {
-    const ct = (res.headers.get("content-type") || created.mime || "").toLowerCase();
-    filename += ct.includes("word") || ct.includes("officedocument") ? ".docx" : ".pdf";
-  }
+  const resume = await run(tabId, fetchResumeUrl, [url, created.filename]).catch((error) => {
+    throw new Error(error?.message || "the signed-in CV download could not be read");
+  });
   await chrome.downloads.erase({ id: created.id }).catch(() => {});
-  return { filename, content: bytesToBase64(bytes) };
+  return resume;
 }
 
 /** Collect applicant/profile links from a Recruiter list page. */
