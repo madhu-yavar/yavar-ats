@@ -149,7 +149,6 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
   // a later capture of the same profile attaches the CV and re-parses everything.
   const profileOnly = input.kind === "cv" && !fileBytes;
 
-
   if (text.length < 80) {
     return log({ status: "skipped", detail: "There was not enough readable text on that page." });
   }
@@ -177,7 +176,6 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
           : fileBytes
             ? "original CV secured"
             : "LinkedIn profile retained — original CV still pending";
-
 
       let verificationNote = "verification queued";
       try {
