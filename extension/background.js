@@ -715,6 +715,11 @@ async function waitForTab(tabId, timeoutMs = 25000) {
 async function send(site, token, payload) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120000);
+  const stopMonitor = setInterval(() => {
+    void stopRequested().then((stopped) => {
+      if (stopped) controller.abort();
+    });
+  }, 250);
   try {
     const res = await fetch(`${site}/api/public/capture`, {
       method: "POST",
@@ -727,10 +732,14 @@ async function send(site, token, payload) {
       throw new Error((body && body.detail) || `ATSIQ refused the page (${res.status}).`);
     return body;
   } catch (error) {
-    if (error?.name === "AbortError") throw new Error("ATSIQ did not respond within two minutes");
+    if (error?.name === "AbortError") {
+      if (await stopRequested()) throw new Error("Sweep stopped");
+      throw new Error("ATSIQ did not respond within two minutes");
+    }
     throw error;
   } finally {
     clearTimeout(timeout);
+    clearInterval(stopMonitor);
   }
 }
 
@@ -888,6 +897,10 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
       }
       await tally(await fileApplicant({ site, token, page, requisitionId, candidateName }));
     } catch (e) {
+      if (await stopRequested()) {
+        await setRun({ running: false, note: "Stopped." });
+        return;
+      }
       const s = await getRun();
       await setRun({
         failed: (s?.failed ?? 0) + 1,
