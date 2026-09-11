@@ -218,7 +218,9 @@ function ColumnFilter({
           type="button"
           title={active ? `Filtered by ${title} — click to change` : `Filter by ${title}`}
           className={`inline-flex size-5 items-center justify-center rounded transition-colors ${
-            active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            active
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground"
           }`}
         >
           <Filter className="size-3" />
@@ -467,7 +469,12 @@ function Candidates() {
       stages.add(r.stage ? STAGE_LABEL[canonical(r.stage)] : "Not in pipeline");
     }
     const sort = (s: Set<string>) => Array.from(s).sort((a, b) => a.localeCompare(b));
-    return { sources: sort(sources), employers: sort(employers), exps: sort(exps), stages: sort(stages) };
+    return {
+      sources: sort(sources),
+      employers: sort(employers),
+      exps: sort(exps),
+      stages: sort(stages),
+    };
   }, [rows]);
 
   const filtered = useMemo(() => {
@@ -521,7 +528,21 @@ function Candidates() {
       }
       return true;
     });
-  }, [rows, q, sourceFilter, reqFilter, minScore, expBand, view, verifMap, dupMap, fSource, fEmployer, fExp, fStage]);
+  }, [
+    rows,
+    q,
+    sourceFilter,
+    reqFilter,
+    minScore,
+    expBand,
+    view,
+    verifMap,
+    dupMap,
+    fSource,
+    fEmployer,
+    fExp,
+    fStage,
+  ]);
 
   const selectedRows = filtered.filter((r) => selected.has(r.candidate.id));
   const selectedAppIds = selectedRows.flatMap((r) => (r.primary ? [r.primary.id] : []));
@@ -673,14 +694,12 @@ function Candidates() {
       return;
     }
     if (reqId) {
-      await supabase
-        .from("applications")
-        .insert({
-          requisition_id: reqId,
-          candidate_id: data.id,
-          source: form.source,
-          stage: "sourced",
-        });
+      await supabase.from("applications").insert({
+        requisition_id: reqId,
+        candidate_id: data.id,
+        source: form.source,
+        stage: "sourced",
+      });
     }
     setBusy(false);
     setOpen(false);
@@ -889,13 +908,19 @@ function Candidates() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {["direct", "naukri", "linkedin", "indeed", "referral", "consultant", "campus"].map(
-                          (s) => (
-                            <SelectItem key={s} value={s}>
-                              {s}
-                            </SelectItem>
-                          ),
-                        )}
+                        {[
+                          "direct",
+                          "naukri",
+                          "linkedin",
+                          "indeed",
+                          "referral",
+                          "consultant",
+                          "campus",
+                        ].map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {s}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1089,20 +1114,35 @@ function Candidates() {
                 <TableHead className="w-[180px]">
                   <span className="inline-flex items-center gap-1">
                     Source &amp; added
-                    <ColumnFilter title="Source" options={colOptions.sources} selected={fSource} onChange={setFSource} />
+                    <ColumnFilter
+                      title="Source"
+                      options={colOptions.sources}
+                      selected={fSource}
+                      onChange={setFSource}
+                    />
                   </span>
                 </TableHead>
                 <TableHead className="w-[200px]">Contact</TableHead>
                 <TableHead className="w-[190px]">
                   <span className="inline-flex items-center gap-1">
                     Current role &amp; tenure
-                    <ColumnFilter title="Employer" options={colOptions.employers} selected={fEmployer} onChange={setFEmployer} />
+                    <ColumnFilter
+                      title="Employer"
+                      options={colOptions.employers}
+                      selected={fEmployer}
+                      onChange={setFEmployer}
+                    />
                   </span>
                 </TableHead>
                 <TableHead className="w-[110px]">
                   <span className="inline-flex items-center gap-1">
                     Experience
-                    <ColumnFilter title="Experience" options={colOptions.exps} selected={fExp} onChange={setFExp} />
+                    <ColumnFilter
+                      title="Experience"
+                      options={colOptions.exps}
+                      selected={fExp}
+                      onChange={setFExp}
+                    />
                   </span>
                 </TableHead>
                 <TableHead className="w-[200px]">Skills &amp; education</TableHead>
@@ -1110,7 +1150,12 @@ function Candidates() {
                 <TableHead className="w-[190px]">
                   <span className="inline-flex items-center gap-1">
                     Stage &amp; next action
-                    <ColumnFilter title="Stage" options={colOptions.stages} selected={fStage} onChange={setFStage} />
+                    <ColumnFilter
+                      title="Stage"
+                      options={colOptions.stages}
+                      selected={fStage}
+                      onChange={setFStage}
+                    />
                   </span>
                 </TableHead>
                 <TableHead className="w-[120px]">Parsing</TableHead>
@@ -1205,7 +1250,9 @@ function Candidates() {
                               <Linkedin className="size-3.5" /> LinkedIn
                             </a>
                           ) : (
-                            <span className="text-[11px] text-muted-foreground">No profile link</span>
+                            <span className="text-[11px] text-muted-foreground">
+                              No profile link
+                            </span>
                           )}
                           {normalizeExternalUrl(c.github_url) ? (
                             <a
