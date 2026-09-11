@@ -560,6 +560,7 @@ async function fileApplicant({ site, token, page, requisitionId, candidateName }
     text: page.text && page.text.length > 80 ? page.text : null,
     title: page.title,
     sourceUrl: page.url,
+    publicProfileUrl: page.publicProfileUrl || null,
     candidateName: candidateName || null,
     ...(page.resume ? { file: page.resume } : {}),
     ...(requisitionId ? { requisitionId } : {}),
@@ -650,10 +651,20 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
     try {
       await chrome.tabs.update(workTabId, { url: item.url, active: true });
       const ready = await waitForTab(workTabId);
-      if (!ready) throw new Error("the page did not finish loading");
-      await sleep(4000);
+      if (!ready) throw new Error("[navigation] the page did not finish loading");
+      let snapshot = null;
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        snapshot = await run(workTabId, inspectActiveProfile, [item.label]).catch(() => null);
+        if (snapshot?.ready && snapshot.identityConfirmed) break;
+        await sleep(500);
+      }
+      if (!snapshot?.ready) throw new Error("[navigation] the active profile did not finish rendering");
+      if (!snapshot.identityConfirmed)
+        throw new Error(
+          `[identity] the opened profile did not match ${item.label || "the queued applicant"}`,
+        );
       const page = await run(workTabId, grabApplicant, [item.label]);
-      if (!page) throw new Error("applicant details did not open");
+      if (!page) throw new Error("[profile] applicant details could not be read");
       const candidateName = page.candidateName || item.label;
       if (!candidateName) throw new Error("the applicant name could not be confirmed");
       if (!page.resume) page.resume = await downloadResumeFromButton(workTabId, candidateName);
