@@ -36,6 +36,9 @@
 - [x] Read the active applicant profile rather than the recommendations panel.
 - [x] Download the CV from the project Highlights attachment row.
 - [x] Persist LinkedIn profile analysis and background JD/CV scoring after capture.
+- [x] Replace label-based scraping with structure-aware profile, attachment and icon-control discovery.
+- [x] Capture each applicant's public LinkedIn profile separately from the Recruiter-only URL.
+- [x] Report the exact failed stage: navigation, identity, attachment, control, download, storage or analysis.
 
 ## Enterprise readiness — slice 2 & 3 (done)
 

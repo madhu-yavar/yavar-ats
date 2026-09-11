@@ -4,7 +4,8 @@
  * Runs in the recruiter's own signed-in browser, at human pace. From the
  * applicant list they already have open it first sends the job description
  * across (so the role exists in ATSIQ), then works through each applicant in
- * the left-hand list by name, grabs the attached resume file itself (the same
+ * the applicant queue by profile URL, understands the active profile, and grabs
+ * the attached resume file itself (the same
  * file the Download button gives) and posts it to ATSIQ, where it is parsed,
  * de-duplicated, matched and scored. It never signs in, stores no credentials,
  * and stops the moment the recruiter presses Stop.
@@ -38,6 +39,64 @@ function readPage() {
   const main = pick("main") || pick("article") || pick("[role=main]") || document.body;
   const text = (main.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
   return { text, title: document.title || null, url: location.href };
+}
+
+function inspectActiveProfile(expectedName) {
+  const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
+  const normalise = (value) =>
+    clean(value)
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9 ]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const expected = normalise(expectedName);
+  const main = document.querySelector("main, [role=main]") || document.body;
+  const visible = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  };
+  const headings = [...main.querySelectorAll('h1, h2, h3, [role="heading"]')]
+    .filter(visible)
+    .map((el) => clean(el.innerText || el.textContent))
+    .filter((value) => value.length >= 3 && value.length <= 140)
+    .filter(
+      (value) =>
+        !/notifications? total|profile activity|row decorations|linkedin recruiter|highlights for this project|most recent activity/i.test(
+          value,
+        ),
+    );
+  const candidateName =
+    headings.find((value) => {
+      const current = normalise(value);
+      return expected && (current.includes(expected) || expected.includes(current));
+    }) || headings[0] || null;
+  const header = [...main.querySelectorAll("header, section, article, div")]
+    .filter(visible)
+    .filter((el) => candidateName && normalise(el.innerText).includes(normalise(candidateName)))
+    .filter((el) => el.querySelector('a[href*="/in/"], a[href*="public-profile"]'))
+    .sort((a, b) => clean(a.innerText).length - clean(b.innerText).length)[0];
+  const publicAnchor =
+    header?.querySelector('a[href*="linkedin.com/in/"], a[href*="/in/"]') ||
+    [...main.querySelectorAll('a[href*="linkedin.com/in/"], a[href*="/in/"]')].find(visible);
+  const publicProfileUrl = publicAnchor?.href ? publicAnchor.href.split(/[?#]/)[0] : null;
+  const text = (main.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
+  const identityConfirmed = Boolean(
+    candidateName &&
+      (!expected ||
+        normalise(candidateName).includes(expected) ||
+        expected.includes(normalise(candidateName))),
+  );
+  return {
+    ready: Boolean(candidateName && text.length > 200),
+    identityConfirmed,
+    candidateName,
+    publicProfileUrl,
+    text,
+    title: document.title || null,
+    url: location.href,
+  };
 }
 
 /**
@@ -142,7 +201,9 @@ async function grabApplicant(expectedName) {
       return null;
     return clean;
   };
-  const candidateName = usableName(document.title) || usableName(expectedName);
+  const snapshot = inspectActiveProfile(expectedName);
+  const candidateName =
+    usableName(snapshot.candidateName) || usableName(expectedName) || usableName(document.title);
   const wanted = normalise(candidateName);
   const main =
     document.querySelector("main") || document.querySelector("[role=main]") || document.body;
@@ -214,6 +275,7 @@ async function grabApplicant(expectedName) {
     url: location.href,
     resume,
     candidateName,
+    publicProfileUrl: snapshot.publicProfileUrl,
   };
 }
 

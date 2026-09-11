@@ -18,6 +18,7 @@ export type CaptureInput = {
   /** base64 file body, for a CV attachment the companion could download. */
   file?: { filename: string; content: string } | null;
   sourceUrl?: string | null;
+  publicProfileUrl?: string | null;
   title?: string | null;
   candidateName?: string | null;
   requisitionId?: string | null;
@@ -161,7 +162,7 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
         source: "browser_capture",
         fullName: input.candidateName ?? null,
         identityKey: input.sourceUrl ?? null,
-        profileUrl: input.sourceUrl ?? null,
+        profileUrl: input.publicProfileUrl ?? input.sourceUrl ?? null,
         resumeFile: fileBytes ? { filename: fileName, bytes: fileBytes } : null,
         requireResumeStored: true,
       });
