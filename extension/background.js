@@ -20,6 +20,21 @@ const PACE = {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const jitter = ([lo, hi]) => lo + Math.floor(Math.random() * (hi - lo));
 
+async function stopRequested() {
+  const state = await getRun();
+  return !state || Boolean(state.stop);
+}
+
+/** Wait in short intervals so Stop is noticed without waiting for the full pace delay. */
+async function interruptibleSleep(ms) {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    if (await stopRequested()) return false;
+    await sleep(Math.min(250, deadline - Date.now()));
+  }
+  return true;
+}
+
 async function getRun() {
   const { run } = await chrome.storage.local.get("run");
   return run ?? null;
@@ -552,15 +567,24 @@ async function fetchResumeUrl(url, fallbackName) {
  */
 async function waitForDownloadEvent(timeoutMs = 6500) {
   return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      chrome.downloads.onCreated.removeListener(listener);
-      resolve(null);
-    }, timeoutMs);
-    const listener = (item) => {
-      if (item.byExtensionId && item.byExtensionId !== chrome.runtime.id) return;
+    let settled = false;
+    const finish = (item) => {
+      if (settled) return;
+      settled = true;
       chrome.downloads.onCreated.removeListener(listener);
       clearTimeout(timer);
+      clearInterval(stopMonitor);
       resolve(item);
+    };
+    const timer = setTimeout(() => finish(null), timeoutMs);
+    const stopMonitor = setInterval(() => {
+      void stopRequested().then((stopped) => {
+        if (stopped) finish(null);
+      });
+    }, 250);
+    const listener = (item) => {
+      if (item.byExtensionId && item.byExtensionId !== chrome.runtime.id) return;
+      finish(item);
     };
     chrome.downloads.onCreated.addListener(listener);
   });
@@ -683,6 +707,7 @@ async function run(tabId, func, args = []) {
 async function waitForTab(tabId, timeoutMs = 25000) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
+    if (await stopRequested()) return false;
     let tab;
     try {
       tab = await chrome.tabs.get(tabId);
@@ -698,14 +723,34 @@ async function waitForTab(tabId, timeoutMs = 25000) {
 /* ------------------------------------------------------------------ upload */
 
 async function send(site, token, payload) {
-  const res = await fetch(`${site}/api/public/capture`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ token, ...payload }),
-  });
-  const body = await res.json().catch(() => null);
-  if (!res.ok) throw new Error((body && body.detail) || `ATSIQ refused the page (${res.status}).`);
-  return body;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120000);
+  const stopMonitor = setInterval(() => {
+    void stopRequested().then((stopped) => {
+      if (stopped) controller.abort();
+    });
+  }, 250);
+  try {
+    const res = await fetch(`${site}/api/public/capture`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token, ...payload }),
+      signal: controller.signal,
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok)
+      throw new Error((body && body.detail) || `ATSIQ refused the page (${res.status}).`);
+    return body;
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      if (await stopRequested()) throw new Error("Sweep stopped");
+      throw new Error("ATSIQ did not respond within two minutes");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+    clearInterval(stopMonitor);
+  }
 }
 
 async function fileApplicant({ site, token, page, requisitionId, candidateName, profileOnly = false }) {
@@ -739,6 +784,7 @@ async function gatherApplicantLinks(tabId) {
   const links = [];
   const seen = new Set();
   for (let pass = 0; pass < 16 && links.length < MAX_PROFILES; pass += 1) {
+    if (await stopRequested()) return links;
     const batch = (await run(tabId, collectApplicantLinks).catch(() => [])) ?? [];
     let added = 0;
     for (const item of batch) {
@@ -750,7 +796,7 @@ async function gatherApplicantLinks(tabId) {
     await setRun({ note: `Reading the applicant list — ${links.length} found so far…` });
     const scrolled = await run(tabId, rowScan, ["scroll"]).catch(() => null);
     if (!scrolled?.moved && added === 0) break;
-    await sleep(900);
+    if (!(await interruptibleSleep(900))) return links;
   }
   return links.slice(0, MAX_PROFILES);
 }
@@ -784,6 +830,11 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
     }
   }
 
+  if (await stopRequested()) {
+    await setRun({ running: false, note: "Stopped." });
+    return;
+  }
+
   // Keep exact profile URLs before leaving the virtualised applicant list. A
   // hard navigation per person prevents LinkedIn's previous detail panel (and
   // its CV button) from being reused for the next applicant.
@@ -810,9 +861,16 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
       if (!ready) throw new Error("[navigation] the page did not finish loading");
       let snapshot = null;
       for (let attempt = 0; attempt < 20; attempt += 1) {
+        if (await stopRequested()) {
+          await setRun({ running: false, note: "Stopped." });
+          return;
+        }
         snapshot = await run(workTabId, inspectActiveProfile, [item.label]).catch(() => null);
         if (snapshot?.ready && snapshot.identityConfirmed) break;
-        await sleep(500);
+        if (!(await interruptibleSleep(500))) {
+          await setRun({ running: false, note: "Stopped." });
+          return;
+        }
       }
       if (!snapshot?.ready)
         throw new Error("[navigation] the active profile did not finish rendering");
@@ -840,12 +898,19 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
           await setRun({
             note: `${candidateName} — profile captured and analysed; CV pending because ${downloadError.message}.`,
           });
-          if (i < queue.length - 1) await sleep(jitter(PACE[pace] ?? PACE.safe));
+          if (i < queue.length - 1 && !(await interruptibleSleep(jitter(PACE[pace] ?? PACE.safe)))) {
+            await setRun({ running: false, note: "Stopped." });
+            return;
+          }
           continue;
         }
       }
       await tally(await fileApplicant({ site, token, page, requisitionId, candidateName }));
     } catch (e) {
+      if (await stopRequested()) {
+        await setRun({ running: false, note: "Stopped." });
+        return;
+      }
       const s = await getRun();
       await setRun({
         failed: (s?.failed ?? 0) + 1,
@@ -853,7 +918,14 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
       });
     }
 
-    if (i < queue.length - 1) await sleep(jitter(PACE[pace] ?? PACE.safe));
+    if (await stopRequested()) {
+      await setRun({ running: false, note: "Stopped." });
+      return;
+    }
+    if (i < queue.length - 1 && !(await interruptibleSleep(jitter(PACE[pace] ?? PACE.safe)))) {
+      await setRun({ running: false, note: "Stopped." });
+      return;
+    }
   }
 
   const done = await getRun();
@@ -872,7 +944,9 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage)
       return true;
     }
     if (msg?.type === "stop") {
-      setRun({ stop: true }).then(() => respond({ ok: true }));
+      setRun({ stop: true, running: false, note: "Stopped." }).then(() =>
+        respond({ ok: true }),
+      );
       return true;
     }
     if (msg?.type === "start") {

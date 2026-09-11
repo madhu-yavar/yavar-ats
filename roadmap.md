@@ -42,6 +42,7 @@
 - [x] Verify active-profile identity, Highlights CV discovery, Attachments CV discovery, public-profile capture and applicant-queue filtering against screenshot-shaped browser fixtures.
 - [x] Handle icon-only attachment controls outside the filename wrapper and recover the CV from LinkedIn's expanded preview when no browser download event fires.
 - [x] Retain and analyse validated LinkedIn profile evidence when a CV download fails, then merge the later CV by public-profile identity.
+- [x] Make Stop immediate and cancellation-aware during applicant discovery, profile loading, and pacing waits.
 
 ## Enterprise readiness — slice 2 & 3 (done)
 
