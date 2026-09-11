@@ -93,7 +93,11 @@ export async function storeResumeFile(input: {
     if (!serviceKey.startsWith("sb_secret_")) headers["authorization"] = `Bearer ${serviceKey}`;
     const response = await fetch(
       `${baseUrl}/storage/v1/object/resumes/${path.split("/").map(encodeURIComponent).join("/")}`,
-      { method: "POST", headers, body: Uint8Array.from(input.bytes).buffer },
+      {
+        method: "POST",
+        headers,
+        body: new Blob([Uint8Array.from(input.bytes)], { type: contentType }),
+      },
     );
     if (!response.ok) {
       const detail = await response.text();
@@ -114,10 +118,11 @@ export async function storeResumeFile(input: {
       .update({ resume_file_path: path } as never)
       .eq("id", input.candidateId);
     if (updateError) throw new Error(`CV saved but candidate link failed: ${updateError.message}`);
-    return path;
+    return { path, error: null };
   } catch (e) {
+    const error = e instanceof Error ? e.message : "unknown vault error";
     console.error("[resumes] could not store CV file:", e);
-    return null;
+    return { path: null, error };
   }
 }
 
