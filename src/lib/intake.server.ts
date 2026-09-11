@@ -50,6 +50,8 @@ export type IngestResult = {
   /** True when no email could be read and a placeholder was used. */
   emailMissing?: boolean;
   resumeStored: boolean;
+  /** Why the original CV file could not be kept, when it could not. */
+  resumeError?: string | null;
   skills: string[];
   linkedinUrl: string | null;
   githubUrl: string | null;
@@ -66,8 +68,10 @@ export async function storeResumeFile(input: {
   candidateId: string;
   filename: string;
   bytes: Uint8Array;
-}): Promise<string | null> {
-  if (!input.orgId || input.bytes.length === 0) return null;
+}): Promise<{ path: string | null; error: string | null }> {
+  if (!input.orgId || input.bytes.length === 0) {
+    return { path: null, error: !input.orgId ? "no organisation on the candidate" : "empty file" };
+  }
   try {
     const safeName = input.filename.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "resume.pdf";
     const path = `${input.orgId}/${input.candidateId}/${safeName}`;
