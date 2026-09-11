@@ -27,6 +27,11 @@
 - [ ] Slice 2: role-scoped CHRO / HR-head dashboards.
 - [ ] Slice 3: embedded HR copilot (one conversation, database-backed).
 
+## LinkedIn Recruiter capture repair
+- [ ] Read the active applicant profile rather than the recommendations panel.
+- [ ] Download the CV from the project Highlights attachment row.
+- [ ] Persist LinkedIn profile analysis and background JD/CV scoring after capture.
+
 ## Enterprise readiness — slice 2 & 3 (done)
 - [x] Slice 2: CHRO / HR-head leadership board on the dashboard (open demand, salary commitment vs departmental budget, pipeline coverage per seat, offer accept rate, time to hire, demand & supply by department). Recruiters keep the operational view only.
 - [x] Slice 3: embedded HR copilot — floating panel on every page, one ongoing conversation per user persisted in `copilot_messages` (org-scoped, RLS own-rows), grounded in a live org data snapshot via the configured AI provider.
