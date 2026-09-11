@@ -67,26 +67,40 @@ function inspectActiveProfile(expectedName) {
           value,
         ),
     );
-  const candidateName =
+  const headingName =
     headings.find((value) => {
       const current = normalise(value);
       return expected && (current.includes(expected) || expected.includes(current));
-    }) || headings[0] || null;
-  const header = [...main.querySelectorAll("header, section, article, div")]
+    }) || null;
+  const publicAnchors = [
+    ...main.querySelectorAll(
+      'a[href*="linkedin.com/in/"], a[href*="/in/"], a[href*="public-profile"]',
+    ),
+  ].filter(visible);
+  const profileContainers = [...main.querySelectorAll("header, section, article, div")]
     .filter(visible)
-    .filter((el) => candidateName && normalise(el.innerText).includes(normalise(candidateName)))
-    .filter((el) => el.querySelector('a[href*="/in/"], a[href*="public-profile"]'))
-    .sort((a, b) => clean(a.innerText).length - clean(b.innerText).length)[0];
+    .filter((el) => publicAnchors.some((anchor) => el.contains(anchor)))
+    .filter((el) => !expected || normalise(el.innerText).includes(expected))
+    .sort((a, b) => clean(a.innerText).length - clean(b.innerText).length);
+  const header = profileContainers[0] || publicAnchors[0]?.closest("header, section, article, div");
+  const headerLines = clean(header?.innerText)
+    .split(/\n+/)
+    .map(clean)
+    .filter(Boolean);
+  const headerName = headerLines.find((value) => {
+    const current = normalise(value.replace(/\s*[·|].*$/, ""));
+    return expected && (current.includes(expected) || expected.includes(current));
+  });
+  const candidateName = headingName || headerName?.replace(/\s*[·|].*$/, "").trim() || null;
   const publicAnchor =
     header?.querySelector('a[href*="linkedin.com/in/"], a[href*="/in/"]') ||
-    [...main.querySelectorAll('a[href*="linkedin.com/in/"], a[href*="/in/"]')].find(visible);
+    publicAnchors.find((anchor) => /linkedin\.com\/in\/|\/in\//i.test(anchor.href));
   const publicProfileUrl = publicAnchor?.href ? publicAnchor.href.split(/[?#]/)[0] : null;
   const text = (main.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
+  const headerMatchesExpected = Boolean(expected && header && normalise(header.innerText).includes(expected));
   const identityConfirmed = Boolean(
     candidateName &&
-      (!expected ||
-        normalise(candidateName).includes(expected) ||
-        expected.includes(normalise(candidateName))),
+      (!expected || headerMatchesExpected || normalise(candidateName) === expected),
   );
   return {
     ready: Boolean(candidateName && text.length > 200),
@@ -326,18 +340,28 @@ function discoverResumeActions(expectedName) {
   ]
     .filter((el) => {
       const r = el.getBoundingClientRect();
-      const text = normalise(el.innerText);
+      const rawText = String(el.innerText || el.textContent || "");
+      const text = normalise(rawText);
       return (
         visible(el) &&
         r.width >= 260 &&
         r.height >= 28 &&
         r.height <= 260 &&
-        (/\.pdf\b|\.docx?\b|\.rtf\b|\(resume\)|\bcv\b/.test(text) ||
+        (/\.(?:pdf|docx?|rtf)\b/i.test(rawText) || /\b(?:resume|curriculum vitae|cv)\b/.test(text) ||
           Boolean(el.querySelector('[data-test-icon*="document" i], [data-test-icon*="file" i]'))) &&
         el.querySelector('button, a[href], [role="button"]')
       );
     })
-    .filter((el, index, all) => !all.some((other, i) => i !== index && el.contains(other)))
+    .filter(
+      (el, index, all) =>
+        !all.some(
+          (other, i) =>
+            i !== index &&
+            el.contains(other) &&
+            /\.(?:pdf|docx?|rtf)\b/i.test(other.innerText || other.textContent || "") &&
+            other.querySelector('button, a[href], [role="button"]'),
+        ),
+    )
     .sort((a, b) => a.innerText.length - b.innerText.length);
 
   const actions = [];
@@ -493,14 +517,17 @@ async function downloadResumeFromButton(tabId, expectedName) {
 function collectApplicantLinks() {
   const out = [];
   const seen = new Set();
+  const current = new URL(location.href);
+  const currentProject = current.searchParams.get("project");
   for (const a of document.querySelectorAll("a[href]")) {
     const href = a.href;
-    if (
-      !/linkedin\.com\/(talent\/(profile|hire\/[^/]+\/(?:discover|manage)(?:\/[^/?#]+)*\/profile)|in\/)/i.test(
-        href,
-      )
-    )
+    if (!/linkedin\.com\/talent\/(profile|hire\/[^/]+\/(?:discover|manage)(?:\/[^/?#]+)*\/profile)/i.test(href))
       continue;
+    const target = new URL(href, location.href);
+    const targetProject = target.searchParams.get("project");
+    if (currentProject && targetProject && targetProject !== currentProject) continue;
+    if (currentProject && !targetProject) continue;
+    if (/recommended|suggested|similar/i.test(a.closest("section, aside")?.innerText || "")) continue;
     const clean = href.split("#")[0];
     if (seen.has(clean)) continue;
     seen.add(clean);
@@ -700,7 +727,7 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
   });
 }
 
-chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
+if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
   if (msg?.type === "status") {
     getRun().then((r) => respond({ run: r }));
     return true;
