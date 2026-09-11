@@ -102,8 +102,8 @@ function inspectActiveProfile(expectedName) {
   );
   const candidateMatchesExpected = Boolean(
     expected &&
-      candidateName &&
-      (normalise(candidateName).includes(expected) || expected.includes(normalise(candidateName))),
+    candidateName &&
+    (normalise(candidateName).includes(expected) || expected.includes(normalise(candidateName))),
   );
   const identityConfirmed = Boolean(
     candidateName && (!expected || headerMatchesExpected || candidateMatchesExpected),
@@ -546,9 +546,9 @@ function collectApplicantLinks() {
     if (publicProfile) {
       const explicitApplicantRow = Boolean(
         row &&
-          !row.closest("aside") &&
-          (row.matches('[role="row"], [data-test-applicant-row], li, tr') ||
-            /applicant|applied|qualification|good fit|not a fit|maybe/i.test(row.innerText || "")),
+        !row.closest("aside") &&
+        (row.matches('[role="row"], [data-test-applicant-row], li, tr') ||
+          /applicant|applied|qualification|good fit|not a fit|maybe/i.test(row.innerText || "")),
       );
       if (!explicitApplicantRow) continue;
     }
