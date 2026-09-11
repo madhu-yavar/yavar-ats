@@ -21,6 +21,8 @@ export type CaptureInput = {
   publicProfileUrl?: string | null;
   title?: string | null;
   candidateName?: string | null;
+  /** Retain validated LinkedIn evidence even when its original CV is still pending. */
+  profileOnly?: boolean;
   requisitionId?: string | null;
 };
 
@@ -140,7 +142,7 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
     }
   }
 
-  if (input.kind === "cv" && !fileBytes) {
+  if (input.kind === "cv" && !fileBytes && !input.profileOnly) {
     return log({
       status: "error",
       detail:
@@ -164,7 +166,8 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
         identityKey: input.publicProfileUrl ?? input.sourceUrl ?? null,
         profileUrl: input.publicProfileUrl ?? input.sourceUrl ?? null,
         resumeFile: fileBytes ? { filename: fileName, bytes: fileBytes } : null,
-        requireResumeStored: true,
+        requireResumeStored: !input.profileOnly,
+        profileOnly: input.profileOnly,
       });
       if (fileBytes && !ingested.resumeStored) {
         return log({
@@ -262,10 +265,14 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
         }
       }
       return log({
-        status: ingested.alreadyApplied ? "updated" : "imported",
+        status: input.profileOnly ? "stored" : ingested.alreadyApplied ? "updated" : "imported",
         detail: `${ingested.name} (${
           ingested.emailMissing ? "no email on the CV — add it later" : ingested.email
-        })${input.requisitionId ? " added to the role" : " filed in the talent pool"}; original CV secured; ${verificationNote}; ${socialNote}.`,
+        })${input.requisitionId ? " added to the role" : " filed in the talent pool"}; ${
+          input.profileOnly
+            ? "LinkedIn profile retained — original CV still pending"
+            : "original CV secured"
+        }; ${verificationNote}; ${socialNote}.`,
         candidateId: ingested.candidateId,
         requisitionId: input.requisitionId ?? null,
         title: ingested.name,

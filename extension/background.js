@@ -708,7 +708,7 @@ async function send(site, token, payload) {
   return body;
 }
 
-async function fileApplicant({ site, token, page, requisitionId, candidateName }) {
+async function fileApplicant({ site, token, page, requisitionId, candidateName, profileOnly = false }) {
   const payload = {
     kind: "cv",
     text: page.text && page.text.length > 80 ? page.text : null,
@@ -716,6 +716,7 @@ async function fileApplicant({ site, token, page, requisitionId, candidateName }
     sourceUrl: page.url,
     publicProfileUrl: page.publicProfileUrl || null,
     candidateName: candidateName || null,
+    profileOnly,
     ...(page.resume ? { file: page.resume } : {}),
     ...(requisitionId ? { requisitionId } : {}),
   };
@@ -822,9 +823,26 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
       if (!page) throw new Error("[profile] applicant details could not be read");
       const candidateName = page.candidateName || item.label;
       if (!candidateName) throw new Error("the applicant name could not be confirmed");
-      if (!page.resume) page.resume = await downloadResumeFromButton(workTabId, candidateName);
-      if (!page.resume)
-        throw new Error("the original CV could not be downloaded — nothing was filed");
+      if (!page.resume) {
+        try {
+          page.resume = await downloadResumeFromButton(workTabId, candidateName);
+        } catch (downloadError) {
+          const retained = await fileApplicant({
+            site,
+            token,
+            page,
+            requisitionId,
+            candidateName,
+            profileOnly: true,
+          });
+          await tally(retained);
+          await setRun({
+            note: `${candidateName} — profile captured and analysed; CV pending because ${downloadError.message}.`,
+          });
+          if (i < queue.length - 1) await sleep(jitter(PACE[pace] ?? PACE.safe));
+          continue;
+        }
+      }
       await tally(await fileApplicant({ site, token, page, requisitionId, candidateName }));
     } catch (e) {
       const s = await getRun();

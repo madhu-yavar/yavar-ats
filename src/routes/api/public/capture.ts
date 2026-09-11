@@ -22,6 +22,7 @@ const Payload = z.object({
   publicProfileUrl: z.string().max(2000).nullish(),
   title: z.string().max(400).nullish(),
   candidateName: z.string().min(2).max(200).nullish(),
+  profileOnly: z.boolean().optional().default(false),
   requisitionId: z.string().uuid().nullish(),
 });
 
@@ -53,6 +54,7 @@ async function handle(request: Request) {
       publicProfileUrl: body.publicProfileUrl ?? null,
       title: body.title ?? null,
       candidateName: body.candidateName ?? null,
+      profileOnly: body.profileOnly,
       requisitionId: body.requisitionId ?? null,
     });
     return Response.json(result, {

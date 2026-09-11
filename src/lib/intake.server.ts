@@ -135,6 +135,8 @@ export async function ingestCandidate(input: {
   resumeFile?: { filename: string; bytes: Uint8Array } | null;
   /** Companion captures must never leave a text-only candidate behind. */
   requireResumeStored?: boolean;
+  /** LinkedIn evidence retained before its original CV becomes available. */
+  profileOnly?: boolean;
 }): Promise<IngestResult> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const p = input.parsed ?? (await parseCv(input.resumeText));
@@ -201,23 +203,51 @@ export async function ingestCandidate(input: {
     last_synced_at: new Date().toISOString(),
   };
 
-  let existingQuery = supabaseAdmin
-    .from("candidates")
-    .select("id, skills")
-    .eq("email", email);
-  existingQuery = input.orgId
-    ? existingQuery.eq("org_id", input.orgId)
-    : existingQuery.is("org_id", null);
-  const { data: existing } = await existingQuery.maybeSingle();
+  const profileUrl = row.linkedin_url;
+  let existing: { id: string; skills: string[] | null } | null = null;
+  if (profileUrl) {
+    let profileQuery = supabaseAdmin
+      .from("candidates")
+      .select("id, skills")
+      .eq("linkedin_url", profileUrl);
+    profileQuery = input.orgId
+      ? profileQuery.eq("org_id", input.orgId)
+      : profileQuery.is("org_id", null);
+    const { data } = await profileQuery.maybeSingle();
+    existing = data;
+  }
+  if (!existing) {
+    let emailQuery = supabaseAdmin
+      .from("candidates")
+      .select("id, skills")
+      .eq("email", email);
+    emailQuery = input.orgId
+      ? emailQuery.eq("org_id", input.orgId)
+      : emailQuery.is("org_id", null);
+    const { data } = await emailQuery.maybeSingle();
+    existing = data;
+  }
 
   let candidateId: string;
   if (existing) {
     const skills = new Set(
       [...(existing.skills ?? []), ...row.skills].map((s) => s.trim()).filter(Boolean),
     );
+    const updateRow = input.profileOnly
+      ? Object.fromEntries(
+          Object.entries(row).filter(
+            ([key, value]) =>
+              key !== "email" &&
+              value !== null &&
+              value !== "" &&
+              (!Array.isArray(value) || value.length > 0) &&
+              (key !== "experience_years" || value !== 0),
+          ),
+        )
+      : row;
     const { error } = await supabaseAdmin
       .from("candidates")
-      .update({ ...row, skills: [...skills] } as never)
+      .update({ ...updateRow, skills: [...skills] } as never)
       .eq("id", existing.id);
     if (error) throw new Error(error.message);
     candidateId = existing.id;
