@@ -567,15 +567,24 @@ async function fetchResumeUrl(url, fallbackName) {
  */
 async function waitForDownloadEvent(timeoutMs = 6500) {
   return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      chrome.downloads.onCreated.removeListener(listener);
-      resolve(null);
-    }, timeoutMs);
-    const listener = (item) => {
-      if (item.byExtensionId && item.byExtensionId !== chrome.runtime.id) return;
+    let settled = false;
+    const finish = (item) => {
+      if (settled) return;
+      settled = true;
       chrome.downloads.onCreated.removeListener(listener);
       clearTimeout(timer);
+      clearInterval(stopMonitor);
       resolve(item);
+    };
+    const timer = setTimeout(() => finish(null), timeoutMs);
+    const stopMonitor = setInterval(() => {
+      void stopRequested().then((stopped) => {
+        if (stopped) finish(null);
+      });
+    }, 250);
+    const listener = (item) => {
+      if (item.byExtensionId && item.byExtensionId !== chrome.runtime.id) return;
+      finish(item);
     };
     chrome.downloads.onCreated.addListener(listener);
   });
@@ -698,6 +707,7 @@ async function run(tabId, func, args = []) {
 async function waitForTab(tabId, timeoutMs = 25000) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
+    if (await stopRequested()) return false;
     let tab;
     try {
       tab = await chrome.tabs.get(tabId);
