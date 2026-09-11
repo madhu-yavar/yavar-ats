@@ -123,8 +123,8 @@ function rowScan(action, arg) {
 /**
  * Read the applicant currently on screen AND pull the attached resume file the
  * page links to, using the recruiter's own session cookies. Only the detail
- * panel on the right is read, so the other applicants in the list can never
- * bleed into one person's record.
+ * active profile is read, so recommendation cards can never bleed into one
+ * person's record.
  */
 async function grabApplicant(expectedName) {
   const normalise = (value) =>
@@ -218,11 +218,7 @@ async function grabApplicant(expectedName) {
 }
 
 /** Click LinkedIn's visible CV download control when no direct file URL exists. */
-function clickResumeDownload(expectedName) {
-  const visible = (el) => {
-    const r = el.getBoundingClientRect();
-    return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight;
-  };
+async function clickResumeDownload(expectedName) {
   const normalise = (value) =>
     String(value || "")
       .toLowerCase()
@@ -251,28 +247,45 @@ function clickResumeDownload(expectedName) {
     return { ok: false, error: `LinkedIn did not finish opening ${expectedName}` };
   }
   if (!attachmentRows) return { ok: false, error: "CV attachment row was not found" };
-  const controls = [...attachmentRows.querySelectorAll('button, a[href], [role="button"]')].filter(
-    visible,
-  );
-  const labelled = controls.find((el) => {
-    const text = [el.innerText, el.getAttribute("aria-label"), el.getAttribute("title")]
+  attachmentRows.scrollIntoView({ block: "center" });
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const accessibleText = (el) =>
+    [el.innerText, el.getAttribute("aria-label"), el.getAttribute("title")]
       .filter(Boolean)
       .join(" ")
-      .toLowerCase();
-    return /download|save/.test(text);
+      .trim();
+  let controls = [...attachmentRows.querySelectorAll('button, a[href], [role="button"]')];
+  let target = controls.find((el) => {
+    const text = accessibleText(el).toLowerCase();
+    return /download|save/.test(text) && !/preview/.test(text);
   });
-  const iconOnly = [...controls]
-    .reverse()
-    .find(
-      (el) =>
-        !/preview/i.test(
-          [el.innerText, el.getAttribute("aria-label"), el.getAttribute("title")]
-            .filter(Boolean)
-            .join(" "),
-        ),
-    );
-  const target = labelled || iconOnly;
+  if (!target) {
+    const menu = controls.find((el) => {
+      const text = accessibleText(el).toLowerCase();
+      return (
+        el.getAttribute("aria-haspopup") === "menu" || /more actions|actions|options/.test(text)
+      );
+    });
+    if (menu) {
+      menu.click();
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      controls = [...document.querySelectorAll('[role="menuitem"], [role="menu"] button')];
+      target = controls.find((el) => {
+        const text = accessibleText(el).toLowerCase();
+        return /download|save/.test(text) && !/preview/.test(text);
+      });
+    }
+  }
+  if (!target) {
+    const rowControls = [...attachmentRows.querySelectorAll('button, a[href], [role="button"]')];
+    target = [...rowControls].reverse().find((el) => {
+      const text = accessibleText(el).toLowerCase();
+      return !/preview/.test(text) && el.getAttribute("aria-haspopup") !== "menu";
+    });
+  }
   if (!target) return { ok: false, error: "CV Download button was not found" };
+  const label = accessibleText(target).toLowerCase();
+  if (/preview/.test(label)) return { ok: false, error: "Only CV Preview was found, not Download" };
   target.click();
   return { ok: true };
 }
@@ -284,6 +297,35 @@ function bytesToBase64(bytes) {
     bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
   }
   return btoa(bin);
+}
+
+/** Read an intercepted attachment URL inside LinkedIn's signed-in page. */
+async function fetchResumeUrl(url, fallbackName) {
+  const res = await fetch(url, { credentials: "include" });
+  if (!res.ok) throw new Error(`CV download returned ${res.status}`);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.length < 800 || bytes.length > 6000000)
+    throw new Error("downloaded CV has an invalid size");
+  const disposition = res.headers.get("content-disposition") || "";
+  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+  let filename = encoded
+    ? decodeURIComponent(encoded)
+    : plain ||
+      String(fallbackName || "")
+        .split(/[\\/]/)
+        .pop() ||
+      "resume.pdf";
+  if (!/\.(pdf|docx?|txt|rtf)$/i.test(filename)) {
+    const ct = (res.headers.get("content-type") || "").toLowerCase();
+    filename += ct.includes("word") || ct.includes("officedocument") ? ".docx" : ".pdf";
+  }
+  let bin = "";
+  const chunk = 8192;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return { filename, content: btoa(bin) };
 }
 
 /**
@@ -315,23 +357,11 @@ async function downloadResumeFromButton(tabId, expectedName) {
   await chrome.downloads.cancel(created.id).catch(() => {});
   const url = created.finalUrl || created.url;
   if (!url) return null;
-  const res = await fetch(url, { credentials: "include" });
-  if (!res.ok) throw new Error(`CV download returned ${res.status}`);
-  const bytes = new Uint8Array(await res.arrayBuffer());
-  if (bytes.length < 800 || bytes.length > 6000000)
-    throw new Error("downloaded CV has an invalid size");
-  const disposition = res.headers.get("content-disposition") || "";
-  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
-  const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1];
-  let filename = encoded
-    ? decodeURIComponent(encoded)
-    : plain || created.filename?.split(/[\\/]/).pop() || "resume.pdf";
-  if (!/\.(pdf|docx?|txt|rtf)$/i.test(filename)) {
-    const ct = (res.headers.get("content-type") || created.mime || "").toLowerCase();
-    filename += ct.includes("word") || ct.includes("officedocument") ? ".docx" : ".pdf";
-  }
+  const resume = await run(tabId, fetchResumeUrl, [url, created.filename]).catch((error) => {
+    throw new Error(error?.message || "the signed-in CV download could not be read");
+  });
   await chrome.downloads.erase({ id: created.id }).catch(() => {});
-  return { filename, content: bytesToBase64(bytes) };
+  return resume;
 }
 
 /** Collect applicant/profile links from a Recruiter list page. */
@@ -508,7 +538,7 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
       await sleep(4000);
       const page = await run(workTabId, grabApplicant, [item.label]);
       if (!page) throw new Error("applicant details did not open");
-        const candidateName = page.candidateName || item.label;
+      const candidateName = page.candidateName || item.label;
       if (!candidateName) throw new Error("the applicant name could not be confirmed");
       if (!page.resume) page.resume = await downloadResumeFromButton(workTabId, candidateName);
       if (!page.resume)
