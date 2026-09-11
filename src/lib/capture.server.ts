@@ -263,7 +263,7 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
       }
       return log({
         status:
-          input.profileOnly || !ingested.resumeStored
+          profileOnly || input.profileOnly || !ingested.resumeStored
             ? "stored"
             : ingested.alreadyApplied
               ? "updated"
