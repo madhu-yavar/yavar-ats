@@ -33,6 +33,7 @@ import {
 import { parseResume } from "@/lib/matching.functions";
 import { verifyCandidates } from "@/lib/verification.functions";
 import { getResumeDownloadUrl } from "@/lib/resume.functions";
+import { downloadResume } from "@/lib/resume-download";
 import { deleteCandidates } from "@/lib/candidates.functions";
 import { intakeCvs, type IntakeStatus } from "@/lib/cv-intake";
 import { normalizeExternalUrl } from "@/lib/external-links";
@@ -1362,7 +1363,7 @@ function Candidates() {
                             className="mt-1 h-7 px-1.5 text-xs"
                             onClick={async () => {
                               const out = await getResumeUrl({ data: { candidateId: c.id } });
-                              if (out.ok) window.open(out.url, "_blank", "noopener");
+                              if (out.ok) downloadResume(out);
                               else toast.error(out.error);
                             }}
                           >

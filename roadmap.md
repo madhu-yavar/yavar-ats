@@ -43,6 +43,7 @@
 - [x] Handle icon-only attachment controls outside the filename wrapper and recover the CV from LinkedIn's expanded preview when no browser download event fires.
 - [x] Retain and analyse validated LinkedIn profile evidence when a CV download fails, then merge the later CV by public-profile identity.
 - [x] Make Stop immediate and cancellation-aware during applicant discovery, profile loading, and pacing waits.
+- [x] Deliver private CV downloads through ATSIQ so browser blockers never open the vault host.
 
 ## Enterprise readiness — slice 2 & 3 (done)
 

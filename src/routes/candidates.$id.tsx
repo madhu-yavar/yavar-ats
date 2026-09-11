@@ -24,6 +24,7 @@ import { runAiScreening } from "@/lib/matching.functions";
 import { verifyCandidate } from "@/lib/verification.functions";
 import { createAssessment } from "@/lib/assessment.functions";
 import { getResumeDownloadUrl } from "@/lib/resume.functions";
+import { downloadResume } from "@/lib/resume-download";
 import { normalizeExternalUrl } from "@/lib/external-links";
 import { nextAction, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
 import { StageMover } from "@/components/StageMover";
@@ -197,7 +198,7 @@ function CandidateDetail() {
               setDownloading(true);
               try {
                 const out = await getResumeUrl({ data: { candidateId: c.id } });
-                if (out.ok) window.open(out.url, "_blank", "noopener");
+                if (out.ok) downloadResume(out);
                 else toast.error(out.error);
               } finally {
                 setDownloading(false);
