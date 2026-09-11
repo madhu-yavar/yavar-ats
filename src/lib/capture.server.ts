@@ -142,13 +142,10 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
     }
   }
 
-  if (input.kind === "cv" && !fileBytes && !input.profileOnly) {
-    return log({
-      status: "error",
-      detail:
-        "The original CV was not downloaded, so this applicant was not filed. Open the applicant and retry.",
-    });
-  }
+  // No file? Keep the readable profile as evidence rather than losing the person;
+  // a later capture of the same profile attaches the CV and re-parses everything.
+  const profileOnly = input.kind === "cv" && !fileBytes;
+
 
   if (text.length < 80) {
     return log({ status: "skipped", detail: "There was not enough readable text on that page." });
@@ -166,18 +163,18 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
         identityKey: input.publicProfileUrl ?? input.sourceUrl ?? null,
         profileUrl: input.publicProfileUrl ?? input.sourceUrl ?? null,
         resumeFile: fileBytes ? { filename: fileName, bytes: fileBytes } : null,
-        requireResumeStored: !input.profileOnly,
-        profileOnly: Boolean(input.profileOnly),
+        requireResumeStored: false,
+        profileOnly: profileOnly || Boolean(input.profileOnly),
       });
-      if (fileBytes && !ingested.resumeStored) {
-        return log({
-          status: "error",
-          detail: `${ingested.name} was parsed, but the original CV could not be secured. Retry this applicant.`,
-          candidateId: ingested.candidateId,
-          requisitionId: input.requisitionId ?? null,
-          title: ingested.name,
-        });
-      }
+      // A vault problem must never lose the person: keep the parsed profile and
+      // say plainly why the original file is still missing.
+      const vaultNote =
+        fileBytes && !ingested.resumeStored
+          ? `original CV could not be saved (${ingested.resumeError ?? "unknown reason"}) — profile kept, file pending`
+          : fileBytes
+            ? "original CV secured"
+            : "LinkedIn profile retained — original CV still pending";
+
 
       let verificationNote = "verification queued";
       try {
@@ -265,14 +262,15 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
         }
       }
       return log({
-        status: input.profileOnly ? "stored" : ingested.alreadyApplied ? "updated" : "imported",
+        status:
+          profileOnly || input.profileOnly || !ingested.resumeStored
+            ? "stored"
+            : ingested.alreadyApplied
+              ? "updated"
+              : "imported",
         detail: `${ingested.name} (${
           ingested.emailMissing ? "no email on the CV — add it later" : ingested.email
-        })${input.requisitionId ? " added to the role" : " filed in the talent pool"}; ${
-          input.profileOnly
-            ? "LinkedIn profile retained — original CV still pending"
-            : "original CV secured"
-        }; ${verificationNote}; ${socialNote}.`,
+        })${input.requisitionId ? " added to the role" : " filed in the talent pool"}; ${vaultNote}; ${verificationNote}; ${socialNote}.`,
         candidateId: ingested.candidateId,
         requisitionId: input.requisitionId ?? null,
         title: ingested.name,

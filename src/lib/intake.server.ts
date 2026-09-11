@@ -50,6 +50,8 @@ export type IngestResult = {
   /** True when no email could be read and a placeholder was used. */
   emailMissing?: boolean;
   resumeStored: boolean;
+  /** Why the original CV file could not be kept, when it could not. */
+  resumeError?: string | null;
   skills: string[];
   linkedinUrl: string | null;
   githubUrl: string | null;
@@ -66,8 +68,10 @@ export async function storeResumeFile(input: {
   candidateId: string;
   filename: string;
   bytes: Uint8Array;
-}): Promise<string | null> {
-  if (!input.orgId || input.bytes.length === 0) return null;
+}): Promise<{ path: string | null; error: string | null }> {
+  if (!input.orgId || input.bytes.length === 0) {
+    return { path: null, error: !input.orgId ? "no organisation on the candidate" : "empty file" };
+  }
   try {
     const safeName = input.filename.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "resume.pdf";
     const path = `${input.orgId}/${input.candidateId}/${safeName}`;
@@ -78,42 +82,54 @@ export async function storeResumeFile(input: {
         : /\.doc$/i.test(safeName)
           ? "application/msword"
           : "text/plain";
-    const baseUrl = process.env["SUPABASE_URL"];
-    const serviceKey = process.env["SUPABASE_SERVICE_ROLE_KEY"];
-    if (!baseUrl || !serviceKey) throw new Error("The private CV vault is not configured.");
-    const headers: Record<string, string> = {
-      apikey: serviceKey,
-      "content-type": contentType,
-      "x-upsert": "true",
-    };
-    if (!serviceKey.startsWith("sb_secret_")) headers["authorization"] = `Bearer ${serviceKey}`;
-    const response = await fetch(
-      `${baseUrl}/storage/v1/object/resumes/${path.split("/").map(encodeURIComponent).join("/")}`,
-      { method: "POST", headers, body: Uint8Array.from(input.bytes).buffer },
-    );
-    if (!response.ok) {
-      const detail = await response.text();
-      console.error(`[resumes] direct upload failed [${response.status}]: ${detail}`);
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      const { error: fallbackError } = await supabaseAdmin.storage
-        .from("resumes")
-        .upload(path, input.bytes, { contentType, upsert: true });
-      if (fallbackError) {
-        throw new Error(
-          `vault upload failed [${response.status}]: ${detail}; fallback: ${fallbackError.message}`,
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const failures: string[] = [];
+
+    // 1. The generated admin client is the most reliable path on the server runtime.
+    const { error: clientError } = await supabaseAdmin.storage
+      .from("resumes")
+      .upload(path, Uint8Array.from(input.bytes), { contentType, upsert: true });
+    let uploaded = !clientError;
+    if (clientError) failures.push(`client: ${clientError.message}`);
+
+    // 2. Fall back to a plain authenticated upload against the storage API.
+    if (!uploaded) {
+      const baseUrl = process.env["SUPABASE_URL"];
+      const serviceKey = process.env["SUPABASE_SERVICE_ROLE_KEY"];
+      if (!baseUrl || !serviceKey) {
+        failures.push("direct: vault credentials unavailable");
+      } else {
+        const headers: Record<string, string> = {
+          apikey: serviceKey,
+          "content-type": contentType,
+          "x-upsert": "true",
+        };
+        if (!serviceKey.startsWith("sb_secret_")) headers["authorization"] = `Bearer ${serviceKey}`;
+        const response = await fetch(
+          `${baseUrl}/storage/v1/object/resumes/${path.split("/").map(encodeURIComponent).join("/")}`,
+          {
+            method: "POST",
+            headers,
+            body: new Blob([Uint8Array.from(input.bytes)], { type: contentType }),
+          },
         );
+        if (response.ok) uploaded = true;
+        else failures.push(`direct [${response.status}]: ${(await response.text()).slice(0, 300)}`);
       }
     }
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    if (!uploaded) throw new Error(`vault upload failed — ${failures.join("; ")}`);
+
     const { error: updateError } = await supabaseAdmin
       .from("candidates")
       .update({ resume_file_path: path } as never)
       .eq("id", input.candidateId);
     if (updateError) throw new Error(`CV saved but candidate link failed: ${updateError.message}`);
-    return path;
+    return { path, error: null };
   } catch (e) {
+    const error = e instanceof Error ? e.message : "unknown vault error";
     console.error("[resumes] could not store CV file:", e);
-    return null;
+    return { path: null, error };
   }
 }
 
@@ -282,24 +298,18 @@ export async function ingestCandidate(input: {
   }
 
   let resumeStored = false;
+  let resumeError: string | null = null;
   if (input.resumeFile?.bytes?.length) {
-    resumeStored = Boolean(
-      await storeResumeFile({
-        orgId: input.orgId,
-        candidateId,
-        filename: input.resumeFile.filename,
-        bytes: input.resumeFile.bytes,
-      }),
-    );
+    const stored = await storeResumeFile({
+      orgId: input.orgId,
+      candidateId,
+      filename: input.resumeFile.filename,
+      bytes: input.resumeFile.bytes,
+    });
+    resumeStored = Boolean(stored.path);
+    resumeError = stored.error;
   }
-  if (input.requireResumeStored && !resumeStored) {
-    if (!existing) {
-      await supabaseAdmin.from("candidates").delete().eq("id", candidateId);
-    }
-    throw new Error(
-      "The original CV reached ATSIQ but could not be saved in the private vault. No new text-only candidate was kept; retry after updating the companion.",
-    );
-  }
+
 
   return {
     candidateId,
@@ -309,6 +319,7 @@ export async function ingestCandidate(input: {
     merged: Boolean(existing),
     emailMissing,
     resumeStored,
+    resumeError,
     skills: row.skills,
     linkedinUrl: row.linkedin_url ?? null,
     githubUrl: row.github_url,
