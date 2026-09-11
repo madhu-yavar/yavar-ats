@@ -54,6 +54,17 @@ function inspectActiveProfile(expectedName) {
       .replace(/[^a-z0-9 ]+/g, " ")
       .replace(/\s+/g, " ")
       .trim();
+  const namesMatch = (left, right) => {
+    const a = normalise(left);
+    const b = normalise(right);
+    if (!a || !b) return false;
+    if (a.includes(b) || b.includes(a)) return true;
+    const aTokens = new Set(a.split(" ").filter((token) => token.length > 1));
+    const bTokens = new Set(b.split(" ").filter((token) => token.length > 1));
+    const smaller = aTokens.size <= bTokens.size ? aTokens : bTokens;
+    const larger = smaller === aTokens ? bTokens : aTokens;
+    return smaller.size >= 2 && [...smaller].every((token) => larger.has(token));
+  };
   const expected = normalise(expectedName);
   const main = document.querySelector("main, [role=main]") || document.body;
   const visible = (el) => {
@@ -71,10 +82,7 @@ function inspectActiveProfile(expectedName) {
         ),
     );
   const headingName =
-    headings.find((value) => {
-      const current = normalise(value);
-      return expected && (current.includes(expected) || expected.includes(current));
-    }) || null;
+    headings.find((value) => expected && namesMatch(value, expected)) || null;
   const publicAnchors = [
     ...main.querySelectorAll(
       'a[href*="linkedin.com/in/"], a[href*="/in/"], a[href*="public-profile"]',
@@ -83,13 +91,12 @@ function inspectActiveProfile(expectedName) {
   const profileContainers = [...main.querySelectorAll("header, section, article, div")]
     .filter(visible)
     .filter((el) => publicAnchors.some((anchor) => el.contains(anchor)))
-    .filter((el) => !expected || normalise(el.innerText).includes(expected))
+    .filter((el) => !expected || namesMatch(el.innerText, expected))
     .sort((a, b) => clean(a.innerText).length - clean(b.innerText).length);
   const header = profileContainers[0] || publicAnchors[0]?.closest("header, section, article, div");
   const headerLines = clean(header?.innerText).split(/\n+/).map(clean).filter(Boolean);
   const headerName = headerLines.find((value) => {
-    const current = normalise(value.replace(/\s*[·|].*$/, ""));
-    return expected && (current.includes(expected) || expected.includes(current));
+    return expected && namesMatch(value.replace(/\s*[·|].*$/, ""), expected);
   });
   const candidateName = headingName || headerName?.replace(/\s*[·|].*$/, "").trim() || null;
   const publicAnchor =
@@ -98,12 +105,10 @@ function inspectActiveProfile(expectedName) {
   const publicProfileUrl = publicAnchor?.href ? publicAnchor.href.split(/[?#]/)[0] : null;
   const text = (main.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
   const headerMatchesExpected = Boolean(
-    expected && header && normalise(header.innerText).includes(expected),
+    expected && header && namesMatch(header.innerText, expected),
   );
   const candidateMatchesExpected = Boolean(
-    expected &&
-    candidateName &&
-    (normalise(candidateName).includes(expected) || expected.includes(normalise(candidateName))),
+    expected && candidateName && namesMatch(candidateName, expected),
   );
   const identityConfirmed = Boolean(
     candidateName && (!expected || headerMatchesExpected || candidateMatchesExpected),
@@ -313,9 +318,20 @@ function discoverResumeActions(expectedName) {
       .replace(/[^a-z0-9 ]+/g, " ")
       .replace(/\s+/g, " ")
       .trim();
+  const namesMatch = (left, right) => {
+    const a = normalise(left);
+    const b = normalise(right);
+    if (!a || !b) return false;
+    if (a.includes(b) || b.includes(a)) return true;
+    const aTokens = new Set(a.split(" ").filter((token) => token.length > 1));
+    const bTokens = new Set(b.split(" ").filter((token) => token.length > 1));
+    const smaller = aTokens.size <= bTokens.size ? aTokens : bTokens;
+    const larger = smaller === aTokens ? bTokens : aTokens;
+    return smaller.size >= 2 && [...smaller].every((token) => larger.has(token));
+  };
   const wanted = normalise(expectedName);
   const main = document.querySelector("main, [role=main]") || document.body;
-  if (wanted && !normalise(main.innerText).includes(wanted)) {
+  if (wanted && !namesMatch(main.innerText, wanted)) {
     return {
       stage: "identity",
       error: `LinkedIn did not finish opening ${expectedName}`,
