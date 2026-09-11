@@ -167,8 +167,10 @@ $("start").addEventListener("click", async () => {
 });
 
 $("stop").addEventListener("click", async () => {
-  await chrome.runtime.sendMessage({ type: "stop" });
-  status("Stopping after the current applicant…", "");
+  const res = await chrome.runtime.sendMessage({ type: "stop" });
+  if (!res?.ok) return status("The sweep could not be stopped.", "err");
+  status("Sweep stopped.", "ok");
+  await refresh();
 });
 
 void refresh();
