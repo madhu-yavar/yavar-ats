@@ -265,14 +265,15 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
         }
       }
       return log({
-        status: input.profileOnly ? "stored" : ingested.alreadyApplied ? "updated" : "imported",
+        status:
+          input.profileOnly || !ingested.resumeStored
+            ? "stored"
+            : ingested.alreadyApplied
+              ? "updated"
+              : "imported",
         detail: `${ingested.name} (${
           ingested.emailMissing ? "no email on the CV — add it later" : ingested.email
-        })${input.requisitionId ? " added to the role" : " filed in the talent pool"}; ${
-          input.profileOnly
-            ? "LinkedIn profile retained — original CV still pending"
-            : "original CV secured"
-        }; ${verificationNote}; ${socialNote}.`,
+        })${input.requisitionId ? " added to the role" : " filed in the talent pool"}; ${vaultNote}; ${verificationNote}; ${socialNote}.`,
         candidateId: ingested.candidateId,
         requisitionId: input.requisitionId ?? null,
         title: ingested.name,
