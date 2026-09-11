@@ -473,7 +473,10 @@ async function downloadResumeFromButton(tabId, expectedName) {
     }
     const waiting = waitForDownloadEvent();
     const clicked = await run(tabId, clickMarkedResumeAction, [action.token]).catch(() => false);
-    if (!clicked) continue;
+    if (!clicked) {
+      await waiting;
+      continue;
+    }
     const created = await waiting;
     if (!created?.id) continue;
     await chrome.downloads.cancel(created.id).catch(() => {});
