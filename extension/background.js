@@ -724,7 +724,8 @@ async function fileApplicant({ site, token, page, requisitionId, candidateName, 
 }
 
 async function tally(result) {
-  const ok = result?.status === "imported" || result?.status === "updated";
+  const ok =
+    result?.status === "imported" || result?.status === "updated" || result?.status === "stored";
   const s = await getRun();
   await setRun({
     imported: (s?.imported ?? 0) + (ok ? 1 : 0),
