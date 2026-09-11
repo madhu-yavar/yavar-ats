@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Fragment, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -64,14 +64,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export const Route = createFileRoute("/candidates/")({
@@ -311,7 +303,7 @@ function Candidates() {
   const [reqFilter, setReqFilter] = useState("all");
   const [minScore, setMinScore] = useState("0");
   const [expBand, setExpBand] = useState("all");
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
   // Excel-style column filters — empty set means "no filter".
   const [fSource, setFSource] = useState<Set<string>>(new Set());
   const [fEmployer, setFEmployer] = useState<Set<string>>(new Set());
@@ -711,6 +703,57 @@ function Candidates() {
 
   const sources = [...new Set((cands.data ?? []).map((c) => c.source))].sort();
 
+  /** Master-detail: the dossier follows the selected row, defaulting to the first match. */
+  const activeRow = filtered.find((r) => r.candidate.id === activeId) ?? filtered[0] ?? null;
+
+  /** Download the current filtered view as CSV for offline slicing. */
+  function exportCsv() {
+    const head = [
+      "Name",
+      "Email",
+      "Phone",
+      "Location",
+      "Source",
+      "Added",
+      "Stage",
+      "Match score",
+      "Authenticity",
+      "Experience (yrs)",
+      "Employer",
+      "Skills",
+    ];
+    const cell = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const lines = filtered.map((r) => {
+      const c = r.candidate;
+      const v = verifMap.get(c.id);
+      return [
+        c.full_name,
+        c.email,
+        c.phone ?? "",
+        c.location ?? "",
+        sourceLabel(c.source),
+        new Date(c.created_at).toLocaleDateString(),
+        r.stage ? STAGE_LABEL[canonical(r.stage)] : "Pool only",
+        r.score ?? "",
+        v ? v.authenticity_score : "",
+        c.experience_years,
+        c.current_employer ?? "",
+        c.skills.join("; "),
+      ]
+        .map(cell)
+        .join(",");
+    });
+    const blob = new Blob([[head.map(cell).join(","), ...lines].join("\n")], {
+      type: "text/csv",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "talent-pool.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <>
       <PageHeader
@@ -719,6 +762,9 @@ function Candidates() {
         description="Every candidate, their live pipeline state, next action, match score and authenticity verdict — one table that scales past thousands of rows."
         actions={
           <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={exportCsv} disabled={filtered.length === 0}>
+              <Download className="size-4" /> Export CSV
+            </Button>
             <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline">
@@ -958,16 +1004,16 @@ function Candidates() {
       />
 
       {/* Saved views */}
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
         {SAVED_VIEWS.map((v) => (
           <button
             key={v.id}
             onClick={() => setView(v.id)}
             className={
-              "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors " +
+              "shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors " +
               (view === v.id
-                ? "border-ring bg-primary/10 text-primary"
-                : "border-border text-muted-foreground hover:text-foreground")
+                ? "bg-foreground text-background"
+                : "bg-muted text-muted-foreground hover:text-foreground")
             }
           >
             {v.label}
