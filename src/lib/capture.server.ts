@@ -142,13 +142,10 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
     }
   }
 
-  if (input.kind === "cv" && !fileBytes && !input.profileOnly) {
-    return log({
-      status: "error",
-      detail:
-        "The original CV was not downloaded, so this applicant was not filed. Open the applicant and retry.",
-    });
-  }
+  // No file? Keep the readable profile as evidence rather than losing the person;
+  // a later capture of the same profile attaches the CV and re-parses everything.
+  const profileOnly = input.kind === "cv" && !fileBytes;
+
 
   if (text.length < 80) {
     return log({ status: "skipped", detail: "There was not enough readable text on that page." });
