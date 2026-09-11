@@ -311,7 +311,11 @@ async function fetchResumeUrl(url, fallbackName) {
   const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1];
   let filename = encoded
     ? decodeURIComponent(encoded)
-    : plain || String(fallbackName || "").split(/[\\/]/).pop() || "resume.pdf";
+    : plain ||
+      String(fallbackName || "")
+        .split(/[\\/]/)
+        .pop() ||
+      "resume.pdf";
   if (!/\.(pdf|docx?|txt|rtf)$/i.test(filename)) {
     const ct = (res.headers.get("content-type") || "").toLowerCase();
     filename += ct.includes("word") || ct.includes("officedocument") ? ".docx" : ".pdf";
