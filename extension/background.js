@@ -263,8 +263,7 @@ async function clickResumeDownload(expectedName) {
     const menu = controls.find((el) => {
       const text = accessibleText(el).toLowerCase();
       return (
-        el.getAttribute("aria-haspopup") === "menu" ||
-        /more actions|actions|options/.test(text)
+        el.getAttribute("aria-haspopup") === "menu" || /more actions|actions|options/.test(text)
       );
     });
     if (menu) {
