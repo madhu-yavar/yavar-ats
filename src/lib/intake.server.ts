@@ -291,24 +291,18 @@ export async function ingestCandidate(input: {
   }
 
   let resumeStored = false;
+  let resumeError: string | null = null;
   if (input.resumeFile?.bytes?.length) {
-    resumeStored = Boolean(
-      await storeResumeFile({
-        orgId: input.orgId,
-        candidateId,
-        filename: input.resumeFile.filename,
-        bytes: input.resumeFile.bytes,
-      }),
-    );
+    const stored = await storeResumeFile({
+      orgId: input.orgId,
+      candidateId,
+      filename: input.resumeFile.filename,
+      bytes: input.resumeFile.bytes,
+    });
+    resumeStored = Boolean(stored.path);
+    resumeError = stored.error;
   }
-  if (input.requireResumeStored && !resumeStored) {
-    if (!existing) {
-      await supabaseAdmin.from("candidates").delete().eq("id", candidateId);
-    }
-    throw new Error(
-      "The original CV reached ATSIQ but could not be saved in the private vault. No new text-only candidate was kept; retry after updating the companion.",
-    );
-  }
+
 
   return {
     candidateId,
