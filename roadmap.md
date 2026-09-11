@@ -40,6 +40,8 @@
 - [x] Capture each applicant's public LinkedIn profile separately from the Recruiter-only URL.
 - [x] Report the exact failed stage: navigation, identity, attachment, control, download, storage or analysis.
 - [x] Verify active-profile identity, Highlights CV discovery, Attachments CV discovery, public-profile capture and applicant-queue filtering against screenshot-shaped browser fixtures.
+- [x] Handle icon-only attachment controls outside the filename wrapper and recover the CV from LinkedIn's expanded preview when no browser download event fires.
+- [x] Retain and analyse validated LinkedIn profile evidence when a CV download fails, then merge the later CV by public-profile identity.
 
 ## Enterprise readiness — slice 2 & 3 (done)
 
