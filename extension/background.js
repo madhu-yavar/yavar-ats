@@ -4,7 +4,8 @@
  * Runs in the recruiter's own signed-in browser, at human pace. From the
  * applicant list they already have open it first sends the job description
  * across (so the role exists in ATSIQ), then works through each applicant in
- * the left-hand list by name, grabs the attached resume file itself (the same
+ * the applicant queue by profile URL, understands the active profile, and grabs
+ * the attached resume file itself (the same
  * file the Download button gives) and posts it to ATSIQ, where it is parsed,
  * de-duplicated, matched and scored. It never signs in, stores no credentials,
  * and stops the moment the recruiter presses Stop.
@@ -38,6 +39,64 @@ function readPage() {
   const main = pick("main") || pick("article") || pick("[role=main]") || document.body;
   const text = (main.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
   return { text, title: document.title || null, url: location.href };
+}
+
+function inspectActiveProfile(expectedName) {
+  const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
+  const normalise = (value) =>
+    clean(value)
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9 ]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const expected = normalise(expectedName);
+  const main = document.querySelector("main, [role=main]") || document.body;
+  const visible = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  };
+  const headings = [...main.querySelectorAll('h1, h2, h3, [role="heading"]')]
+    .filter(visible)
+    .map((el) => clean(el.innerText || el.textContent))
+    .filter((value) => value.length >= 3 && value.length <= 140)
+    .filter(
+      (value) =>
+        !/notifications? total|profile activity|row decorations|linkedin recruiter|highlights for this project|most recent activity/i.test(
+          value,
+        ),
+    );
+  const candidateName =
+    headings.find((value) => {
+      const current = normalise(value);
+      return expected && (current.includes(expected) || expected.includes(current));
+    }) || headings[0] || null;
+  const header = [...main.querySelectorAll("header, section, article, div")]
+    .filter(visible)
+    .filter((el) => candidateName && normalise(el.innerText).includes(normalise(candidateName)))
+    .filter((el) => el.querySelector('a[href*="/in/"], a[href*="public-profile"]'))
+    .sort((a, b) => clean(a.innerText).length - clean(b.innerText).length)[0];
+  const publicAnchor =
+    header?.querySelector('a[href*="linkedin.com/in/"], a[href*="/in/"]') ||
+    [...main.querySelectorAll('a[href*="linkedin.com/in/"], a[href*="/in/"]')].find(visible);
+  const publicProfileUrl = publicAnchor?.href ? publicAnchor.href.split(/[?#]/)[0] : null;
+  const text = (main.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
+  const identityConfirmed = Boolean(
+    candidateName &&
+      (!expected ||
+        normalise(candidateName).includes(expected) ||
+        expected.includes(normalise(candidateName))),
+  );
+  return {
+    ready: Boolean(candidateName && text.length > 200),
+    identityConfirmed,
+    candidateName,
+    publicProfileUrl,
+    text,
+    title: document.title || null,
+    url: location.href,
+  };
 }
 
 /**
@@ -142,7 +201,7 @@ async function grabApplicant(expectedName) {
       return null;
     return clean;
   };
-  const candidateName = usableName(document.title) || usableName(expectedName);
+  const candidateName = usableName(expectedName) || usableName(document.title);
   const wanted = normalise(candidateName);
   const main =
     document.querySelector("main") || document.querySelector("[role=main]") || document.body;
@@ -160,6 +219,14 @@ async function grabApplicant(expectedName) {
     .sort((a, b) => a.innerText.length - b.innerText.length);
   const scope = candidates[0] || main;
   const text = (scope.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
+  const publicAnchor = [
+    ...scope.querySelectorAll('a[href*="linkedin.com/in/"], a[href*="/in/"]'),
+    ...main.querySelectorAll('a[href*="linkedin.com/in/"], a[href*="/in/"]'),
+  ].find((el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  });
+  const publicProfileUrl = publicAnchor?.href ? publicAnchor.href.split(/[?#]/)[0] : null;
 
   const urls = [];
   const add = (u) => {
@@ -214,11 +281,12 @@ async function grabApplicant(expectedName) {
     url: location.href,
     resume,
     candidateName,
+    publicProfileUrl,
   };
 }
 
-/** Click LinkedIn's visible CV download control when no direct file URL exists. */
-async function clickResumeDownload(expectedName) {
+/** Rank attachment controls by file-row structure, not visible button text. */
+function discoverResumeActions(expectedName) {
   const normalise = (value) =>
     String(value || "")
       .toLowerCase()
@@ -226,68 +294,104 @@ async function clickResumeDownload(expectedName) {
       .replace(/\s+/g, " ")
       .trim();
   const wanted = normalise(expectedName);
+  const main = document.querySelector("main, [role=main]") || document.body;
+  if (wanted && !normalise(main.innerText).includes(wanted)) {
+    return { stage: "identity", error: `LinkedIn did not finish opening ${expectedName}`, actions: [] };
+  }
+  const visible = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  };
+  const valueOf = (el) =>
+    [
+      el.innerText,
+      el.textContent,
+      el.getAttribute("aria-label"),
+      el.getAttribute("title"),
+      el.getAttribute("data-test-icon"),
+      el.getAttribute("data-view-name"),
+      el.querySelector("svg")?.getAttribute("aria-label"),
+      el.querySelector("svg use")?.getAttribute("href"),
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+  const tabs = [...main.querySelectorAll('[role="tab"], button, a')].filter(visible);
+  const attachmentsTab = tabs.find((el) => /attachments?/i.test(valueOf(el)));
+  const panelId = attachmentsTab?.getAttribute("aria-controls");
+  const panel = panelId ? document.getElementById(panelId) : null;
+  const roots = [panel, main].filter(Boolean);
   const attachmentRows = [
-    ...document.querySelectorAll("main li, main tr, main article, main section, main div"),
+    ...new Set(roots.flatMap((root) => [...root.querySelectorAll("li, tr, article, section, div")])),
   ]
     .filter((el) => {
       const r = el.getBoundingClientRect();
       const text = normalise(el.innerText);
       return (
+        visible(el) &&
         r.width >= 260 &&
         r.height >= 28 &&
-        r.height <= 220 &&
-        /\.pdf\b|\.docx?\b|\(resume\)|\bcv\b/.test(text) &&
+        r.height <= 260 &&
+        (/\.pdf\b|\.docx?\b|\.rtf\b|\(resume\)|\bcv\b/.test(text) ||
+          Boolean(el.querySelector('[data-test-icon*="document" i], [data-test-icon*="file" i]'))) &&
         el.querySelector('button, a[href], [role="button"]')
       );
     })
-    .sort((a, b) => a.innerText.length - b.innerText.length)[0];
-  const profile =
-    document.querySelector("main") || document.querySelector("[role=main]") || document.body;
-  if (wanted && !normalise(profile.innerText).includes(wanted)) {
-    return { ok: false, error: `LinkedIn did not finish opening ${expectedName}` };
-  }
-  if (!attachmentRows) return { ok: false, error: "CV attachment row was not found" };
-  attachmentRows.scrollIntoView({ block: "center" });
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  const accessibleText = (el) =>
-    [el.innerText, el.getAttribute("aria-label"), el.getAttribute("title")]
-      .filter(Boolean)
-      .join(" ")
-      .trim();
-  let controls = [...attachmentRows.querySelectorAll('button, a[href], [role="button"]')];
-  let target = controls.find((el) => {
-    const text = accessibleText(el).toLowerCase();
-    return /download|save/.test(text) && !/preview/.test(text);
+    .filter((el, index, all) => !all.some((other, i) => i !== index && el.contains(other)))
+    .sort((a, b) => a.innerText.length - b.innerText.length);
+
+  const actions = [];
+  attachmentRows.slice(0, 8).forEach((row, rowIndex) => {
+    const filename = (row.innerText || "").match(/[^\n]+\.(?:pdf|docx?|rtf)/i)?.[0]?.trim() || null;
+    const controls = [...row.querySelectorAll('a[href], button, [role="button"]')].filter(visible);
+    controls.forEach((control, controlIndex) => {
+      const semantic = valueOf(control).toLowerCase();
+      const href = control.href || "";
+      if (/preview|open viewer/.test(semantic) || control.getAttribute("aria-haspopup") === "menu") return;
+      let score = 0;
+      if (control.hasAttribute("download")) score += 100;
+      if (/download|save|arrow-down|download-small/.test(semantic)) score += 90;
+      if (/licdn|linkedin|ambry|dms|media-proxy|attachment/.test(href)) score += 70;
+      if (controlIndex === controls.length - 1) score += 35;
+      if (!(control.innerText || "").trim() && control.querySelector("svg")) score += 20;
+      if (score < 20) return;
+      const token = `atsiq-${Date.now()}-${rowIndex}-${controlIndex}`;
+      control.setAttribute("data-atsiq-download-token", token);
+      actions.push({ token, score, filename, href: href || null });
+    });
   });
-  if (!target) {
-    const menu = controls.find((el) => {
-      const text = accessibleText(el).toLowerCase();
-      return (
-        el.getAttribute("aria-haspopup") === "menu" || /more actions|actions|options/.test(text)
-      );
-    });
-    if (menu) {
-      menu.click();
-      await new Promise((resolve) => setTimeout(resolve, 350));
-      controls = [...document.querySelectorAll('[role="menuitem"], [role="menu"] button')];
-      target = controls.find((el) => {
-        const text = accessibleText(el).toLowerCase();
-        return /download|save/.test(text) && !/preview/.test(text);
-      });
-    }
-  }
-  if (!target) {
-    const rowControls = [...attachmentRows.querySelectorAll('button, a[href], [role="button"]')];
-    target = [...rowControls].reverse().find((el) => {
-      const text = accessibleText(el).toLowerCase();
-      return !/preview/.test(text) && el.getAttribute("aria-haspopup") !== "menu";
-    });
-  }
-  if (!target) return { ok: false, error: "CV Download button was not found" };
-  const label = accessibleText(target).toLowerCase();
-  if (/preview/.test(label)) return { ok: false, error: "Only CV Preview was found, not Download" };
+  actions.sort((a, b) => b.score - a.score);
+  return {
+    stage: actions.length ? "ready" : attachmentRows.length ? "control" : "attachment",
+    error: actions.length
+      ? null
+      : attachmentRows.length
+        ? "CV attachment was found, but its download control could not be identified"
+        : "No CV file row was found in Highlights, Attachments, or recent activity",
+    actions,
+    canOpenAttachments: Boolean(attachmentsTab && attachmentsTab.getAttribute("aria-selected") !== "true"),
+  };
+}
+
+function openAttachmentsTab() {
+  const main = document.querySelector("main, [role=main]") || document.body;
+  const tab = [...main.querySelectorAll('[role="tab"], button, a')].find((el) =>
+    /attachments?/i.test(
+      [el.innerText, el.getAttribute("aria-label"), el.getAttribute("title")].filter(Boolean).join(" "),
+    ),
+  );
+  if (!tab) return false;
+  tab.scrollIntoView({ block: "center" });
+  tab.click();
+  return true;
+}
+
+function clickMarkedResumeAction(token) {
+  const target = document.querySelector(`[data-atsiq-download-token="${CSS.escape(token)}"]`);
+  if (!target) return false;
+  target.scrollIntoView({ block: "center" });
   target.click();
-  return { ok: true };
+  return true;
 }
 
 function bytesToBase64(bytes) {
@@ -333,13 +437,12 @@ async function fetchResumeUrl(url, fallbackName) {
  * browser download it creates, cancel the local copy, then read that same
  * authenticated URL into the capture payload.
  */
-async function downloadResumeFromButton(tabId, expectedName) {
-  let created = null;
-  const waitForDownload = new Promise((resolve) => {
+async function waitForDownloadEvent(timeoutMs = 6500) {
+  return new Promise((resolve) => {
     const timer = setTimeout(() => {
       chrome.downloads.onCreated.removeListener(listener);
       resolve(null);
-    }, 12000);
+    }, timeoutMs);
     const listener = (item) => {
       if (item.byExtensionId && item.byExtensionId !== chrome.runtime.id) return;
       chrome.downloads.onCreated.removeListener(listener);
@@ -348,20 +451,42 @@ async function downloadResumeFromButton(tabId, expectedName) {
     };
     chrome.downloads.onCreated.addListener(listener);
   });
+}
 
-  const clicked = await run(tabId, clickResumeDownload, [expectedName]).catch(() => null);
-  if (!clicked?.ok) throw new Error(clicked?.error || "CV Download button was not found");
-  created = await waitForDownload;
-  if (!created?.id) return null;
+async function downloadResumeFromButton(tabId, expectedName) {
+  let discovery = await run(tabId, discoverResumeActions, [expectedName]).catch(() => null);
+  if (discovery?.canOpenAttachments && !discovery.actions?.length) {
+    await run(tabId, openAttachmentsTab).catch(() => false);
+    await sleep(900);
+    discovery = await run(tabId, discoverResumeActions, [expectedName]).catch(() => null);
+  }
+  if (!discovery?.actions?.length) {
+    throw new Error(
+      `[${discovery?.stage || "attachment"}] ${discovery?.error || "CV attachment discovery failed"}`,
+    );
+  }
 
-  await chrome.downloads.cancel(created.id).catch(() => {});
-  const url = created.finalUrl || created.url;
-  if (!url) return null;
-  const resume = await run(tabId, fetchResumeUrl, [url, created.filename]).catch((error) => {
-    throw new Error(error?.message || "the signed-in CV download could not be read");
-  });
-  await chrome.downloads.erase({ id: created.id }).catch(() => {});
-  return resume;
+  for (const action of discovery.actions.slice(0, 4)) {
+    if (action.href && /\.(pdf|docx?|rtf)(\?|$)/i.test(action.href)) {
+      const direct = await run(tabId, fetchResumeUrl, [action.href, action.filename]).catch(() => null);
+      if (direct) return direct;
+    }
+    const waiting = waitForDownloadEvent();
+    const clicked = await run(tabId, clickMarkedResumeAction, [action.token]).catch(() => false);
+    if (!clicked) {
+      await waiting;
+      continue;
+    }
+    const created = await waiting;
+    if (!created?.id) continue;
+    await chrome.downloads.cancel(created.id).catch(() => {});
+    const url = created.finalUrl || created.url;
+    if (!url) continue;
+    const resume = await run(tabId, fetchResumeUrl, [url, created.filename]).catch(() => null);
+    await chrome.downloads.erase({ id: created.id }).catch(() => {});
+    if (resume) return resume;
+  }
+  throw new Error("[download] CV controls were tried, but LinkedIn did not deliver a readable file");
 }
 
 /** Collect applicant/profile links from a Recruiter list page. */
@@ -444,6 +569,7 @@ async function fileApplicant({ site, token, page, requisitionId, candidateName }
     text: page.text && page.text.length > 80 ? page.text : null,
     title: page.title,
     sourceUrl: page.url,
+    publicProfileUrl: page.publicProfileUrl || null,
     candidateName: candidateName || null,
     ...(page.resume ? { file: page.resume } : {}),
     ...(requisitionId ? { requisitionId } : {}),
@@ -534,10 +660,20 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
     try {
       await chrome.tabs.update(workTabId, { url: item.url, active: true });
       const ready = await waitForTab(workTabId);
-      if (!ready) throw new Error("the page did not finish loading");
-      await sleep(4000);
+      if (!ready) throw new Error("[navigation] the page did not finish loading");
+      let snapshot = null;
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        snapshot = await run(workTabId, inspectActiveProfile, [item.label]).catch(() => null);
+        if (snapshot?.ready && snapshot.identityConfirmed) break;
+        await sleep(500);
+      }
+      if (!snapshot?.ready) throw new Error("[navigation] the active profile did not finish rendering");
+      if (!snapshot.identityConfirmed)
+        throw new Error(
+          `[identity] the opened profile did not match ${item.label || "the queued applicant"}`,
+        );
       const page = await run(workTabId, grabApplicant, [item.label]);
-      if (!page) throw new Error("applicant details did not open");
+      if (!page) throw new Error("[profile] applicant details could not be read");
       const candidateName = page.candidateName || item.label;
       if (!candidateName) throw new Error("the applicant name could not be confirmed");
       if (!page.resume) page.resume = await downloadResumeFromButton(workTabId, candidateName);
