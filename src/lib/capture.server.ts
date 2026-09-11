@@ -203,11 +203,68 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
         console.error("capture verification failed", e);
         verificationNote = "verification needs retry";
       }
+
+      let socialNote = "profile analysis needs retry";
+      try {
+        const { fetchLinkedinSignal } = await import("./social.server");
+        let roleTitle = "Candidate profile";
+        let jdSkills: string[] = [];
+        if (input.requisitionId) {
+          const { data: requisition } = await db
+            .from("requisitions")
+            .select("title, must_have_skills, good_to_have_skills")
+            .eq("id", input.requisitionId)
+            .maybeSingle();
+          roleTitle = requisition?.title ?? roleTitle;
+          jdSkills = [
+            ...(requisition?.must_have_skills ?? []),
+            ...(requisition?.good_to_have_skills ?? []),
+          ];
+        }
+        const linkedin = await fetchLinkedinSignal({
+          url: ingested.linkedinUrl,
+          jobTitle: roleTitle,
+          jdSkills,
+          resumeText: text,
+          profileText: pageText || null,
+        });
+        if (linkedin) {
+          const { error: socialError } = await db.from("social_profiles").upsert(
+            {
+              candidate_id: ingested.candidateId,
+              org_id: org.id,
+              provider: linkedin.provider,
+              profile_url: linkedin.profile_url,
+              handle: linkedin.handle,
+              score: linkedin.score,
+              signals: linkedin.signals as never,
+              rationale: linkedin.rationale,
+              status: linkedin.status,
+              fetched_at: new Date().toISOString(),
+              last_synced_at: new Date().toISOString(),
+            } as never,
+            { onConflict: "candidate_id,provider" },
+          );
+          if (socialError) throw new Error(socialError.message);
+          socialNote = `LinkedIn analysis ${linkedin.score}/100`;
+        }
+      } catch (e) {
+        console.error("capture social analysis failed", e);
+      }
+
+      if (input.requisitionId) {
+        try {
+          const { scoreUnscored } = await import("./autoscore.server");
+          await scoreUnscored({ orgId: org.id, requisitionId: input.requisitionId, limit: 1 });
+        } catch (e) {
+          console.error("capture background match failed", e);
+        }
+      }
       return log({
         status: ingested.alreadyApplied ? "updated" : "imported",
         detail: `${ingested.name} (${
           ingested.emailMissing ? "no email on the CV — add it later" : ingested.email
-        })${input.requisitionId ? " added to the role" : " filed in the talent pool"}; original CV secured; ${verificationNote}.`,
+        })${input.requisitionId ? " added to the role" : " filed in the talent pool"}; original CV secured; ${verificationNote}; ${socialNote}.`,
         candidateId: ingested.candidateId,
         requisitionId: input.requisitionId ?? null,
         title: ingested.name,

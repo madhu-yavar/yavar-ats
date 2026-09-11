@@ -126,21 +126,39 @@ function rowScan(action, arg) {
  * panel on the right is read, so the other applicants in the list can never
  * bleed into one person's record.
  */
-async function grabApplicant() {
-  const mid = window.innerWidth / 2;
-  let panel = null;
-  let best = 0;
-  for (const el of document.querySelectorAll("main div, main section, section, article")) {
-    const r = el.getBoundingClientRect();
-    if (r.left < mid * 0.75 || r.width < 280 || r.height < 240) continue;
-    const len = (el.innerText || "").trim().length;
-    if (len < 200) continue;
-    if (!panel || len < best) {
-      panel = el;
-      best = len;
-    }
-  }
-  const scope = panel || document.querySelector("main") || document.body;
+async function grabApplicant(expectedName) {
+  const normalise = (value) =>
+    String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const usableName = (value) => {
+    const clean = String(value || "")
+      .replace(/\s*[|–-]\s*(LinkedIn|Recruiter).*$/i, "")
+      .trim();
+    if (clean.length < 3 || clean.length > 120) return null;
+    if (/notifications? total|profile activity|row decorations|linkedin recruiter/i.test(clean))
+      return null;
+    return clean;
+  };
+  const candidateName = usableName(document.title) || usableName(expectedName);
+  const wanted = normalise(candidateName);
+  const main =
+    document.querySelector("main") || document.querySelector("[role=main]") || document.body;
+  const candidates = [...main.querySelectorAll("section, article, div")]
+    .filter((el) => {
+      const r = el.getBoundingClientRect();
+      const value = normalise(el.innerText);
+      return (
+        r.width >= 420 &&
+        r.height >= 300 &&
+        (!wanted || value.includes(wanted)) &&
+        /summary|experience|highlights for this project|attachments?/.test(value)
+      );
+    })
+    .sort((a, b) => a.innerText.length - b.innerText.length);
+  const scope = candidates[0] || main;
   const text = (scope.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
 
   const urls = [];
@@ -148,7 +166,7 @@ async function grabApplicant() {
     if (u && !urls.includes(u)) urls.push(u);
   };
 
-  const linkScope = panel && panel.querySelector("a[href], iframe[src]") ? panel : document;
+  const linkScope = scope.querySelector("a[href], iframe[src]") ? scope : document;
   for (const a of linkScope.querySelectorAll("a[href], a[download]")) {
     const href = a.href || "";
     const label = (a.innerText || a.getAttribute("aria-label") || "").toLowerCase();
@@ -190,26 +208,12 @@ async function grabApplicant() {
     }
   }
 
-  const genericHeading =
-    /^(applicant|applicants|profile|activity|inbox|projects?|pipeline|recruiter|linkedin|messages?|notifications?)$/i;
-  const headingScope = panel || document.querySelector("main") || document.body;
-  const candidateName = [...headingScope.querySelectorAll('h1, h2, h3, [role="heading"]')]
-    .map((el) => (el.innerText || el.textContent || "").trim().split("\n")[0])
-    .find(
-      (value) =>
-        value &&
-        value.length >= 3 &&
-        value.length <= 120 &&
-        !genericHeading.test(value) &&
-        !/profile activity|row decorations|candidate details/i.test(value),
-    );
-
   return {
     text,
     title: document.title || null,
     url: location.href,
     resume,
-    candidateName: candidateName || null,
+    candidateName,
   };
 }
 
@@ -226,35 +230,48 @@ function clickResumeDownload(expectedName) {
       .replace(/\s+/g, " ")
       .trim();
   const wanted = normalise(expectedName);
-  const rightSide = [...document.querySelectorAll("main section, main article, main div, section, article")]
+  const attachmentRows = [
+    ...document.querySelectorAll("main li, main tr, main article, main section, main div"),
+  ]
     .filter((el) => {
       const r = el.getBoundingClientRect();
       const text = normalise(el.innerText);
       return (
-        r.left >= window.innerWidth * 0.35 &&
-        r.width >= 280 &&
-        r.height >= 180 &&
-        (!wanted || text.includes(wanted)) &&
-        /resume|curriculum|attachment|download/.test(text)
+        r.width >= 260 &&
+        r.height >= 28 &&
+        r.height <= 220 &&
+        /\.pdf\b|\.docx?\b|\(resume\)|\bcv\b/.test(text) &&
+        el.querySelector('button, a[href], [role="button"]')
       );
     })
     .sort((a, b) => a.innerText.length - b.innerText.length)[0];
-  const scope = rightSide || document.querySelector("main") || document.body;
-  if (wanted && !normalise(scope.innerText).includes(wanted)) {
+  const profile =
+    document.querySelector("main") || document.querySelector("[role=main]") || document.body;
+  if (wanted && !normalise(profile.innerText).includes(wanted)) {
     return { ok: false, error: `LinkedIn did not finish opening ${expectedName}` };
   }
-  const controls = [...scope.querySelectorAll('button, a[href], [role="button"]')].filter(visible);
-  const target = controls.find((el) => {
+  if (!attachmentRows) return { ok: false, error: "CV attachment row was not found" };
+  const controls = [...attachmentRows.querySelectorAll('button, a[href], [role="button"]')].filter(
+    visible,
+  );
+  const labelled = controls.find((el) => {
     const text = [el.innerText, el.getAttribute("aria-label"), el.getAttribute("title")]
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
-    const context = (el.closest("li, tr, article, section, div")?.innerText || "").toLowerCase();
-    return (
-      /download\s+(resume|cv)|download.*(resume|cv)|(resume|cv).*download/.test(text) ||
-      (/download/.test(text) && /\.pdf|\.docx?|resume|curriculum|attachment/.test(context))
-    );
+    return /download|save/.test(text);
   });
+  const iconOnly = [...controls]
+    .reverse()
+    .find(
+      (el) =>
+        !/preview/i.test(
+          [el.innerText, el.getAttribute("aria-label"), el.getAttribute("title")]
+            .filter(Boolean)
+            .join(" "),
+        ),
+    );
+  const target = labelled || iconOnly;
   if (!target) return { ok: false, error: "CV Download button was not found" };
   target.click();
   return { ok: true };
@@ -335,13 +352,22 @@ function collectApplicantLinks() {
     const row = a.closest("li, tr, article, [role=row], [data-test-applicant-row]");
     const candidates = [a.innerText || "", row?.innerText || ""]
       .flatMap((value) => value.split("\n"))
-      .map((value) => value.trim().replace(/^view\s+/i, "").replace(/\s+profile$/i, ""))
+      .map((value) =>
+        value
+          .trim()
+          .replace(/^view\s+/i, "")
+          .replace(/\s+profile$/i, ""),
+      )
       .filter(
         (value) =>
           value.length >= 3 &&
           value.length <= 120 &&
-          !/^(profile|applicant|applied|view profile|profile activity row decorations)$/i.test(value) &&
-          !/ago$|qualification|good fit|not a fit|maybe|pipeline|message/i.test(value),
+          !/^(profile|applicant|applied|view profile|profile activity row decorations)$/i.test(
+            value,
+          ) &&
+          !/notifications? total|ago$|qualification|good fit|not a fit|maybe|pipeline|message/i.test(
+            value,
+          ),
       );
     const label = candidates[0] || null;
     out.push({ url: clean, label });
@@ -467,39 +493,36 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
   });
 
   for (let i = 0; i < queue.length; i += 1) {
-      const state = await getRun();
-      if (!state || state.stop) {
-        await setRun({ running: false, note: "Stopped." });
-        return;
-      }
-      const item = queue[i];
-      await setRun({ index: i + 1, current: item.label ?? "Applicant" });
+    const state = await getRun();
+    if (!state || state.stop) {
+      await setRun({ running: false, note: "Stopped." });
+      return;
+    }
+    const item = queue[i];
+    await setRun({ index: i + 1, current: item.label ?? "Applicant" });
 
-      try {
-        await chrome.tabs.update(workTabId, { url: item.url, active: true });
-        const ready = await waitForTab(workTabId);
-        if (!ready) throw new Error("the page did not finish loading");
-        await sleep(4000);
-        const page = await run(workTabId, grabApplicant);
-        if (!page) throw new Error("applicant details did not open");
+    try {
+      await chrome.tabs.update(workTabId, { url: item.url, active: true });
+      const ready = await waitForTab(workTabId);
+      if (!ready) throw new Error("the page did not finish loading");
+      await sleep(4000);
+      const page = await run(workTabId, grabApplicant, [item.label]);
+      if (!page) throw new Error("applicant details did not open");
         const candidateName = page.candidateName || item.label;
-        if (!candidateName) throw new Error("the applicant name could not be confirmed");
-        if (!page.resume)
-          page.resume = await downloadResumeFromButton(workTabId, candidateName);
-        if (!page.resume)
-          throw new Error("the original CV could not be downloaded — nothing was filed");
-        await tally(
-          await fileApplicant({ site, token, page, requisitionId, candidateName }),
-        );
-      } catch (e) {
-        const s = await getRun();
-        await setRun({
-          failed: (s?.failed ?? 0) + 1,
-          note: `Skipped ${item.label || "one applicant"} — ${e.message}.`,
-        });
-      }
+      if (!candidateName) throw new Error("the applicant name could not be confirmed");
+      if (!page.resume) page.resume = await downloadResumeFromButton(workTabId, candidateName);
+      if (!page.resume)
+        throw new Error("the original CV could not be downloaded — nothing was filed");
+      await tally(await fileApplicant({ site, token, page, requisitionId, candidateName }));
+    } catch (e) {
+      const s = await getRun();
+      await setRun({
+        failed: (s?.failed ?? 0) + 1,
+        note: `Skipped ${item.label || "one applicant"} — ${e.message}.`,
+      });
+    }
 
-      if (i < queue.length - 1) await sleep(jitter(PACE[pace] ?? PACE.safe));
+    if (i < queue.length - 1) await sleep(jitter(PACE[pace] ?? PACE.safe));
   }
 
   const done = await getRun();
