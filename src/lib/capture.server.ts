@@ -126,7 +126,10 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
     try {
       const { attachmentText } = await import("./inbox.server");
       fileBytes = base64ToBytes(input.file.content);
-      const fromFile = (await attachmentText(input.file.filename, fileBytes)).trim();
+      // PDF parsers may transfer/detach the ArrayBuffer they receive. Parse a
+      // copy so the original bytes remain intact for the private CV vault.
+      const parseBytes = Uint8Array.from(fileBytes);
+      const fromFile = (await attachmentText(input.file.filename, parseBytes)).trim();
       // The attached CV is the better source; the page text stays as a fallback
       // and as extra context when the file yields little.
       text = fromFile.length >= 200 ? fromFile : [fromFile, pageText].filter(Boolean).join("\n\n");

@@ -69,8 +69,13 @@ export async function storeResumeFile(input: {
   filename: string;
   bytes: Uint8Array;
 }): Promise<{ path: string | null; error: string | null }> {
-  if (!input.orgId || input.bytes.length === 0) {
-    return { path: null, error: !input.orgId ? "no organisation on the candidate" : "empty file" };
+  if (!input.orgId || input.bytes.byteLength === 0) {
+    return {
+      path: null,
+      error: !input.orgId
+        ? "no organisation on the candidate"
+        : "the CV file buffer was empty after parsing",
+    };
   }
   try {
     const safeName = input.filename.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "resume.pdf";
