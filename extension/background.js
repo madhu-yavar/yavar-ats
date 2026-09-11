@@ -81,8 +81,7 @@ function inspectActiveProfile(expectedName) {
           value,
         ),
     );
-  const headingName =
-    headings.find((value) => expected && namesMatch(value, expected)) || null;
+  const headingName = headings.find((value) => expected && namesMatch(value, expected)) || null;
   const publicAnchors = [
     ...main.querySelectorAll(
       'a[href*="linkedin.com/in/"], a[href*="/in/"], a[href*="public-profile"]',
