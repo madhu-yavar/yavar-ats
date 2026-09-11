@@ -161,7 +161,7 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
         orgId: org.id,
         source: "browser_capture",
         fullName: input.candidateName ?? null,
-        identityKey: input.sourceUrl ?? null,
+        identityKey: input.publicProfileUrl ?? input.sourceUrl ?? null,
         profileUrl: input.publicProfileUrl ?? input.sourceUrl ?? null,
         resumeFile: fileBytes ? { filename: fileName, bytes: fileBytes } : null,
         requireResumeStored: true,

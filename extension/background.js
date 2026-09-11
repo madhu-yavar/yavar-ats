@@ -201,9 +201,7 @@ async function grabApplicant(expectedName) {
       return null;
     return clean;
   };
-  const snapshot = inspectActiveProfile(expectedName);
-  const candidateName =
-    usableName(snapshot.candidateName) || usableName(expectedName) || usableName(document.title);
+  const candidateName = usableName(expectedName) || usableName(document.title);
   const wanted = normalise(candidateName);
   const main =
     document.querySelector("main") || document.querySelector("[role=main]") || document.body;
@@ -221,6 +219,12 @@ async function grabApplicant(expectedName) {
     .sort((a, b) => a.innerText.length - b.innerText.length);
   const scope = candidates[0] || main;
   const text = (scope.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
+  const publicAnchor = [...scope.querySelectorAll('a[href*="linkedin.com/in/"], a[href*="/in/"]')]
+    .find((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    });
+  const publicProfileUrl = publicAnchor?.href ? publicAnchor.href.split(/[?#]/)[0] : null;
 
   const urls = [];
   const add = (u) => {
@@ -275,7 +279,7 @@ async function grabApplicant(expectedName) {
     url: location.href,
     resume,
     candidateName,
-    publicProfileUrl: snapshot.publicProfileUrl,
+    publicProfileUrl,
   };
 }
 
