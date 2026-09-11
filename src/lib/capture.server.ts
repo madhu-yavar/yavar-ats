@@ -166,18 +166,18 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
         identityKey: input.publicProfileUrl ?? input.sourceUrl ?? null,
         profileUrl: input.publicProfileUrl ?? input.sourceUrl ?? null,
         resumeFile: fileBytes ? { filename: fileName, bytes: fileBytes } : null,
-        requireResumeStored: !input.profileOnly,
+        requireResumeStored: false,
         profileOnly: Boolean(input.profileOnly),
       });
-      if (fileBytes && !ingested.resumeStored) {
-        return log({
-          status: "error",
-          detail: `${ingested.name} was parsed, but the original CV could not be secured. Retry this applicant.`,
-          candidateId: ingested.candidateId,
-          requisitionId: input.requisitionId ?? null,
-          title: ingested.name,
-        });
-      }
+      // A vault problem must never lose the person: keep the parsed profile and
+      // say plainly why the original file is still missing.
+      const vaultNote =
+        fileBytes && !ingested.resumeStored
+          ? `original CV could not be saved (${ingested.resumeError ?? "unknown reason"}) — profile kept, file pending`
+          : fileBytes
+            ? "original CV secured"
+            : "LinkedIn profile retained — original CV still pending";
+
 
       let verificationNote = "verification queued";
       try {
