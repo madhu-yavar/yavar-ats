@@ -99,9 +99,15 @@ function inspectActiveProfile(expectedName) {
   });
   const candidateName = headingName || headerName?.replace(/\s*[·|].*$/, "").trim() || null;
   const publicAnchor =
-    header?.querySelector('a[href*="linkedin.com/in/"], a[href*="/in/"]') ||
-    publicAnchors.find((anchor) => /linkedin\.com\/in\/|\/in\//i.test(anchor.href));
-  const publicProfileUrl = publicAnchor?.href ? publicAnchor.href.split(/[?#]/)[0] : null;
+    header?.querySelector(
+      'a[href*="linkedin.com/in/"], a[href*="/in/"], a[href*="public-profile"]',
+    ) || publicAnchors[0];
+  const publicHref = publicAnchor?.href || null;
+  const redirectTarget = publicHref
+    ? new URL(publicHref, location.href).searchParams.get("url") ||
+      new URL(publicHref, location.href).searchParams.get("redirect")
+    : null;
+  const publicProfileUrl = (redirectTarget || publicHref)?.split(/[?#]/)[0] || null;
   const text = (main.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
   const headerMatchesExpected = Boolean(
     expected && header && namesMatch(header.innerText, expected),
@@ -244,13 +250,22 @@ async function grabApplicant(expectedName) {
   const scope = candidates[0] || main;
   const text = (scope.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
   const publicAnchor = [
-    ...scope.querySelectorAll('a[href*="linkedin.com/in/"], a[href*="/in/"]'),
-    ...main.querySelectorAll('a[href*="linkedin.com/in/"], a[href*="/in/"]'),
+    ...scope.querySelectorAll(
+      'a[href*="linkedin.com/in/"], a[href*="/in/"], a[href*="public-profile"]',
+    ),
+    ...main.querySelectorAll(
+      'a[href*="linkedin.com/in/"], a[href*="/in/"], a[href*="public-profile"]',
+    ),
   ].find((el) => {
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0;
   });
-  const publicProfileUrl = publicAnchor?.href ? publicAnchor.href.split(/[?#]/)[0] : null;
+  const publicHref = publicAnchor?.href || null;
+  const redirectTarget = publicHref
+    ? new URL(publicHref, location.href).searchParams.get("url") ||
+      new URL(publicHref, location.href).searchParams.get("redirect")
+    : null;
+  const publicProfileUrl = (redirectTarget || publicHref)?.split(/[?#]/)[0] || null;
 
   const urls = [];
   const add = (u) => {
@@ -373,7 +388,7 @@ function discoverResumeActions(expectedName) {
         visible(el) &&
         r.width >= 260 &&
         r.height >= 28 &&
-        r.height <= 260 &&
+        r.height <= 900 &&
         (/\.(?:pdf|docx?|rtf)\b/i.test(rawText) ||
           /\b(?:resume|curriculum vitae|cv)\b/.test(text) ||
           Boolean(
@@ -382,24 +397,51 @@ function discoverResumeActions(expectedName) {
         el.querySelector('button, a[href], [role="button"]')
       );
     })
-    .filter((el, index, all) => !all.some((other, i) => i !== index && el.contains(other)))
+    .filter((el, index, all) => {
+      const ownFile = /\.(?:pdf|docx?|rtf)\b/i.test(String(el.innerText || el.textContent || ""));
+      if (!ownFile) return false;
+      const childFileRow = all.some(
+        (other, i) =>
+          i !== index &&
+          el.contains(other) &&
+          /\.(?:pdf|docx?|rtf)\b/i.test(String(other.innerText || other.textContent || "")) &&
+          other.querySelector('button, a[href], [role="button"], [tabindex]'),
+      );
+      return !childFileRow;
+    })
     .sort((a, b) => a.innerText.length - b.innerText.length);
 
   const actions = [];
   attachmentRows.slice(0, 8).forEach((row, rowIndex) => {
     const filename = (row.innerText || "").match(/[^\n]+\.(?:pdf|docx?|rtf)/i)?.[0]?.trim() || null;
-    const controls = [...row.querySelectorAll('a[href], button, [role="button"]')].filter(visible);
+    const structuralRow = (() => {
+      let current = row;
+      for (let depth = 0; depth < 5 && current?.parentElement; depth += 1) {
+        const parent = current.parentElement;
+        const parentText = String(parent.innerText || parent.textContent || "");
+        if (!/\.(?:pdf|docx?|rtf)\b/i.test(parentText)) break;
+        if (parent.getBoundingClientRect().height > 900) break;
+        current = parent;
+      }
+      return current;
+    })();
+    const controls = [
+      ...structuralRow.querySelectorAll(
+        'a[href], button, [role="button"], [tabindex]:not([tabindex="-1"]), [data-view-name], [data-control-name]',
+      ),
+    ].filter(visible);
     controls.forEach((control, controlIndex) => {
       const semantic = valueOf(control).toLowerCase();
       const href = control.href || "";
-      if (/preview|open viewer/.test(semantic) || control.getAttribute("aria-haspopup") === "menu")
+      if (/preview|hide preview|open viewer/.test(semantic) || control.getAttribute("aria-haspopup") === "menu")
         return;
       let score = 0;
       if (control.hasAttribute("download")) score += 100;
       if (/download|save|arrow-down|download-small/.test(semantic)) score += 90;
       if (/licdn|linkedin|ambry|dms|media-proxy|attachment/.test(href)) score += 70;
-      if (controlIndex === controls.length - 1) score += 35;
+      if (controlIndex === controls.length - 1) score += 45;
       if (!(control.innerText || "").trim() && control.querySelector("svg")) score += 20;
+      if (!(control.innerText || "").trim() && controlIndex > 0) score += 20;
       if (score < 20) return;
       const token = `atsiq-${Date.now()}-${rowIndex}-${controlIndex}`;
       control.setAttribute("data-atsiq-download-token", token);
@@ -419,6 +461,27 @@ function discoverResumeActions(expectedName) {
       attachmentsTab && attachmentsTab.getAttribute("aria-selected") !== "true",
     ),
   };
+}
+
+/** When LinkedIn expands Preview instead of emitting a browser download, read the preview file. */
+function discoverPreviewResumeUrls() {
+  const urls = [];
+  const add = (value) => {
+    if (!value) return;
+    try {
+      const href = new URL(value, location.href).href;
+      if (!urls.includes(href) && /licdn|linkedin|ambry|dms|media-proxy|attachment|\.pdf|\.doc/i.test(href)) {
+        urls.push(href);
+      }
+    } catch {
+      /* ignore malformed page URLs */
+    }
+  };
+  for (const el of document.querySelectorAll("iframe[src], embed[src], object[data], a[href]")) {
+    add(el.getAttribute("src") || el.getAttribute("data") || el.getAttribute("href"));
+  }
+  for (const entry of performance.getEntriesByType("resource")) add(entry.name);
+  return urls.slice(-20).reverse();
 }
 
 function openAttachmentsTab() {
@@ -530,7 +593,18 @@ async function downloadResumeFromButton(tabId, expectedName) {
       continue;
     }
     const created = await waiting;
-    if (!created?.id) continue;
+    if (!created?.id) {
+      await sleep(700);
+      const previewUrls =
+        (await run(tabId, discoverPreviewResumeUrls).catch(() => [])) ?? [];
+      for (const previewUrl of previewUrls) {
+        const previewResume = await run(tabId, fetchResumeUrl, [previewUrl, action.filename]).catch(
+          () => null,
+        );
+        if (previewResume) return previewResume;
+      }
+      continue;
+    }
     await chrome.downloads.cancel(created.id).catch(() => {});
     const url = created.finalUrl || created.url;
     if (!url) continue;
