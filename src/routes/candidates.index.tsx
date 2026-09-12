@@ -1289,8 +1289,7 @@ function Candidates() {
                       <div className="min-w-0">
                         <h2 className="text-2xl font-semibold tracking-tight">{c.full_name}</h2>
                         <p className="mt-1 text-sm text-muted-foreground">
-                          {history[0]?.title || "Role unknown"} ·{" "}
-                          {c.location || "location unknown"}
+                          {history[0]?.title || "Role unknown"} · {c.location || "location unknown"}
                         </p>
                         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                           {linkedInUrl ? (
@@ -1394,8 +1393,7 @@ function Candidates() {
                                   : "border-destructive/30 bg-destructive/10 text-destructive")
                             }
                           >
-                            <ShieldCheck className="size-3.5" /> Authenticity{" "}
-                            {v.authenticity_score}
+                            <ShieldCheck className="size-3.5" /> Authenticity {v.authenticity_score}
                             {flags ? ` · ${flags} flag${flags === 1 ? "" : "s"}` : ""}
                           </span>
                         ) : (
@@ -1498,9 +1496,7 @@ function Candidates() {
                           <div>
                             <dt className="text-[11px] uppercase text-muted-foreground">Notice</dt>
                             <dd className="num">
-                              {c.notice_period_days !== null
-                                ? `${c.notice_period_days} days`
-                                : "—"}
+                              {c.notice_period_days !== null ? `${c.notice_period_days} days` : "—"}
                             </dd>
                           </div>
                           <div>
@@ -1530,7 +1526,10 @@ function Candidates() {
                         </h3>
                         <div className="space-y-1.5 text-sm">
                           {c.email ? (
-                            <a href={`mailto:${c.email}`} className="block break-all hover:underline">
+                            <a
+                              href={`mailto:${c.email}`}
+                              className="block break-all hover:underline"
+                            >
                               {c.email}
                             </a>
                           ) : (
@@ -1547,9 +1546,7 @@ function Candidates() {
                           {missing.length === 0 ? (
                             <span className="text-emerald-600">Parse complete</span>
                           ) : (
-                            <span className="text-amber-600">
-                              Missing: {missing.join(", ")}
-                            </span>
+                            <span className="text-amber-600">Missing: {missing.join(", ")}</span>
                           )}
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
