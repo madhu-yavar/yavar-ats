@@ -1070,77 +1070,208 @@ function Candidates() {
       {filtered.length === 0 ? (
         <EmptyState title="No candidates match" hint="Change the view or clear the filters." />
       ) : (
-        <div className="panel overflow-x-auto">
-          <Table className="min-w-[1900px] table-fixed">
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">
-                  <Checkbox
-                    checked={allChecked}
-                    onCheckedChange={toggleAll}
-                    aria-label="Select all"
-                  />
-                </TableHead>
-                <TableHead className="w-[240px]">Candidate</TableHead>
-                <TableHead className="w-[180px]">
-                  <span className="inline-flex items-center gap-1">
-                    Source &amp; added
-                    <ColumnFilter
-                      title="Source"
-                      options={colOptions.sources}
-                      selected={fSource}
-                      onChange={setFSource}
-                    />
-                  </span>
-                </TableHead>
-                <TableHead className="w-[200px]">Contact</TableHead>
-                <TableHead className="w-[190px]">
-                  <span className="inline-flex items-center gap-1">
-                    Current role &amp; tenure
-                    <ColumnFilter
-                      title="Employer"
-                      options={colOptions.employers}
-                      selected={fEmployer}
-                      onChange={setFEmployer}
-                    />
-                  </span>
-                </TableHead>
-                <TableHead className="w-[110px]">
-                  <span className="inline-flex items-center gap-1">
-                    Experience
-                    <ColumnFilter
-                      title="Experience"
-                      options={colOptions.exps}
-                      selected={fExp}
-                      onChange={setFExp}
-                    />
-                  </span>
-                </TableHead>
-                <TableHead className="w-[200px]">Skills &amp; education</TableHead>
-                <TableHead className="w-[170px]">Comp &amp; availability</TableHead>
-                <TableHead className="w-[190px]">
-                  <span className="inline-flex items-center gap-1">
-                    Stage &amp; next action
-                    <ColumnFilter
-                      title="Stage"
-                      options={colOptions.stages}
-                      selected={fStage}
-                      onChange={setFStage}
-                    />
-                  </span>
-                </TableHead>
-                <TableHead className="w-[120px]">Parsing</TableHead>
-                <TableHead className="w-[90px] whitespace-nowrap text-right">Match</TableHead>
-                <TableHead className="w-[120px] whitespace-nowrap text-right">
-                  Authenticity
-                </TableHead>
-                <TableHead className="w-[100px] whitespace-nowrap text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
+        <div className="panel flex flex-col overflow-hidden lg:h-[calc(100dvh-15rem)] lg:min-h-[540px] lg:flex-row">
+          {/* Left: focused candidate list */}
+          <div className="flex w-full flex-col border-b border-border bg-muted/30 lg:w-96 lg:shrink-0 lg:border-b-0 lg:border-r">
+            <div className="space-y-2 border-b border-border bg-card p-3">
+              <Input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search name, email, skill or location…"
+                className="h-8 text-sm"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All sources</SelectItem>
+                    {sources.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {sourceLabel(s)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={minScore} onValueChange={setMinScore}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["0", "50", "60", "70", "80"].map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s === "0" ? "Any score" : `Score ${s}+`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={reqFilter} onValueChange={setReqFilter}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Any requisition" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Any requisition</SelectItem>
+                    {(reqs.data ?? []).map((r) => (
+                      <SelectItem key={r.id} value={r.id}>
+                        {r.code} — {r.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={expBand} onValueChange={setExpBand}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EXP_BANDS.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <Filter className="size-3" />
+                <span>Value filters:</span>
+                <ColumnFilter
+                  title="Source"
+                  options={colOptions.sources}
+                  selected={fSource}
+                  onChange={setFSource}
+                />
+                <ColumnFilter
+                  title="Employer"
+                  options={colOptions.employers}
+                  selected={fEmployer}
+                  onChange={setFEmployer}
+                />
+                <ColumnFilter
+                  title="Experience"
+                  options={colOptions.exps}
+                  selected={fExp}
+                  onChange={setFExp}
+                />
+                <ColumnFilter
+                  title="Stage"
+                  options={colOptions.stages}
+                  selected={fStage}
+                  onChange={setFStage}
+                />
+              </div>
+            </div>
 
-            <TableBody>
+            <div className="max-h-96 flex-1 overflow-y-auto lg:max-h-none">
+              <div className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-[11px] text-muted-foreground">
+                <Checkbox
+                  checked={allChecked}
+                  onCheckedChange={toggleAll}
+                  aria-label="Select all"
+                  className="size-3.5"
+                />
+                <span className="num">
+                  {filtered.length} of {rows.length} candidates
+                </span>
+              </div>
               {filtered.slice(0, 300).map((r) => {
                 const c = r.candidate;
+                const v = verifMap.get(c.id);
+                const isActive = activeRow?.candidate.id === c.id;
+                const dup = dupMap.get(c.id);
+                return (
+                  <div
+                    key={c.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setActiveId(c.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") setActiveId(c.id);
+                    }}
+                    className={
+                      "w-full cursor-pointer border-b border-border py-3 pl-3 pr-3 text-left transition-colors hover:bg-card " +
+                      (isActive
+                        ? "border-l-4 border-l-primary bg-card"
+                        : "border-l-4 border-l-transparent")
+                    }
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Checkbox
+                          checked={selected.has(c.id)}
+                          onCheckedChange={() => toggleOne(c.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`Select ${c.full_name}`}
+                          className="size-3.5 shrink-0"
+                        />
+                        <span className="truncate text-sm font-semibold">{c.full_name}</span>
+                      </div>
+                      {r.score !== null ? (
+                        <ScoreChip score={r.score} size="sm" />
+                      ) : (
+                        <span className="num text-xs text-muted-foreground">—</span>
+                      )}
+                    </div>
+                    <div className="mt-0.5 truncate pl-6 text-xs text-muted-foreground">
+                      {c.current_employer || "employer unknown"} ·{" "}
+                      <span className="num">{c.experience_years} yrs</span>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 pl-6">
+                      {r.stage ? (
+                        <StageBadge stage={r.stage} />
+                      ) : (
+                        <span className="rounded-md border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          Pool only
+                        </span>
+                      )}
+                      <span className="text-[11px] text-muted-foreground">
+                        {sourceLabel(c.source)}
+                      </span>
+                      {v ? (
+                        <span
+                          className={
+                            "num inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold " +
+                            (v.authenticity_score >= 70
+                              ? "bg-emerald-500/10 text-emerald-600"
+                              : v.authenticity_score >= 45
+                                ? "bg-amber-500/10 text-amber-600"
+                                : "bg-destructive/10 text-destructive")
+                          }
+                        >
+                          <ShieldCheck className="size-3" /> {v.authenticity_score}
+                        </span>
+                      ) : null}
+                      {dup ? (
+                        <span
+                          className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-700 dark:text-amber-400"
+                          title={`Possible duplicate (${dup.confidence}) — matched on ${dup.reasons.join(", ")}`}
+                        >
+                          <Copy className="size-3" /> dup ×{dup.members.length}
+                        </span>
+                      ) : null}
+                      {r.stalled !== null ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-amber-600">
+                          <AlertTriangle className="size-3" /> stalled {r.stalled}d
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+              {filtered.length > 300 ? (
+                <p className="num p-3 text-center text-xs text-muted-foreground">
+                  Showing the first 300 of {filtered.length} matches — narrow the filters to see the
+                  rest.
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Right: candidate dossier */}
+          <div className="flex-1 overflow-y-auto">
+            {activeRow ? (
+              (() => {
+                const c = activeRow.candidate;
                 const v = verifMap.get(c.id);
                 const flags = (v?.red_flags ?? []).length;
                 const missing = gaps(c);
@@ -1148,46 +1279,47 @@ function Candidates() {
                   Array.isArray(c.employment_history) ? c.employment_history : []
                 ) as EmploymentRow[];
                 const metrics = history.length ? computeCareerMetrics(history) : null;
-                const current = history[0] ?? null;
-                const isOpen = expanded === c.id;
                 const fresh = freshness(c);
-                const dup = dupMap.get(c.id);
                 const linkedInUrl = normalizeExternalUrl(c.linkedin_url);
+                const githubUrl = normalizeExternalUrl(c.github_url);
                 return (
-                  <Fragment key={c.id}>
-                    <TableRow className="align-top">
-                      <TableCell>
-                        <Checkbox
-                          checked={selected.has(c.id)}
-                          onCheckedChange={() => toggleOne(c.id)}
-                          aria-label={`Select ${c.full_name}`}
-                        />
-                      </TableCell>
-                      <TableCell className="w-[240px]">
-                        <Link
-                          to="/candidates/$id"
-                          params={{ id: c.id }}
-                          className="font-medium hover:underline"
-                        >
-                          {c.full_name}
-                        </Link>
-                        {c.is_internal ? (
-                          <div className="text-xs text-muted-foreground">internal employee</div>
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="w-[180px]">
-                        <div className="text-sm">{sourceLabel(c.source)}</div>
-                        <div
-                          className="text-xs text-muted-foreground"
-                          title={new Date(c.created_at).toLocaleString()}
-                        >
-                          {new Date(c.created_at).toLocaleDateString()}{" "}
-                          {new Date(c.created_at).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </div>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+                  <div className="mx-auto max-w-3xl p-6 lg:p-8">
+                    {/* Dossier header */}
+                    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-6">
+                      <div className="min-w-0">
+                        <h2 className="text-2xl font-semibold tracking-tight">{c.full_name}</h2>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {history[0]?.title || "Role unknown"} ·{" "}
+                          {c.location || "location unknown"}
+                        </p>
+                        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                          {linkedInUrl ? (
+                            <a
+                              href={linkedInUrl}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+                            >
+                              <Linkedin className="size-3.5" /> LinkedIn profile
+                            </a>
+                          ) : null}
+                          {githubUrl ? (
+                            <a
+                              href={githubUrl}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+                            >
+                              <Github className="size-3.5" /> GitHub
+                            </a>
+                          ) : null}
+                          <span className="text-muted-foreground">
+                            Added via{" "}
+                            <span className="font-medium text-foreground">
+                              {sourceLabel(c.source)}
+                            </span>{" "}
+                            on {new Date(c.created_at).toLocaleDateString()}
+                          </span>
                           <span
                             className={
                               fresh.tier === "stale"
@@ -1200,309 +1332,307 @@ function Candidates() {
                           >
                             CV {fresh.label}
                           </span>
-                          {dup ? (
-                            <span
-                              className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-amber-700 dark:text-amber-400"
-                              title={`Possible duplicate (${dup.confidence}) — matched on ${dup.reasons.join(", ")}`}
-                            >
-                              <Copy className="size-3" /> dup ×{dup.members.length}
-                            </span>
-                          ) : null}
                         </div>
-                        <div className="mt-1 flex items-center gap-2 text-muted-foreground">
-                          {linkedInUrl ? (
-                            <a
-                              href={linkedInUrl}
-                              target="_blank"
-                              rel="noreferrer noopener"
-                              aria-label="LinkedIn profile"
-                              className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <Link to="/candidates/$id" params={{ id: c.id }}>
+                            <Button size="sm">Full profile</Button>
+                          </Link>
+                          {activeRow.primary ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setMoverStage(activeRow.stage ?? undefined);
+                                if (activeRow.primary) setMoverIds([activeRow.primary.id]);
+                              }}
                             >
-                              <Linkedin className="size-3.5" /> LinkedIn
-                            </a>
+                              Move stage
+                            </Button>
                           ) : (
-                            <span className="text-[11px] text-muted-foreground">
-                              No profile link
-                            </span>
+                            <Link to="/matching">
+                              <Button size="sm" variant="outline">
+                                Match against a role
+                              </Button>
+                            </Link>
                           )}
-                          {normalizeExternalUrl(c.github_url) ? (
-                            <a
-                              href={normalizeExternalUrl(c.github_url)!}
-                              target="_blank"
-                              rel="noreferrer noopener"
-                              aria-label="GitHub profile"
+                          {c.resume_file_path ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={async () => {
+                                const out = await getResumeUrl({ data: { candidateId: c.id } });
+                                if (out.ok) downloadResume(out);
+                                else toast.error(out.error);
+                              }}
                             >
-                              <Github className="size-3.5 hover:text-foreground" />
-                            </a>
+                              <Download className="size-4" /> Open CV
+                            </Button>
                           ) : null}
-                          <button
-                            type="button"
-                            className="text-xs underline-offset-4 hover:underline"
-                            onClick={() => setExpanded(isOpen ? null : c.id)}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            Match
+                          </span>
+                          {activeRow.score !== null ? (
+                            <span className="num text-3xl font-bold text-primary">
+                              {activeRow.score}%
+                            </span>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">not scored</span>
+                          )}
+                        </div>
+                        {v ? (
+                          <span
+                            className={
+                              "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold " +
+                              (v.authenticity_score >= 70
+                                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600"
+                                : v.authenticity_score >= 45
+                                  ? "border-amber-500/30 bg-amber-500/10 text-amber-600"
+                                  : "border-destructive/30 bg-destructive/10 text-destructive")
+                            }
                           >
-                            {isOpen ? "Hide detail" : "Detail"}
-                          </button>
-                        </div>
-                        {r.stalled !== null ? (
-                          <div className="mt-1 inline-flex items-center gap-1 text-xs text-amber-600">
-                            <AlertTriangle className="size-3.5" /> stalled {r.stalled}d
-                          </div>
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="w-[200px] text-xs">
-                        {c.email ? (
-                          <a href={`mailto:${c.email}`} className="break-all hover:underline">
-                            {c.email}
-                          </a>
+                            <ShieldCheck className="size-3.5" /> Authenticity{" "}
+                            {v.authenticity_score}
+                            {flags ? ` · ${flags} flag${flags === 1 ? "" : "s"}` : ""}
+                          </span>
                         ) : (
-                          <span className="text-destructive">no email parsed</span>
+                          <span className="text-xs text-muted-foreground">
+                            verification not run
+                          </span>
                         )}
-                        <div className="num mt-0.5 text-muted-foreground">
-                          {c.phone || "no phone"}
-                        </div>
-                        <div
-                          className="line-clamp-1 text-muted-foreground"
-                          title={c.location ?? ""}
-                        >
-                          {c.location ?? "location unknown"}
-                        </div>
-                      </TableCell>
-                      <TableCell className="w-[190px] text-xs">
-                        <div
-                          className="line-clamp-1 font-medium text-foreground"
-                          title={current?.title ?? ""}
-                        >
-                          {current?.title || "—"}
-                        </div>
-                        <div className="line-clamp-1 text-muted-foreground">
-                          {c.current_employer || current?.company || "employer unknown"}
-                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 grid gap-x-10 gap-y-8 sm:grid-cols-2">
+                      {/* Experience */}
+                      <section>
+                        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Experience
+                        </h3>
+                        {history.length ? (
+                          <ul className="space-y-3">
+                            {history.map((h, i) => (
+                              <li
+                                key={`${h.company}-${i}`}
+                                className="border-l-2 border-border pl-3"
+                              >
+                                <div className="text-sm font-medium">
+                                  {h.title || "role"} · {h.company || "employer"}
+                                </div>
+                                <div className="num text-xs text-muted-foreground">
+                                  {h.start ?? "?"} – {h.end ?? "present"}
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">
+                            No work history parsed — run matching to extract it from the CV.
+                          </p>
+                        )}
                         {metrics ? (
-                          <div className="num mt-0.5 text-muted-foreground">
+                          <p className="num mt-3 text-xs text-muted-foreground">
                             {metrics.current_tenure_years !== null
-                              ? `${metrics.current_tenure_years.toFixed(1)}y here`
+                              ? `${metrics.current_tenure_years.toFixed(1)}y in current role`
                               : "tenure n/a"}{" "}
                             · {metrics.employers} employers · avg{" "}
                             {metrics.avg_tenure_years.toFixed(1)}y
-                          </div>
-                        ) : (
-                          <div className="text-muted-foreground">no work history parsed</div>
-                        )}
-                      </TableCell>
-                      <TableCell className="w-[110px] text-sm">
-                        <span className="num">{c.experience_years} yrs</span>
-                        {metrics && metrics.jobs_last_5y > 2 ? (
-                          <div className="num text-xs text-amber-600">
-                            {metrics.jobs_last_5y} jobs / 5y
-                          </div>
+                            {metrics.jobs_last_5y > 2 ? ` · ${metrics.jobs_last_5y} jobs / 5y` : ""}
+                            {metrics.longest_gap_months >= 6
+                              ? ` · ${metrics.longest_gap_months}m gap`
+                              : ""}
+                          </p>
                         ) : null}
-                        {metrics && metrics.longest_gap_months >= 6 ? (
-                          <div className="num text-xs text-amber-600">
-                            {metrics.longest_gap_months}m gap
-                          </div>
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="w-[200px] text-xs text-muted-foreground">
-                        <span className="line-clamp-2 break-words">
-                          {c.skills.slice(0, 6).join(" · ") || "no skills parsed"}
-                        </span>
-                        {c.skills.length > 6 ? (
-                          <span className="num block text-[11px]">+{c.skills.length - 6} more</span>
-                        ) : null}
-                        <span
-                          className="mt-0.5 line-clamp-2 block break-words"
-                          title={educationLabel(c.education)}
-                        >
-                          {educationLabel(c.education) || "education unknown"}
-                        </span>
-                      </TableCell>
+                      </section>
 
-                      <TableCell className="w-[170px] text-xs text-muted-foreground">
-                        <div className="num">
-                          CTC {money(c.current_ctc as number | null)} → exp{" "}
-                          {money(c.expected_ctc as number | null)}
-                        </div>
-                        <div className="num">
-                          {c.notice_period_days !== null
-                            ? `${c.notice_period_days}d notice`
-                            : "notice unknown"}
-                        </div>
-                        <div>
-                          {c.willing_to_relocate === null
-                            ? "relocation not asked"
-                            : c.willing_to_relocate
-                              ? "will relocate"
-                              : "no relocation"}
-                          {c.work_authorization ? ` · ${c.work_authorization}` : ""}
-                        </div>
-                      </TableCell>
-                      <TableCell className="w-[190px]">
-                        {r.stage ? (
-                          <>
-                            <StageBadge stage={r.stage} />
-                            {r.apps.length > 1 ? (
-                              <span className="num ml-1.5 text-[11px] text-muted-foreground">
-                                +{r.apps.length - 1}
+                      {/* Skills & education */}
+                      <section>
+                        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Skills &amp; education
+                        </h3>
+                        <div className="flex flex-wrap gap-1.5">
+                          {c.skills.length ? (
+                            c.skills.map((s) => (
+                              <span
+                                key={s}
+                                className="rounded-md border border-border bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground"
+                              >
+                                {s}
                               </span>
-                            ) : null}
-                          </>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Pool only</span>
-                        )}
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {r.stage ? nextAction(r.stage) : "Match against an open requisition"}
+                            ))
+                          ) : (
+                            <span className="text-sm text-muted-foreground">no skills parsed</span>
+                          )}
                         </div>
-                        {r.primary ? (
-                          <div className="num mt-0.5 text-[11px] text-muted-foreground">
-                            last activity{" "}
-                            {new Date(r.primary.last_activity_at).toLocaleDateString()}
-                          </div>
+                        <p className="mt-3 text-sm text-muted-foreground">
+                          {educationLabel(c.education) || "education unknown"}
+                        </p>
+                        {(c.preferred_locations ?? []).length ? (
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            Prefers: {(c.preferred_locations ?? []).join(" · ")}
+                          </p>
                         ) : null}
-                      </TableCell>
-                      <TableCell className="w-[110px] text-xs">
-                        {missing.length === 0 ? (
-                          <span className="text-emerald-600">complete</span>
-                        ) : (
-                          <span className="text-amber-600" title={`Missing: ${missing.join(", ")}`}>
-                            {missing.length} field{missing.length === 1 ? "" : "s"} missing
+                      </section>
+
+                      {/* Compensation & availability */}
+                      <section>
+                        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Compensation &amp; availability
+                        </h3>
+                        <dl className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <dt className="text-[11px] uppercase text-muted-foreground">
+                              Current CTC
+                            </dt>
+                            <dd className="num">{money(c.current_ctc as number | null)}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-[11px] uppercase text-muted-foreground">
+                              Expected
+                            </dt>
+                            <dd className="num">{money(c.expected_ctc as number | null)}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-[11px] uppercase text-muted-foreground">Notice</dt>
+                            <dd className="num">
+                              {c.notice_period_days !== null
+                                ? `${c.notice_period_days} days`
+                                : "—"}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-[11px] uppercase text-muted-foreground">
+                              Relocation
+                            </dt>
+                            <dd>
+                              {c.willing_to_relocate === null
+                                ? "not asked"
+                                : c.willing_to_relocate
+                                  ? "yes"
+                                  : "no"}
+                            </dd>
+                          </div>
+                        </dl>
+                        {c.work_authorization ? (
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            Work authorisation: {c.work_authorization}
+                          </p>
+                        ) : null}
+                      </section>
+
+                      {/* Contact & record health */}
+                      <section>
+                        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Contact &amp; record
+                        </h3>
+                        <div className="space-y-1.5 text-sm">
+                          {c.email ? (
+                            <a href={`mailto:${c.email}`} className="block break-all hover:underline">
+                              {c.email}
+                            </a>
+                          ) : (
+                            <span className="block text-destructive">no email parsed</span>
+                          )}
+                          <span className="num block text-muted-foreground">
+                            {c.phone || "no phone"}
                           </span>
-                        )}
-                        <div className="text-muted-foreground">
+                          <span className="block text-muted-foreground">
+                            {c.location || "location unknown"}
+                          </span>
+                        </div>
+                        <p className="mt-3 text-xs">
+                          {missing.length === 0 ? (
+                            <span className="text-emerald-600">Parse complete</span>
+                          ) : (
+                            <span className="text-amber-600">
+                              Missing: {missing.join(", ")}
+                            </span>
+                          )}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
                           {c.resume_file_path
-                            ? "original CV secured"
+                            ? "Original CV secured in the vault"
                             : c.resume_text
                               ? "text only — no original file"
-                              : "no CV"}
-                        </div>
-                        {c.resume_file_path ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="mt-1 h-7 px-1.5 text-xs"
-                            onClick={async () => {
-                              const out = await getResumeUrl({ data: { candidateId: c.id } });
-                              if (out.ok) downloadResume(out);
-                              else toast.error(out.error);
-                            }}
-                          >
-                            <Download className="size-3.5" /> Open CV
-                          </Button>
-                        ) : null}
-                      </TableCell>
+                              : "no CV on file"}
+                        </p>
+                      </section>
+                    </div>
 
-                      <TableCell className="text-right">
-                        {r.score !== null ? (
-                          <ScoreChip score={r.score} size="sm" />
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {v ? (
-                          <div className="inline-flex flex-col items-end">
-                            <span
-                              className={
-                                "num inline-flex items-center gap-1 text-sm font-semibold " +
-                                (v.authenticity_score >= 70
-                                  ? "text-emerald-600"
-                                  : v.authenticity_score >= 45
-                                    ? "text-amber-600"
-                                    : "text-destructive")
-                              }
-                            >
-                              <ShieldCheck className="size-3.5" /> {v.authenticity_score}
-                            </span>
-                            {flags > 0 ? (
-                              <span className="text-xs text-muted-foreground">
-                                {flags} flag{flags === 1 ? "" : "s"}
+                    {/* Pipeline */}
+                    <section className="mt-8 rounded-md border border-border bg-muted/30 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            Pipeline
+                          </h3>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            {activeRow.stage ? (
+                              <StageBadge stage={activeRow.stage} />
+                            ) : (
+                              <span className="text-sm text-muted-foreground">
+                                Pool only — not attached to a requisition
+                              </span>
+                            )}
+                            {activeRow.apps.length > 1 ? (
+                              <span className="num text-xs text-muted-foreground">
+                                +{activeRow.apps.length - 1} more pipeline
+                                {activeRow.apps.length === 2 ? "" : "s"}
                               </span>
                             ) : null}
                           </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">not run</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {r.primary ? (
+                          <p className="mt-1.5 text-sm text-muted-foreground">
+                            Next:{" "}
+                            {activeRow.stage
+                              ? nextAction(activeRow.stage)
+                              : "match against an open requisition"}
+                            {activeRow.primary ? (
+                              <span className="num">
+                                {" "}
+                                · last activity{" "}
+                                {new Date(activeRow.primary.last_activity_at).toLocaleDateString()}
+                              </span>
+                            ) : null}
+                          </p>
+                        </div>
+                        {activeRow.primary ? (
                           <Button
-                            size="sm"
                             variant="outline"
+                            size="sm"
                             onClick={() => {
-                              setMoverStage(r.stage ?? undefined);
-                              if (r.primary) setMoverIds([r.primary.id]);
+                              setMoverStage(activeRow.stage ?? undefined);
+                              if (activeRow.primary) setMoverIds([activeRow.primary.id]);
                             }}
                           >
-                            Move
+                            Move stage
                           </Button>
-                        ) : (
-                          <Link
-                            to="/matching"
-                            className="text-xs text-muted-foreground underline hover:text-foreground"
-                          >
-                            Match
-                          </Link>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                    {isOpen ? (
-                      <TableRow className="bg-surface-2">
-                        <TableCell colSpan={12} className="text-xs">
-                          <div className="grid gap-4 sm:grid-cols-3">
-                            <div>
-                              <div className="mb-1 font-medium">Work history (parsed)</div>
-                              {history.length ? (
-                                <ul className="space-y-1 text-muted-foreground">
-                                  {history.map((h, i) => (
-                                    <li key={`${h.company}-${i}`}>
-                                      {h.title || "role"} · {h.company || "employer"} ·{" "}
-                                      <span className="num">
-                                        {h.start ?? "?"} – {h.end ?? "present"}
-                                      </span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              ) : (
-                                <p className="text-muted-foreground">
-                                  Nothing parsed yet — run matching to extract the history from the
-                                  CV.
-                                </p>
-                              )}
-                            </div>
-                            <div>
-                              <div className="mb-1 font-medium">All skills</div>
-                              <p className="text-muted-foreground">{c.skills.join(" · ") || "—"}</p>
-                              <div className="mt-2 mb-1 font-medium">Preferred locations</div>
-                              <p className="text-muted-foreground">
-                                {(c.preferred_locations ?? []).join(" · ") || "—"}
-                              </p>
-                            </div>
-                            <div>
-                              <div className="mb-1 font-medium">Missing from the parse</div>
-                              <p className="text-muted-foreground">
-                                {missing.join(", ") || "nothing — record is complete"}
-                              </p>
-                              <div className="mt-2 mb-1 font-medium">Verification</div>
-                              <p className="text-muted-foreground">
-                                {v
-                                  ? v.summary || `Authenticity ${v.authenticity_score}`
-                                  : "not run yet"}
-                              </p>
-                            </div>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ) : null}
-                  </Fragment>
+                        ) : null}
+                      </div>
+                    </section>
+
+                    {/* Authenticity verdict */}
+                    <section className="mt-6">
+                      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Authenticity verdict
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        {v
+                          ? v.summary || `Authenticity ${v.authenticity_score}/100`
+                          : "not run yet — select the candidate and use Re-verify"}
+                      </p>
+                    </section>
+                  </div>
                 );
-              })}
-            </TableBody>
-          </Table>
-          {filtered.length > 300 ? (
-            <p className="num border-t border-border p-3 text-xs text-muted-foreground">
-              Showing the first 300 of {filtered.length} matches — narrow the filters to see the
-              rest.
-            </p>
-          ) : null}
+              })()
+            ) : (
+              <div className="flex h-full items-center justify-center p-10 text-sm text-muted-foreground">
+                Select a candidate from the list.
+              </div>
+            )}
+          </div>
         </div>
       )}
 
