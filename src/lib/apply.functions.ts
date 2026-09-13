@@ -96,8 +96,7 @@ export const submitApplication = createServerFn({ method: "POST" })
       .eq("id", data.requisitionId)
       .maybeSingle();
     if (!r) throw new Error("This job link is no longer valid.");
-    if (r.status !== "approved")
-      throw new Error("This role is no longer accepting applications.");
+    if (r.status !== "approved") throw new Error("This role is no longer accepting applications.");
 
     const parsed = await aiJson<{
       full_name: string | null;
@@ -120,10 +119,12 @@ export const submitApplication = createServerFn({ method: "POST" })
 
     const p = parsed.ok ? parsed.data : null;
     const email = (data.email ?? p?.email ?? "").trim().toLowerCase();
-    if (!email) throw new Error("We could not read an email address — please type yours in the form.");
+    if (!email)
+      throw new Error("We could not read an email address — please type yours in the form.");
 
     const row = {
-      full_name: (data.fullName ?? p?.full_name ?? "").trim() || data.fileName.replace(/\.[^.]+$/, ""),
+      full_name:
+        (data.fullName ?? p?.full_name ?? "").trim() || data.fileName.replace(/\.[^.]+$/, ""),
       email,
       phone: (data.phone ?? p?.phone) || null,
       location: p?.location || null,
@@ -139,15 +140,27 @@ export const submitApplication = createServerFn({ method: "POST" })
       last_synced_at: new Date().toISOString(),
     };
 
-    const { data: existing } = await supabaseAdmin
+    // Scope the lookup to this requisition's organisation: the same person may
+    // exist in another company's talent pool, and that record must never be
+    // rewritten or pulled across tenants.
+    let existingQuery = supabaseAdmin
       .from("candidates")
       .select("id, skills, resume_text")
-      .eq("email", email)
-      .maybeSingle();
+      .eq("email", email);
+    existingQuery = r.org_id
+      ? existingQuery.eq("org_id", r.org_id)
+      : existingQuery.is("org_id", null);
+    const { data: existingRows, error: existingError } = await existingQuery
+      .order("created_at", { ascending: true })
+      .limit(1);
+    if (existingError) throw new Error(existingError.message);
+    const existing = existingRows?.[0] ?? null;
 
     let candidateId: string;
     if (existing) {
-      const skills = new Set([...(existing.skills ?? []), ...row.skills].map((s) => s.trim()).filter(Boolean));
+      const skills = new Set(
+        [...(existing.skills ?? []), ...row.skills].map((s) => s.trim()).filter(Boolean),
+      );
       const { error } = await supabaseAdmin
         .from("candidates")
         .update({ ...row, skills: [...skills] } as never)
