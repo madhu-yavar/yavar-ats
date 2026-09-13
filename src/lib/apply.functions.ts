@@ -139,11 +139,21 @@ export const submitApplication = createServerFn({ method: "POST" })
       last_synced_at: new Date().toISOString(),
     };
 
-    const { data: existing } = await supabaseAdmin
+    // Scope the lookup to this requisition's organisation: the same person may
+    // exist in another company's talent pool, and that record must never be
+    // rewritten or pulled across tenants.
+    let existingQuery = supabaseAdmin
       .from("candidates")
       .select("id, skills, resume_text")
-      .eq("email", email)
-      .maybeSingle();
+      .eq("email", email);
+    existingQuery = r.org_id
+      ? existingQuery.eq("org_id", r.org_id)
+      : existingQuery.is("org_id", null);
+    const { data: existingRows, error: existingError } = await existingQuery
+      .order("created_at", { ascending: true })
+      .limit(1);
+    if (existingError) throw new Error(existingError.message);
+    const existing = existingRows?.[0] ?? null;
 
     let candidateId: string;
     if (existing) {
