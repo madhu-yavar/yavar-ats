@@ -96,7 +96,7 @@ export async function benchmarkMarket(input: {
   experienceMin: number;
   experienceMax: number;
   skills: string[];
-  department?: string | null;
+  department?: string | null | undefined;
 }): Promise<MarketBenchmark> {
   const wanted = candidateSources(input.role, input.location, input.currency);
   const fetched = await Promise.all(wanted.map(async (s) => ({ ...s, text: await readSource(s.url) })));
