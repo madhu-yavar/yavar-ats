@@ -14,6 +14,7 @@ import {
 } from "@/lib/data";
 import { findDuplicateRequisitions } from "@/lib/jd-dedupe";
 import { EmptyState, PageHeader, SkillPills, StatusBadge, inr } from "@/components/ats";
+import { MarketBenchmarkPanel } from "@/components/MarketBenchmark";
 import { CreatableSelect, MasterSelect, TokenPicker } from "@/components/pickers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -335,6 +336,25 @@ function Requisitions() {
                     Used to flag out-of-band expectations — it never lowers a candidate&apos;s match score.
                   </p>
                 </Field>
+                <div className="sm:col-span-2">
+                  <MarketBenchmarkPanel
+                    role={form.title}
+                    location={form.location}
+                    department={departments.find((d) => d.id === form.department_id)?.name ?? null}
+                    experienceMin={Number(form.experience_min) || 0}
+                    experienceMax={Number(form.experience_max) || 0}
+                    skills={[...form.must, ...form.good]}
+                    onApply={({ budget, bandMin, bandMax }) => {
+                      setForm((f) => ({
+                        ...f,
+                        budget_ctc: String(budget),
+                        ctc_band_min: String(bandMin),
+                        ctc_band_max: String(bandMax),
+                      }));
+                      toast.success("Budget and band filled from the market range.");
+                    }}
+                  />
+                </div>
                 <Field label="Max notice period (days)">
                   <Input
                     type="number"
