@@ -46,18 +46,31 @@ function slug(s: string) {
 /** Public salary pages worth trying for a role + location. */
 function candidateSources(role: string, location: string, currency: string) {
   const r = slug(role);
-  const india = currency.toUpperCase() === "INR" || /india|bengaluru|bangalore|chennai|mumbai|delhi|pune|hyderabad|noida|gurgaon|kolkata/i.test(location);
+  const india =
+    currency.toUpperCase() === "INR" ||
+    /india|bengaluru|bangalore|chennai|mumbai|delhi|pune|hyderabad|noida|gurgaon|kolkata/i.test(
+      location,
+    );
   const list: { title: string; url: string }[] = [
     { title: `Levels.fyi — ${role}`, url: `https://www.levels.fyi/t/${r}` },
-    { title: `Glassdoor salaries — ${role}`, url: `https://www.glassdoor.com/Salaries/${r}-salary-SRCH_KO0,20.htm` },
+    {
+      title: `Glassdoor salaries — ${role}`,
+      url: `https://www.glassdoor.com/Salaries/${r}-salary-SRCH_KO0,20.htm`,
+    },
   ];
   if (india) {
     list.unshift(
-      { title: `AmbitionBox — ${role} salary`, url: `https://www.ambitionbox.com/profile/${r}-salary` },
+      {
+        title: `AmbitionBox — ${role} salary`,
+        url: `https://www.ambitionbox.com/profile/${r}-salary`,
+      },
       { title: `6figr — ${role} salary`, url: `https://6figr.com/in/salary/${r}--t` },
     );
   } else {
-    list.push({ title: `Payscale — ${role}`, url: `https://www.payscale.com/research/US/Job=${encodeURIComponent(role)}/Salary` });
+    list.push({
+      title: `Payscale — ${role}`,
+      url: `https://www.payscale.com/research/US/Job=${encodeURIComponent(role)}/Salary`,
+    });
   }
   return list.slice(0, 4);
 }
@@ -99,8 +112,14 @@ export async function benchmarkMarket(input: {
   department?: string | null | undefined;
 }): Promise<MarketBenchmark> {
   const wanted = candidateSources(input.role, input.location, input.currency);
-  const fetched = await Promise.all(wanted.map(async (s) => ({ ...s, text: await readSource(s.url) })));
-  const sources: MarketSource[] = fetched.map((s) => ({ title: s.title, url: s.url, read: Boolean(s.text) }));
+  const fetched = await Promise.all(
+    wanted.map(async (s) => ({ ...s, text: await readSource(s.url) })),
+  );
+  const sources: MarketSource[] = fetched.map((s) => ({
+    title: s.title,
+    url: s.url,
+    read: Boolean(s.text),
+  }));
   const evidence = fetched
     .filter((s) => s.text)
     .map((s) => `SOURCE: ${s.title} (${s.url})\n${s.text}`)
@@ -128,7 +147,8 @@ export async function benchmarkMarket(input: {
       key_skills: input.skills.slice(0, 15),
       today: new Date().toISOString().slice(0, 10),
       live_sources_readable: sources.filter((s) => s.read).map((s) => s.url),
-      live_source_extracts: evidence || "NONE — no public salary page was readable from the server.",
+      live_source_extracts:
+        evidence || "NONE — no public salary page was readable from the server.",
     }),
   });
 

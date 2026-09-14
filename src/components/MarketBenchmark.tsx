@@ -63,7 +63,8 @@ export function MarketBenchmarkPanel(props: Props) {
         <div>
           <p className="text-sm font-semibold">Market pay benchmark</p>
           <p className="text-xs text-muted-foreground">
-            Reads public salary pages live and returns a range per career level for this role and location.
+            Reads public salary pages live and returns a range per career level for this role and
+            location.
           </p>
         </div>
         <Button type="button" size="sm" variant="outline" onClick={research} disabled={loading}>
