@@ -12,7 +12,7 @@ const VIOLET: [number, number, number] = [88, 77, 255];
 
 /** jsPDF's built-in fonts cover WinAnsi only, so swap glyphs they cannot draw. */
 function pdfText(t: string) {
-  return t.replace(/\u2194/g, "to").replace(/[\u2192\u2190]/g, "-");
+  return t.replace(/\s*\u2194\s*/g, " to ").replace(/[\u2192\u2190]/g, "-");
 }
 
 function stamp() {
