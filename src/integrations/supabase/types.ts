@@ -281,6 +281,166 @@ export type Database = {
           },
         ]
       }
+      candidate_notes: {
+        Row: {
+          author_id: string
+          author_name: string | null
+          body: string
+          candidate_id: string
+          created_at: string
+          id: string
+          mentions: string[]
+          org_id: string | null
+        }
+        Insert: {
+          author_id: string
+          author_name?: string | null
+          body: string
+          candidate_id: string
+          created_at?: string
+          id?: string
+          mentions?: string[]
+          org_id?: string | null
+        }
+        Update: {
+          author_id?: string
+          author_name?: string | null
+          body?: string
+          candidate_id?: string
+          created_at?: string
+          id?: string
+          mentions?: string[]
+          org_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidate_notes_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidate_notes_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      candidate_ownership_events: {
+        Row: {
+          actor: string | null
+          candidate_id: string
+          created_at: string
+          from_owner: string | null
+          id: string
+          org_id: string | null
+          reason: string | null
+          to_owner: string | null
+        }
+        Insert: {
+          actor?: string | null
+          candidate_id: string
+          created_at?: string
+          from_owner?: string | null
+          id?: string
+          org_id?: string | null
+          reason?: string | null
+          to_owner?: string | null
+        }
+        Update: {
+          actor?: string | null
+          candidate_id?: string
+          created_at?: string
+          from_owner?: string | null
+          id?: string
+          org_id?: string | null
+          reason?: string | null
+          to_owner?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidate_ownership_events_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidate_ownership_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      candidate_referrals: {
+        Row: {
+          candidate_id: string
+          created_at: string
+          from_user: string
+          id: string
+          note: string | null
+          org_id: string | null
+          requisition_id: string | null
+          responded_at: string | null
+          response_note: string | null
+          status: string
+          to_user: string
+        }
+        Insert: {
+          candidate_id: string
+          created_at?: string
+          from_user: string
+          id?: string
+          note?: string | null
+          org_id?: string | null
+          requisition_id?: string | null
+          responded_at?: string | null
+          response_note?: string | null
+          status?: string
+          to_user: string
+        }
+        Update: {
+          candidate_id?: string
+          created_at?: string
+          from_user?: string
+          id?: string
+          note?: string | null
+          org_id?: string | null
+          requisition_id?: string | null
+          responded_at?: string | null
+          response_note?: string | null
+          status?: string
+          to_user?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidate_referrals_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidate_referrals_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidate_referrals_requisition_id_fkey"
+            columns: ["requisition_id"]
+            isOneToOne: false
+            referencedRelation: "requisitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       candidate_verifications: {
         Row: {
           authenticity_score: number
@@ -340,6 +500,7 @@ export type Database = {
       }
       candidates: {
         Row: {
+          added_by: string | null
           career_metrics: Json | null
           consent_given: boolean
           created_at: string
@@ -364,6 +525,7 @@ export type Database = {
           manager_endorsed: boolean
           notice_period_days: number | null
           org_id: string | null
+          owner_id: string | null
           phone: string | null
           preferred_locations: string[]
           referral_source: string | null
@@ -378,6 +540,7 @@ export type Database = {
           x_url: string | null
         }
         Insert: {
+          added_by?: string | null
           career_metrics?: Json | null
           consent_given?: boolean
           created_at?: string
@@ -402,6 +565,7 @@ export type Database = {
           manager_endorsed?: boolean
           notice_period_days?: number | null
           org_id?: string | null
+          owner_id?: string | null
           phone?: string | null
           preferred_locations?: string[]
           referral_source?: string | null
@@ -416,6 +580,7 @@ export type Database = {
           x_url?: string | null
         }
         Update: {
+          added_by?: string | null
           career_metrics?: Json | null
           consent_given?: boolean
           created_at?: string
@@ -440,6 +605,7 @@ export type Database = {
           manager_endorsed?: boolean
           notice_period_days?: number | null
           org_id?: string | null
+          owner_id?: string | null
           phone?: string | null
           preferred_locations?: string[]
           referral_source?: string | null
@@ -1291,6 +1457,60 @@ export type Database = {
           },
         ]
       }
+      org_pool_shares: {
+        Row: {
+          created_at: string
+          id: string
+          owner_org: string
+          partner_org: string
+          requested_by: string | null
+          responded_at: string | null
+          responded_by: string | null
+          revoked_at: string | null
+          scope: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          owner_org: string
+          partner_org: string
+          requested_by?: string | null
+          responded_at?: string | null
+          responded_by?: string | null
+          revoked_at?: string | null
+          scope?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          owner_org?: string
+          partner_org?: string
+          requested_by?: string | null
+          responded_at?: string | null
+          responded_by?: string | null
+          revoked_at?: string | null
+          scope?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_pool_shares_owner_org_fkey"
+            columns: ["owner_org"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_pool_shares_partner_org_fkey"
+            columns: ["partner_org"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           approved_at: string | null
@@ -1892,6 +2112,115 @@ export type Database = {
           },
         ]
       }
+      talent_request_suggestions: {
+        Row: {
+          candidate_id: string
+          created_at: string
+          id: string
+          note: string | null
+          org_id: string
+          request_id: string
+          status: string
+          suggested_by: string
+        }
+        Insert: {
+          candidate_id: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          org_id: string
+          request_id: string
+          status?: string
+          suggested_by: string
+        }
+        Update: {
+          candidate_id?: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          org_id?: string
+          request_id?: string
+          status?: string
+          suggested_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "talent_request_suggestions_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "talent_request_suggestions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "talent_request_suggestions_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "talent_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      talent_requests: {
+        Row: {
+          closed_at: string | null
+          created_at: string
+          id: string
+          note: string | null
+          org_id: string
+          requester_id: string
+          requisition_id: string | null
+          skills: string[]
+          status: string
+          title: string
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          org_id: string
+          requester_id: string
+          requisition_id?: string | null
+          skills?: string[]
+          status?: string
+          title: string
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          org_id?: string
+          requester_id?: string
+          requisition_id?: string | null
+          skills?: string[]
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "talent_requests_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "talent_requests_requisition_id_fkey"
+            columns: ["requisition_id"]
+            isOneToOne: false
+            referencedRelation: "requisitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
@@ -1944,6 +2273,7 @@ export type Database = {
       }
       is_org_member: { Args: { _org: string }; Returns: boolean }
       is_org_owner: { Args: { _org: string }; Returns: boolean }
+      shares_pool_with_me: { Args: { _owner_org: string }; Returns: boolean }
     }
     Enums: {
       app_role:
