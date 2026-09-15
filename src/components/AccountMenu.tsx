@@ -22,7 +22,7 @@ const ROLE_LABEL: Record<string, string> = {
  * place — the top bar beside the notification bell.
  */
 export function AccountMenu() {
-  const { org, membership, roles, isOwner } = useOrg();
+  const { org, roles, isOwner } = useOrg();
   const { isSuperUser } = usePlatform();
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
