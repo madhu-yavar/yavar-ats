@@ -1252,7 +1252,11 @@ function AiModelCard() {
           <div className="space-y-1.5 sm:col-span-2">
             <Label className="flex items-center gap-1.5">
               <KeyRound className="size-3.5" />
-              {activeProvider === "openai" ? "OpenAI API key" : "Anthropic API key"}
+              {activeProvider === "openai"
+                ? "OpenAI API key"
+                : activeProvider === "gemini"
+                  ? "Google Gemini API key"
+                  : "Anthropic API key"}
             </Label>
             <Input
               type="password"
