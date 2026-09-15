@@ -16,9 +16,9 @@ import {
   Plug,
   ShieldCheck,
   Target,
-  Users, BookOpen,
+  Users,
+  BookOpen,
 } from "lucide-react";
-
 
 import { usePlatform } from "@/hooks/usePlatform";
 import { Button } from "@/components/ui/button";
@@ -46,11 +46,14 @@ const NAV = [
   { to: "/help", label: "User manual", icon: BookOpen },
 ] as const;
 
-
-
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { isSuperUser, claimable } = usePlatform();
-  const nav = [...NAV, ...(isSuperUser || claimable ? [{ to: "/platform", label: "Platform console", icon: Globe2 } as const] : [])];
+  const nav = [
+    ...NAV,
+    ...(isSuperUser || claimable
+      ? [{ to: "/platform", label: "Platform console", icon: Globe2 } as const]
+      : []),
+  ];
 
   // Collapsed state is remembered per browser so the choice survives reloads.
   const [collapsed, setCollapsed] = useState(false);
@@ -73,7 +76,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         }`}
       >
         <div>
-          <div className={`mb-6 flex items-center gap-2 ${collapsed ? "justify-center" : "justify-between px-1"}`}>
+          <div
+            className={`mb-6 flex items-center gap-2 ${collapsed ? "justify-center" : "justify-between px-1"}`}
+          >
             {collapsed ? null : (
               <div className="min-w-0">
                 <div className="text-xs font-semibold uppercase tracking-[0.2em] text-sidebar-primary">
@@ -90,7 +95,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               title={collapsed ? "Expand menu" : "Collapse menu"}
               className="shrink-0 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             >
-              {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+              {collapsed ? (
+                <PanelLeftOpen className="size-4" />
+              ) : (
+                <PanelLeftClose className="size-4" />
+              )}
             </Button>
           </div>
           <nav className="space-y-1">
@@ -117,7 +126,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2 border-b border-border bg-card px-4 py-2">
           <Link to="/" className="flex items-center gap-3">
@@ -138,7 +146,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               to={to}
               activeOptions={{ exact: to === "/" }}
               className="whitespace-nowrap rounded-md px-3 py-1.5 text-xs text-muted-foreground"
-              activeProps={{ className: "whitespace-nowrap rounded-md px-3 py-1.5 text-xs bg-secondary font-medium" }}
+              activeProps={{
+                className:
+                  "whitespace-nowrap rounded-md px-3 py-1.5 text-xs bg-secondary font-medium",
+              }}
             >
               {label}
             </Link>

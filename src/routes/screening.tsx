@@ -68,8 +68,9 @@ function ScreeningWorkspace() {
         const requisition = requisitions.find((r) => r.id === app.requisition_id);
         if (!candidate || !requisition) return null;
         const kit =
-          kitList.find((k) => k.candidate_id === candidate.id && k.requisition_id === app.requisition_id) ??
-          null;
+          kitList.find(
+            (k) => k.candidate_id === candidate.id && k.requisition_id === app.requisition_id,
+          ) ?? null;
         const run = kit ? (runList.find((r) => r.kit_id === kit.id) ?? null) : null;
         return {
           app,
@@ -81,7 +82,9 @@ function ScreeningWorkspace() {
         };
       })
       .filter((row): row is NonNullable<typeof row> => Boolean(row))
-      .filter((row) => !["joined", "rejected", "withdrawn"].includes(canonical(row.app.stage as Stage)))
+      .filter(
+        (row) => !["joined", "rejected", "withdrawn"].includes(canonical(row.app.stage as Stage)),
+      )
       .filter((row) => {
         if (view === "to_call") return !row.run;
         if (view === "graded") return Boolean(row.run);
@@ -122,7 +125,10 @@ function ScreeningWorkspace() {
           { label: "Question sets prepared", value: preparedCount, note: "ready for the call" },
           { label: "Calls graded", value: gradedCount, note: "with score and rationale" },
         ].map((m) => (
-          <div key={m.label} className="border-b border-border px-5 py-4 sm:border-b-0 sm:border-r sm:last:border-r-0">
+          <div
+            key={m.label}
+            className="border-b border-border px-5 py-4 sm:border-b-0 sm:border-r sm:last:border-r-0"
+          >
             <p className="text-xs font-medium text-muted-foreground">{m.label}</p>
             <p className="num mt-1 text-2xl font-bold">{m.value}</p>
             <p className="mt-1 text-xs text-muted-foreground">{m.note}</p>
@@ -180,7 +186,9 @@ function ScreeningWorkspace() {
                 <td className="px-5 py-3">
                   <div className="font-semibold">{row.candidate.full_name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {row.candidate.current_employer || row.candidate.location || "Profile available"}
+                    {row.candidate.current_employer ||
+                      row.candidate.location ||
+                      "Profile available"}
                   </div>
                 </td>
                 <td className="px-4 py-3">

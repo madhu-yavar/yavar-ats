@@ -654,7 +654,8 @@ function TeamGovernance() {
         <div>
           <h2 className="font-semibold">HR team governance</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Last 90 days — delivery, quality of the candidates moved forward, and incentive position.
+            Last 90 days — delivery, quality of the candidates moved forward, and incentive
+            position.
           </p>
         </div>
         <Button asChild variant="ghost" size="sm">
@@ -692,7 +693,8 @@ function TeamGovernance() {
               value={
                 avgQuality.length
                   ? Math.round(
-                      avgQuality.reduce((s, r) => s + (r.quality_score ?? 0), 0) / avgQuality.length,
+                      avgQuality.reduce((s, r) => s + (r.quality_score ?? 0), 0) /
+                        avgQuality.length,
                     )
                   : "—"
               }
