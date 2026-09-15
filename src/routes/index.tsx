@@ -48,7 +48,10 @@ export const Route = createFileRoute("/")({
         content:
           "Live analytics across requisitions, funnel conversion, JD↔CV match quality, talent-pool freshness, duplicate hygiene and AI-suggested candidates from history.",
       },
-      { property: "og:title", content: "TA Command Centre — pipeline, match quality & pool health" },
+      {
+        property: "og:title",
+        content: "TA Command Centre — pipeline, match quality & pool health",
+      },
       {
         property: "og:description",
         content:
@@ -61,7 +64,19 @@ export const Route = createFileRoute("/")({
   component: Dashboard,
 });
 
-const FUNNEL: Stage[] = ["sourced", "applied", "ai_screened", "shortlisted", "l1", "l2", "l3", "offer_pending", "offer_released", "offer_accepted", "joined"];
+const FUNNEL: Stage[] = [
+  "sourced",
+  "applied",
+  "ai_screened",
+  "shortlisted",
+  "l1",
+  "l2",
+  "l3",
+  "offer_pending",
+  "offer_released",
+  "offer_accepted",
+  "joined",
+];
 
 /** Compact horizontal bar used across the analytics panels. */
 function Bar({
@@ -163,7 +178,9 @@ function Dashboard() {
   const pending = requisitions.filter((r) => r.status.startsWith("pending"));
   const scored = applications.filter((a) => scoreMap.has(a.id));
   const avgMatch = scored.length
-    ? Math.round(scored.reduce((s, a) => s + (scoreMap.get(a.id)?.overall_score ?? 0), 0) / scored.length)
+    ? Math.round(
+        scored.reduce((s, a) => s + (scoreMap.get(a.id)?.overall_score ?? 0), 0) / scored.length,
+      )
     : 0;
   const budgeted = (depts.data ?? []).reduce((s, d) => s + Number(d.budgeted_cost), 0);
   const committed = requisitions.reduce((s, r) => s + Number(r.budget_ctc) * r.openings, 0);
@@ -212,7 +229,11 @@ function Dashboard() {
     mutationFn: async (v: { requisitionId: string; candidateId: string }) => {
       const { error } = await supabase
         .from("applications")
-        .insert({ requisition_id: v.requisitionId, candidate_id: v.candidateId, source: "talent_pool" });
+        .insert({
+          requisition_id: v.requisitionId,
+          candidate_id: v.candidateId,
+          source: "talent_pool",
+        });
       if (error) throw new Error(error.message);
     },
     onSuccess: async () => {
@@ -246,7 +267,9 @@ function Dashboard() {
   /* ---------- offers & attention ---------- */
   const offerRows = offers.data ?? [];
   const accepted = offerRows.filter((o) => ["accepted", "released"].includes(o.status)).length;
-  const acceptRate = offerRows.length ? Math.round((offerRows.filter((o) => o.status === "accepted").length / offerRows.length) * 100) : 0;
+  const acceptRate = offerRows.length
+    ? Math.round((offerRows.filter((o) => o.status === "accepted").length / offerRows.length) * 100)
+    : 0;
 
   const stalled = useMemo(
     () =>
@@ -261,7 +284,10 @@ function Dashboard() {
   const upcoming = useMemo(() => {
     const now = Date.now();
     return (interviews.data ?? [])
-      .filter((i) => i.scheduled_at && new Date(i.scheduled_at).getTime() >= now && i.status !== "cancelled")
+      .filter(
+        (i) =>
+          i.scheduled_at && new Date(i.scheduled_at).getTime() >= now && i.status !== "cancelled",
+      )
       .slice(0, 5);
   }, [interviews.data]);
 
@@ -273,7 +299,8 @@ function Dashboard() {
 
   const scarceSkills = useMemo(() => {
     const m = new Map<string, number>();
-    for (const s of scores.data ?? []) for (const skill of s.missing_skills ?? []) m.set(skill, (m.get(skill) ?? 0) + 1);
+    for (const s of scores.data ?? [])
+      for (const skill of s.missing_skills ?? []) m.set(skill, (m.get(skill) ?? 0) + 1);
     return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
   }, [scores.data]);
 
@@ -299,13 +326,23 @@ function Dashboard() {
     const term = queueSearch.trim().toLowerCase();
     return rows
       .filter((row) => {
-        if (term && !`${row.candidate.full_name} ${row.requisition.title} ${row.candidate.current_employer ?? ""}`.toLowerCase().includes(term)) return false;
+        if (
+          term &&
+          !`${row.candidate.full_name} ${row.requisition.title} ${row.candidate.current_employer ?? ""}`
+            .toLowerCase()
+            .includes(term)
+        )
+          return false;
         if (queueView === "matches") return row.score >= 70;
-        if (queueView === "recent") return Date.now() - new Date(row.app.last_activity_at).getTime() < 7 * 86_400_000;
+        if (queueView === "recent")
+          return Date.now() - new Date(row.app.last_activity_at).getTime() < 7 * 86_400_000;
         return !["joined", "rejected", "withdrawn"].includes(canonical(row.app.stage as Stage));
       })
       .sort((a, b) => {
-        if (queueView === "recent") return new Date(b.app.last_activity_at).getTime() - new Date(a.app.last_activity_at).getTime();
+        if (queueView === "recent")
+          return (
+            new Date(b.app.last_activity_at).getTime() - new Date(a.app.last_activity_at).getTime()
+          );
         return b.score - a.score;
       })
       .slice(0, 8);
@@ -322,26 +359,61 @@ function Dashboard() {
           </div>
           <h1 className="truncate text-2xl font-bold">{org?.name ?? "Organisation"}</h1>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-primary" />{roleLabel} view</span>
+            <span className="inline-flex items-center gap-1.5">
+              <ShieldCheck className="size-3.5 text-primary" />
+              {roleLabel} view
+            </span>
             <span>Organisation-scoped access</span>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline"><Link to="/candidates"><Users />Talent pool</Link></Button>
-          <Button asChild><Link to="/requisitions">Raise requisition</Link></Button>
+          <Button asChild variant="outline">
+            <Link to="/candidates">
+              <Users />
+              Talent pool
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link to="/requisitions">Raise requisition</Link>
+          </Button>
         </div>
       </header>
 
       <section className="grid border-b border-border bg-surface-2/50 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { label: "Open requisitions", value: open.length, note: `${pending.length} awaiting approval` },
-          { label: "Candidates in play", value: applications.filter((a) => !["joined", "rejected", "withdrawn"].includes(canonical(a.stage as Stage))).length, note: `${candidates.length} in talent pool` },
-          { label: "Average match", value: `${avgMatch}%`, note: `${scored.length} of ${applications.length} scored` },
+          {
+            label: "Open requisitions",
+            value: open.length,
+            note: `${pending.length} awaiting approval`,
+          },
+          {
+            label: "Candidates in play",
+            value: applications.filter(
+              (a) => !["joined", "rejected", "withdrawn"].includes(canonical(a.stage as Stage)),
+            ).length,
+            note: `${candidates.length} in talent pool`,
+          },
+          {
+            label: "Average match",
+            value: `${avgMatch}%`,
+            note: `${scored.length} of ${applications.length} scored`,
+          },
           isExecutive
-            ? { label: "Salary committed", value: inr(committed), note: `${inr(budgeted)} budgeted` }
-            : { label: "Upcoming interviews", value: upcoming.length, note: `${stalled.length} candidates need attention` },
+            ? {
+                label: "Salary committed",
+                value: inr(committed),
+                note: `${inr(budgeted)} budgeted`,
+              }
+            : {
+                label: "Upcoming interviews",
+                value: upcoming.length,
+                note: `${stalled.length} candidates need attention`,
+              },
         ].map((metric) => (
-          <div key={metric.label} className="border-b border-border px-5 py-4 last:border-b-0 sm:[&:nth-child(odd)]:border-r xl:border-b-0 xl:border-r xl:last:border-r-0">
+          <div
+            key={metric.label}
+            className="border-b border-border px-5 py-4 last:border-b-0 sm:[&:nth-child(odd)]:border-r xl:border-b-0 xl:border-r xl:last:border-r-0"
+          >
             <p className="text-xs font-medium text-muted-foreground">{metric.label}</p>
             <p className="num mt-1 text-2xl font-bold">{metric.value}</p>
             <p className="mt-1 text-xs text-muted-foreground">{metric.note}</p>
@@ -354,20 +426,46 @@ function Dashboard() {
           <div className="mb-5 flex items-start justify-between gap-3">
             <div>
               <h2 className="font-semibold">Priority workspace</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">The next candidates and decisions for your role.</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                The next candidates and decisions for your role.
+              </p>
             </div>
-            <Button asChild variant="ghost" size="sm"><Link to="/matching">Matching engine <ArrowUpRight /></Link></Button>
+            <Button asChild variant="ghost" size="sm">
+              <Link to="/matching">
+                Matching engine <ArrowUpRight />
+              </Link>
+            </Button>
           </div>
 
           <div className="mb-4 flex flex-col gap-3 xl:flex-row">
             <label className="relative min-w-0 flex-1">
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <span className="sr-only">Search candidates or roles</span>
-              <input value={queueSearch} onChange={(event) => setQueueSearch(event.target.value)} placeholder="Search candidates or roles" className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none transition-shadow focus:ring-2 focus:ring-ring/30" />
+              <input
+                value={queueSearch}
+                onChange={(event) => setQueueSearch(event.target.value)}
+                placeholder="Search candidates or roles"
+                className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none transition-shadow focus:ring-2 focus:ring-ring/30"
+              />
             </label>
             <div className="flex rounded-md bg-secondary p-1" aria-label="Queue view">
-              {([['priority', 'Priority'], ['matches', 'Top matches'], ['recent', 'Recent']] as const).map(([value, label]) => (
-                <Button key={value} type="button" size="sm" variant={queueView === value ? "outline" : "ghost"} onClick={() => setQueueView(value)} className="flex-1 shadow-none xl:flex-none">{label}</Button>
+              {(
+                [
+                  ["priority", "Priority"],
+                  ["matches", "Top matches"],
+                  ["recent", "Recent"],
+                ] as const
+              ).map(([value, label]) => (
+                <Button
+                  key={value}
+                  type="button"
+                  size="sm"
+                  variant={queueView === value ? "outline" : "ghost"}
+                  onClick={() => setQueueView(value)}
+                  className="flex-1 shadow-none xl:flex-none"
+                >
+                  {label}
+                </Button>
               ))}
             </div>
           </div>
@@ -375,19 +473,53 @@ function Dashboard() {
           <div className="overflow-x-auto rounded-md border border-border">
             <table className="w-full min-w-[680px] text-left text-sm">
               <thead className="border-b border-border bg-surface-2/70 text-xs text-muted-foreground">
-                <tr><th className="px-4 py-3 font-semibold">Candidate</th><th className="px-4 py-3 font-semibold">Role</th><th className="px-4 py-3 font-semibold">Fit</th><th className="px-4 py-3 font-semibold">Stage</th><th className="px-4 py-3 text-right font-semibold">Action</th></tr>
+                <tr>
+                  <th className="px-4 py-3 font-semibold">Candidate</th>
+                  <th className="px-4 py-3 font-semibold">Role</th>
+                  <th className="px-4 py-3 font-semibold">Fit</th>
+                  <th className="px-4 py-3 font-semibold">Stage</th>
+                  <th className="px-4 py-3 text-right font-semibold">Action</th>
+                </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {queueRows.map(({ app, candidate, requisition, score }) => (
                   <tr key={app.id} className="transition-colors hover:bg-surface-2/70">
-                    <td className="px-4 py-3"><div className="font-semibold">{candidate.full_name}</div><div className="text-xs text-muted-foreground">{candidate.current_employer || candidate.location || "Profile available"}</div></td>
-                    <td className="px-4 py-3"><div className="font-medium">{requisition.title}</div><div className="num text-xs text-muted-foreground">{requisition.code}</div></td>
-                    <td className="px-4 py-3">{score ? <ScoreChip score={score} size="sm" /> : <span className="text-xs text-muted-foreground">Not scored</span>}</td>
-                    <td className="px-4 py-3"><StageBadge stage={app.stage} /></td>
-                    <td className="px-4 py-3 text-right"><Button asChild variant="ghost" size="sm"><Link to="/candidates/$id" params={{ id: candidate.id }}>Review <ArrowRight /></Link></Button></td>
+                    <td className="px-4 py-3">
+                      <div className="font-semibold">{candidate.full_name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {candidate.current_employer || candidate.location || "Profile available"}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="font-medium">{requisition.title}</div>
+                      <div className="num text-xs text-muted-foreground">{requisition.code}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {score ? (
+                        <ScoreChip score={score} size="sm" />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Not scored</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <StageBadge stage={app.stage} />
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Button asChild variant="ghost" size="sm">
+                        <Link to="/candidates/$id" params={{ id: candidate.id }}>
+                          Review <ArrowRight />
+                        </Link>
+                      </Button>
+                    </td>
                   </tr>
                 ))}
-                {queueRows.length === 0 ? <tr><td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">No candidates match this view.</td></tr> : null}
+                {queueRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
+                      No candidates match this view.
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </div>
@@ -395,18 +527,55 @@ function Dashboard() {
 
         <aside className="p-5 sm:p-7">
           <h2 className="font-semibold">Action queue</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">Only actions available to {roleLabel.toLowerCase()}.</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Only actions available to {roleLabel.toLowerCase()}.
+          </p>
           <div className="mt-5 divide-y divide-border border-y border-border">
-            {pending.length > 0 && (isExecutive || roles.includes("department_head")) ? <ActionRow icon={CheckCircle2} label="Requisitions awaiting approval" value={pending.length} to="/requisitions" /> : null}
-            <ActionRow icon={Clock} label="Candidates past stage SLA" value={stalled.length} to="/candidates" tone={stalled.length ? "warning" : "default"} />
-            <ActionRow icon={CalendarClock} label="Upcoming interviews" value={upcoming.length} to="/interviews" />
-            <ActionRow icon={BriefcaseBusiness} label="Open requisitions" value={open.length} to="/requisitions" />
+            {pending.length > 0 && (isExecutive || roles.includes("department_head")) ? (
+              <ActionRow
+                icon={CheckCircle2}
+                label="Requisitions awaiting approval"
+                value={pending.length}
+                to="/requisitions"
+              />
+            ) : null}
+            <ActionRow
+              icon={Clock}
+              label="Candidates past stage SLA"
+              value={stalled.length}
+              to="/candidates"
+              tone={stalled.length ? "warning" : "default"}
+            />
+            <ActionRow
+              icon={CalendarClock}
+              label="Upcoming interviews"
+              value={upcoming.length}
+              to="/interviews"
+            />
+            <ActionRow
+              icon={BriefcaseBusiness}
+              label="Open requisitions"
+              value={open.length}
+              to="/requisitions"
+            />
           </div>
           <div className="mt-6">
-            <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-semibold">Pipeline movement</h3><span className="text-xs text-muted-foreground">All active stages</span></div>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Pipeline movement</h3>
+              <span className="text-xs text-muted-foreground">All active stages</span>
+            </div>
             <div className="space-y-3">
-              {funnel.slice(0, 6).map((row) => <Bar key={row.stage} label={STAGE_LABEL[row.stage] ?? row.stage} value={row.reached} max={funnelTop} />)}
-              {funnel.length === 0 ? <p className="text-sm text-muted-foreground">No applications yet.</p> : null}
+              {funnel.slice(0, 6).map((row) => (
+                <Bar
+                  key={row.stage}
+                  label={STAGE_LABEL[row.stage] ?? row.stage}
+                  value={row.reached}
+                  max={funnelTop}
+                />
+              ))}
+              {funnel.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No applications yet.</p>
+              ) : null}
             </div>
           </div>
         </aside>
@@ -414,12 +583,44 @@ function Dashboard() {
 
       {isExecutive ? (
         <section className="border-t border-border p-5 sm:p-7">
-          <div className="mb-4 flex items-end justify-between gap-3"><div><h2 className="font-semibold">Organisation health</h2><p className="mt-0.5 text-xs text-muted-foreground">Executive demand, quality and cost signals.</p></div><Button asChild variant="ghost" size="sm"><Link to="/reports">Full reports <ArrowUpRight /></Link></Button></div>
+          <div className="mb-4 flex items-end justify-between gap-3">
+            <div>
+              <h2 className="font-semibold">Organisation health</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Executive demand, quality and cost signals.
+              </p>
+            </div>
+            <Button asChild variant="ghost" size="sm">
+              <Link to="/reports">
+                Full reports <ArrowUpRight />
+              </Link>
+            </Button>
+          </div>
           <div className="grid gap-px overflow-hidden rounded-md border border-border bg-border md:grid-cols-4">
-            <Signal label="Offer acceptance" value={offerRows.length ? `${acceptRate}%` : "—"} note={`${accepted} accepted or released`} />
-            <Signal label="Pool freshness" value={candidates.length ? `${Math.round((poolHealth.fresh / candidates.length) * 100)}%` : "—"} note={`${poolHealth.stale} stale profiles`} />
-            <Signal label="Incomplete profiles" value={poolHealth.noSkills + poolHealth.noEmail} note={`${poolHealth.groups} duplicate sets`} />
-            <Signal label="Budget position" value={budgeted ? `${Math.round((committed / budgeted) * 100)}%` : "—"} note="of workforce budget committed" />
+            <Signal
+              label="Offer acceptance"
+              value={offerRows.length ? `${acceptRate}%` : "—"}
+              note={`${accepted} accepted or released`}
+            />
+            <Signal
+              label="Pool freshness"
+              value={
+                candidates.length
+                  ? `${Math.round((poolHealth.fresh / candidates.length) * 100)}%`
+                  : "—"
+              }
+              note={`${poolHealth.stale} stale profiles`}
+            />
+            <Signal
+              label="Incomplete profiles"
+              value={poolHealth.noSkills + poolHealth.noEmail}
+              note={`${poolHealth.groups} duplicate sets`}
+            />
+            <Signal
+              label="Budget position"
+              value={budgeted ? `${Math.round((committed / budgeted) * 100)}%` : "—"}
+              note="of workforce budget committed"
+            />
           </div>
         </section>
       ) : null}
@@ -437,8 +638,8 @@ function Dashboard() {
       >
         {suggestions.length === 0 ? (
           <p className="p-4 text-sm text-muted-foreground">
-            No pool matches yet. Add candidates to the talent pool or approve a requisition, and historic matches appear
-            here automatically.
+            No pool matches yet. Add candidates to the talent pool or approve a requisition, and
+            historic matches appear here automatically.
           </p>
         ) : (
           <div className="divide-y divide-border">
@@ -485,7 +686,8 @@ function Dashboard() {
                         </span>
                         <span
                           className={
-                            "text-xs " + (f.tier === "stale" ? "text-destructive" : "text-muted-foreground")
+                            "text-xs " +
+                            (f.tier === "stale" ? "text-destructive" : "text-muted-foreground")
                           }
                         >
                           CV {f.label}
@@ -497,7 +699,10 @@ function Dashboard() {
                           disabled={addingKey === key && addToPipeline.isPending}
                           onClick={() => {
                             setAddingKey(key);
-                            addToPipeline.mutate({ requisitionId: req.id, candidateId: r.candidate.id });
+                            addToPipeline.mutate({
+                              requisitionId: req.id,
+                              candidateId: r.candidate.id,
+                            });
                           }}
                         >
                           <Sparkles className="size-4" /> Add to pipeline
@@ -513,14 +718,19 @@ function Dashboard() {
       </Panel>
 
       <div className="m-5 grid gap-4 sm:m-7 lg:grid-cols-3">
-        <Panel title="Pipeline funnel" subtitle="Cumulative candidates that reached each stage" className="lg:col-span-1">
+        <Panel
+          title="Pipeline funnel"
+          subtitle="Cumulative candidates that reached each stage"
+          className="lg:col-span-1"
+        >
           <div className="space-y-3 p-4">
             {funnel.length === 0 ? (
               <p className="text-sm text-muted-foreground">No applications yet.</p>
             ) : (
               funnel.map((row, i) => {
                 const prev = funnel[i - 1];
-                const conv = prev && prev.reached > 0 ? Math.round((row.reached / prev.reached) * 100) : null;
+                const conv =
+                  prev && prev.reached > 0 ? Math.round((row.reached / prev.reached) * 100) : null;
                 return (
                   <Bar
                     key={row.stage}
@@ -545,9 +755,24 @@ function Dashboard() {
           }
         >
           <div className="space-y-3 p-4">
-            <Bar label="Fresh (under 90 days)" value={poolHealth.fresh} max={candidates.length || 1} tone="accent" />
-            <Bar label="Aging (3–12 months)" value={poolHealth.aging} max={candidates.length || 1} tone="warning" />
-            <Bar label="Stale (over a year)" value={poolHealth.stale} max={candidates.length || 1} tone="destructive" />
+            <Bar
+              label="Fresh (under 90 days)"
+              value={poolHealth.fresh}
+              max={candidates.length || 1}
+              tone="accent"
+            />
+            <Bar
+              label="Aging (3–12 months)"
+              value={poolHealth.aging}
+              max={candidates.length || 1}
+              tone="warning"
+            />
+            <Bar
+              label="Stale (over a year)"
+              value={poolHealth.stale}
+              max={candidates.length || 1}
+              tone="destructive"
+            />
             <div className="grid grid-cols-2 gap-3 pt-2 text-xs">
               <div className="rounded-md bg-surface-2 p-3">
                 <div className="num text-lg font-semibold">{poolHealth.groups}</div>
@@ -556,7 +781,9 @@ function Dashboard() {
                 </div>
               </div>
               <div className="rounded-md bg-surface-2 p-3">
-                <div className="num text-lg font-semibold">{poolHealth.noSkills + poolHealth.noEmail}</div>
+                <div className="num text-lg font-semibold">
+                  {poolHealth.noSkills + poolHealth.noEmail}
+                </div>
                 <div className="flex items-center gap-1 text-muted-foreground">
                   <AlertTriangle className="size-3" /> incomplete profiles
                 </div>
@@ -592,7 +819,10 @@ function Dashboard() {
           <div className="divide-y divide-border">
             {requisitions.slice(0, 6).map((r: Requisition) => {
               const list = applications.filter((a) => a.requisition_id === r.id);
-              const best = list.reduce((m, a) => Math.max(m, scoreMap.get(a.id)?.overall_score ?? 0), 0);
+              const best = list.reduce(
+                (m, a) => Math.max(m, scoreMap.get(a.id)?.overall_score ?? 0),
+                0,
+              );
               return (
                 <Link
                   key={r.id}
@@ -607,8 +837,8 @@ function Dashboard() {
                     </div>
                     <div className="mt-1 truncate font-medium">{r.title}</div>
                     <div className="text-xs text-muted-foreground">
-                      {r.location} · {r.openings} opening(s) · {r.experience_min}-{r.experience_max} yrs ·{" "}
-                      {inr(Number(r.budget_ctc))}
+                      {r.location} · {r.openings} opening(s) · {r.experience_min}-{r.experience_max}{" "}
+                      yrs · {inr(Number(r.budget_ctc))}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-4">
@@ -646,7 +876,9 @@ function Dashboard() {
                   <ScoreChip score={score!.overall_score} />
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium">{candidateName(app.candidate_id)}</div>
-                    <div className="truncate text-xs text-muted-foreground">{reqTitle(app.requisition_id)}</div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {reqTitle(app.requisition_id)}
+                    </div>
                   </div>
                   <StageBadge stage={app.stage} />
                 </Link>
@@ -660,7 +892,9 @@ function Dashboard() {
         <Panel title="Needs attention" subtitle="Candidates sitting past the stage SLA">
           <div className="divide-y divide-border">
             {stalled.length === 0 ? (
-              <p className="p-4 text-sm text-muted-foreground">Nothing stalled. Pipeline is moving.</p>
+              <p className="p-4 text-sm text-muted-foreground">
+                Nothing stalled. Pipeline is moving.
+              </p>
             ) : (
               stalled.map(({ app, days }) => (
                 <Link
@@ -671,7 +905,9 @@ function Dashboard() {
                 >
                   <div className="min-w-0">
                     <div className="truncate font-medium">{candidateName(app.candidate_id)}</div>
-                    <div className="truncate text-xs text-muted-foreground">{reqTitle(app.requisition_id)}</div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {reqTitle(app.requisition_id)}
+                    </div>
                   </div>
                   <span className="num flex shrink-0 items-center gap-1 text-xs text-amber-600">
                     <Clock className="size-3.5" /> {days}d
@@ -682,13 +918,25 @@ function Dashboard() {
           </div>
         </Panel>
 
-        <Panel title="Scarcest must-have skills" subtitle="Most frequently missing across scored CVs">
+        <Panel
+          title="Scarcest must-have skills"
+          subtitle="Most frequently missing across scored CVs"
+        >
           <div className="space-y-3 p-4">
             {scarceSkills.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Run the matching engine to see skill gaps.</p>
+              <p className="text-sm text-muted-foreground">
+                Run the matching engine to see skill gaps.
+              </p>
             ) : (
               scarceSkills.map(([skill, n]) => (
-                <Bar key={skill} label={skill} value={n} max={scarceSkills[0]![1]} hint={`${n} CVs`} tone="warning" />
+                <Bar
+                  key={skill}
+                  label={skill}
+                  value={n}
+                  max={scarceSkills[0]![1]}
+                  hint={`${n} CVs`}
+                  tone="warning"
+                />
               ))
             )}
           </div>
@@ -750,12 +998,41 @@ function Dashboard() {
   );
 }
 
-function ActionRow({ icon: Icon, label, value, to, tone = "default" }: { icon: React.ComponentType<{ className?: string }>; label: string; value: number; to: "/requisitions" | "/candidates" | "/interviews"; tone?: "default" | "warning" }) {
-  return <Link to={to} className="group flex items-center gap-3 py-3.5"><span className={`flex size-8 items-center justify-center rounded-md ${tone === "warning" ? "bg-warning/15 text-warning" : "bg-secondary text-muted-foreground"}`}><Icon className="size-4" /></span><span className="min-w-0 flex-1 text-sm font-medium">{label}</span><span className="num text-sm font-semibold">{value}</span><ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" /></Link>;
+function ActionRow({
+  icon: Icon,
+  label,
+  value,
+  to,
+  tone = "default",
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: number;
+  to: "/requisitions" | "/candidates" | "/interviews";
+  tone?: "default" | "warning";
+}) {
+  return (
+    <Link to={to} className="group flex items-center gap-3 py-3.5">
+      <span
+        className={`flex size-8 items-center justify-center rounded-md ${tone === "warning" ? "bg-warning/15 text-warning" : "bg-secondary text-muted-foreground"}`}
+      >
+        <Icon className="size-4" />
+      </span>
+      <span className="min-w-0 flex-1 text-sm font-medium">{label}</span>
+      <span className="num text-sm font-semibold">{value}</span>
+      <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+    </Link>
+  );
 }
 
 function Signal({ label, value, note }: { label: string; value: string | number; note: string }) {
-  return <div className="bg-card p-4"><p className="text-xs font-medium text-muted-foreground">{label}</p><p className="num mt-1 text-xl font-bold">{value}</p><p className="mt-1 text-xs text-muted-foreground">{note}</p></div>;
+  return (
+    <div className="bg-card p-4">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className="num mt-1 text-xl font-bold">{value}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{note}</p>
+    </div>
+  );
 }
 
 /** Kept for type-narrowing of the pool candidates in suggestions. */
