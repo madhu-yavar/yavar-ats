@@ -31,6 +31,7 @@ export const getAiSettings = createServerFn({ method: "POST" })
       keys: {
         openai: await hasProviderKey("openai"),
         anthropic: await hasProviderKey("anthropic"),
+        gemini: await hasProviderKey("gemini"),
       },
     };
   });
