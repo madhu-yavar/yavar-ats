@@ -10,6 +10,11 @@ import { CATALOGUE_SUMMARY } from "@/lib/product-catalogue";
 const INK: [number, number, number] = [17, 17, 20];
 const VIOLET: [number, number, number] = [88, 77, 255];
 
+/** jsPDF's built-in fonts cover WinAnsi only, so swap glyphs they cannot draw. */
+function pdfText(t: string) {
+  return t.replace(/\u2194/g, "to").replace(/[\u2192\u2190]/g, "-");
+}
+
 function stamp() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -29,22 +34,22 @@ export function buildCataloguePdf(cat: CatalogueResult) {
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(20);
-  doc.text(CATALOGUE_SUMMARY.name, margin, 44);
+  doc.text(pdfText(CATALOGUE_SUMMARY.name, margin, 44);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
-  doc.text(`${CATALOGUE_SUMMARY.tagline} — product catalogue`, margin, 64);
+  doc.text(pdfText(`${CATALOGUE_SUMMARY.tagline} — product catalogue`), margin, 64);
   doc.setFontSize(9);
   doc.text(`Generated ${new Date(cat.generatedAt).toUTCString()}`, margin, 80);
 
   doc.setTextColor(...INK);
   doc.setFontSize(10);
-  const intro = doc.splitTextToSize(CATALOGUE_SUMMARY.positioning, width - margin * 2);
+  const intro = doc.splitTextToSize(pdfText(CATALOGUE_SUMMARY.positioning), width - margin * 2);
   doc.text(intro, margin, 126);
 
   autoTable(doc, {
     startY: 126 + intro.length * 13 + 14,
     head: [["Module", "Category", "Tier", "List price"]],
-    body: cat.modules.map((m) => [m.name, m.category, m.commercials.tier, price(m.commercials)]),
+    body: cat.modules.map((m) => [pdfText(m.name), m.category, m.commercials.tier, price(m.commercials)]),
     theme: "grid",
     styles: {
       font: "helvetica",
@@ -62,7 +67,7 @@ export function buildCataloguePdf(cat: CatalogueResult) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
     doc.setTextColor(...INK);
-    doc.text(doc.splitTextToSize(m.name, width - margin * 2), margin, 56);
+    doc.text(doc.splitTextToSize(pdfText(m.name), width - margin * 2), margin, 56);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(110, 110, 120);
@@ -81,7 +86,7 @@ export function buildCataloguePdf(cat: CatalogueResult) {
       m.commercials.notes ? `Commercial notes: ${m.commercials.notes}` : "",
     ]) {
       if (!para) continue;
-      const lines = doc.splitTextToSize(para, width - margin * 2);
+      const lines = doc.splitTextToSize(pdfText(para), width - margin * 2);
       doc.text(lines, margin, y);
       y += lines.length * 13 + 8;
     }
@@ -89,7 +94,7 @@ export function buildCataloguePdf(cat: CatalogueResult) {
     autoTable(doc, {
       startY: y + 4,
       head: [["Capabilities"]],
-      body: m.capabilities.map((c) => [c]),
+      body: m.capabilities.map((c) => [pdfText(c)]),
       theme: "striped",
       styles: { font: "helvetica", fontSize: 9, cellPadding: 5, textColor: INK },
       headStyles: { fillColor: INK, textColor: [255, 255, 255], fontStyle: "bold" },
