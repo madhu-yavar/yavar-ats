@@ -38,7 +38,7 @@ export const Route = createFileRoute("/screening")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: ScreeningWorkspace;
+  component: ScreeningWorkspace,
 });
 
 type View = "to_call" | "graded" | "all";
