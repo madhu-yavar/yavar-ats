@@ -34,7 +34,7 @@ export function buildCataloguePdf(cat: CatalogueResult) {
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(20);
-  doc.text(pdfText(CATALOGUE_SUMMARY.name, margin, 44);
+  doc.text(pdfText(CATALOGUE_SUMMARY.name), margin, 44);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
   doc.text(pdfText(`${CATALOGUE_SUMMARY.tagline} — product catalogue`), margin, 64);
