@@ -112,6 +112,20 @@ export function OntologyGraph({
         aria-label="Organisational skill ontology graph"
       >
         <g>
+          {layout.clusters.map((c) => (
+            <text
+              key={c.label}
+              x={c.x}
+              y={c.y}
+              textAnchor="middle"
+              className="fill-muted-foreground"
+              style={{ fontSize: 10, letterSpacing: 1.4, textTransform: "uppercase" }}
+            >
+              {c.label} · {c.count}
+            </text>
+          ))}
+        </g>
+        <g>
           {layout.links.map((l) => {
             const a = byslug.get(l.from);
             const b = byslug.get(l.to);
@@ -125,8 +139,8 @@ export function OntologyGraph({
                 x2={b.x}
                 y2={b.y}
                 stroke={lit ? "hsl(var(--primary))" : "hsl(var(--border))"}
-                strokeWidth={lit ? 1.6 : Math.min(2, 0.4 + l.weight)}
-                strokeOpacity={focus ? (lit ? 0.9 : 0.15) : 0.5}
+                strokeWidth={lit ? 1.6 : Math.min(1.4, 0.3 + l.weight)}
+                strokeOpacity={focus ? (lit ? 0.9 : 0.08) : 0.28}
               />
             );
           })}
@@ -134,6 +148,8 @@ export function OntologyGraph({
         <g>
           {layout.placed.map((n) => {
             const dim = focus ? !connected.has(n.slug) : false;
+            // Labels only where they can be read: big bubbles, the focus and its neighbours.
+            const label = n.r >= 11 || focus === n.slug || (focus ? connected.has(n.slug) : false);
             return (
               <g
                 key={n.slug}
@@ -144,24 +160,28 @@ export function OntologyGraph({
                 onClick={() => onSelect(n.slug)}
                 className="cursor-pointer"
               >
+                <title>{`${n.name} — ${n.supply} in pool, ${n.demand} weighted demand`}</title>
                 <circle
                   r={n.r}
                   fill={fill(n)}
                   stroke={selected === n.slug ? "hsl(var(--foreground))" : "white"}
                   strokeWidth={selected === n.slug ? 2.5 : 1.2}
                 />
-                <text
-                  y={n.r + 12}
-                  textAnchor="middle"
-                  className="fill-foreground"
-                  style={{ fontSize: 10, pointerEvents: "none" }}
-                >
-                  {n.name.length > 22 ? `${n.name.slice(0, 21)}…` : n.name}
-                </text>
+                {label ? (
+                  <text
+                    y={n.r + 11}
+                    textAnchor="middle"
+                    className="fill-foreground"
+                    style={{ fontSize: 9.5, pointerEvents: "none" }}
+                  >
+                    {n.name.length > 18 ? `${n.name.slice(0, 17)}…` : n.name}
+                  </text>
+                ) : null}
               </g>
             );
           })}
         </g>
+
       </svg>
       <div className="flex flex-wrap items-center gap-4 border-t px-4 py-3 text-[11px] text-muted-foreground">
         <Legend colour="hsl(var(--primary) / 0.8)" label="Healthy supply" />
