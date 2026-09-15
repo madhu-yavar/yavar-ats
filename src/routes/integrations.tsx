@@ -1130,6 +1130,11 @@ const PROVIDER_MODELS: Record<string, { id: string; label: string }[]> = {
     { id: "claude-opus-4-1", label: "Claude Opus 4.1" },
     { id: "claude-3-5-haiku-latest", label: "Claude 3.5 Haiku" },
   ],
+  gemini: [
+    { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash — fast, low cost" },
+    { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro — deeper reasoning" },
+    { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+  ],
 };
 
 function AiModelCard() {
