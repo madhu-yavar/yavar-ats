@@ -225,6 +225,13 @@
       "when": 1789447068522,
       "tag": "0031_product_catalogue_commercials",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1789452363027,
+      "tag": "0032_talent_ontology",
+      "breakpoints": true
     }
   ]
 }

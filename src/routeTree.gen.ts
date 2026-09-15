@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BrainRouteImport } from './routes/brain'
 import { Route as CatalogueRouteImport } from './routes/catalogue'
 import { Route as CollaborationRouteImport } from './routes/collaboration'
 import { Route as CookiesRouteImport } from './routes/cookies'
@@ -46,6 +47,11 @@ import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/l
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BrainRoute = BrainRouteImport.update({
+  id: '/brain',
+  path: '/brain',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CatalogueRoute = CatalogueRouteImport.update({
@@ -213,6 +219,7 @@ const LovableEmailTransactionalPreviewRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/brain': typeof BrainRoute
   '/catalogue': typeof CatalogueRoute
   '/collaboration': typeof CollaborationRoute
   '/cookies': typeof CookiesRoute
@@ -248,6 +255,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/brain': typeof BrainRoute
   '/catalogue': typeof CatalogueRoute
   '/collaboration': typeof CollaborationRoute
   '/cookies': typeof CookiesRoute
@@ -284,6 +292,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/brain': typeof BrainRoute
   '/catalogue': typeof CatalogueRoute
   '/collaboration': typeof CollaborationRoute
   '/cookies': typeof CookiesRoute
@@ -321,6 +330,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/brain'
     | '/catalogue'
     | '/collaboration'
     | '/cookies'
@@ -356,6 +366,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/brain'
     | '/catalogue'
     | '/collaboration'
     | '/cookies'
@@ -391,6 +402,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/brain'
     | '/catalogue'
     | '/collaboration'
     | '/cookies'
@@ -427,6 +439,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BrainRoute: typeof BrainRoute
   CatalogueRoute: typeof CatalogueRoute
   CollaborationRoute: typeof CollaborationRoute
   CookiesRoute: typeof CookiesRoute
@@ -467,6 +480,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/brain': {
+      id: '/brain'
+      path: '/brain'
+      fullPath: '/brain'
+      preLoaderRoute: typeof BrainRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/catalogue': {
@@ -710,6 +730,7 @@ const InterviewsRouteWithChildren = InterviewsRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BrainRoute: BrainRoute,
   CatalogueRoute: CatalogueRoute,
   CollaborationRoute: CollaborationRoute,
   CookiesRoute: CookiesRoute,

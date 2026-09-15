@@ -1354,6 +1354,56 @@ export type Database = {
           },
         ]
       }
+      ontology_snapshots: {
+        Row: {
+          added: string[]
+          created_at: string
+          dormant: string[]
+          edge_count: number
+          grown: string[]
+          id: string
+          model: string | null
+          node_count: number
+          org_id: string
+          retired: string[]
+          stats: Json
+        }
+        Insert: {
+          added?: string[]
+          created_at?: string
+          dormant?: string[]
+          edge_count?: number
+          grown?: string[]
+          id?: string
+          model?: string | null
+          node_count?: number
+          org_id: string
+          retired?: string[]
+          stats?: Json
+        }
+        Update: {
+          added?: string[]
+          created_at?: string
+          dormant?: string[]
+          edge_count?: number
+          grown?: string[]
+          id?: string
+          model?: string | null
+          node_count?: number
+          org_id?: string
+          retired?: string[]
+          stats?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ontology_snapshots_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_linkedin_connections: {
         Row: {
           access_token: string
@@ -1968,6 +2018,167 @@ export type Database = {
             columns: ["requisition_id"]
             isOneToOne: false
             referencedRelation: "requisitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      skill_edges: {
+        Row: {
+          evidence_count: number
+          from_slug: string
+          id: string
+          kind: string
+          org_id: string
+          to_slug: string
+          updated_at: string
+          weight: number
+        }
+        Insert: {
+          evidence_count?: number
+          from_slug: string
+          id?: string
+          kind?: string
+          org_id: string
+          to_slug: string
+          updated_at?: string
+          weight?: number
+        }
+        Update: {
+          evidence_count?: number
+          from_slug?: string
+          id?: string
+          kind?: string
+          org_id?: string
+          to_slug?: string
+          updated_at?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "skill_edges_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      skill_evidence: {
+        Row: {
+          candidate_id: string | null
+          created_at: string
+          id: string
+          observed_at: string
+          org_id: string
+          requisition_id: string | null
+          slug: string
+          source: string
+          strength: number
+        }
+        Insert: {
+          candidate_id?: string | null
+          created_at?: string
+          id?: string
+          observed_at?: string
+          org_id: string
+          requisition_id?: string | null
+          slug: string
+          source: string
+          strength?: number
+        }
+        Update: {
+          candidate_id?: string | null
+          created_at?: string
+          id?: string
+          observed_at?: string
+          org_id?: string
+          requisition_id?: string | null
+          slug?: string
+          source?: string
+          strength?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "skill_evidence_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "skill_evidence_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "skill_evidence_requisition_id_fkey"
+            columns: ["requisition_id"]
+            isOneToOne: false
+            referencedRelation: "requisitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      skill_nodes: {
+        Row: {
+          aliases: string[]
+          category: string
+          demand: number
+          evidence_count: number
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          name: string
+          org_id: string
+          parent_slug: string | null
+          slug: string
+          status: string
+          supply: number
+          updated_at: string
+          validated: number
+        }
+        Insert: {
+          aliases?: string[]
+          category?: string
+          demand?: number
+          evidence_count?: number
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          name: string
+          org_id: string
+          parent_slug?: string | null
+          slug: string
+          status?: string
+          supply?: number
+          updated_at?: string
+          validated?: number
+        }
+        Update: {
+          aliases?: string[]
+          category?: string
+          demand?: number
+          evidence_count?: number
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          name?: string
+          org_id?: string
+          parent_slug?: string | null
+          slug?: string
+          status?: string
+          supply?: number
+          updated_at?: string
+          validated?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "skill_nodes_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
