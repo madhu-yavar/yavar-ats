@@ -1343,10 +1343,11 @@ function AiModelCard() {
         ) : (
           <p className="mt-1 text-muted-foreground">
             Saved setting: <span className="font-medium">your own {s?.provider} key</span> ·{" "}
-            {s?.model}. Every AI action — matching, parsing, screening, market benchmarking — is sent
-            straight to {s?.provider} with your key and billed by them. No Lovable credits are used,
-            and if your key is missing or rejected the action fails with that provider&apos;s error
-            instead of falling back. Results across the app show the engine that produced them.
+            {s?.model}. Every AI action — matching, parsing, screening, market benchmarking — is
+            sent straight to {s?.provider} with your key and billed by them. No Lovable credits are
+            used, and if your key is missing or rejected the action fails with that provider&apos;s
+            error instead of falling back. Results across the app show the engine that produced
+            them.
           </p>
         )}
       </div>
