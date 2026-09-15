@@ -10,21 +10,21 @@ import {
   FileSignature,
   Inbox,
   LayoutDashboard,
-  LogOut,
   PanelLeftClose,
   PanelLeftOpen,
+  PhoneCall,
   Plug,
   ShieldCheck,
   Target,
-  Users, BookOpen,
+  Users,
+  BookOpen,
 } from "lucide-react";
 
-
-import { supabase } from "@/integrations/supabase/client";
 import { usePlatform } from "@/hooks/usePlatform";
 import { Button } from "@/components/ui/button";
 import { Copilot } from "@/components/Copilot";
 import { NotificationBell } from "@/components/NotificationBell";
+import { AccountMenu } from "@/components/AccountMenu";
 import { BrandFooter, BrandLogo } from "@/components/Brand";
 
 const NAV = [
@@ -34,6 +34,7 @@ const NAV = [
   { to: "/candidates", label: "Talent pool", icon: Users },
   { to: "/inbox", label: "Careers inbox", icon: Inbox },
   { to: "/matching", label: "JD ↔ CV matching", icon: Target },
+  { to: "/screening", label: "Screening calls", icon: PhoneCall },
   { to: "/interviews", label: "Interviews", icon: CalendarClock },
 
   { to: "/offers", label: "Offers", icon: FileSignature },
@@ -45,11 +46,14 @@ const NAV = [
   { to: "/help", label: "User manual", icon: BookOpen },
 ] as const;
 
-
-
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { isSuperUser, claimable } = usePlatform();
-  const nav = [...NAV, ...(isSuperUser || claimable ? [{ to: "/platform", label: "Platform console", icon: Globe2 } as const] : [])];
+  const nav = [
+    ...NAV,
+    ...(isSuperUser || claimable
+      ? [{ to: "/platform", label: "Platform console", icon: Globe2 } as const]
+      : []),
+  ];
 
   // Collapsed state is remembered per browser so the choice survives reloads.
   const [collapsed, setCollapsed] = useState(false);
@@ -72,7 +76,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         }`}
       >
         <div>
-          <div className={`mb-6 flex items-center gap-2 ${collapsed ? "justify-center" : "justify-between px-1"}`}>
+          <div
+            className={`mb-6 flex items-center gap-2 ${collapsed ? "justify-center" : "justify-between px-1"}`}
+          >
             {collapsed ? null : (
               <div className="min-w-0">
                 <div className="text-xs font-semibold uppercase tracking-[0.2em] text-sidebar-primary">
@@ -89,7 +95,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               title={collapsed ? "Expand menu" : "Collapse menu"}
               className="shrink-0 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             >
-              {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+              {collapsed ? (
+                <PanelLeftOpen className="size-4" />
+              ) : (
+                <PanelLeftClose className="size-4" />
+              )}
             </Button>
           </div>
           <nav className="space-y-1">
@@ -114,18 +124,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
         </div>
-        <Button
-          variant="ghost"
-          title="Sign out"
-          className={`text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
-            collapsed ? "justify-center px-2" : "justify-start"
-          }`}
-          onClick={() => supabase.auth.signOut()}
-        >
-          <LogOut className="size-4" /> {collapsed ? null : "Sign out"}
-        </Button>
       </aside>
-
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2 border-b border-border bg-card px-4 py-2">
@@ -135,7 +134,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               ATSIQ
             </span>
           </Link>
-          <NotificationBell />
+          <div className="flex items-center gap-1">
+            <NotificationBell />
+            <AccountMenu />
+          </div>
         </div>
         <div className="flex gap-1 overflow-x-auto border-b border-border bg-card px-4 py-2 lg:hidden">
           {nav.map(({ to, label }) => (
@@ -144,7 +146,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               to={to}
               activeOptions={{ exact: to === "/" }}
               className="whitespace-nowrap rounded-md px-3 py-1.5 text-xs text-muted-foreground"
-              activeProps={{ className: "whitespace-nowrap rounded-md px-3 py-1.5 text-xs bg-secondary font-medium" }}
+              activeProps={{
+                className:
+                  "whitespace-nowrap rounded-md px-3 py-1.5 text-xs bg-secondary font-medium",
+              }}
             >
               {label}
             </Link>

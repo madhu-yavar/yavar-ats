@@ -37,7 +37,11 @@ import { rankPool } from "@/lib/shortlist";
 import { ScoreChip, StageBadge, StatusBadge, inr } from "@/components/ats";
 import { useRoles } from "@/hooks/useRoles";
 import { useOrg } from "@/hooks/useOrg";
+import { usePlatform } from "@/hooks/usePlatform";
+import { getHrPerformance } from "@/lib/hr-performance.functions";
+import { listAllOrganizations } from "@/lib/platform.functions";
 import { Button } from "@/components/ui/button";
+import { useServerFn } from "@tanstack/react-start";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -622,7 +626,168 @@ function Dashboard() {
           </div>
         </section>
       ) : null}
+
+      {isExecutive ? <TeamGovernance /> : null}
+      <PlatformOverview />
     </div>
+  );
+}
+
+/** CHRO / HR-head governance: how the recruiting team is actually performing. */
+function TeamGovernance() {
+  const fetchPerf = useServerFn(getHrPerformance);
+  const perf = useQuery({
+    queryKey: ["hr_performance", "dashboard", 90],
+    queryFn: () => fetchPerf({ data: { days: 90 } }),
+    staleTime: 120_000,
+    retry: 1,
+  });
+
+  const rows = perf.data?.rows ?? [];
+  const top = rows.slice(0, 5);
+  const avgQuality = rows.filter((r) => r.quality_score !== null);
+  const currency = perf.data?.scheme.currency ?? "INR";
+
+  return (
+    <section className="panel p-5 sm:p-6">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-semibold">HR team governance</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Last 90 days — delivery, quality of the candidates moved forward, and incentive
+            position.
+          </p>
+        </div>
+        <Button asChild variant="ghost" size="sm">
+          <Link to="/reports">
+            Team performance <ArrowUpRight />
+          </Link>
+        </Button>
+      </div>
+
+      {perf.isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading team performance…</p>
+      ) : perf.isError ? (
+        <p className="text-sm text-muted-foreground">
+          Team performance is available to the CHRO, HR head and organisation owner.
+        </p>
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No recruiter activity recorded in this window yet.
+        </p>
+      ) : (
+        <>
+          <div className="mb-4 grid gap-px overflow-hidden rounded-md border border-border bg-border md:grid-cols-4">
+            <Signal
+              label="Recruiters active"
+              value={rows.length}
+              note={`${perf.data?.unattributed ?? 0} moves unattributed`}
+            />
+            <Signal
+              label="Closures"
+              value={perf.data?.totals.closures ?? 0}
+              note={`target ${perf.data?.scheme.target_closures_per_month ?? 0}/month each`}
+            />
+            <Signal
+              label="Average quality"
+              value={
+                avgQuality.length
+                  ? Math.round(
+                      avgQuality.reduce((s, r) => s + (r.quality_score ?? 0), 0) /
+                        avgQuality.length,
+                    )
+                  : "—"
+              }
+              note="fit score of candidates advanced"
+            />
+            <Signal
+              label="Incentive position"
+              value={`${currency} ${Math.round(perf.data?.totals.payout ?? 0).toLocaleString("en-IN")}`}
+              note="earned on current scheme"
+            />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left text-sm">
+              <thead className="border-b border-border text-xs text-muted-foreground">
+                <tr>
+                  <th className="py-2 font-semibold">Recruiter</th>
+                  <th className="py-2 font-semibold">Closures</th>
+                  <th className="py-2 font-semibold">Quality</th>
+                  <th className="py-2 font-semibold">Attainment</th>
+                  <th className="py-2 text-right font-semibold">Performance</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {top.map((r) => (
+                  <tr key={r.recruiter}>
+                    <td className="py-2.5 font-medium">{r.recruiter}</td>
+                    <td className="num py-2.5">{r.joined || r.offers_accepted}</td>
+                    <td className="num py-2.5">{r.quality_score ?? "—"}</td>
+                    <td className="num py-2.5">{r.attainment_pct}%</td>
+                    <td className="py-2.5 text-right">
+                      <ScoreChip score={r.performance_score} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+/** Cross-organisation totals, visible only to the platform super admin. */
+function PlatformOverview() {
+  const { isSuperUser } = usePlatform();
+  const fetchOrgs = useServerFn(listAllOrganizations);
+  const orgs = useQuery({
+    queryKey: ["platform_orgs", "dashboard"],
+    queryFn: () => fetchOrgs({}),
+    enabled: isSuperUser,
+    staleTime: 120_000,
+    retry: 1,
+  });
+
+  if (!isSuperUser) return null;
+  const all = orgs.data ?? [];
+  const sum = (pick: (o: (typeof all)[number]) => number) => all.reduce((s, o) => s + pick(o), 0);
+
+  return (
+    <section className="panel p-5 sm:p-6">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-primary">
+            Platform super admin
+          </div>
+          <h2 className="mt-0.5 font-semibold">All organisations</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Every tenant on ATSIQ. Your own organisation's data stays in the panels above.
+          </p>
+        </div>
+        <Button asChild variant="ghost" size="sm">
+          <Link to="/platform">
+            Platform console <ArrowUpRight />
+          </Link>
+        </Button>
+      </div>
+      {orgs.isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading organisations…</p>
+      ) : (
+        <div className="grid gap-px overflow-hidden rounded-md border border-border bg-border md:grid-cols-5">
+          <Signal
+            label="Organisations"
+            value={all.length}
+            note={`${all.filter((o) => o.status === "pending").length} awaiting approval`}
+          />
+          <Signal label="Users" value={sum((o) => o.members)} note="across all tenants" />
+          <Signal label="Requisitions" value={sum((o) => o.requisitions)} note="raised to date" />
+          <Signal label="Candidates" value={sum((o) => o.candidates)} note="in all talent pools" />
+          <Signal label="Hires" value={sum((o) => o.hires)} note="joined across tenants" />
+        </div>
+      )}
+    </section>
   );
 }
 

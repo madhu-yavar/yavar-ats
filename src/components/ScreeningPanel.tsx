@@ -218,7 +218,7 @@ export function ScreeningPanel(props: {
   };
 
   return (
-    <section className="panel p-5">
+    <section id="screening" className="panel scroll-mt-24 p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="font-semibold">Screening call support</h2>
