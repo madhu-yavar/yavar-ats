@@ -36,6 +36,7 @@ import { canonical, stalledDays, STAGE_LABEL, type Stage } from "@/lib/lifecycle
 import { findDuplicateGroups, freshness } from "@/lib/dedupe";
 import { rankPool } from "@/lib/shortlist";
 import { ScoreChip, StageBadge, StatusBadge, inr } from "@/components/ats";
+import { RolePeek } from "@/components/RolePeek";
 import { useRoles } from "@/hooks/useRoles";
 import { useOrg } from "@/hooks/useOrg";
 import { usePlatform } from "@/hooks/usePlatform";
@@ -818,8 +819,7 @@ function Dashboard() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="font-medium">{requisition.title}</div>
-                      <div className="num text-xs text-muted-foreground">{requisition.code}</div>
+                      <RolePeek requisition={requisition} />
                     </td>
                     <td className="px-4 py-3">
                       {score ? (
