@@ -320,7 +320,13 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
   }
 
   const p = await parseJd(text);
-  const title = (p?.title ?? input.title ?? "").trim() || "Captured role";
+  // Prefer the title the model read out of the description; the page title the
+  // companion sends is usually the job board's own name.
+  const title =
+    cleanRoleTitle(p?.title) ??
+    cleanRoleTitle(input.title) ??
+    titleFromText(text) ??
+    "Captured role — needs a title";
   try {
     const { data: created, error } = await db
       .from("requisitions")

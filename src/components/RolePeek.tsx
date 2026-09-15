@@ -51,10 +51,7 @@ export function RolePeek({ requisition }: { requisition: Requisition }) {
         </DialogHeader>
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <Fact
-            label="Experience"
-            value={`${r.experience_min}–${r.experience_max} yrs`}
-          />
+          <Fact label="Experience" value={`${r.experience_min}–${r.experience_max} yrs`} />
           <Fact label="Budget" value={r.budget_ctc ? inr(Number(r.budget_ctc)) : "Not set"} />
           <Fact label="Hiring manager" value={r.hiring_manager || "Not assigned"} />
         </div>

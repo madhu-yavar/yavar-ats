@@ -373,7 +373,9 @@ function Dashboard() {
   }, [funnel]);
 
   const SHORTLISTED_ON = new Set<Stage>(["shortlisted", "l1", "l2", "l3", "offer", "hired"]);
-  const shortlistedApps = applications.filter((a) => SHORTLISTED_ON.has(canonical(a.stage as Stage)));
+  const shortlistedApps = applications.filter((a) =>
+    SHORTLISTED_ON.has(canonical(a.stage as Stage)),
+  );
   const gradedAppIds = new Set(
     (runs.data ?? []).map((r) => r.application_id).filter((id): id is string => Boolean(id)),
   );
@@ -397,7 +399,8 @@ function Dashboard() {
 
     if (pending.length) {
       const oldest = pending.reduce(
-        (d, r) => Math.max(d, Math.floor((Date.now() - new Date(r.created_at).getTime()) / 86_400_000)),
+        (d, r) =>
+          Math.max(d, Math.floor((Date.now() - new Date(r.created_at).getTime()) / 86_400_000)),
         0,
       );
       out.push({
@@ -418,7 +421,8 @@ function Dashboard() {
       out.push({
         title: `${emptyRoles} approved role${emptyRoles > 1 ? "s have" : " has"} no candidate yet`,
         evidence: `${open.length} roles are open and ${poolHealth.untapped} pool profiles have never been put against a role.`,
-        action: "Post internally, publish externally, or pull the best historic fits from the pool.",
+        action:
+          "Post internally, publish externally, or pull the best historic fits from the pool.",
         cta: "Source",
         to: "/matching",
         tone: "risk",
@@ -493,7 +497,8 @@ function Dashboard() {
       out.push({
         title: "Committed salary is above the workforce budget",
         evidence: `${inr(committed)} committed against ${inr(budgeted)} budgeted.`,
-        action: "Re-sequence lower-priority roles into the next quarter, or get the budget revised.",
+        action:
+          "Re-sequence lower-priority roles into the next quarter, or get the budget revised.",
         cta: "Requisitions",
         to: "/requisitions",
         tone: "risk",
@@ -533,7 +538,6 @@ function Dashboard() {
     worstDrop,
     screeningCoverage,
   ]);
-
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card">
@@ -732,12 +736,7 @@ function Dashboard() {
               </p>
               <div className="mt-4 space-y-3">
                 {scarceSkills.map(([skill, count]) => (
-                  <Bar
-                    key={skill}
-                    label={skill}
-                    value={count}
-                    max={scarceSkills[0]?.[1] ?? 1}
-                  />
+                  <Bar key={skill} label={skill} value={count} max={scarceSkills[0]?.[1] ?? 1} />
                 ))}
                 {scarceSkills.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
@@ -749,164 +748,164 @@ function Dashboard() {
           </section>
         </>
       ) : (
-      <div className="grid lg:grid-cols-[minmax(0,1.65fr)_minmax(280px,0.75fr)]">
-        <section className="border-b border-border p-5 sm:p-7 lg:border-b-0 lg:border-r">
-          <div className="mb-5 flex items-start justify-between gap-3">
-            <div>
-              <h2 className="font-semibold">Priority workspace</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                The next candidates and decisions for your role.
-              </p>
+        <div className="grid lg:grid-cols-[minmax(0,1.65fr)_minmax(280px,0.75fr)]">
+          <section className="border-b border-border p-5 sm:p-7 lg:border-b-0 lg:border-r">
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">Priority workspace</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  The next candidates and decisions for your role.
+                </p>
+              </div>
+              <Button asChild variant="ghost" size="sm">
+                <Link to="/matching">
+                  Matching engine <ArrowUpRight />
+                </Link>
+              </Button>
             </div>
-            <Button asChild variant="ghost" size="sm">
-              <Link to="/matching">
-                Matching engine <ArrowUpRight />
-              </Link>
-            </Button>
-          </div>
 
-          <div className="mb-4 flex flex-col gap-3 xl:flex-row">
-            <label className="relative min-w-0 flex-1">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <span className="sr-only">Search candidates or roles</span>
-              <input
-                value={queueSearch}
-                onChange={(event) => setQueueSearch(event.target.value)}
-                placeholder="Search candidates or roles"
-                className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none transition-shadow focus:ring-2 focus:ring-ring/30"
-              />
-            </label>
-            <div className="flex rounded-md bg-secondary p-1" aria-label="Queue view">
-              {(
-                [
-                  ["priority", "Priority"],
-                  ["matches", "Top matches"],
-                  ["recent", "Recent"],
-                ] as const
-              ).map(([value, label]) => (
-                <Button
-                  key={value}
-                  type="button"
-                  size="sm"
-                  variant={queueView === value ? "outline" : "ghost"}
-                  onClick={() => setQueueView(value)}
-                  className="flex-1 shadow-none xl:flex-none"
-                >
-                  {label}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          <div className="overflow-x-auto rounded-md border border-border">
-            <table className="w-full min-w-[680px] text-left text-sm">
-              <thead className="border-b border-border bg-surface-2/70 text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">Candidate</th>
-                  <th className="px-4 py-3 font-semibold">Role</th>
-                  <th className="px-4 py-3 font-semibold">Fit</th>
-                  <th className="px-4 py-3 font-semibold">Stage</th>
-                  <th className="px-4 py-3 text-right font-semibold">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {queueRows.map(({ app, candidate, requisition, score }) => (
-                  <tr key={app.id} className="transition-colors hover:bg-surface-2/70">
-                    <td className="px-4 py-3">
-                      <div className="font-semibold">{candidate.full_name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {candidate.current_employer || candidate.location || "Profile available"}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <RolePeek requisition={requisition} />
-                    </td>
-                    <td className="px-4 py-3">
-                      {score ? (
-                        <ScoreChip score={score} size="sm" />
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Not scored</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StageBadge stage={app.stage} />
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Button asChild variant="ghost" size="sm">
-                        <Link to="/candidates/$id" params={{ id: candidate.id }}>
-                          Review <ArrowRight />
-                        </Link>
-                      </Button>
-                    </td>
-                  </tr>
+            <div className="mb-4 flex flex-col gap-3 xl:flex-row">
+              <label className="relative min-w-0 flex-1">
+                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <span className="sr-only">Search candidates or roles</span>
+                <input
+                  value={queueSearch}
+                  onChange={(event) => setQueueSearch(event.target.value)}
+                  placeholder="Search candidates or roles"
+                  className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none transition-shadow focus:ring-2 focus:ring-ring/30"
+                />
+              </label>
+              <div className="flex rounded-md bg-secondary p-1" aria-label="Queue view">
+                {(
+                  [
+                    ["priority", "Priority"],
+                    ["matches", "Top matches"],
+                    ["recent", "Recent"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    size="sm"
+                    variant={queueView === value ? "outline" : "ghost"}
+                    onClick={() => setQueueView(value)}
+                    className="flex-1 shadow-none xl:flex-none"
+                  >
+                    {label}
+                  </Button>
                 ))}
-                {queueRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
-                      No candidates match this view.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </section>
+              </div>
+            </div>
 
-        <aside className="p-5 sm:p-7">
-          <h2 className="font-semibold">Action queue</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Only actions available to {roleLabel.toLowerCase()}.
-          </p>
-          <div className="mt-5 divide-y divide-border border-y border-border">
-            {pending.length > 0 && (isExecutive || roles.includes("department_head")) ? (
+            <div className="overflow-x-auto rounded-md border border-border">
+              <table className="w-full min-w-[680px] text-left text-sm">
+                <thead className="border-b border-border bg-surface-2/70 text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Candidate</th>
+                    <th className="px-4 py-3 font-semibold">Role</th>
+                    <th className="px-4 py-3 font-semibold">Fit</th>
+                    <th className="px-4 py-3 font-semibold">Stage</th>
+                    <th className="px-4 py-3 text-right font-semibold">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {queueRows.map(({ app, candidate, requisition, score }) => (
+                    <tr key={app.id} className="transition-colors hover:bg-surface-2/70">
+                      <td className="px-4 py-3">
+                        <div className="font-semibold">{candidate.full_name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {candidate.current_employer || candidate.location || "Profile available"}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <RolePeek requisition={requisition} />
+                      </td>
+                      <td className="px-4 py-3">
+                        {score ? (
+                          <ScoreChip score={score} size="sm" />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Not scored</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StageBadge stage={app.stage} />
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button asChild variant="ghost" size="sm">
+                          <Link to="/candidates/$id" params={{ id: candidate.id }}>
+                            Review <ArrowRight />
+                          </Link>
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                  {queueRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
+                        No candidates match this view.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <aside className="p-5 sm:p-7">
+            <h2 className="font-semibold">Action queue</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Only actions available to {roleLabel.toLowerCase()}.
+            </p>
+            <div className="mt-5 divide-y divide-border border-y border-border">
+              {pending.length > 0 && (isExecutive || roles.includes("department_head")) ? (
+                <ActionRow
+                  icon={CheckCircle2}
+                  label="Requisitions awaiting approval"
+                  value={pending.length}
+                  to="/requisitions"
+                />
+              ) : null}
               <ActionRow
-                icon={CheckCircle2}
-                label="Requisitions awaiting approval"
-                value={pending.length}
+                icon={Clock}
+                label="Candidates past stage SLA"
+                value={stalled.length}
+                to="/candidates"
+                tone={stalled.length ? "warning" : "default"}
+              />
+              <ActionRow
+                icon={CalendarClock}
+                label="Upcoming interviews"
+                value={upcoming.length}
+                to="/interviews"
+              />
+              <ActionRow
+                icon={BriefcaseBusiness}
+                label="Open requisitions"
+                value={open.length}
                 to="/requisitions"
               />
-            ) : null}
-            <ActionRow
-              icon={Clock}
-              label="Candidates past stage SLA"
-              value={stalled.length}
-              to="/candidates"
-              tone={stalled.length ? "warning" : "default"}
-            />
-            <ActionRow
-              icon={CalendarClock}
-              label="Upcoming interviews"
-              value={upcoming.length}
-              to="/interviews"
-            />
-            <ActionRow
-              icon={BriefcaseBusiness}
-              label="Open requisitions"
-              value={open.length}
-              to="/requisitions"
-            />
-          </div>
-          <div className="mt-6">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold">Pipeline movement</h3>
-              <span className="text-xs text-muted-foreground">All active stages</span>
             </div>
-            <div className="space-y-3">
-              {funnel.slice(0, 6).map((row) => (
-                <Bar
-                  key={row.stage}
-                  label={STAGE_LABEL[row.stage] ?? row.stage}
-                  value={row.reached}
-                  max={funnelTop}
-                />
-              ))}
-              {funnel.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No applications yet.</p>
-              ) : null}
+            <div className="mt-6">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold">Pipeline movement</h3>
+                <span className="text-xs text-muted-foreground">All active stages</span>
+              </div>
+              <div className="space-y-3">
+                {funnel.slice(0, 6).map((row) => (
+                  <Bar
+                    key={row.stage}
+                    label={STAGE_LABEL[row.stage] ?? row.stage}
+                    value={row.reached}
+                    max={funnelTop}
+                  />
+                ))}
+                {funnel.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No applications yet.</p>
+                ) : null}
+              </div>
             </div>
-          </div>
-        </aside>
-      </div>
+          </aside>
+        </div>
       )}
 
       {isExecutive ? (
