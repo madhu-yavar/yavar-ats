@@ -20,6 +20,7 @@ import {
 
 import { supabase } from "@/integrations/supabase/client";
 import {
+  allScreeningRunsQuery,
   applicationsQuery,
   candidatesQuery,
   departmentsQuery,
@@ -35,6 +36,7 @@ import { canonical, stalledDays, STAGE_LABEL, type Stage } from "@/lib/lifecycle
 import { findDuplicateGroups, freshness } from "@/lib/dedupe";
 import { rankPool } from "@/lib/shortlist";
 import { ScoreChip, StageBadge, StatusBadge, inr } from "@/components/ats";
+import { RolePeek } from "@/components/RolePeek";
 import { useRoles } from "@/hooks/useRoles";
 import { useOrg } from "@/hooks/useOrg";
 import { usePlatform } from "@/hooks/usePlatform";
@@ -172,6 +174,7 @@ function Dashboard() {
   const depts = useQuery(departmentsQuery);
   const offers = useQuery(offersQuery);
   const interviews = useQuery(interviewsQuery);
+  const runs = useQuery(allScreeningRunsQuery);
 
   const requisitions = reqs.data ?? [];
   const applications = apps.data ?? [];
@@ -350,6 +353,192 @@ function Dashboard() {
       .slice(0, 8);
   }, [applications, candidates, requisitions, scoreMap, queueSearch, queueView]);
 
+  /* ---------- executive analytics: drop-off, coverage, prescriptions ---------- */
+
+  /** The stage pair that loses the largest share of the candidates reaching it. */
+  const worstDrop = useMemo(() => {
+    let worst: { from: Stage; to: Stage; reached: number; lost: number; lossPct: number } | null =
+      null;
+    for (let i = 0; i < funnel.length - 1; i += 1) {
+      const from = funnel[i]!;
+      const to = funnel[i + 1]!;
+      if (from.reached < 3) continue;
+      const lost = from.reached - to.reached;
+      const lossPct = Math.round((lost / from.reached) * 100);
+      if (lost > 0 && (!worst || lossPct > worst.lossPct)) {
+        worst = { from: from.stage, to: to.stage, reached: from.reached, lost, lossPct };
+      }
+    }
+    return worst;
+  }, [funnel]);
+
+  const SHORTLISTED_ON = new Set<Stage>(["shortlisted", "l1", "l2", "l3", "offer", "hired"]);
+  const shortlistedApps = applications.filter((a) =>
+    SHORTLISTED_ON.has(canonical(a.stage as Stage)),
+  );
+  const gradedAppIds = new Set(
+    (runs.data ?? []).map((r) => r.application_id).filter((id): id is string => Boolean(id)),
+  );
+  const screeningCoverage = shortlistedApps.length
+    ? Math.round(
+        (shortlistedApps.filter((a) => gradedAppIds.has(a.id)).length / shortlistedApps.length) *
+          100,
+      )
+    : 0;
+
+  const prescriptions = useMemo(() => {
+    const out: {
+      title: string;
+      evidence: string;
+      action: string;
+      cta: string;
+      to: "/requisitions" | "/candidates" | "/interviews" | "/offers" | "/matching" | "/screening";
+      tone: "risk" | "watch" | "opportunity";
+      icon: React.ComponentType<{ className?: string }>;
+    }[] = [];
+
+    if (pending.length) {
+      const oldest = pending.reduce(
+        (d, r) =>
+          Math.max(d, Math.floor((Date.now() - new Date(r.created_at).getTime()) / 86_400_000)),
+        0,
+      );
+      out.push({
+        title: `${pending.length} requisition${pending.length > 1 ? "s" : ""} waiting on approval`,
+        evidence: `Oldest has waited ${oldest} day${oldest === 1 ? "" : "s"}. Nothing can be sourced until these clear.`,
+        action: "Approve, return with comments, or reassign the approval to the department head.",
+        cta: "Review",
+        to: "/requisitions",
+        tone: oldest > 3 ? "risk" : "watch",
+        icon: CheckCircle2,
+      });
+    }
+
+    const emptyRoles = open.filter(
+      (r) => !applications.some((a) => a.requisition_id === r.id),
+    ).length;
+    if (emptyRoles) {
+      out.push({
+        title: `${emptyRoles} approved role${emptyRoles > 1 ? "s have" : " has"} no candidate yet`,
+        evidence: `${open.length} roles are open and ${poolHealth.untapped} pool profiles have never been put against a role.`,
+        action:
+          "Post internally, publish externally, or pull the best historic fits from the pool.",
+        cta: "Source",
+        to: "/matching",
+        tone: "risk",
+        icon: BriefcaseBusiness,
+      });
+    }
+
+    if (stalled.length) {
+      out.push({
+        title: `${stalled.length} candidate${stalled.length > 1 ? "s are" : " is"} past the stage SLA`,
+        evidence: `Longest wait is ${stalled[0]?.days ?? 0} days without any movement.`,
+        action: "Hold the recruiter accountable in the weekly review or reassign the candidate.",
+        cta: "Open",
+        to: "/candidates",
+        tone: (stalled[0]?.days ?? 0) > 10 ? "risk" : "watch",
+        icon: Clock,
+      });
+    }
+
+    if (shortlistedApps.length && screeningCoverage < 70) {
+      out.push({
+        title: `Only ${screeningCoverage}% of shortlisted candidates were screened properly`,
+        evidence: `${shortlistedApps.length - shortlistedApps.filter((a) => gradedAppIds.has(a.id)).length} shortlisted candidates reached interviews without a graded screening call.`,
+        action: "Make the screening call mandatory before an interview slot is booked.",
+        cta: "Screening",
+        to: "/screening",
+        tone: "watch",
+        icon: ShieldCheck,
+      });
+    }
+
+    if (offerRows.length && acceptRate < 70) {
+      out.push({
+        title: `Offer acceptance is ${acceptRate}%`,
+        evidence: `${offerRows.filter((o) => o.status === "declined").length} declined out of ${offerRows.length} offers made.`,
+        action: "Check the offered range against the market band before the next release.",
+        cta: "Offers",
+        to: "/offers",
+        tone: acceptRate < 50 ? "risk" : "watch",
+        icon: TrendingUp,
+      });
+    }
+
+    if (scored.length >= 5 && avgMatch < 60) {
+      out.push({
+        title: `Average fit is only ${avgMatch}%`,
+        evidence: scarceSkills.length
+          ? `"${scarceSkills[0]?.[0]}" is missing on ${scarceSkills[0]?.[1]} scored candidates.`
+          : `${scored.length} candidates scored and few clear the bar.`,
+        action:
+          "Either soften the must-have list to what the market actually has, or budget for training.",
+        cta: "Matching",
+        to: "/matching",
+        tone: "watch",
+        icon: AlertTriangle,
+      });
+    }
+
+    if (candidates.length && poolHealth.stale / candidates.length > 0.3) {
+      out.push({
+        title: `${Math.round((poolHealth.stale / candidates.length) * 100)}% of the talent pool is stale`,
+        evidence: `${poolHealth.stale} profiles are over a year old and ${poolHealth.groups} duplicate sets are still unmerged.`,
+        action: "Run a refresh campaign and merge duplicates before the next sourcing push.",
+        cta: "Talent pool",
+        to: "/candidates",
+        tone: "watch",
+        icon: Users,
+      });
+    }
+
+    if (budgeted > 0 && committed > budgeted) {
+      out.push({
+        title: "Committed salary is above the workforce budget",
+        evidence: `${inr(committed)} committed against ${inr(budgeted)} budgeted.`,
+        action:
+          "Re-sequence lower-priority roles into the next quarter, or get the budget revised.",
+        cta: "Requisitions",
+        to: "/requisitions",
+        tone: "risk",
+        icon: AlertTriangle,
+      });
+    }
+
+    if (worstDrop && worstDrop.lossPct >= 40) {
+      out.push({
+        title: `${worstDrop.lossPct}% of candidates are lost at one step`,
+        evidence: `${worstDrop.lost} of ${worstDrop.reached} candidates stop between ${STAGE_LABEL[worstDrop.from]} and ${STAGE_LABEL[worstDrop.to]}.`,
+        action: "Review interviewer feedback and the screening bar for that step.",
+        cta: "Interviews",
+        to: "/interviews",
+        tone: "watch",
+        icon: Sparkles,
+      });
+    }
+
+    const order = { risk: 0, watch: 1, opportunity: 2 } as const;
+    return out.sort((a, b) => order[a.tone] - order[b.tone]).slice(0, 6);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    pending,
+    open,
+    applications,
+    stalled,
+    offerRows,
+    acceptRate,
+    scored.length,
+    avgMatch,
+    scarceSkills,
+    candidates.length,
+    poolHealth,
+    budgeted,
+    committed,
+    worstDrop,
+    screeningCoverage,
+  ]);
+
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card">
       <header className="flex flex-col gap-4 border-b border-border px-5 py-5 sm:px-7 lg:flex-row lg:items-center lg:justify-between">
@@ -423,165 +612,301 @@ function Dashboard() {
         ))}
       </section>
 
-      <div className="grid lg:grid-cols-[minmax(0,1.65fr)_minmax(280px,0.75fr)]">
-        <section className="border-b border-border p-5 sm:p-7 lg:border-b-0 lg:border-r">
-          <div className="mb-5 flex items-start justify-between gap-3">
-            <div>
-              <h2 className="font-semibold">Priority workspace</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                The next candidates and decisions for your role.
-              </p>
-            </div>
-            <Button asChild variant="ghost" size="sm">
-              <Link to="/matching">
-                Matching engine <ArrowUpRight />
-              </Link>
-            </Button>
-          </div>
-
-          <div className="mb-4 flex flex-col gap-3 xl:flex-row">
-            <label className="relative min-w-0 flex-1">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <span className="sr-only">Search candidates or roles</span>
-              <input
-                value={queueSearch}
-                onChange={(event) => setQueueSearch(event.target.value)}
-                placeholder="Search candidates or roles"
-                className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none transition-shadow focus:ring-2 focus:ring-ring/30"
-              />
-            </label>
-            <div className="flex rounded-md bg-secondary p-1" aria-label="Queue view">
-              {(
-                [
-                  ["priority", "Priority"],
-                  ["matches", "Top matches"],
-                  ["recent", "Recent"],
-                ] as const
-              ).map(([value, label]) => (
-                <Button
-                  key={value}
-                  type="button"
-                  size="sm"
-                  variant={queueView === value ? "outline" : "ghost"}
-                  onClick={() => setQueueView(value)}
-                  className="flex-1 shadow-none xl:flex-none"
-                >
-                  {label}
+      {isExecutive ? (
+        <>
+          <div className="grid lg:grid-cols-[minmax(0,1.65fr)_minmax(280px,0.75fr)]">
+            <section className="border-b border-border p-5 sm:p-7 lg:border-b-0 lg:border-r">
+              <div className="mb-5 flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold">Decisions & prescriptions</h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    What the numbers say you should act on, with the evidence behind each call.
+                  </p>
+                </div>
+                <Button asChild variant="ghost" size="sm">
+                  <Link to="/reports">
+                    Full reports <ArrowUpRight />
+                  </Link>
                 </Button>
-              ))}
-            </div>
-          </div>
-
-          <div className="overflow-x-auto rounded-md border border-border">
-            <table className="w-full min-w-[680px] text-left text-sm">
-              <thead className="border-b border-border bg-surface-2/70 text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">Candidate</th>
-                  <th className="px-4 py-3 font-semibold">Role</th>
-                  <th className="px-4 py-3 font-semibold">Fit</th>
-                  <th className="px-4 py-3 font-semibold">Stage</th>
-                  <th className="px-4 py-3 text-right font-semibold">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {queueRows.map(({ app, candidate, requisition, score }) => (
-                  <tr key={app.id} className="transition-colors hover:bg-surface-2/70">
-                    <td className="px-4 py-3">
-                      <div className="font-semibold">{candidate.full_name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {candidate.current_employer || candidate.location || "Profile available"}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium">{requisition.title}</div>
-                      <div className="num text-xs text-muted-foreground">{requisition.code}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {score ? (
-                        <ScoreChip score={score} size="sm" />
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Not scored</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StageBadge stage={app.stage} />
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Button asChild variant="ghost" size="sm">
-                        <Link to="/candidates/$id" params={{ id: candidate.id }}>
-                          Review <ArrowRight />
-                        </Link>
-                      </Button>
-                    </td>
-                  </tr>
+              </div>
+              <div className="divide-y divide-border border-y border-border">
+                {prescriptions.map((p) => (
+                  <div key={p.title} className="flex flex-wrap items-start gap-3 py-4">
+                    <span
+                      className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md ${
+                        p.tone === "risk"
+                          ? "bg-destructive/10 text-destructive"
+                          : p.tone === "watch"
+                            ? "bg-warning/15 text-warning"
+                            : "bg-primary/10 text-primary"
+                      }`}
+                    >
+                      <p.icon className="size-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold">{p.title}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{p.evidence}</p>
+                      <p className="mt-1 text-xs">
+                        <span className="font-medium text-primary">Do next: </span>
+                        {p.action}
+                      </p>
+                    </div>
+                    <Button asChild variant="outline" size="sm">
+                      <Link to={p.to}>
+                        {p.cta} <ArrowRight />
+                      </Link>
+                    </Button>
+                  </div>
                 ))}
-                {queueRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
-                      No candidates match this view.
-                    </td>
-                  </tr>
+                {prescriptions.length === 0 ? (
+                  <p className="py-8 text-sm text-muted-foreground">
+                    Nothing needs an executive decision right now — approvals, SLAs, offers and pool
+                    hygiene are all clear.
+                  </p>
                 ) : null}
-              </tbody>
-            </table>
-          </div>
-        </section>
+              </div>
+            </section>
 
-        <aside className="p-5 sm:p-7">
-          <h2 className="font-semibold">Action queue</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Only actions available to {roleLabel.toLowerCase()}.
-          </p>
-          <div className="mt-5 divide-y divide-border border-y border-border">
-            {pending.length > 0 && (isExecutive || roles.includes("department_head")) ? (
+            <aside className="p-5 sm:p-7">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="font-semibold">Conversion</h2>
+                <span className="text-xs text-muted-foreground">All active stages</span>
+              </div>
+              <div className="space-y-3">
+                {funnel.slice(0, 7).map((row) => (
+                  <Bar
+                    key={row.stage}
+                    label={STAGE_LABEL[row.stage] ?? row.stage}
+                    value={row.reached}
+                    max={funnelTop}
+                  />
+                ))}
+                {funnel.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No applications yet.</p>
+                ) : null}
+              </div>
+              <div className="mt-6 rounded-md border border-border p-4">
+                <p className="text-xs font-medium text-muted-foreground">Biggest drop-off</p>
+                <p className="mt-1 text-sm font-semibold">
+                  {worstDrop
+                    ? `${STAGE_LABEL[worstDrop.from] ?? worstDrop.from} → ${STAGE_LABEL[worstDrop.to] ?? worstDrop.to}`
+                    : "Not enough movement yet"}
+                </p>
+                {worstDrop ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {worstDrop.lost} of {worstDrop.reached} candidates stop here (
+                    {worstDrop.lossPct}%). Ask the team what is failing at this step.
+                  </p>
+                ) : null}
+              </div>
+              <div className="mt-4 rounded-md border border-border p-4">
+                <p className="text-xs font-medium text-muted-foreground">Screening coverage</p>
+                <p className="num mt-1 text-xl font-bold">{screeningCoverage}%</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  of shortlisted candidates have a graded screening call.
+                </p>
+              </div>
+            </aside>
+          </div>
+
+          <section className="grid border-t border-border md:grid-cols-2">
+            <div className="border-b border-border p-5 sm:p-7 md:border-b-0 md:border-r">
+              <h2 className="font-semibold">Where candidates come from</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Volume by channel — spend and effort should follow this.
+              </p>
+              <div className="mt-4 space-y-3">
+                {sourceMix.map(([source, count]) => (
+                  <Bar
+                    key={source}
+                    label={source.replace(/_/g, " ")}
+                    value={count}
+                    max={sourceMix[0]?.[1] ?? 1}
+                  />
+                ))}
+                {sourceMix.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No candidates in the pool yet.</p>
+                ) : null}
+              </div>
+            </div>
+            <div className="p-5 sm:p-7">
+              <h2 className="font-semibold">Skills the market is not giving us</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Most frequently missing must-haves across scored candidates.
+              </p>
+              <div className="mt-4 space-y-3">
+                {scarceSkills.map(([skill, count]) => (
+                  <Bar key={skill} label={skill} value={count} max={scarceSkills[0]?.[1] ?? 1} />
+                ))}
+                {scarceSkills.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Nothing scarce yet — run matching to build this picture.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </section>
+        </>
+      ) : (
+        <div className="grid lg:grid-cols-[minmax(0,1.65fr)_minmax(280px,0.75fr)]">
+          <section className="border-b border-border p-5 sm:p-7 lg:border-b-0 lg:border-r">
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">Priority workspace</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  The next candidates and decisions for your role.
+                </p>
+              </div>
+              <Button asChild variant="ghost" size="sm">
+                <Link to="/matching">
+                  Matching engine <ArrowUpRight />
+                </Link>
+              </Button>
+            </div>
+
+            <div className="mb-4 flex flex-col gap-3 xl:flex-row">
+              <label className="relative min-w-0 flex-1">
+                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <span className="sr-only">Search candidates or roles</span>
+                <input
+                  value={queueSearch}
+                  onChange={(event) => setQueueSearch(event.target.value)}
+                  placeholder="Search candidates or roles"
+                  className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none transition-shadow focus:ring-2 focus:ring-ring/30"
+                />
+              </label>
+              <div className="flex rounded-md bg-secondary p-1" aria-label="Queue view">
+                {(
+                  [
+                    ["priority", "Priority"],
+                    ["matches", "Top matches"],
+                    ["recent", "Recent"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    size="sm"
+                    variant={queueView === value ? "outline" : "ghost"}
+                    onClick={() => setQueueView(value)}
+                    className="flex-1 shadow-none xl:flex-none"
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-md border border-border">
+              <table className="w-full min-w-[680px] text-left text-sm">
+                <thead className="border-b border-border bg-surface-2/70 text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Candidate</th>
+                    <th className="px-4 py-3 font-semibold">Role</th>
+                    <th className="px-4 py-3 font-semibold">Fit</th>
+                    <th className="px-4 py-3 font-semibold">Stage</th>
+                    <th className="px-4 py-3 text-right font-semibold">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {queueRows.map(({ app, candidate, requisition, score }) => (
+                    <tr key={app.id} className="transition-colors hover:bg-surface-2/70">
+                      <td className="px-4 py-3">
+                        <div className="font-semibold">{candidate.full_name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {candidate.current_employer || candidate.location || "Profile available"}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <RolePeek requisition={requisition} />
+                      </td>
+                      <td className="px-4 py-3">
+                        {score ? (
+                          <ScoreChip score={score} size="sm" />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Not scored</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StageBadge stage={app.stage} />
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button asChild variant="ghost" size="sm">
+                          <Link to="/candidates/$id" params={{ id: candidate.id }}>
+                            Review <ArrowRight />
+                          </Link>
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                  {queueRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
+                        No candidates match this view.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <aside className="p-5 sm:p-7">
+            <h2 className="font-semibold">Action queue</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Only actions available to {roleLabel.toLowerCase()}.
+            </p>
+            <div className="mt-5 divide-y divide-border border-y border-border">
+              {pending.length > 0 && (isExecutive || roles.includes("department_head")) ? (
+                <ActionRow
+                  icon={CheckCircle2}
+                  label="Requisitions awaiting approval"
+                  value={pending.length}
+                  to="/requisitions"
+                />
+              ) : null}
               <ActionRow
-                icon={CheckCircle2}
-                label="Requisitions awaiting approval"
-                value={pending.length}
+                icon={Clock}
+                label="Candidates past stage SLA"
+                value={stalled.length}
+                to="/candidates"
+                tone={stalled.length ? "warning" : "default"}
+              />
+              <ActionRow
+                icon={CalendarClock}
+                label="Upcoming interviews"
+                value={upcoming.length}
+                to="/interviews"
+              />
+              <ActionRow
+                icon={BriefcaseBusiness}
+                label="Open requisitions"
+                value={open.length}
                 to="/requisitions"
               />
-            ) : null}
-            <ActionRow
-              icon={Clock}
-              label="Candidates past stage SLA"
-              value={stalled.length}
-              to="/candidates"
-              tone={stalled.length ? "warning" : "default"}
-            />
-            <ActionRow
-              icon={CalendarClock}
-              label="Upcoming interviews"
-              value={upcoming.length}
-              to="/interviews"
-            />
-            <ActionRow
-              icon={BriefcaseBusiness}
-              label="Open requisitions"
-              value={open.length}
-              to="/requisitions"
-            />
-          </div>
-          <div className="mt-6">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold">Pipeline movement</h3>
-              <span className="text-xs text-muted-foreground">All active stages</span>
             </div>
-            <div className="space-y-3">
-              {funnel.slice(0, 6).map((row) => (
-                <Bar
-                  key={row.stage}
-                  label={STAGE_LABEL[row.stage] ?? row.stage}
-                  value={row.reached}
-                  max={funnelTop}
-                />
-              ))}
-              {funnel.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No applications yet.</p>
-              ) : null}
+            <div className="mt-6">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold">Pipeline movement</h3>
+                <span className="text-xs text-muted-foreground">All active stages</span>
+              </div>
+              <div className="space-y-3">
+                {funnel.slice(0, 6).map((row) => (
+                  <Bar
+                    key={row.stage}
+                    label={STAGE_LABEL[row.stage] ?? row.stage}
+                    value={row.reached}
+                    max={funnelTop}
+                  />
+                ))}
+                {funnel.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No applications yet.</p>
+                ) : null}
+              </div>
             </div>
-          </div>
-        </aside>
-      </div>
+          </aside>
+        </div>
+      )}
 
       {isExecutive ? (
         <section className="border-t border-border p-5 sm:p-7">

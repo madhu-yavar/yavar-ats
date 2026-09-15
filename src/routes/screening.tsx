@@ -14,6 +14,7 @@ import {
 } from "@/lib/data";
 import { canonical, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
 import { StageBadge } from "@/components/ats";
+import { RolePeek } from "@/components/RolePeek";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/screening")({
@@ -192,8 +193,7 @@ function ScreeningWorkspace() {
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <div className="font-medium">{row.requisition.title}</div>
-                  <div className="num text-xs text-muted-foreground">{row.requisition.code}</div>
+                  <RolePeek requisition={row.requisition} />
                 </td>
                 <td className="num px-4 py-3">{row.match === null ? "—" : `${row.match}%`}</td>
                 <td className="px-4 py-3">

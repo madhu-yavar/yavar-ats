@@ -64,10 +64,45 @@ async function parseJd(text: string): Promise<ParsedJd | null> {
       "Extract a structured job requisition from a job description. Return ONLY JSON with keys: title, location, " +
       "must_have_skills (string array), good_to_have_skills (string array), responsibilities, education_requirement, " +
       "experience_min (number of years), experience_max (number of years). Use null when a field is genuinely absent. " +
-      "Never invent requirements.",
+      "Never invent requirements. `title` MUST be the job title a candidate would recognise, such as " +
+      "'Senior React Developer' or 'UI/UX Designer' — never the job board, product, tool or company name " +
+      "(for example never 'LinkedIn', 'LinkedIn Talent Solutions', 'Recruiter', 'Naukri', 'Indeed', 'Careers'), " +
+      "and never a browser tab or page heading. Include seniority when the description states it.",
     prompt: text.slice(0, 20000),
   });
   return parsed.ok ? parsed.data : null;
+}
+
+/**
+ * Job boards put their own product name in the page title, so a captured role
+ * arrived as "LinkedIn Talent Solutions" instead of the job. Reject that kind of
+ * chrome, and only keep something that reads like a role.
+ */
+const BOARD_CHROME =
+  /^(\(\d+\)\s*)?(linkedin|linkedin recruiter|linkedin talent solutions?|talent solutions?|recruiter|naukri|naukri recruiter|resdex|indeed|monster|shine|glassdoor|careers?|jobs?|job search|hiring|projects?|my jobs|applicants?|home|dashboard|feed|talent hub|hiring project)\b/i;
+
+export function cleanRoleTitle(raw: string | null | undefined): string | null {
+  const value = String(raw ?? "")
+    .replace(/\s+/g, " ")
+    .replace(/^\(\d+\)\s*/, "")
+    // drop the "| LinkedIn" / "- Naukri" suffix boards append
+    .replace(/\s*[|·–—-]\s*(linkedin|naukri|indeed|monster|glassdoor|shine)[^|]*$/i, "")
+    .trim();
+  if (value.length < 3 || value.length > 120) return null;
+  if (BOARD_CHROME.test(value)) return null;
+  if (!/[a-z]/i.test(value)) return null;
+  return value;
+}
+
+/** Last resort: the first line of the description that reads like a job title. */
+function titleFromText(text: string): string | null {
+  for (const line of text.split(/\r?\n/).slice(0, 40)) {
+    const candidate = cleanRoleTitle(line.replace(/^[•*\-–\s]+/, ""));
+    if (!candidate) continue;
+    const words = candidate.split(" ").length;
+    if (words >= 2 && words <= 10 && !/[.:;]$/.test(candidate)) return candidate;
+  }
+  return null;
 }
 
 async function nextCaptureCode(orgId: string): Promise<string> {
@@ -285,7 +320,13 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
   }
 
   const p = await parseJd(text);
-  const title = (p?.title ?? input.title ?? "").trim() || "Captured role";
+  // Prefer the title the model read out of the description; the page title the
+  // companion sends is usually the job board's own name.
+  const title =
+    cleanRoleTitle(p?.title) ??
+    cleanRoleTitle(input.title) ??
+    titleFromText(text) ??
+    "Captured role — needs a title";
   try {
     const { data: created, error } = await db
       .from("requisitions")
