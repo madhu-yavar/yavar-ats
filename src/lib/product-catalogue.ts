@@ -222,6 +222,25 @@ export const CATALOGUE_MODULES: CatalogueModule[] = [
     defaultTier: "Growth",
   },
   {
+    id: "talent-brain",
+    name: "Talent Brain & skill ontology",
+    category: "Leadership",
+    audience: "CHRO, HR head, owner, product owner",
+    summary:
+      "A living organisational knowledge graph that connects skills, people, open-role demand and proven hiring outcomes.",
+    outcome: "Leadership can see capability risk early and decide what talent to hire, build, borrow or redeploy.",
+    capabilities: [
+      "Graphical skill ontology grouped into canonical capability families and aliases",
+      "Supply, weighted demand, hiring validation, scarcity and evidence recency per skill",
+      "Skill-adjacency and bridge analysis for reskilling and internal mobility",
+      "Emerging, fading, dormant and retired skill lifecycle with historical snapshots",
+      "Executive narrative plus evidence-based decisions and prescriptions",
+      "Organisation view for leadership and aggregate all-organisation view for the product owner",
+      "Uses each client's configured AI provider while retaining deterministic analysis when AI is unavailable",
+    ],
+    defaultTier: "Enterprise",
+  },
+  {
     id: "performance",
     name: "Recruiter performance & incentives",
     category: "Leadership",
