@@ -281,3 +281,66 @@ export const allScreeningRunsQuery = queryOptions({
       supabase.from("screening_runs").select("*").order("created_at", { ascending: false }),
     ),
 });
+
+export type CandidateNote = Tables<"candidate_notes">;
+export type CandidateReferral = Tables<"candidate_referrals">;
+export type TalentRequest = Tables<"talent_requests">;
+export type TalentRequestSuggestion = Tables<"talent_request_suggestions">;
+export type OwnershipEvent = Tables<"candidate_ownership_events">;
+
+/** Team notes and mentions on one candidate, newest first. */
+export const candidateNotesQuery = (candidateId: string) =>
+  queryOptions({
+    queryKey: ["candidate_notes", candidateId],
+    queryFn: () =>
+      unwrap<CandidateNote[]>(
+        supabase
+          .from("candidate_notes")
+          .select("*")
+          .eq("candidate_id", candidateId)
+          .order("created_at", { ascending: false }),
+      ),
+  });
+
+/** Every referral in the organisation; filter by sender/receiver in the UI. */
+export const referralsQuery = queryOptions({
+  queryKey: ["candidate_referrals"],
+  queryFn: () =>
+    unwrap<CandidateReferral[]>(
+      supabase.from("candidate_referrals").select("*").order("created_at", { ascending: false }),
+    ),
+});
+
+/** Open and closed "who has someone for this?" requests. */
+export const talentRequestsQuery = queryOptions({
+  queryKey: ["talent_requests"],
+  queryFn: () =>
+    unwrap<TalentRequest[]>(
+      supabase.from("talent_requests").select("*").order("created_at", { ascending: false }),
+    ),
+});
+
+export const talentSuggestionsQuery = queryOptions({
+  queryKey: ["talent_request_suggestions"],
+  queryFn: () =>
+    unwrap<TalentRequestSuggestion[]>(
+      supabase
+        .from("talent_request_suggestions")
+        .select("*")
+        .order("created_at", { ascending: false }),
+    ),
+});
+
+/** Hand-over history for one candidate. */
+export const ownershipEventsQuery = (candidateId: string) =>
+  queryOptions({
+    queryKey: ["candidate_ownership_events", candidateId],
+    queryFn: () =>
+      unwrap<OwnershipEvent[]>(
+        supabase
+          .from("candidate_ownership_events")
+          .select("*")
+          .eq("candidate_id", candidateId)
+          .order("created_at", { ascending: false }),
+      ),
+  });
