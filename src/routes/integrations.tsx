@@ -1152,7 +1152,9 @@ function IntegrationCard({ row }: { row: Integration }) {
 
 const PROVIDER_MODELS: Record<string, { id: string; label: string }[]> = {
   lovable: [
+    { id: "google/gemini-3.8-flash", label: "Gemini 3.8 Flash — newest, fast" },
     { id: "google/gemini-3.7-flash", label: "Gemini 3.7 Flash — fast, default" },
+    { id: "google/gemini-3.5-flash", label: "Gemini 3.5 Flash" },
     { id: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro — deeper reasoning" },
     { id: "openai/gpt-5.5", label: "GPT-5.5 — strongest reasoning" },
     { id: "openai/gpt-5.4-mini", label: "GPT-5.4 mini — cheap, high volume" },
