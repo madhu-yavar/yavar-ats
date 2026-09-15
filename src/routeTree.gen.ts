@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CollaborationRouteImport } from './routes/collaboration'
 import { Route as CookiesRouteImport } from './routes/cookies'
 import { Route as HelpRouteImport } from './routes/help'
 import { Route as IjpRouteImport } from './routes/ijp'
@@ -44,6 +45,11 @@ import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/l
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CollaborationRoute = CollaborationRouteImport.update({
+  id: '/collaboration',
+  path: '/collaboration',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CookiesRoute = CookiesRouteImport.update({
@@ -201,6 +207,7 @@ const LovableEmailTransactionalPreviewRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/collaboration': typeof CollaborationRoute
   '/cookies': typeof CookiesRoute
   '/help': typeof HelpRoute
   '/ijp': typeof IjpRoute
@@ -234,6 +241,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/collaboration': typeof CollaborationRoute
   '/cookies': typeof CookiesRoute
   '/help': typeof HelpRoute
   '/ijp': typeof IjpRoute
@@ -268,6 +276,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/collaboration': typeof CollaborationRoute
   '/cookies': typeof CookiesRoute
   '/help': typeof HelpRoute
   '/ijp': typeof IjpRoute
@@ -303,6 +312,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/collaboration'
     | '/cookies'
     | '/help'
     | '/ijp'
@@ -336,6 +346,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/collaboration'
     | '/cookies'
     | '/help'
     | '/ijp'
@@ -369,6 +380,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/collaboration'
     | '/cookies'
     | '/help'
     | '/ijp'
@@ -403,6 +415,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CollaborationRoute: typeof CollaborationRoute
   CookiesRoute: typeof CookiesRoute
   HelpRoute: typeof HelpRoute
   IjpRoute: typeof IjpRoute
@@ -441,6 +454,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/collaboration': {
+      id: '/collaboration'
+      path: '/collaboration'
+      fullPath: '/collaboration'
+      preLoaderRoute: typeof CollaborationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cookies': {
@@ -670,6 +690,7 @@ const InterviewsRouteWithChildren = InterviewsRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CollaborationRoute: CollaborationRoute,
   CookiesRoute: CookiesRoute,
   HelpRoute: HelpRoute,
   IjpRoute: IjpRoute,

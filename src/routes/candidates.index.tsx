@@ -45,6 +45,8 @@ import { EmptyState, PageHeader, ScoreChip, StageBadge } from "@/components/ats"
 import { StageMover } from "@/components/StageMover";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useMe } from "@/hooks/useMe";
+import { poolTeam, setCandidateOwner } from "@/lib/collaboration.functions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -296,6 +298,14 @@ function Candidates() {
   const reverify = useServerFn(verifyCandidates);
   const getResumeUrl = useServerFn(getResumeDownloadUrl);
   const removeCandidates = useServerFn(deleteCandidates);
+  const assignOwner = useServerFn(setCandidateOwner);
+  const fetchTeam = useServerFn(poolTeam);
+  const me = useMe();
+  const team = useQuery({
+    queryKey: ["pool_team"],
+    queryFn: () => fetchTeam({}),
+    staleTime: 300_000,
+  });
 
   const [q, setQ] = useState("");
   const [view, setView] = useState<ViewId>("all");
@@ -304,6 +314,7 @@ function Candidates() {
   const [minScore, setMinScore] = useState("0");
   const [expBand, setExpBand] = useState("all");
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [ownerFilter, setOwnerFilter] = useState<"all" | "mine" | "unassigned">("all");
   // Excel-style column filters — empty set means "no filter".
   const [fSource, setFSource] = useState<Set<string>>(new Set());
   const [fEmployer, setFEmployer] = useState<Set<string>>(new Set());
@@ -488,6 +499,8 @@ function Candidates() {
         if (!hit) return false;
       }
       if (sourceFilter !== "all" && c.source !== sourceFilter) return false;
+      if (ownerFilter === "mine" && c.owner_id !== me.userId) return false;
+      if (ownerFilter === "unassigned" && c.owner_id) return false;
       if (reqFilter !== "all" && !r.apps.some((a) => a.requisition_id === reqFilter)) return false;
       // Excel-style column filters
       if (fSource.size > 0 && !fSource.has(sourceLabel(c.source))) return false;
@@ -524,6 +537,8 @@ function Candidates() {
     rows,
     q,
     sourceFilter,
+    ownerFilter,
+    me.userId,
     reqFilter,
     minScore,
     expBand,
@@ -1060,6 +1075,36 @@ function Candidates() {
             >
               <Trash2 className="size-4" /> Delete ({selectedRows.length})
             </Button>
+            <select
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+              value=""
+              onChange={async (e) => {
+                const v = e.target.value;
+                if (!v) return;
+                try {
+                  await assignOwner({
+                    data: {
+                      candidateIds: selectedRows.map((r) => r.candidate.id),
+                      ownerId: v === "none" ? null : v,
+                      reason: "Bulk assignment from the talent pool",
+                    },
+                  });
+                  toast.success("Ownership updated");
+                  qc.invalidateQueries({ queryKey: ["candidates"] });
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Could not change ownership");
+                }
+              }}
+            >
+              <option value="">Assign owner…</option>
+              <option value="none">Unassign (shared pool)</option>
+              {(team.data ?? []).map((m) => (
+                <option key={m.userId} value={m.userId}>
+                  {m.name}
+                  {m.userId === me.userId ? " (you)" : ""}
+                </option>
+              ))}
+            </select>
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
               Clear
             </Button>
@@ -1330,6 +1375,17 @@ function Candidates() {
                             title={`Profile data last refreshed ${fresh.days} days ago`}
                           >
                             CV {fresh.label}
+                          </span>
+                          <span className="text-muted-foreground">
+                            Owner:{" "}
+                            <span className="font-medium text-foreground">
+                              {c.owner_id
+                                ? c.owner_id === me.userId
+                                  ? "you"
+                                  : ((team.data ?? []).find((m) => m.userId === c.owner_id)?.name ??
+                                    "a colleague")
+                                : "unassigned"}
+                            </span>
                           </span>
                         </div>
                         <div className="mt-4 flex flex-wrap gap-2">
