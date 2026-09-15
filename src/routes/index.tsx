@@ -721,9 +721,9 @@ function TeamGovernance() {
                     <td className="py-2.5 font-medium">{r.recruiter}</td>
                     <td className="num py-2.5">{r.joined || r.offers_accepted}</td>
                     <td className="num py-2.5">{r.quality_score ?? "—"}</td>
-                    <td className="num py-2.5">{r.target_attainment}%</td>
+                    <td className="num py-2.5">{r.attainment_pct}%</td>
                     <td className="py-2.5 text-right">
-                      <ScoreChip value={r.performance_score} />
+                      <ScoreChip score={r.performance_score} />
                     </td>
                   </tr>
                 ))}
