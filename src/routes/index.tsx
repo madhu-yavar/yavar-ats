@@ -423,6 +423,147 @@ function Dashboard() {
         ))}
       </section>
 
+      {isExecutive ? (
+        <>
+          <div className="grid lg:grid-cols-[minmax(0,1.65fr)_minmax(280px,0.75fr)]">
+            <section className="border-b border-border p-5 sm:p-7 lg:border-b-0 lg:border-r">
+              <div className="mb-5 flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold">Decisions & prescriptions</h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    What the numbers say you should act on, with the evidence behind each call.
+                  </p>
+                </div>
+                <Button asChild variant="ghost" size="sm">
+                  <Link to="/reports">
+                    Full reports <ArrowUpRight />
+                  </Link>
+                </Button>
+              </div>
+              <div className="divide-y divide-border border-y border-border">
+                {prescriptions.map((p) => (
+                  <div key={p.title} className="flex flex-wrap items-start gap-3 py-4">
+                    <span
+                      className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md ${
+                        p.tone === "risk"
+                          ? "bg-destructive/10 text-destructive"
+                          : p.tone === "watch"
+                            ? "bg-warning/15 text-warning"
+                            : "bg-primary/10 text-primary"
+                      }`}
+                    >
+                      <p.icon className="size-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold">{p.title}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{p.evidence}</p>
+                      <p className="mt-1 text-xs">
+                        <span className="font-medium text-primary">Do next: </span>
+                        {p.action}
+                      </p>
+                    </div>
+                    <Button asChild variant="outline" size="sm">
+                      <Link to={p.to}>
+                        {p.cta} <ArrowRight />
+                      </Link>
+                    </Button>
+                  </div>
+                ))}
+                {prescriptions.length === 0 ? (
+                  <p className="py-8 text-sm text-muted-foreground">
+                    Nothing needs an executive decision right now — approvals, SLAs, offers and pool
+                    hygiene are all clear.
+                  </p>
+                ) : null}
+              </div>
+            </section>
+
+            <aside className="p-5 sm:p-7">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="font-semibold">Conversion</h2>
+                <span className="text-xs text-muted-foreground">All active stages</span>
+              </div>
+              <div className="space-y-3">
+                {funnel.slice(0, 7).map((row) => (
+                  <Bar
+                    key={row.stage}
+                    label={STAGE_LABEL[row.stage] ?? row.stage}
+                    value={row.reached}
+                    max={funnelTop}
+                  />
+                ))}
+                {funnel.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No applications yet.</p>
+                ) : null}
+              </div>
+              <div className="mt-6 rounded-md border border-border p-4">
+                <p className="text-xs font-medium text-muted-foreground">Biggest drop-off</p>
+                <p className="mt-1 text-sm font-semibold">
+                  {worstDrop
+                    ? `${STAGE_LABEL[worstDrop.from] ?? worstDrop.from} → ${STAGE_LABEL[worstDrop.to] ?? worstDrop.to}`
+                    : "Not enough movement yet"}
+                </p>
+                {worstDrop ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {worstDrop.lost} of {worstDrop.reached} candidates stop here (
+                    {worstDrop.lossPct}%). Ask the team what is failing at this step.
+                  </p>
+                ) : null}
+              </div>
+              <div className="mt-4 rounded-md border border-border p-4">
+                <p className="text-xs font-medium text-muted-foreground">Screening coverage</p>
+                <p className="num mt-1 text-xl font-bold">{screeningCoverage}%</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  of shortlisted candidates have a graded screening call.
+                </p>
+              </div>
+            </aside>
+          </div>
+
+          <section className="grid border-t border-border md:grid-cols-2">
+            <div className="border-b border-border p-5 sm:p-7 md:border-b-0 md:border-r">
+              <h2 className="font-semibold">Where candidates come from</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Volume by channel — spend and effort should follow this.
+              </p>
+              <div className="mt-4 space-y-3">
+                {sourceMix.map(([source, count]) => (
+                  <Bar
+                    key={source}
+                    label={source.replace(/_/g, " ")}
+                    value={count}
+                    max={sourceMix[0]?.[1] ?? 1}
+                  />
+                ))}
+                {sourceMix.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No candidates in the pool yet.</p>
+                ) : null}
+              </div>
+            </div>
+            <div className="p-5 sm:p-7">
+              <h2 className="font-semibold">Skills the market is not giving us</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Most frequently missing must-haves across scored candidates.
+              </p>
+              <div className="mt-4 space-y-3">
+                {scarceSkills.map(([skill, count]) => (
+                  <Bar
+                    key={skill}
+                    label={skill}
+                    value={count}
+                    max={scarceSkills[0]?.[1] ?? 1}
+                  />
+                ))}
+                {scarceSkills.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Nothing scarce yet — run matching to build this picture.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </section>
+        </>
+      ) : (
       <div className="grid lg:grid-cols-[minmax(0,1.65fr)_minmax(280px,0.75fr)]">
         <section className="border-b border-border p-5 sm:p-7 lg:border-b-0 lg:border-r">
           <div className="mb-5 flex items-start justify-between gap-3">
