@@ -55,7 +55,9 @@ function candidateSources(role: string, location: string, currency: string) {
   const list: { title: string; url: string }[] = [
     {
       title: `Talent.com salary — ${role}`,
-      url: india ? `https://in.talent.com/salary?job=${q}` : `https://www.talent.com/salary?job=${q}`,
+      url: india
+        ? `https://in.talent.com/salary?job=${q}`
+        : `https://www.talent.com/salary?job=${q}`,
     },
     { title: `Levels.fyi — ${role}`, url: `https://www.levels.fyi/t/${r}` },
   ];
