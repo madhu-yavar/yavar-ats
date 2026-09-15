@@ -10,6 +10,9 @@
 
 import { aiJson } from "./ai-gateway.server";
 
+/** One quoted figure from a live page that supports a level's band. */
+export type MarketEvidence = { source: string; url: string; quote: string };
+
 export type MarketLevel = {
   level: string;
   experience_band: string;
@@ -18,6 +21,7 @@ export type MarketLevel = {
   high: number;
   confidence: "high" | "medium" | "low";
   note: string;
+  evidence: MarketEvidence[];
 };
 
 export type MarketSource = { title: string; url: string; read: boolean };
@@ -31,6 +35,8 @@ export type MarketBenchmark = {
   recommended: { budget: number; band_min: number; band_max: number; rationale: string };
   caveats: string[];
   sources: MarketSource[];
+  /** Which model actually did the reasoning, so nobody has to guess. */
+  engine: { provider: string; model: string };
 };
 
 const UA =
@@ -138,8 +144,11 @@ export async function benchmarkMarket(input: {
       "Figures are absolute annual amounts in the requested currency (not lakhs, not abbreviated). " +
       "Set confidence 'high' only when a supplied source states figures for that level; 'medium' when " +
       "interpolated from supplied sources; 'low' when no source covered it and you are estimating. " +
-      "Never invent a source. Return ONLY JSON with keys: currency, role, location, as_of (ISO date), " +
-      "levels (array of {level, experience_band, low, median, high, confidence, note}), " +
+      "Never invent a source. For every level, list the evidence you actually used: each entry is a short " +
+      "VERBATIM quote from a supplied extract that mentions the pay figure, with the source title and its URL. " +
+      "Leave evidence as an empty array when the level is an estimate with no supporting extract. " +
+      "Return ONLY JSON with keys: currency, role, location, as_of (ISO date), " +
+      "levels (array of {level, experience_band, low, median, high, confidence, note, evidence: [{source, url, quote}]}), " +
       "recommended ({budget, band_min, band_max, rationale}) sized for the requisition's own experience range, " +
       "caveats (2-4 short strings, including whether live sources were readable).",
     prompt: JSON.stringify({
@@ -167,6 +176,14 @@ export async function benchmarkMarket(input: {
     high: num(l.high),
     confidence: (["high", "medium", "low"] as const).includes(l.confidence) ? l.confidence : "low",
     note: String(l.note ?? ""),
+    evidence: (Array.isArray(l.evidence) ? l.evidence : [])
+      .map((e) => ({
+        source: String(e?.source ?? ""),
+        url: String(e?.url ?? ""),
+        quote: String(e?.quote ?? "").slice(0, 320),
+      }))
+      .filter((e) => e.quote)
+      .slice(0, 4),
   }));
 
   return {
@@ -183,5 +200,6 @@ export async function benchmarkMarket(input: {
     },
     caveats: Array.isArray(result.data.caveats) ? result.data.caveats.map(String).slice(0, 5) : [],
     sources,
+    engine: { provider: result.provider, model: result.model },
   };
 }

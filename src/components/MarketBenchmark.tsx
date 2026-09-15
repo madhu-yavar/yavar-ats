@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 
@@ -24,10 +24,18 @@ const confidenceTone: Record<string, string> = {
   low: "text-muted-foreground",
 };
 
+const engineLabel: Record<string, string> = {
+  lovable: "Built-in Lovable AI (uses Lovable credits)",
+  openai: "Your OpenAI key",
+  anthropic: "Your Claude key",
+  gemini: "Your Google Gemini key",
+};
+
 export function MarketBenchmarkPanel(props: Props) {
   const run = useServerFn(benchmarkCompensation);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<MarketBenchmark | null>(null);
+  const [openLevel, setOpenLevel] = useState<string | null>(null);
   const currency = props.currency ?? "INR";
   const money = (n: number) => (currency === "INR" ? inr(n) : `${currency} ${n.toLocaleString()}`);
 
@@ -78,6 +86,9 @@ export function MarketBenchmarkPanel(props: Props) {
             <span>
               {data.role} · {data.location || "Location not set"} · as of {data.as_of}
             </span>
+            <span className="rounded-full border px-2 py-0.5">
+              {engineLabel[data.engine.provider] ?? data.engine.provider} · {data.engine.model}
+            </span>
           </div>
 
           <div className="overflow-x-auto">
@@ -95,31 +106,76 @@ export function MarketBenchmarkPanel(props: Props) {
               </thead>
               <tbody>
                 {data.levels.map((l) => (
-                  <tr key={l.level} className="border-t">
-                    <td className="py-1.5 pr-2 font-medium">{l.level}</td>
-                    <td className="py-1.5 pr-2 text-muted-foreground">{l.experience_band}</td>
-                    <td className="py-1.5 pr-2">{money(l.low)}</td>
-                    <td className="py-1.5 pr-2 font-semibold">{money(l.median)}</td>
-                    <td className="py-1.5 pr-2">{money(l.high)}</td>
-                    <td className={`py-1.5 pr-2 ${confidenceTone[l.confidence] ?? ""}`}>
-                      {l.confidence === "high"
-                        ? "From sources"
-                        : l.confidence === "medium"
-                          ? "Interpolated"
-                          : "Estimate"}
-                    </td>
-                    <td className="py-1.5 text-right">
-                      <button
-                        type="button"
-                        className="text-primary underline-offset-2 hover:underline"
-                        onClick={() =>
-                          props.onApply({ budget: l.median, bandMin: l.low, bandMax: l.high })
-                        }
-                      >
-                        Use
-                      </button>
-                    </td>
-                  </tr>
+                  <Fragment key={l.level}>
+                    <tr className="border-t">
+                      <td className="py-1.5 pr-2 font-medium">{l.level}</td>
+                      <td className="py-1.5 pr-2 text-muted-foreground">{l.experience_band}</td>
+                      <td className="py-1.5 pr-2">{money(l.low)}</td>
+                      <td className="py-1.5 pr-2 font-semibold">{money(l.median)}</td>
+                      <td className="py-1.5 pr-2">{money(l.high)}</td>
+                      <td className={`py-1.5 pr-2 ${confidenceTone[l.confidence] ?? ""}`}>
+                        <button
+                          type="button"
+                          className="underline-offset-2 hover:underline"
+                          onClick={() => setOpenLevel(openLevel === l.level ? null : l.level)}
+                        >
+                          {l.confidence === "high"
+                            ? "From sources"
+                            : l.confidence === "medium"
+                              ? "Interpolated"
+                              : "Estimate"}
+                          {l.evidence.length > 0 ? ` (${l.evidence.length})` : ""}
+                          {openLevel === l.level ? " ▴" : " ▾"}
+                        </button>
+                      </td>
+                      <td className="py-1.5 text-right">
+                        <button
+                          type="button"
+                          className="text-primary underline-offset-2 hover:underline"
+                          onClick={() =>
+                            props.onApply({ budget: l.median, bandMin: l.low, bandMax: l.high })
+                          }
+                        >
+                          Use
+                        </button>
+                      </td>
+                    </tr>
+                    {openLevel === l.level && (
+                      <tr className="border-t bg-muted/40">
+                        <td colSpan={7} className="p-2.5">
+                          {l.note && <p className="text-xs">{l.note}</p>}
+                          {l.evidence.length > 0 ? (
+                            <ul className="mt-1.5 space-y-1.5">
+                              {l.evidence.map((e, i) => (
+                                <li key={`${e.url}-${i}`} className="text-xs">
+                                  <span className="text-muted-foreground">“{e.quote}”</span>{" "}
+                                  {e.url ? (
+                                    <a
+                                      href={e.url}
+                                      target="_blank"
+                                      rel="noreferrer noopener"
+                                      className="text-primary underline-offset-2 hover:underline"
+                                    >
+                                      {e.source || "source"}
+                                    </a>
+                                  ) : (
+                                    <span className="text-muted-foreground">
+                                      {e.source || "source"}
+                                    </span>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              No live page quoted a figure for this level — the range is an estimate
+                              from the levels above and below.
+                            </p>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

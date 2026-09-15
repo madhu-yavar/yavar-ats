@@ -1332,6 +1332,26 @@ function AiModelCard() {
         )}
       </div>
 
+      <div className="mt-4 rounded-md border bg-muted/40 p-3 text-xs">
+        <p className="font-semibold">Who pays for AI</p>
+        {(s?.provider ?? "lovable") === "lovable" ? (
+          <p className="mt-1 text-muted-foreground">
+            Saved setting: <span className="font-medium">Built-in Lovable AI</span> ·{" "}
+            {s?.model ?? "default model"}. Every AI action is billed to Lovable credits. Switch the
+            provider above and save your own key to stop that.
+          </p>
+        ) : (
+          <p className="mt-1 text-muted-foreground">
+            Saved setting: <span className="font-medium">your own {s?.provider} key</span> ·{" "}
+            {s?.model}. Every AI action — matching, parsing, screening, market benchmarking — is
+            sent straight to {s?.provider} with your key and billed by them. No Lovable credits are
+            used, and if your key is missing or rejected the action fails with that provider&apos;s
+            error instead of falling back. Results across the app show the engine that produced
+            them.
+          </p>
+        )}
+      </div>
+
       {s?.last_test_message ? (
         <p className="mt-3 text-xs text-muted-foreground">{s.last_test_message}</p>
       ) : null}
