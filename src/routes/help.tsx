@@ -13,12 +13,12 @@ export const Route = createFileRoute("/help")({
       {
         name: "description",
         content:
-          "Step-by-step ATSIQ user manual: register and approve an organisation, invite users, configure master data and integrations, raise requisitions, score CVs against a JD, run interviews, release offers and read reports.",
+          "Step-by-step ATSIQ manual for setup, sourcing, JD-CV matching, screening, recruiter collaboration, interviews, offers and leadership governance.",
       },
       { property: "og:title", content: "ATSIQ user manual" },
       {
         property: "og:description",
-        content: "Everything an organisation needs to self-configure and operate ATSIQ, end to end.",
+        content: "Everything an organisation needs to configure and operate ATSIQ, from hiring demand through joining and governance.",
       },
       { property: "og:type", content: "article" },
       { name: "twitter:card", content: "summary" },

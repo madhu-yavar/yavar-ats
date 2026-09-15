@@ -17,13 +17,16 @@ import {
   Building2,
   CalendarCheck,
   CheckCircle2,
+  CircleDollarSign,
   Database,
   FileSignature,
   GitCompareArrows,
   Globe2,
+  Handshake,
   Layers,
   Lock,
   MessageSquare,
+  PhoneCall,
   ScrollText,
   ShieldCheck,
   Sparkles,
@@ -78,10 +81,10 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 /* ------------------------------------------------------------------ content */
 
 const HERO_PROOF = [
-  "Requisition approvals with a CHRO / department-head trail",
-  "AI JD ↔ CV matching on six weighted dimensions",
-  "Interview scorecards, offers and joining in one pipeline",
-  "Multi-tenant, role-based, fully audited",
+  "Stop losing strong candidates inside stale spreadsheets and disconnected tools",
+  "Replace opaque AI rankings with evidence recruiters and hiring managers can inspect",
+  "Give CHROs live quality, productivity, budget and pipeline governance",
+  "Keep every organisation, role, decision and candidate hand-over accountable",
 ] as const;
 
 const CAPABILITIES = [
@@ -124,6 +127,53 @@ const CAPABILITIES = [
     icon: MessageSquare,
     title: "Embedded HR copilot",
     body: "An assistant grounded in your own live data and the product manual, so the team can configure and operate the system without a services engagement.",
+  },
+  {
+    icon: CircleDollarSign,
+    title: "Live market compensation",
+    body: "Benchmark a role against current public salary evidence, see the source and confidence behind the range, and set a defensible hiring budget before approval.",
+  },
+  {
+    icon: PhoneCall,
+    title: "Screening-call intelligence",
+    body: "Generate JD-and-CV-specific questions with the reason for asking and the expected answer, then score typed notes or a private call recording with evidence.",
+  },
+  {
+    icon: Handshake,
+    title: "Recruiter ownership & collaboration",
+    body: "Give every candidate an accountable owner, preserve hand-over history, refer talent to colleagues, request candidates by role and mention teammates in notes.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "CHRO performance governance",
+    body: "Compare recruiter activity, quality, conversion, speed and target attainment, with transparent incentive bands and role-specific executive views.",
+  },
+] as const;
+
+const PAIN_OUTCOMES = [
+  {
+    pain: "Strong profiles disappear in a growing database",
+    outcome: "A clean, searchable talent pool",
+    detail:
+      "Duplicate detection, CV freshness, source and capture time, recruiter ownership, historic matching and automatic suggestions keep existing talent useful.",
+  },
+  {
+    pain: "Shortlists are difficult to explain or challenge",
+    outcome: "Evidence behind every score",
+    detail:
+      "JD ↔ CV fit, career history, impact, education and verified public signals are separated, weighted and shown with missing evidence and risk flags.",
+  },
+  {
+    pain: "Screening quality depends on who makes the call",
+    outcome: "Consistent preliminary assessment",
+    detail:
+      "Role-specific questions tell HR why to ask, what a strong answer should contain and how the candidate's actual response changed the fit assessment.",
+  },
+  {
+    pain: "Leadership sees activity, but not hiring quality",
+    outcome: "Governance with prescriptions",
+    detail:
+      "CHRO and HR-head views expose stalled demand, weak coverage, screening gaps, funnel leakage, offer health, budget risk and recruiter performance.",
   },
 ] as const;
 
@@ -209,6 +259,7 @@ function Landing() {
       <TopBar />
       <Hero />
       <TrustStrip />
+      <PainOutcomes />
       <Capabilities />
       <HowItWorks />
       <ScoringModel />
@@ -253,17 +304,15 @@ function Hero() {
         <div className="max-w-2xl space-y-7">
           <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
             <Sparkles className="h-3.5 w-3.5 text-primary" />
-            AI applicant tracking system for enterprise HR
+            Enterprise recruiting operating system
           </span>
           <h1 className="text-4xl font-semibold leading-[1.12] xl:text-5xl">
-            <span className="text-primary">The applicant tracking system</span> that hires faster — and can prove
-            every shortlist.
+            <span className="text-primary">Recruiting infrastructure</span> for high-performance hiring teams.
           </h1>
           <p className="text-base leading-relaxed text-muted-foreground">
-            ATSIQ runs the complete hiring cycle for large, multi-department organisations: budgeted requisitions
-            and approvals, sourcing from a deduplicated talent pool, AI JD&nbsp;↔&nbsp;CV matching with an evidence
-            trail, panel interviews and scorecards, offers, joining and leadership analytics — on one auditable
-            record.
+            ATSIQ connects source-aware intake, live market benchmarking, explainable matching, guided screening,
+            recruiter collaboration and leadership governance. Every hiring decision stays attached to one
+            organisation-safe, auditable record.
           </p>
           <ul className="grid gap-2.5">
             {HERO_PROOF.map((p) => (
@@ -309,6 +358,36 @@ function TrustStrip() {
   );
 }
 
+function PainOutcomes() {
+  return (
+    <section className="border-b border-border bg-surface-2">
+      <div className="mx-auto max-w-[1200px] px-5 py-16">
+        <SectionHead
+          eyebrow="Why ATSIQ"
+          title="Fix the failure points between demand and joining"
+          body="Enterprise hiring does not fail because teams lack another tracker. It fails when evidence, ownership and accountability break between stages."
+        />
+        <div className="mt-10 divide-y divide-border border-y border-border">
+          {PAIN_OUTCOMES.map((item, index) => (
+            <article key={item.pain} className="grid gap-3 py-5 md:grid-cols-[2rem_0.9fr_1fr] md:items-start md:gap-6">
+              <span className="num text-xs font-semibold text-primary">0{index + 1}</span>
+              <div>
+                <p className="text-xs font-medium uppercase text-muted-foreground">The pain</p>
+                <h3 className="mt-1 text-base font-semibold">{item.pain}</h3>
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase text-primary">The outcome</p>
+                <p className="mt-1 text-sm font-semibold">{item.outcome}</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{item.detail}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function SectionHead({
   eyebrow,
   title,
@@ -333,10 +412,10 @@ function Capabilities() {
       <div className="mx-auto max-w-[1200px] px-5 py-16">
         <SectionHead
           eyebrow="Capabilities"
-          title="Everything the hiring cycle needs, in one system"
-          body="No spreadsheets bridging modules, no separate scoring tool, no untracked approvals."
+          title="An enterprise recruiting OS, not another applicant list"
+          body="One operating layer for hiring demand, talent intelligence, human decisions, team accountability and executive governance."
         />
-        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {CAPABILITIES.map((c) => (
             <article key={c.title} className="panel p-5">
               <c.icon className="h-5 w-5 text-primary" />

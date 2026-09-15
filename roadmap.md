@@ -60,3 +60,8 @@
 ## Landing page (done)
 
 - [x] Replace the terse split-screen sign-in with an information-rich, Zoho-Recruit-style enterprise landing page (hero + sign-in card, capability grid, module walkthrough, scoring model, governance, FAQ, CTA) while keeping email/Google sign-in and org registration intact.
+
+## Manual and client-facing capability refresh (done)
+
+- [x] Document market benchmarking, LinkedIn Recruiter capture, screening-call intelligence, candidate ownership, recruiter collaboration, consortium sharing and CHRO performance governance.
+- [x] Reframe the public landing page around enterprise hiring pain points, accountable outcomes and the complete current capability set.

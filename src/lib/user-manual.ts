@@ -61,6 +61,8 @@ export const MANUAL_SECTIONS: ManualSection[] = [
     summary: "A requisition is the hiring demand; the JD is its published description. Both move through approval.",
     steps: [
       "Create a requisition (/requisitions) with department, openings, experience band, budget, location, must-have and good-to-have skills.",
+      "Use role-profile assistance to fill missing skills, qualifications and responsibilities from the role title; existing HR entries are preserved and remain editable.",
+      "Use Get market range for a current low, median and high compensation benchmark. Review the named public sources, evidence extracts, freshness and confidence before adopting the suggested CTC band.",
       "Set the scoring weights on the requisition: skills, experience, career history, impact, education and social. They must total 100. Ask the AI for a suggestion if unsure.",
       "Draft or paste the JD; the parser splits purpose, responsibilities, must-have and good-to-have skills and qualifications into versioned fields.",
       "Send for approval: department head, then HR head, then president/CBO where required. Every decision is recorded in the approval trail.",
@@ -70,19 +72,33 @@ export const MANUAL_SECTIONS: ManualSection[] = [
   {
     id: "talent-pool",
     title: "5. Talent pool and CV intake",
-    summary: "One growing candidate pool, deduplicated and freshness-tracked.",
+    summary: "A shared organisation pool with clear recruiter ownership, source history, duplicate control and freshness tracking.",
     steps: [
       "Add candidates individually or upload CVs in bulk (PDF/DOCX) on Talent pool (/candidates) — parsing fills name, contact, skills, experience and employment history automatically.",
-      "Review parsing quality in the table: filter by skill, experience, location, source, freshness and duplicates.",
+      "Use Mine, Unassigned or All to focus the list. Every candidate can have an owning recruiter; assignment and hand-over history remains visible.",
+      "Review the master-detail view and filter it by skill, experience, location, source, added date, freshness, duplicates, owner and stage. Source identifies manual upload, LinkedIn capture, careers inbox, Naukri, Indeed, referral, consultant, campus or IJP.",
       "Freshness: fresh (updated within 90 days), aging (91-365 days), stale (over a year). Refresh or re-sync stale profiles before relying on them.",
       "Select rows to move stage, merge duplicates, re-run verification, or permanently delete candidates along with their applications, interviews, scores and stored CV files.",
       "Duplicates are grouped by normalised email, phone and name. Merge keeps the richest record and reassigns every application, interview, offer and score.",
       "Social links (LinkedIn, GitHub, X, portfolio, blog) are fetched and verified where the provider allows it; the verification agent scores authenticity and flags contradictions against CV claims.",
+      "Original CVs are held privately. Open or download them through ATSIQ, rather than through the storage host. A profile-only LinkedIn capture remains usable and is marked as file pending until the original CV is recovered.",
+    ],
+  },
+  {
+    id: "candidate-sources",
+    title: "6. Candidate sources and LinkedIn Recruiter capture",
+    summary: "Source candidates without losing their origin, evidence or original CV.",
+    steps: [
+      "Configure candidate sources on Integrations (/integrations). The careers inbox can import attached CVs; LinkedIn Recruiter capture uses the downloadable ATSIQ browser companion.",
+      "In LinkedIn Recruiter, open the job's applicant list and start the companion. It visits applicants in the authenticated Recruiter session, reads the active profile and public profile link, finds the CV under Highlights or Attachments, and sends the evidence to ATSIQ.",
+      "The companion reports the precise failed stage when navigation, identity confirmation, attachment discovery, download, private storage or analysis does not complete. Stop interrupts the current wait rather than leaving the run stuck.",
+      "A successful original-file capture is parsed and stored privately. When only validated profile evidence is available, ATSIQ keeps the candidate, runs available social analysis and matching, and waits for a later CV capture to enrich the same person.",
+      "Use Careers inbox (/inbox) to trigger mailbox intake and background matching for CVs received through job advertisements.",
     ],
   },
   {
     id: "matching",
-    title: "6. JD to CV matching and scoring",
+    title: "7. JD to CV matching and scoring",
     summary:
       "Scoring is evidence-based and always out of 100, using the requisition's own weights.",
     steps: [
@@ -94,8 +110,21 @@ export const MANUAL_SECTIONS: ManualSection[] = [
     ],
   },
   {
+    id: "screening",
+    title: "8. Preliminary screening-call support",
+    summary: "A JD-and-CV-specific helper for consistent recruiter screening and explainable second-level matching.",
+    steps: [
+      "Open Screening calls (/screening), choose a requisition and candidate, or open the Screening section on the candidate profile.",
+      "Generate a question kit. Each question includes why HR should ask it, the most relevant answer expected, and weak-answer guidance grounded in the JD and candidate evidence.",
+      "Review, edit, remove, copy or print the questions before the call. The saved kit remains attached to that candidate and role.",
+      "After the call, enter answers question by question, paste whole-call notes, or upload the private audio recording for transcription.",
+      "Submit for analysis to receive per-question verdicts and evidence, a screening score, recommendation, red flags and rationale. ATSIQ also shows the combined fit using 60% existing JD/CV match and 40% screening result.",
+      "Previous runs and private recording links remain available for authorised organisation users.",
+    ],
+  },
+  {
     id: "interviews",
-    title: "7. Interviews",
+    title: "9. Interviews",
     summary: "Multi-level interviews with calendar invites, scorecards and automatic progression.",
     steps: [
       "Schedule from Interviews (/interviews): level, interviewer and email, mode, duration and agenda. The candidate's stored email is used for the invite.",
@@ -108,7 +137,7 @@ export const MANUAL_SECTIONS: ManualSection[] = [
   },
   {
     id: "offers",
-    title: "8. Offers and joining",
+    title: "10. Offers and joining",
     summary: "Candidates reaching the offer stage flow through approval, release and joining.",
     steps: [
       "When a candidate clears the final interview level, move them to the offer stage; they then appear on Offers (/offers).",
@@ -118,18 +147,31 @@ export const MANUAL_SECTIONS: ManualSection[] = [
     ],
   },
   {
-    id: "reports",
-    title: "9. Reports and dashboards",
-    summary: "Operational analytics for recruiters and executive views for HR heads and the CHRO.",
+    id: "collaboration",
+    title: "11. Recruiter ownership, referrals and talent sharing",
+    summary: "The organisation shares one talent pool while ownership and every hand-over remain explicit.",
     steps: [
-      "Dashboard (/) is the command centre: KPIs, funnel, pool health, source mix, requisition analytics, stalled candidates, skill gaps, offers and upcoming interviews.",
+      "Assign or take ownership from Talent pool, including bulk assignment. Mine shows your candidates, Unassigned shows work needing an owner, and All preserves organisation-wide visibility.",
+      "On a candidate profile, use Ownership & team to hand the candidate to a colleague, refer them to a colleague's requisition, add notes and mention teammates. Ownership events form a permanent trail.",
+      "Open Team & sharing (/collaboration) to accept or decline referrals and see referrals you sent. Accepting a referral makes you the owner and adds the candidate to the named role when applicable.",
+      "Post a request for talent with role, skills and context. Colleagues can suggest candidates already in the shared pool, and the requester can close the request when filled.",
+      "Organisation owners can offer or respond to an opt-in pool-sharing agreement with another organisation. Sharing is explicit and can be revoked; it is never enabled automatically.",
+    ],
+  },
+  {
+    id: "reports",
+    title: "12. Dashboards, reports and HR performance",
+    summary: "Operational work for recruiters and governance, quality and performance views for HR leadership.",
+    steps: [
+      "Dashboard (/) changes with the signed-in role. Recruiters see operational priorities; CHROs, HR heads and owners see decisions and prescriptions such as approval aging, weak pipeline coverage, screening gaps, SLA breaches, offer health, budget risk and funnel drop-off.",
       "Reports (/reports) adds filters by department, requisition, location, skill, source and date, plus funnel conversion, score distribution, drop-off, interviewer load and CSV export.",
-      "Executive views summarise open demand, cost against budgeted headcount, time-to-hire and pipeline risk.",
+      "Leadership-only HR performance compares recruiter activity, quality, conversion, speed and target attainment. Configure incentive bands and caps, inspect the calculation and export the result; recruiters cannot see the team-governance view.",
+      "Platform super admins receive a cross-organisation aggregate view, while organisation records remain separated by access controls.",
     ],
   },
   {
     id: "copilot",
-    title: "10. HR copilot",
+    title: "13. HR copilot",
     summary: "An embedded assistant grounded in your own live data and in this manual.",
     steps: [
       "Open the copilot from any page and ask about your pipeline, a requisition, pool coverage for a skill, or how to perform any task in the platform.",
@@ -139,7 +181,7 @@ export const MANUAL_SECTIONS: ManualSection[] = [
   },
   {
     id: "platform",
-    title: "11. Platform super admin (product owner only)",
+    title: "14. Platform super admin (product owner only)",
     summary: "Cross-tenant administration lives on Platform console (/platform).",
     steps: [
       "Review the pending registration queue and approve or reject organisations; the registering owner is emailed the decision.",
