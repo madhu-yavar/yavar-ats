@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ScreeningPanel } from "@/components/ScreeningPanel";
+import { CandidateCollab } from "@/components/CandidateCollab";
 import { ArrowLeft, Download, ExternalLink, ShieldCheck, Sparkles } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -350,6 +351,8 @@ function CandidateDetail() {
               title: (reqs.data ?? []).find((r) => r.id === a.requisition_id)?.title ?? "Role",
             }))}
           />
+
+          <CandidateCollab candidateId={id} ownerId={c.owner_id ?? null} />
 
           <section className="panel p-5">
             <h2 className="font-semibold">Interview evaluations</h2>
