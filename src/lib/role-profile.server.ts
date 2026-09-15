@@ -57,7 +57,9 @@ export async function draftRoleProfile(input: {
     must_have_skills: clean(result.data.must_have_skills, 10),
     good_to_have_skills: clean(result.data.good_to_have_skills, 8),
     qualifications: clean(result.data.qualifications, 5),
-    responsibilities: String(result.data.responsibilities ?? "").trim().slice(0, 2000),
+    responsibilities: String(result.data.responsibilities ?? "")
+      .trim()
+      .slice(0, 2000),
     engine: { provider: result.provider, model: result.model },
   };
 }

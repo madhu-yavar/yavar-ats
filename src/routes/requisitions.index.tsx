@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -13,6 +14,7 @@ import {
   requisitionsQuery,
 } from "@/lib/data";
 import { findDuplicateRequisitions } from "@/lib/jd-dedupe";
+import { suggestRoleProfile } from "@/lib/role-profile.functions";
 import { EmptyState, PageHeader, SkillPills, StatusBadge, inr } from "@/components/ats";
 import { MarketBenchmarkPanel } from "@/components/MarketBenchmark";
 import { CreatableSelect, MasterSelect, TokenPicker } from "@/components/pickers";
@@ -49,7 +51,8 @@ export const Route = createFileRoute("/requisitions/")({
       { property: "og:title", content: "Manpower Requisitions & JD Library" },
       {
         property: "og:description",
-        content: "Budget-aware requisitions with DH/HR/CBO approval trail and AI-drafted job descriptions.",
+        content:
+          "Budget-aware requisitions with DH/HR/CBO approval trail and AI-drafted job descriptions.",
       },
     ],
   }),
@@ -88,6 +91,8 @@ function Requisitions() {
   });
 
   const [dupAck, setDupAck] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+  const draftProfile = useServerFn(suggestRoleProfile);
   const requisitions = reqs.data ?? [];
   const departments = depts.data ?? [];
   const skills = byKind(masters.data, "skill");
@@ -125,7 +130,6 @@ function Requisitions() {
     }
   }
 
-
   async function createRoleTitle(name: string) {
     try {
       await addMasterItem("role_title", name);
@@ -150,6 +154,59 @@ function Requisitions() {
     toast.success(`${name.trim()} added — set its budget below`);
   }
 
+  // Skills and qualifications drafted from the role title. Existing picks are
+  // kept — the draft only adds what is missing, and HR can edit everything.
+  async function autofillFromRole() {
+    if (form.title.trim().length < 2) {
+      toast.error("Pick or type the role title first.");
+      return;
+    }
+    setDrafting(true);
+    try {
+      const out = await draftProfile({
+        data: {
+          role: form.title,
+          department: departments.find((d) => d.id === form.department_id)?.name ?? null,
+          location: form.location,
+          experienceMin: Number(form.experience_min) || 0,
+          experienceMax: Number(form.experience_max) || 0,
+        },
+      });
+      const merge = (current: string[], next: string[]) => {
+        const seen = new Set(current.map((s) => s.toLowerCase()));
+        return [...current, ...next.filter((s) => !seen.has(s.toLowerCase()))];
+      };
+      const must = merge(form.must, out.must_have_skills);
+      const good = merge(form.good, out.good_to_have_skills).filter(
+        (s) => !must.some((m) => m.toLowerCase() === s.toLowerCase()),
+      );
+      const quals = merge(
+        form.education_requirement ? form.education_requirement.split(" | ") : [],
+        out.qualifications,
+      );
+      setForm((f) => ({
+        ...f,
+        must,
+        good,
+        education_requirement: quals.join(" | "),
+        responsibilities: f.responsibilities.trim() ? f.responsibilities : out.responsibilities,
+      }));
+      for (const name of [...out.must_have_skills, ...out.good_to_have_skills]) {
+        await addMasterItem("skill", name).catch(() => {});
+      }
+      for (const name of out.qualifications) {
+        await addMasterItem("education", name).catch(() => {});
+      }
+      await qc.invalidateQueries({ queryKey: ["master_items"] });
+      toast.success(
+        `Drafted by ${out.engine.provider} · ${out.engine.model} — review and edit as needed.`,
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not draft the role profile.");
+    } finally {
+      setDrafting(false);
+    }
+  }
 
   // Duplicate-JD guard: an open requisition for the same role in the same
   // department is almost always a mistake, so we surface it before saving.
@@ -174,7 +231,9 @@ function Requisitions() {
     }
     if (duplicates.length && !dupAck) {
       setDupAck(true);
-      toast.error("A similar open requisition already exists — review it, then confirm to continue.");
+      toast.error(
+        "A similar open requisition already exists — review it, then confirm to continue.",
+      );
       return;
     }
     setSaving(true);
@@ -190,7 +249,9 @@ function Requisitions() {
       budget_ctc: Number(form.budget_ctc) || 0,
       ctc_band_min: form.ctc_band_min ? Number(form.ctc_band_min) : null,
       ctc_band_max: form.ctc_band_max ? Number(form.ctc_band_max) : null,
-      max_notice_period_days: form.max_notice_period_days ? Number(form.max_notice_period_days) : null,
+      max_notice_period_days: form.max_notice_period_days
+        ? Number(form.max_notice_period_days)
+        : null,
       work_authorization_required: form.work_authorization_required || null,
       hiring_manager: form.hiring_manager || null,
       must_have_skills: form.must,
@@ -307,7 +368,14 @@ function Requisitions() {
                 <Field label="Locations">
                   <TokenPicker
                     options={locations}
-                    value={form.location ? form.location.split(",").map((s) => s.trim()).filter(Boolean) : []}
+                    value={
+                      form.location
+                        ? form.location
+                            .split(",")
+                            .map((s) => s.trim())
+                            .filter(Boolean)
+                        : []
+                    }
                     onChange={(next) => setForm({ ...form, location: next.join(", ") })}
                     onCreate={async (name) => {
                       await addMasterItem("location", name);
@@ -348,7 +416,8 @@ function Requisitions() {
                     onChange={(e) => setForm({ ...form, ctc_band_max: e.target.value })}
                   />
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Used to flag out-of-band expectations — it never lowers a candidate&apos;s match score.
+                    Used to flag out-of-band expectations — it never lowers a candidate&apos;s match
+                    score.
                   </p>
                 </Field>
                 <div className="sm:col-span-2">
@@ -381,7 +450,9 @@ function Requisitions() {
                   <Input
                     placeholder="e.g. Indian citizen / H-1B / EU work permit"
                     value={form.work_authorization_required}
-                    onChange={(e) => setForm({ ...form, work_authorization_required: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, work_authorization_required: e.target.value })
+                    }
                   />
                 </Field>
                 <Field label="Experience min (yrs)">
@@ -454,10 +525,15 @@ function Requisitions() {
                     placeholder="Search the skills library…"
                   />
                 </Field>
-                <Field label="Education requirement — any of these qualifies" className="sm:col-span-2">
+                <Field
+                  label="Education requirement — any of these qualifies"
+                  className="sm:col-span-2"
+                >
                   <TokenPicker
                     options={education}
-                    value={form.education_requirement ? form.education_requirement.split(" | ") : []}
+                    value={
+                      form.education_requirement ? form.education_requirement.split(" | ") : []
+                    }
                     onChange={(v) => setForm({ ...form, education_requirement: v.join(" | ") })}
                     onCreate={createEducation}
                     placeholder="Search qualifications — pick every acceptable degree…"
@@ -494,8 +570,10 @@ function Requisitions() {
       <DepartmentBudgets />
 
       {requisitions.length === 0 ? (
-        <EmptyState title="No requisitions yet" hint="Raise your first requisition to start sourcing." />
-
+        <EmptyState
+          title="No requisitions yet"
+          hint="Raise your first requisition to start sourcing."
+        />
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {requisitions.map((r) => {
@@ -558,8 +636,8 @@ function Requisitions() {
                 </div>
                 <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
                   <span>
-                    Weights — skills {r.weight_skills} · exp {r.weight_experience} · edu {r.weight_education} ·
-                    social {r.weight_social}
+                    Weights — skills {r.weight_skills} · exp {r.weight_experience} · edu{" "}
+                    {r.weight_education} · social {r.weight_social}
                   </span>
                   <span className="num">{count} applicants</span>
                 </div>
@@ -575,7 +653,12 @@ function Requisitions() {
 function DepartmentBudgets() {
   const qc = useQueryClient();
   const depts = useQuery(departmentsQuery);
-  const [form, setForm] = useState({ name: "", head_name: "", budgeted_headcount: "", budgeted_cost: "" });
+  const [form, setForm] = useState({
+    name: "",
+    head_name: "",
+    budgeted_headcount: "",
+    budgeted_cost: "",
+  });
   const [saving, setSaving] = useState(false);
   const departments = depts.data ?? [];
 
@@ -606,7 +689,8 @@ function DepartmentBudgets() {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-base font-semibold">Departments & budgeted headcount</h2>
         <p className="text-xs text-muted-foreground">
-          Requisitions are checked against these budgets. Add your real departments before raising requisitions.
+          Requisitions are checked against these budgets. Add your real departments before raising
+          requisitions.
         </p>
       </div>
 
@@ -619,7 +703,10 @@ function DepartmentBudgets() {
           />
         </Field>
         <Field label="Department head">
-          <Input value={form.head_name} onChange={(e) => setForm({ ...form, head_name: e.target.value })} />
+          <Input
+            value={form.head_name}
+            onChange={(e) => setForm({ ...form, head_name: e.target.value })}
+          />
         </Field>
         <Field label="Budgeted headcount">
           <Input
@@ -660,7 +747,6 @@ function DepartmentBudgets() {
 }
 
 function Field({
-
   label,
   children,
   className,
