@@ -20,9 +20,11 @@ import {
   Target,
   Users,
   BookOpen,
+  Brain,
 } from "lucide-react";
 
 import { usePlatform } from "@/hooks/usePlatform";
+import { useOrg } from "@/hooks/useOrg";
 import { Button } from "@/components/ui/button";
 import { Copilot } from "@/components/Copilot";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -51,8 +53,13 @@ const NAV = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { isSuperUser, claimable } = usePlatform();
+  const { roles, isOwner } = useOrg();
+  // The Talent Brain is a governance view: CHRO, HR head, owner or the product owner.
+  const leadership =
+    isSuperUser || isOwner || roles.some((r) => r === "president_cbo" || r === "hr_head");
   const nav = [
     ...NAV,
+    ...(leadership ? [{ to: "/brain", label: "Talent Brain", icon: Brain } as const] : []),
     ...(isSuperUser || claimable
       ? [{ to: "/platform", label: "Platform console", icon: Globe2 } as const]
       : []),
