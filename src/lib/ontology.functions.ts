@@ -90,7 +90,9 @@ async function loadSources(db: Sb, orgId: string | null) {
     ).limit(2000),
     scopeIt(db.from("applications").select("candidate_id, stage")).limit(10000),
     scopeIt(
-      db.from("skill_nodes").select("slug, first_seen_at, last_seen_at, evidence_count, status"),
+      db
+        .from("skill_nodes")
+        .select("slug, first_seen_at, last_seen_at, evidence_count, status, category, aliases"),
     ).limit(5000),
     scopeIt(db.from("ontology_snapshots").select("*"))
       .order("created_at", { ascending: false })
@@ -130,7 +132,17 @@ async function loadSources(db: Sb, orgId: string | null) {
     status: n.status ?? "active",
   }));
 
-  return { candidates, demand, previous, snapshots: snaps.data ?? [] };
+  // Curation already learned (families, merged aliases) is reused on every read.
+  const curated: Record<string, { category?: string; aliases?: string[] }> = {};
+  for (const n of prevNodes.data ?? []) {
+    const entry: { category?: string; aliases?: string[] } = {};
+    if (typeof (n as any).category === "string" && (n as any).category !== "general")
+      entry.category = (n as any).category;
+    if (Array.isArray((n as any).aliases)) entry.aliases = (n as any).aliases;
+    if (entry.category || entry.aliases?.length) curated[(n as any).slug] = entry;
+  }
+
+  return { candidates, demand, previous, curated, snapshots: snaps.data ?? [] };
 }
 
 function history(snapshots: any[]) {
@@ -174,6 +186,7 @@ export const readTalentBrain = createServerFn({ method: "POST" })
       candidates: src.candidates,
       demand: src.demand,
       previous: src.previous,
+      aiCategories: src.curated,
     });
 
     return {
@@ -208,6 +221,7 @@ export const rebuildTalentBrain = createServerFn({ method: "POST" })
       candidates: src.candidates,
       demand: src.demand,
       previous: src.previous,
+      aiCategories: src.curated,
     });
 
     // AI pass: canonical categories, merged aliases and an executive narrative.
@@ -215,7 +229,7 @@ export const rebuildTalentBrain = createServerFn({ method: "POST" })
     let narrative: string | null = null;
     try {
       const { aiJson } = await import("./ai-gateway.server");
-      const top = build.nodes.slice(0, 120);
+      const top = build.nodes.slice(0, 220);
       const res = await aiJson<{
         skills?: Array<{ slug: string; category?: string; aliases?: string[] }>;
         narrative?: string;
@@ -242,7 +256,9 @@ export const rebuildTalentBrain = createServerFn({ method: "POST" })
       if (res.ok) {
         engine = `${res.provider}/${res.model}`;
         narrative = res.data.narrative?.trim() || null;
-        const aiCategories: Record<string, { category?: string; aliases?: string[] }> = {};
+        const aiCategories: Record<string, { category?: string; aliases?: string[] }> = {
+          ...src.curated,
+        };
         for (const s of res.data.skills ?? []) {
           if (!s?.slug) continue;
           const entry: { category?: string; aliases?: string[] } = {};
