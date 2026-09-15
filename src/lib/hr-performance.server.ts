@@ -6,25 +6,36 @@
  * how strong the screening/match quality was. No estimates, no invented data.
  */
 
+export type QualityBand = { min_score: number; multiplier: number };
+
 export type IncentiveScheme = {
   currency: string;
-  monthly_target: number;
+  target_closures_per_month: number;
   payout_per_closure: number;
-  quality_floor: number;
-  quality_bonus_pct: number;
-  cap_amount: number | null;
+  quality_bands: QualityBand[];
+  monthly_cap: number | null;
   notes: string | null;
 };
 
 export const DEFAULT_SCHEME: IncentiveScheme = {
   currency: "INR",
-  monthly_target: 4,
-  payout_per_closure: 5000,
-  quality_floor: 70,
-  quality_bonus_pct: 20,
-  cap_amount: null,
+  target_closures_per_month: 3,
+  payout_per_closure: 10000,
+  quality_bands: [
+    { min_score: 85, multiplier: 1.2 },
+    { min_score: 70, multiplier: 1 },
+    { min_score: 0, multiplier: 0.8 },
+  ],
+  monthly_cap: null,
   notes: null,
 };
+
+/** Multiplier for a measured quality score, from the highest band it clears. */
+export function bandFor(bands: QualityBand[], score: number | null) {
+  const sorted = [...bands].sort((a, b) => b.min_score - a.min_score);
+  const band = sorted.find((b) => (score ?? 0) >= b.min_score);
+  return band ?? { min_score: 0, multiplier: 1 };
+}
 
 export type RecruiterRow = {
   recruiter: string;
@@ -168,7 +179,7 @@ export function buildRecruiterPerformance(input: {
     }
   }
 
-  const target = Math.max(1, Math.round(input.scheme.monthly_target * input.months));
+  const target = Math.max(1, Math.round(input.scheme.target_closures_per_month * input.months));
 
   const rows: RecruiterRow[] = [...byRecruiter.entries()]
     .map(([recruiter, a]) => {
@@ -206,18 +217,17 @@ export function buildRecruiterPerformance(input: {
       const performance = Math.round(deliveryPart + qualityPart + conversionPart + speedPart);
 
       const base = closures * input.scheme.payout_per_closure;
-      const earnsBonus = (quality ?? 0) >= input.scheme.quality_floor;
-      const multiplier = earnsBonus ? 1 + input.scheme.quality_bonus_pct / 100 : 1;
+      const band = bandFor(input.scheme.quality_bands, quality);
+      const multiplier = band.multiplier;
       const raw = Math.round(base * multiplier);
-      const capped = input.scheme.cap_amount !== null && raw > input.scheme.cap_amount;
-      const payout = capped ? input.scheme.cap_amount! : raw;
+      const cap = input.scheme.monthly_cap === null ? null : input.scheme.monthly_cap * input.months;
+      const capped = cap !== null && raw > cap;
+      const payout = capped ? Math.round(cap!) : raw;
 
       const workings = [
         `${closures} closure(s) × ${input.scheme.payout_per_closure} = ${base}`,
-        earnsBonus
-          ? `quality ${quality}/100 ≥ floor ${input.scheme.quality_floor} → ×${multiplier.toFixed(2)}`
-          : `quality ${quality ?? "not measured"} below floor ${input.scheme.quality_floor} → no bonus`,
-        capped ? `capped at ${input.scheme.cap_amount}` : `payable ${payout}`,
+        `quality ${quality ?? "not measured"} → band ≥${band.min_score} → ×${multiplier.toFixed(2)}`,
+        capped ? `capped at ${Math.round(cap!)}` : `payable ${payout}`,
         `performance = delivery ${Math.round(deliveryPart)} + quality ${Math.round(qualityPart)} + conversion ${Math.round(conversionPart)} + speed ${Math.round(speedPart)}`,
       ];
 
