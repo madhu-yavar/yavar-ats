@@ -86,9 +86,8 @@ export const testAiModel = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => TestInput.parse(data))
   .handler(async ({ data, context }) => {
-    const { aiJson, resolveAiConfig, DEFAULT_MODEL, readProviderKey } = await import(
-      "./ai-gateway.server"
-    );
+    const { aiJson, resolveAiConfig, DEFAULT_MODEL, readProviderKey } =
+      await import("./ai-gateway.server");
 
     let cfg = await resolveAiConfig();
     // When the page passes a provider, test exactly that — never silently fall
