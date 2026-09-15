@@ -200,5 +200,6 @@ export async function benchmarkMarket(input: {
     },
     caveats: Array.isArray(result.data.caveats) ? result.data.caveats.map(String).slice(0, 5) : [],
     sources,
+    engine: { provider: result.provider, model: result.model },
   };
 }
