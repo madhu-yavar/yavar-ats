@@ -32,6 +32,7 @@ export function CandidateCollab({
 }) {
   const qc = useQueryClient();
   const me = useMe();
+  const fetchTeam = useServerFn(poolTeam);
   const team = useQuery({ queryKey: ["pool_team"], queryFn: () => fetchTeam({}), staleTime: 300_000 });
   const notes = useQuery(candidateNotesQuery(candidateId));
   const history = useQuery(ownershipEventsQuery(candidateId));
@@ -81,7 +82,7 @@ export function CandidateCollab({
         <div>
           <h2 className="font-semibold">Ownership & team</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Everyone in {"your organisation"} can see this candidate. Ownership says who is
+            Everyone in your organisation can see this candidate. Ownership says who is
             responsible for them.
           </p>
         </div>
@@ -287,6 +288,3 @@ export function CandidateCollab({
     </section>
   );
 }
-
-/** Kept outside the component so the query key stays stable. */
-const fetchTeam = poolTeam;
