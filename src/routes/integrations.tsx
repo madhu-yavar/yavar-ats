@@ -1170,9 +1170,14 @@ const PROVIDER_MODELS: Record<string, { id: string; label: string }[]> = {
     { id: "claude-3-5-haiku-latest", label: "Claude 3.5 Haiku" },
   ],
   gemini: [
-    { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash — fast, low cost" },
-    { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro — deeper reasoning" },
-    { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+    { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash — newest, fast" },
+    { id: "gemini-3.7-flash", label: "Gemini 3.7 Flash" },
+    { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash" },
+    { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro — deeper reasoning" },
+    { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite — cheapest" },
+    { id: "gemini-3-flash-preview", label: "Gemini 3 Flash (preview)" },
+    { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+    { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
   ],
 };
 
@@ -1216,7 +1221,13 @@ function AiModelCard() {
   async function onTest() {
     setBusy("test");
     try {
-      const out = await test({ data: undefined });
+      const out = await test({
+        data: {
+          provider: activeProvider as "gemini",
+          model: activeModel,
+          ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
+        },
+      });
       if (out.status === "ok") toast.success(out.message);
       else toast.error(out.message);
       qc.invalidateQueries({ queryKey: ["ai_settings"] });
