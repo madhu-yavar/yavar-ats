@@ -49,9 +49,8 @@ export async function resolveAiConfig(): Promise<AiConfig> {
     const { data } = await db.from("ai_settings").select("provider, model").limit(1).maybeSingle();
     if (!data) return fallback;
 
-    const provider = (["lovable", "openai", "anthropic"] as const).includes(data.provider as AiProvider)
-      ? (data.provider as AiProvider)
-      : "lovable";
+    const known: AiProvider[] = ["lovable", "openai", "anthropic", "gemini"];
+    const provider = known.includes(data.provider as AiProvider) ? (data.provider as AiProvider) : "lovable";
     const model = data.model?.trim() || DEFAULT_MODEL[provider];
 
     if (provider === "lovable") return { provider, model, apiKey: process.env["LOVABLE_API_KEY"] ?? null };
