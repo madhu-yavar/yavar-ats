@@ -211,7 +211,9 @@ export async function aiJson<T>(opts: {
     ? ANTHROPIC_ENDPOINT
     : cfg.provider === "openai"
       ? OPENAI_ENDPOINT
-      : LOVABLE_GATEWAY;
+      : cfg.provider === "gemini"
+        ? GEMINI_ENDPOINT
+        : LOVABLE_GATEWAY;
 
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (isAnthropic) {
