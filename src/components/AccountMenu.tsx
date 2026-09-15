@@ -33,8 +33,8 @@ export function AccountMenu() {
     staleTime: 300_000,
   });
 
-  const email = membership?.email ?? session.data?.email ?? null;
-  const name = membership?.fullName ?? session.data?.user_metadata?.["full_name"] ?? email ?? "You";
+  const email = session.data?.email ?? null;
+  const name = session.data?.user_metadata?.["full_name"] ?? email ?? "You";
   const initials = String(name)
     .split(" ")
     .filter(Boolean)
