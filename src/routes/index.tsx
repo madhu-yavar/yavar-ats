@@ -37,7 +37,11 @@ import { rankPool } from "@/lib/shortlist";
 import { ScoreChip, StageBadge, StatusBadge, inr } from "@/components/ats";
 import { useRoles } from "@/hooks/useRoles";
 import { useOrg } from "@/hooks/useOrg";
+import { usePlatform } from "@/hooks/usePlatform";
+import { getHrPerformance } from "@/lib/hr-performance.functions";
+import { listAllOrganizations } from "@/lib/platform.functions";
 import { Button } from "@/components/ui/button";
+import { useServerFn } from "@tanstack/react-start";
 
 export const Route = createFileRoute("/")({
   head: () => ({
