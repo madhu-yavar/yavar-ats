@@ -143,7 +143,11 @@ export function slugify(raw: string) {
 export function prettyName(slug: string) {
   return slug
     .split("-")
-    .map((w) => (w.length <= 3 && /^[a-z]+$/.test(w) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1)))
+    .map((w) =>
+      w.length <= 3 && /^[a-z]+$/.test(w)
+        ? w.toUpperCase()
+        : `${(w[0] ?? "").toUpperCase()}${w.slice(1)}`,
+    )
     .join(" ");
 }
 

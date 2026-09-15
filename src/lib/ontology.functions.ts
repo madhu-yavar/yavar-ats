@@ -40,8 +40,16 @@ async function requireBrainAccess(supabase: Sb, userId: string, email: string | 
     .limit(1)
     .maybeSingle();
 
-  const { isSuperUserEmail } = await import("./platform.functions");
-  const superUser = email ? await isSuperUserEmail(email) : false;
+  let superUser = false;
+  if (email) {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: pa } = await supabaseAdmin
+      .from("platform_admins")
+      .select("id")
+      .ilike("email", email.toLowerCase())
+      .maybeSingle();
+    superUser = Boolean(pa);
+  }
 
   if (!member?.org_id) {
     if (superUser) return { orgId: null as string | null, orgName: null, superUser: true };
@@ -144,9 +152,7 @@ function history(snapshots: any[]) {
 export const readTalentBrain = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
-    z
-      .object({ scope: z.enum(["org", "platform"]).default("org") })
-      .parse(input ?? {}),
+    z.object({ scope: z.enum(["org", "platform"]).default("org") }).parse(input ?? {}),
   )
   .handler(async ({ data, context }): Promise<TalentBrain> => {
     const supabase = context.supabase as unknown as Sb;
@@ -238,7 +244,11 @@ export const rebuildTalentBrain = createServerFn({ method: "POST" })
         narrative = res.data.narrative?.trim() || null;
         const aiCategories: Record<string, { category?: string; aliases?: string[] }> = {};
         for (const s of res.data.skills ?? []) {
-          if (s?.slug) aiCategories[s.slug] = { category: s.category, aliases: s.aliases };
+          if (!s?.slug) continue;
+          const entry: { category?: string; aliases?: string[] } = {};
+          if (typeof s.category === "string" && s.category.trim()) entry.category = s.category;
+          if (Array.isArray(s.aliases)) entry.aliases = s.aliases;
+          aiCategories[s.slug] = entry;
         }
         build = buildOntology({
           candidates: src.candidates,
@@ -280,7 +290,9 @@ export const rebuildTalentBrain = createServerFn({ method: "POST" })
 
     // Retire nodes that lost all live evidence — this is how the graph shrinks.
     const liveSlugs = new Set(build.nodes.map((n) => n.slug));
-    const gone = src.previous.filter((p) => !liveSlugs.has(p.slug)).map((p) => p.slug);
+    const gone = src.previous
+      .filter((p: { slug: string }) => !liveSlugs.has(p.slug))
+      .map((p: { slug: string }) => p.slug);
     if (gone.length) {
       await (supabase.from("skill_nodes") as any)
         .delete()
