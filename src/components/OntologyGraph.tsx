@@ -91,7 +91,6 @@ export function OntologyGraph({
     return { width, height, placed, links, clusters };
   }, [nodes, edges, limit]);
 
-
   const byslug = new Map(layout.placed.map((p) => [p.slug, p]));
   const focus = hover ?? selected;
   const connected = new Set<string>();
@@ -181,7 +180,6 @@ export function OntologyGraph({
             );
           })}
         </g>
-
       </svg>
       <div className="flex flex-wrap items-center gap-4 border-t px-4 py-3 text-[11px] text-muted-foreground">
         <Legend colour="hsl(var(--primary) / 0.8)" label="Healthy supply" />
