@@ -138,7 +138,8 @@ export function OntologyGraph({
         <div>
           <p className="text-sm font-semibold">Enterprise skill map</p>
           <p className="text-xs text-muted-foreground">
-            {layout.placed.length} priority skills across {layout.clusters.length} capability families
+            {layout.placed.length} priority skills across {layout.clusters.length} capability
+            families
           </p>
         </div>
         <div className="flex items-center gap-2 rounded-md bg-secondary px-2.5 py-1.5 text-xs text-secondary-foreground">
@@ -168,79 +169,85 @@ export function OntologyGraph({
               />
             ))}
           </g>
-        <g>
-          {layout.clusters.map((c) => (
-            <text
-              key={c.label}
-              x={c.x}
-              y={c.y}
-              textAnchor="middle"
-              className="fill-foreground font-semibold"
-              style={{ fontSize: 10, letterSpacing: 0, textTransform: "uppercase" }}
-            >
-              {`${c.label.length > 16 ? `${c.label.slice(0, 15)}…` : c.label} · ${c.count}`}
-            </text>
-          ))}
-        </g>
-        <g>
-          {layout.links.map((l) => {
-            const a = byslug.get(l.from);
-            const b = byslug.get(l.to);
-            if (!a || !b) return null;
-            const lit = focus ? connected.has(l.from) && connected.has(l.to) : false;
-            return (
-              <line
-                key={`${l.from}-${l.to}`}
-                x1={a.x}
-                y1={a.y}
-                x2={b.x}
-                y2={b.y}
-                stroke={lit ? "var(--primary)" : "var(--border)"}
-                strokeWidth={lit ? 2 : Math.min(1.4, 0.3 + l.weight)}
-                strokeOpacity={focus ? (lit ? 0.9 : 0.06) : 0.38}
-              />
-            );
-          })}
-        </g>
-        <g>
-          {layout.placed.map((n) => {
-            const dim = focus ? !connected.has(n.slug) : false;
-            // Labels only where they can be read: big bubbles, the focus and its neighbours.
-            const label = n.r >= 11 || focus === n.slug || (focus ? connected.has(n.slug) : false);
-            return (
-              <g
-                key={n.slug}
-                transform={`translate(${n.x},${n.y})`}
-                opacity={dim ? 0.25 : 1}
-                onMouseEnter={() => setHover(n.slug)}
-                onMouseLeave={() => setHover(null)}
-                onClick={() => onSelect(n.slug)}
-                className="cursor-pointer"
+          <g>
+            {layout.clusters.map((c) => (
+              <text
+                key={c.label}
+                x={c.x}
+                y={c.y}
+                textAnchor="middle"
+                className="fill-foreground font-semibold"
+                style={{ fontSize: 10, letterSpacing: 0, textTransform: "uppercase" }}
               >
-                <title>{`${n.name} — ${n.supply} in pool, ${n.demand} weighted demand`}</title>
-                {selected === n.slug ? (
-                  <circle r={n.r + 6} fill="var(--accent)" stroke="var(--primary)" strokeWidth="1" />
-                ) : null}
-                <circle
-                  r={n.r}
-                  fill={fill(n)}
-                  stroke={selected === n.slug ? "var(--foreground)" : "var(--card)"}
-                  strokeWidth={selected === n.slug ? 2.5 : 1.5}
+                {`${c.label.length > 16 ? `${c.label.slice(0, 15)}…` : c.label} · ${c.count}`}
+              </text>
+            ))}
+          </g>
+          <g>
+            {layout.links.map((l) => {
+              const a = byslug.get(l.from);
+              const b = byslug.get(l.to);
+              if (!a || !b) return null;
+              const lit = focus ? connected.has(l.from) && connected.has(l.to) : false;
+              return (
+                <line
+                  key={`${l.from}-${l.to}`}
+                  x1={a.x}
+                  y1={a.y}
+                  x2={b.x}
+                  y2={b.y}
+                  stroke={lit ? "var(--primary)" : "var(--border)"}
+                  strokeWidth={lit ? 2 : Math.min(1.4, 0.3 + l.weight)}
+                  strokeOpacity={focus ? (lit ? 0.9 : 0.06) : 0.38}
                 />
-                {label ? (
-                  <text
-                    y={n.r + 11}
-                    textAnchor="middle"
-                    className="fill-foreground"
-                    style={{ fontSize: 9.5, pointerEvents: "none" }}
-                  >
-                    {n.name.length > 18 ? `${n.name.slice(0, 17)}…` : n.name}
-                  </text>
-                ) : null}
-              </g>
-            );
-          })}
-        </g>
+              );
+            })}
+          </g>
+          <g>
+            {layout.placed.map((n) => {
+              const dim = focus ? !connected.has(n.slug) : false;
+              // Labels only where they can be read: big bubbles, the focus and its neighbours.
+              const label =
+                n.r >= 11 || focus === n.slug || (focus ? connected.has(n.slug) : false);
+              return (
+                <g
+                  key={n.slug}
+                  transform={`translate(${n.x},${n.y})`}
+                  opacity={dim ? 0.25 : 1}
+                  onMouseEnter={() => setHover(n.slug)}
+                  onMouseLeave={() => setHover(null)}
+                  onClick={() => onSelect(n.slug)}
+                  className="cursor-pointer"
+                >
+                  <title>{`${n.name} — ${n.supply} in pool, ${n.demand} weighted demand`}</title>
+                  {selected === n.slug ? (
+                    <circle
+                      r={n.r + 6}
+                      fill="var(--accent)"
+                      stroke="var(--primary)"
+                      strokeWidth="1"
+                    />
+                  ) : null}
+                  <circle
+                    r={n.r}
+                    fill={fill(n)}
+                    stroke={selected === n.slug ? "var(--foreground)" : "var(--card)"}
+                    strokeWidth={selected === n.slug ? 2.5 : 1.5}
+                  />
+                  {label ? (
+                    <text
+                      y={n.r + 11}
+                      textAnchor="middle"
+                      className="fill-foreground"
+                      style={{ fontSize: 9.5, pointerEvents: "none" }}
+                    >
+                      {n.name.length > 18 ? `${n.name.slice(0, 17)}…` : n.name}
+                    </text>
+                  ) : null}
+                </g>
+              );
+            })}
+          </g>
         </svg>
       </div>
       <div className="grid gap-3 border-t px-4 py-3 text-[11px] text-muted-foreground sm:grid-cols-[auto_1fr] sm:items-center">
@@ -250,7 +257,9 @@ export function OntologyGraph({
           <Legend colour="var(--ontology-scarce)" label="Scarce" />
           <Legend colour="var(--ontology-dormant)" label="Dormant" />
         </div>
-        <p className="sm:text-right">Larger bubbles carry more people and open-role demand. Lines show skills found together.</p>
+        <p className="sm:text-right">
+          Larger bubbles carry more people and open-role demand. Lines show skills found together.
+        </p>
       </div>
     </div>
   );

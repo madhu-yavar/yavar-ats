@@ -228,7 +228,8 @@ export const CATALOGUE_MODULES: CatalogueModule[] = [
     audience: "CHRO, HR head, owner, product owner",
     summary:
       "A living organisational knowledge graph that connects skills, people, open-role demand and proven hiring outcomes.",
-    outcome: "Leadership can see capability risk early and decide what talent to hire, build, borrow or redeploy.",
+    outcome:
+      "Leadership can see capability risk early and decide what talent to hire, build, borrow or redeploy.",
     capabilities: [
       "Graphical skill ontology grouped into canonical capability families and aliases",
       "Supply, weighted demand, hiring validation, scarcity and evidence recency per skill",

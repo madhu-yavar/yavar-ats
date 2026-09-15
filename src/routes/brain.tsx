@@ -189,10 +189,26 @@ function TalentBrainPage() {
               <h2 className="text-sm font-semibold">Read this map in 30 seconds</h2>
             </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <Guide icon={Users} title="Start with size" text="Large bubbles combine strong talent supply with open-role demand." />
-              <Guide icon={Target} title="Check pressure" text="Red needs action, amber needs monitoring, violet has healthier coverage." />
-              <Guide icon={Link2} title="Trace adjacencies" text="Select a skill to reveal capabilities commonly found alongside it." />
-              <Guide icon={TrendingUp} title="Act on movement" text="Use emerging, fading and scarce signals to hire, build or redeploy talent." />
+              <Guide
+                icon={Users}
+                title="Start with size"
+                text="Large bubbles combine strong talent supply with open-role demand."
+              />
+              <Guide
+                icon={Target}
+                title="Check pressure"
+                text="Red needs action, amber needs monitoring, violet has healthier coverage."
+              />
+              <Guide
+                icon={Link2}
+                title="Trace adjacencies"
+                text="Select a skill to reveal capabilities commonly found alongside it."
+              />
+              <Guide
+                icon={TrendingUp}
+                title="Act on movement"
+                text="Use emerging, fading and scarce signals to hire, build or redeploy talent."
+              />
             </div>
           </section>
           {brain.isLoading ? (
@@ -374,15 +390,7 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
-function Guide({
-  icon: Icon,
-  title,
-  text,
-}: {
-  icon: typeof Users;
-  title: string;
-  text: string;
-}) {
+function Guide({ icon: Icon, title, text }: { icon: typeof Users; title: string; text: string }) {
   return (
     <div className="flex gap-2.5">
       <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-accent text-accent-foreground">
