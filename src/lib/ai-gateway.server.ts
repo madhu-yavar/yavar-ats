@@ -50,10 +50,13 @@ export async function resolveAiConfig(): Promise<AiConfig> {
     if (!data) return fallback;
 
     const known: AiProvider[] = ["lovable", "openai", "anthropic", "gemini"];
-    const provider = known.includes(data.provider as AiProvider) ? (data.provider as AiProvider) : "lovable";
+    const provider = known.includes(data.provider as AiProvider)
+      ? (data.provider as AiProvider)
+      : "lovable";
     const model = data.model?.trim() || DEFAULT_MODEL[provider];
 
-    if (provider === "lovable") return { provider, model, apiKey: process.env["LOVABLE_API_KEY"] ?? null };
+    if (provider === "lovable")
+      return { provider, model, apiKey: process.env["LOVABLE_API_KEY"] ?? null };
 
     const { data: cred } = await db
       .from("ai_provider_credentials")
@@ -264,7 +267,8 @@ export async function aiJson<T>(opts: {
 
   const text = isAnthropic ? await readAnthropicStream(res.body) : await readOpenAiStream(res.body);
   const parsed = parseJsonish<T>(text);
-  if (!parsed) return { ok: false, status: 502, message: "AI returned a response that could not be parsed." };
+  if (!parsed)
+    return { ok: false, status: 502, message: "AI returned a response that could not be parsed." };
 
   return { ok: true, data: parsed, model: cfg.model, provider: cfg.provider };
 }
