@@ -9,18 +9,21 @@
  *   lovable   — built-in Lovable AI gateway (Gemini + OpenAI models, no key)
  *   openai    — your own OpenAI API key
  *   anthropic — your own Anthropic (Claude) API key
+ *   gemini    — your own Google Gemini API key
  */
 
 const LOVABLE_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const OPENAI_ENDPOINT = "https://api.openai.com/v1/chat/completions";
 const ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1/messages";
+const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 
-export type AiProvider = "lovable" | "openai" | "anthropic";
+export type AiProvider = "lovable" | "openai" | "anthropic" | "gemini";
 
 export const DEFAULT_MODEL: Record<AiProvider, string> = {
   lovable: "google/gemini-3.7-flash",
   openai: "gpt-5.5",
   anthropic: "claude-sonnet-4-5",
+  gemini: "gemini-2.5-flash",
 };
 
 export type AiConfig = { provider: AiProvider; model: string; apiKey: string | null };
