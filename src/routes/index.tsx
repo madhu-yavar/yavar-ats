@@ -350,6 +350,188 @@ function Dashboard() {
       .slice(0, 8);
   }, [applications, candidates, requisitions, scoreMap, queueSearch, queueView]);
 
+  /* ---------- executive analytics: drop-off, coverage, prescriptions ---------- */
+
+  /** The stage pair that loses the largest share of the candidates reaching it. */
+  const worstDrop = useMemo(() => {
+    let worst: { from: Stage; to: Stage; reached: number; lost: number; lossPct: number } | null =
+      null;
+    for (let i = 0; i < funnel.length - 1; i += 1) {
+      const from = funnel[i]!;
+      const to = funnel[i + 1]!;
+      if (from.reached < 3) continue;
+      const lost = from.reached - to.reached;
+      const lossPct = Math.round((lost / from.reached) * 100);
+      if (lost > 0 && (!worst || lossPct > worst.lossPct)) {
+        worst = { from: from.stage, to: to.stage, reached: from.reached, lost, lossPct };
+      }
+    }
+    return worst;
+  }, [funnel]);
+
+  const SHORTLISTED_ON = new Set<Stage>(["shortlisted", "l1", "l2", "l3", "offer", "hired"]);
+  const shortlistedApps = applications.filter((a) => SHORTLISTED_ON.has(canonical(a.stage as Stage)));
+  const gradedAppIds = new Set(
+    (runs.data ?? []).map((r) => r.application_id).filter((id): id is string => Boolean(id)),
+  );
+  const screeningCoverage = shortlistedApps.length
+    ? Math.round(
+        (shortlistedApps.filter((a) => gradedAppIds.has(a.id)).length / shortlistedApps.length) *
+          100,
+      )
+    : 0;
+
+  const prescriptions = useMemo(() => {
+    const out: {
+      title: string;
+      evidence: string;
+      action: string;
+      cta: string;
+      to: "/requisitions" | "/candidates" | "/interviews" | "/offers" | "/matching" | "/screening";
+      tone: "risk" | "watch" | "opportunity";
+      icon: React.ComponentType<{ className?: string }>;
+    }[] = [];
+
+    if (pending.length) {
+      const oldest = pending.reduce(
+        (d, r) => Math.max(d, Math.floor((Date.now() - new Date(r.created_at).getTime()) / 86_400_000)),
+        0,
+      );
+      out.push({
+        title: `${pending.length} requisition${pending.length > 1 ? "s" : ""} waiting on approval`,
+        evidence: `Oldest has waited ${oldest} day${oldest === 1 ? "" : "s"}. Nothing can be sourced until these clear.`,
+        action: "Approve, return with comments, or reassign the approval to the department head.",
+        cta: "Review",
+        to: "/requisitions",
+        tone: oldest > 3 ? "risk" : "watch",
+        icon: CheckCircle2,
+      });
+    }
+
+    const emptyRoles = open.filter(
+      (r) => !applications.some((a) => a.requisition_id === r.id),
+    ).length;
+    if (emptyRoles) {
+      out.push({
+        title: `${emptyRoles} approved role${emptyRoles > 1 ? "s have" : " has"} no candidate yet`,
+        evidence: `${open.length} roles are open and ${poolHealth.untapped} pool profiles have never been put against a role.`,
+        action: "Post internally, publish externally, or pull the best historic fits from the pool.",
+        cta: "Source",
+        to: "/matching",
+        tone: "risk",
+        icon: BriefcaseBusiness,
+      });
+    }
+
+    if (stalled.length) {
+      out.push({
+        title: `${stalled.length} candidate${stalled.length > 1 ? "s are" : " is"} past the stage SLA`,
+        evidence: `Longest wait is ${stalled[0]?.days ?? 0} days without any movement.`,
+        action: "Hold the recruiter accountable in the weekly review or reassign the candidate.",
+        cta: "Open",
+        to: "/candidates",
+        tone: (stalled[0]?.days ?? 0) > 10 ? "risk" : "watch",
+        icon: Clock,
+      });
+    }
+
+    if (shortlistedApps.length && screeningCoverage < 70) {
+      out.push({
+        title: `Only ${screeningCoverage}% of shortlisted candidates were screened properly`,
+        evidence: `${shortlistedApps.length - shortlistedApps.filter((a) => gradedAppIds.has(a.id)).length} shortlisted candidates reached interviews without a graded screening call.`,
+        action: "Make the screening call mandatory before an interview slot is booked.",
+        cta: "Screening",
+        to: "/screening",
+        tone: "watch",
+        icon: ShieldCheck,
+      });
+    }
+
+    if (offerRows.length && acceptRate < 70) {
+      out.push({
+        title: `Offer acceptance is ${acceptRate}%`,
+        evidence: `${offerRows.filter((o) => o.status === "declined").length} declined out of ${offerRows.length} offers made.`,
+        action: "Check the offered range against the market band before the next release.",
+        cta: "Offers",
+        to: "/offers",
+        tone: acceptRate < 50 ? "risk" : "watch",
+        icon: TrendingUp,
+      });
+    }
+
+    if (scored.length >= 5 && avgMatch < 60) {
+      out.push({
+        title: `Average fit is only ${avgMatch}%`,
+        evidence: scarceSkills.length
+          ? `"${scarceSkills[0]?.[0]}" is missing on ${scarceSkills[0]?.[1]} scored candidates.`
+          : `${scored.length} candidates scored and few clear the bar.`,
+        action:
+          "Either soften the must-have list to what the market actually has, or budget for training.",
+        cta: "Matching",
+        to: "/matching",
+        tone: "watch",
+        icon: AlertTriangle,
+      });
+    }
+
+    if (candidates.length && poolHealth.stale / candidates.length > 0.3) {
+      out.push({
+        title: `${Math.round((poolHealth.stale / candidates.length) * 100)}% of the talent pool is stale`,
+        evidence: `${poolHealth.stale} profiles are over a year old and ${poolHealth.groups} duplicate sets are still unmerged.`,
+        action: "Run a refresh campaign and merge duplicates before the next sourcing push.",
+        cta: "Talent pool",
+        to: "/candidates",
+        tone: "watch",
+        icon: Users,
+      });
+    }
+
+    if (budgeted > 0 && committed > budgeted) {
+      out.push({
+        title: "Committed salary is above the workforce budget",
+        evidence: `${inr(committed)} committed against ${inr(budgeted)} budgeted.`,
+        action: "Re-sequence lower-priority roles into the next quarter, or get the budget revised.",
+        cta: "Requisitions",
+        to: "/requisitions",
+        tone: "risk",
+        icon: AlertTriangle,
+      });
+    }
+
+    if (worstDrop && worstDrop.lossPct >= 40) {
+      out.push({
+        title: `${worstDrop.lossPct}% of candidates are lost at one step`,
+        evidence: `${worstDrop.lost} of ${worstDrop.reached} candidates stop between ${STAGE_LABEL[worstDrop.from]} and ${STAGE_LABEL[worstDrop.to]}.`,
+        action: "Review interviewer feedback and the screening bar for that step.",
+        cta: "Interviews",
+        to: "/interviews",
+        tone: "watch",
+        icon: Sparkles,
+      });
+    }
+
+    const order = { risk: 0, watch: 1, opportunity: 2 } as const;
+    return out.sort((a, b) => order[a.tone] - order[b.tone]).slice(0, 6);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    pending,
+    open,
+    applications,
+    stalled,
+    offerRows,
+    acceptRate,
+    scored.length,
+    avgMatch,
+    scarceSkills,
+    candidates.length,
+    poolHealth,
+    budgeted,
+    committed,
+    worstDrop,
+    screeningCoverage,
+  ]);
+
+
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card">
       <header className="flex flex-col gap-4 border-b border-border px-5 py-5 sm:px-7 lg:flex-row lg:items-center lg:justify-between">
