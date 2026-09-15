@@ -113,7 +113,9 @@ export function ScreeningPanel(props: {
     }
     setBuilding(true);
     try {
-      const out = await buildKit({ data: { candidateId: props.candidateId, requisitionId: reqId } });
+      const out = await buildKit({
+        data: { candidateId: props.candidateId, requisitionId: reqId },
+      });
       setAnswers({});
       await qc.invalidateQueries({ queryKey: ["screening_kits", props.candidateId] });
       toast.success(
@@ -288,7 +290,9 @@ export function ScreeningPanel(props: {
                           weight {q.weight}/5
                         </span>
                         {verdict ? (
-                          <span className={`text-[11px] font-medium ${VERDICT_TONE[verdict.verdict]}`}>
+                          <span
+                            className={`text-[11px] font-medium ${VERDICT_TONE[verdict.verdict]}`}
+                          >
                             {VERDICT_LABEL[verdict.verdict]} · {verdict.score}/100
                           </span>
                         ) : null}

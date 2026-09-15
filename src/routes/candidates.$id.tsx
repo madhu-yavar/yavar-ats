@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
+import { ScreeningPanel } from "@/components/ScreeningPanel";
 import { ArrowLeft, Download, ExternalLink, ShieldCheck, Sparkles } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -340,6 +341,15 @@ function CandidateDetail() {
               </ul>
             )}
           </section>
+
+          <ScreeningPanel
+            candidateId={id}
+            candidateName={c.full_name}
+            roles={myApps.map((a) => ({
+              requisitionId: a.requisition_id,
+              title: (reqs.data ?? []).find((r) => r.id === a.requisition_id)?.title ?? "Role",
+            }))}
+          />
 
           <section className="panel p-5">
             <h2 className="font-semibold">Interview evaluations</h2>
