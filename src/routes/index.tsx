@@ -20,6 +20,7 @@ import {
 
 import { supabase } from "@/integrations/supabase/client";
 import {
+  allScreeningRunsQuery,
   applicationsQuery,
   candidatesQuery,
   departmentsQuery,
@@ -172,6 +173,7 @@ function Dashboard() {
   const depts = useQuery(departmentsQuery);
   const offers = useQuery(offersQuery);
   const interviews = useQuery(interviewsQuery);
+  const runs = useQuery(allScreeningRunsQuery);
 
   const requisitions = reqs.data ?? [];
   const applications = apps.data ?? [];
