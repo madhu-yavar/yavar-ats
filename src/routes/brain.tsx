@@ -3,7 +3,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Brain, RefreshCw, Search, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  Brain,
+  CircleHelp,
+  Link2,
+  RefreshCw,
+  Search,
+  Target,
+  TrendingDown,
+  TrendingUp,
+  Users,
+} from "lucide-react";
 
 import { readTalentBrain, rebuildTalentBrain, type TalentBrain } from "@/lib/ontology.functions";
 import { usePlatform } from "@/hooks/usePlatform";
@@ -173,6 +183,34 @@ function TalentBrainPage() {
               className="pl-9"
             />
           </div>
+          <section className="rounded-xl border bg-card p-4">
+            <div className="flex items-center gap-2">
+              <CircleHelp className="size-4 text-primary" />
+              <h2 className="text-sm font-semibold">Read this map in 30 seconds</h2>
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <Guide
+                icon={Users}
+                title="Start with size"
+                text="Large bubbles combine strong talent supply with open-role demand."
+              />
+              <Guide
+                icon={Target}
+                title="Check pressure"
+                text="Red needs action, amber needs monitoring, violet has healthier coverage."
+              />
+              <Guide
+                icon={Link2}
+                title="Trace adjacencies"
+                text="Select a skill to reveal capabilities commonly found alongside it."
+              />
+              <Guide
+                icon={TrendingUp}
+                title="Act on movement"
+                text="Use emerging, fading and scarce signals to hire, build or redeploy talent."
+              />
+            </div>
+          </section>
           {brain.isLoading ? (
             <p className="text-sm text-muted-foreground">Reading the ontology…</p>
           ) : nodes.length ? (
@@ -348,6 +386,20 @@ function Stat({ label, value }: { label: string; value: number }) {
     <div className="rounded-md border p-2">
       <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</dt>
       <dd className="text-sm">{value}</dd>
+    </div>
+  );
+}
+
+function Guide({ icon: Icon, title, text }: { icon: typeof Users; title: string; text: string }) {
+  return (
+    <div className="flex gap-2.5">
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-accent text-accent-foreground">
+        <Icon className="size-3.5" />
+      </span>
+      <div>
+        <p className="text-xs font-semibold">{title}</p>
+        <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">{text}</p>
+      </div>
     </div>
   );
 }

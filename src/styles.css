@@ -55,6 +55,11 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-ontology-healthy: var(--ontology-healthy);
+  --color-ontology-tightening: var(--ontology-tightening);
+  --color-ontology-scarce: var(--ontology-scarce);
+  --color-ontology-dormant: var(--ontology-dormant);
+  --color-ontology-zone: var(--ontology-zone);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -105,6 +110,11 @@
   --chart-3: oklch(0.68 0.15 62);
   --chart-4: oklch(0.58 0.22 22);
   --chart-5: oklch(0.45 0.04 285);
+  --ontology-healthy: oklch(0.55 0.252 277);
+  --ontology-tightening: oklch(0.68 0.15 62);
+  --ontology-scarce: oklch(0.58 0.22 22);
+  --ontology-dormant: oklch(0.67 0.01 261);
+  --ontology-zone: oklch(0.975 0.006 261);
 
   /* Application chrome — the ink-black product canvas */
   --sidebar: oklch(0.13 0 0);
@@ -142,6 +152,11 @@
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 16%);
   --ring: oklch(0.66 0.2 276);
+  --ontology-healthy: oklch(0.66 0.2 276);
+  --ontology-tightening: oklch(0.76 0.15 62);
+  --ontology-scarce: oklch(0.68 0.19 22);
+  --ontology-dormant: oklch(0.55 0.01 285);
+  --ontology-zone: oklch(0.22 0.012 285);
 }
 
 @layer base {

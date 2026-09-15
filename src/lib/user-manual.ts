@@ -163,8 +163,22 @@ export const MANUAL_SECTIONS: ManualSection[] = [
     ],
   },
   {
+    id: "talent-brain",
+    title: "12. Talent Brain for workforce intelligence",
+    summary:
+      "A leadership-only, evidence-linked skill map showing organisational capability supply, hiring demand, scarcity and change over time.",
+    steps: [
+      "Open Talent Brain (/brain). Organisation owners, CHROs and HR heads see their organisation; the platform super admin can also switch to an all-organisations view.",
+      "Read bubble size as the combined weight of people with the skill and demand from open roles. Violet means healthier coverage, amber means tightening supply, red means scarce against demand and grey means dormant evidence.",
+      "Capability-family zones group related skills. Select a bubble to isolate skills that occur alongside it, then use the detail panel to compare people in the pool, weighted demand, evidence validated by hires and recency.",
+      "Use Decisions & prescriptions to identify skills to hire, build, borrow or redeploy, plus bridge skills that support reskilling into scarce capabilities.",
+      "The ontology learns from CV skills, requisition requirements and hiring outcomes. Evidence keeps full weight for 180 days, half weight through one year and quarter weight thereafter; unsupported skills become dormant after one year and retire after two years.",
+      "Press Relearn ontology after substantial candidate, requisition or hiring changes. Deterministic analysis always runs; the organisation's configured AI provider can improve aliases, capability families and the executive narrative.",
+    ],
+  },
+  {
     id: "reports",
-    title: "12. Dashboards, reports and HR performance",
+    title: "13. Dashboards, reports and HR performance",
     summary:
       "Operational work for recruiters and governance, quality and performance views for HR leadership.",
     steps: [
@@ -176,7 +190,7 @@ export const MANUAL_SECTIONS: ManualSection[] = [
   },
   {
     id: "copilot",
-    title: "13. HR copilot",
+    title: "14. HR copilot",
     summary: "An embedded assistant grounded in your own live data and in this manual.",
     steps: [
       "Open the copilot from any page and ask about your pipeline, a requisition, pool coverage for a skill, or how to perform any task in the platform.",
@@ -186,7 +200,7 @@ export const MANUAL_SECTIONS: ManualSection[] = [
   },
   {
     id: "platform",
-    title: "14. Platform super admin (product owner only)",
+    title: "15. Platform super admin (product owner only)",
     summary: "Cross-tenant administration lives on Platform console (/platform).",
     steps: [
       "Review the pending registration queue and approve or reject organisations; the registering owner is emailed the decision.",

@@ -65,3 +65,9 @@
 
 - [x] Document market benchmarking, LinkedIn Recruiter capture, screening-call intelligence, candidate ownership, recruiter collaboration, consortium sharing and CHRO performance governance.
 - [x] Reframe the public landing page around enterprise hiring pain points, accountable outcomes and the complete current capability set.
+
+## Talent Brain ontology (done)
+
+- [x] Build the leadership-only organisational skill ontology with supply, demand, evidence, scarcity and lifecycle intelligence.
+- [x] Add a readable semantic cluster map, interpretation guide and skill relationship drill-down.
+- [x] Document Talent Brain in the user manual, copilot knowledge and downloadable product catalogue.
