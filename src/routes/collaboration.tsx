@@ -120,7 +120,7 @@ function Collaboration() {
     <div className="space-y-6">
       <PageHeader
         title="Team & sharing"
-        subtitle={`The pool is shared across ${org?.name ?? "your organisation"}. Ownership, referrals and requests keep it clear who is working on whom.`}
+        description={`The pool is shared across ${org?.name ?? "your organisation"}. Ownership, referrals and requests keep it clear who is working on whom.`}
       />
 
       <section className="panel p-5">
