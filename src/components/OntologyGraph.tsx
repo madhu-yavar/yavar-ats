@@ -4,16 +4,6 @@ import type { OntologyEdge, OntologyNode } from "@/lib/ontology.server";
 
 type Placed = OntologyNode & { x: number; y: number; r: number };
 
-const CATEGORY_ANGLE: Record<string, number> = {};
-
-function angleFor(category: string, categories: string[]) {
-  if (CATEGORY_ANGLE[category] === undefined) {
-    const idx = categories.indexOf(category);
-    CATEGORY_ANGLE[category] = (idx / Math.max(1, categories.length)) * Math.PI * 2;
-  }
-  return CATEGORY_ANGLE[category]!;
-}
-
 /** Colour by pressure: violet = comfortable, amber = tightening, red = scarce. */
 function fill(n: OntologyNode) {
   if (n.status === "dormant") return "hsl(var(--muted-foreground) / 0.35)";
@@ -23,15 +13,17 @@ function fill(n: OntologyNode) {
 }
 
 /**
- * Deterministic clustered force layout drawn as plain SVG — capability families sit
- * in their own neighbourhood, and co-occurrence edges pull related skills together.
+ * Capability-family constellation drawn as plain SVG. Each family owns a
+ * neighbourhood; inside it, skills are packed in spiral rings with the heaviest
+ * (most people plus openings) at the centre, and co-occurrence links are drawn
+ * between them.
  */
 export function OntologyGraph({
   nodes,
   edges,
   onSelect,
   selected,
-  limit = 90,
+  limit = 70,
 }: {
   nodes: OntologyNode[];
   edges: OntologyEdge[];
@@ -42,76 +34,63 @@ export function OntologyGraph({
   const [hover, setHover] = useState<string | null>(null);
 
   const layout = useMemo(() => {
-    const width = 900;
-    const height = 620;
+    const width = 960;
+    const height = 640;
     const top = nodes.slice(0, limit);
     const slugs = new Set(top.map((n) => n.slug));
-    const links = edges.filter((e) => slugs.has(e.from) && slugs.has(e.to)).slice(0, 320);
-    const categories = [...new Set(top.map((n) => n.category))].sort();
+    const links = edges.filter((e) => slugs.has(e.from) && slugs.has(e.to)).slice(0, 220);
+
+    // Families ordered by size so the biggest neighbourhoods get the roomiest slots.
+    const families = new Map<string, OntologyNode[]>();
+    for (const n of top) {
+      const list = families.get(n.category) ?? [];
+      list.push(n);
+      families.set(n.category, list);
+    }
+    const ordered = [...families.entries()].sort((a, b) => b[1].length - a[1].length);
 
     const maxMass = Math.max(1, ...top.map((n) => n.supply + n.demand));
-    const pos = new Map<string, { x: number; y: number; vx: number; vy: number; r: number }>();
-    top.forEach((n, i) => {
-      const a = angleFor(n.category, categories) + (i % 7) * 0.14;
-      const radius = 130 + ((i * 37) % 210);
-      pos.set(n.slug, {
-        x: width / 2 + Math.cos(a) * radius,
-        y: height / 2 + Math.sin(a) * radius,
-        vx: 0,
-        vy: 0,
-        r: 8 + Math.round(((n.supply + n.demand) / maxMass) * 20),
-      });
-    });
+    const placed: Placed[] = [];
+    const clusters: Array<{ label: string; x: number; y: number; count: number }> = [];
 
-    // A few relaxation passes: links attract, everything repels, clusters pull home.
-    for (let step = 0; step < 140; step += 1) {
-      for (const l of links) {
-        const a = pos.get(l.from)!;
-        const b = pos.get(l.to)!;
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const dist = Math.max(24, Math.hypot(dx, dy));
-        const pull = ((dist - 110) / dist) * 0.02 * (0.4 + l.weight);
-        a.vx += dx * pull;
-        a.vy += dy * pull;
-        b.vx -= dx * pull;
-        b.vy -= dy * pull;
-      }
-      const list = [...pos.entries()];
-      for (let i = 0; i < list.length; i += 1) {
-        for (let j = i + 1; j < list.length; j += 1) {
-          const a = list[i]![1];
-          const b = list[j]![1];
-          const dx = b.x - a.x;
-          const dy = b.y - a.y;
-          const d2 = Math.max(400, dx * dx + dy * dy);
-          const push = ((a.r + b.r) * 26) / d2;
-          a.vx -= dx * push;
-          a.vy -= dy * push;
-          b.vx += dx * push;
-          b.vy += dy * push;
+    // Grid of neighbourhoods keeps everything inside the canvas at any node count.
+    const cols = ordered.length <= 2 ? 1 : ordered.length <= 6 ? 3 : 4;
+    const rows = Math.max(1, Math.ceil(ordered.length / cols));
+    const cellW = width / cols;
+    const cellH = height / rows;
+
+    ordered.forEach(([label, list], ci) => {
+      const cx = (ci % cols) * cellW + cellW / 2;
+      const cy = Math.floor(ci / cols) * cellH + cellH / 2 + 6;
+      clusters.push({ label, x: cx, y: cy - cellH / 2 + 16, count: list.length });
+
+      const sorted = list.slice().sort((a, b) => b.supply + b.demand - (a.supply + a.demand));
+      sorted.forEach((n, i) => {
+        const r = 6 + Math.round(((n.supply + n.demand) / maxMass) * 14);
+        // Spiral: ring 0 is the centre, then 6, 12, 18 slots outward.
+        let ring = 0;
+        let seen = 0;
+        while (seen + Math.max(1, ring * 6) <= i) {
+          seen += Math.max(1, ring * 6);
+          ring += 1;
         }
-      }
-      top.forEach((n, i) => {
-        const p = pos.get(n.slug)!;
-        const a = angleFor(n.category, categories) + (i % 7) * 0.14;
-        const hx = width / 2 + Math.cos(a) * 250;
-        const hy = height / 2 + Math.sin(a) * 200;
-        p.vx += (hx - p.x) * 0.006;
-        p.vy += (hy - p.y) * 0.006;
-        p.x = Math.min(width - 40, Math.max(40, p.x + p.vx * 0.6));
-        p.y = Math.min(height - 34, Math.max(34, p.y + p.vy * 0.6));
-        p.vx *= 0.72;
-        p.vy *= 0.72;
+        const inRing = i - seen;
+        const slots = Math.max(1, ring * 6);
+        const angle = (inRing / slots) * Math.PI * 2 + ring * 0.5;
+        const spread = Math.min(cellW, cellH) / 2 - 26;
+        const radius = ring === 0 ? 0 : (ring / Math.max(1, rows + 2)) * spread * 1.6;
+        placed.push({
+          ...n,
+          r,
+          x: Math.min(width - 26, Math.max(26, cx + Math.cos(angle) * radius)),
+          y: Math.min(height - 26, Math.max(30, cy + Math.sin(angle) * radius)),
+        });
       });
-    }
-
-    const placed: Placed[] = top.map((n) => {
-      const p = pos.get(n.slug)!;
-      return { ...n, x: p.x, y: p.y, r: p.r };
     });
-    return { width, height, placed, links, categories };
+
+    return { width, height, placed, links, clusters };
   }, [nodes, edges, limit]);
+
 
   const byslug = new Map(layout.placed.map((p) => [p.slug, p]));
   const focus = hover ?? selected;
