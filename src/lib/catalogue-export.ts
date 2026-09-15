@@ -19,7 +19,7 @@ function price(c: CatalogueResult["modules"][number]["commercials"]) {
   return `${c.currency} ${c.listPrice.toLocaleString()}${c.unit ? ` ${c.unit}` : ""}`;
 }
 
-export function downloadCataloguePdf(cat: CatalogueResult) {
+export function buildCataloguePdf(cat: CatalogueResult) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const width = doc.internal.pageSize.getWidth();
   const margin = 42;
@@ -109,7 +109,11 @@ export function downloadCataloguePdf(cat: CatalogueResult) {
     );
   }
 
-  doc.save(`atsiq-product-catalogue-${stamp()}.pdf`);
+  return doc;
+}
+
+export function downloadCataloguePdf(cat: CatalogueResult) {
+  buildCataloguePdf(cat).save(`atsiq-product-catalogue-${stamp()}.pdf`);
 }
 
 export function downloadCatalogueXlsx(cat: CatalogueResult) {
