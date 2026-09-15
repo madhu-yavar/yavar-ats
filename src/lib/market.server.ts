@@ -51,21 +51,25 @@ function candidateSources(role: string, location: string, currency: string) {
     /india|bengaluru|bangalore|chennai|mumbai|delhi|pune|hyderabad|noida|gurgaon|kolkata/i.test(
       location,
     );
+  const q = encodeURIComponent(role.trim()).replace(/%20/g, "+");
   const list: { title: string; url: string }[] = [
-    { title: `Levels.fyi — ${role}`, url: `https://www.levels.fyi/t/${r}` },
     {
-      title: `Glassdoor salaries — ${role}`,
-      url: `https://www.glassdoor.com/Salaries/${r}-salary-SRCH_KO0,20.htm`,
+      title: `Talent.com salary — ${role}`,
+      url: india
+        ? `https://in.talent.com/salary?job=${q}`
+        : `https://www.talent.com/salary?job=${q}`,
     },
+    { title: `Levels.fyi — ${role}`, url: `https://www.levels.fyi/t/${r}` },
   ];
   if (india) {
-    list.unshift(
-      {
-        title: `AmbitionBox — ${role} salary`,
-        url: `https://www.ambitionbox.com/profile/${r}-salary`,
-      },
-      { title: `6figr — ${role} salary`, url: `https://6figr.com/in/salary/${r}--t` },
-    );
+    list.splice(1, 0, {
+      title: `6figr — ${role} salary`,
+      url: `https://6figr.com/in/salary/${r}--t`,
+    });
+    list.push({
+      title: `AmbitionBox — ${role} salary`,
+      url: `https://www.ambitionbox.com/profile/${r}-salary`,
+    });
   } else {
     list.push({
       title: `Payscale — ${role}`,
