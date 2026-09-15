@@ -53,21 +53,33 @@ export function OntologyGraph({
     const placed: Placed[] = [];
     const clusters: Array<{ label: string; x: number; y: number; count: number }> = [];
 
-    // Grid of neighbourhoods keeps everything inside the canvas at any node count.
-    const cols = ordered.length <= 2 ? 1 : ordered.length <= 6 ? 3 : 4;
-    const rows = Math.max(1, Math.ceil(ordered.length / cols));
-    const cellW = width / cols;
-    const cellH = height / rows;
+    // Each family gets a box sized by how many skills it holds, then boxes flow
+    // left to right and wrap — big neighbourhoods stay legible, small ones stay tight.
+    const gap = 18;
+    const boxes = ordered.map(([label, list]) => {
+      const side = Math.min(300, Math.max(96, 60 + Math.sqrt(list.length) * 46));
+      return { label, list, side };
+    });
 
-    ordered.forEach(([label, list], ci) => {
-      const cx = (ci % cols) * cellW + cellW / 2;
-      const cy = Math.floor(ci / cols) * cellH + cellH / 2 + 6;
-      clusters.push({ label, x: cx, y: cy - cellH / 2 + 16, count: list.length });
+    let cursorX = gap;
+    let cursorY = gap;
+    let rowH = 0;
+    for (const box of boxes) {
+      if (cursorX + box.side > width - gap && cursorX > gap) {
+        cursorX = gap;
+        cursorY += rowH + gap + 14;
+        rowH = 0;
+      }
+      const cx = cursorX + box.side / 2;
+      const cy = cursorY + box.side / 2 + 12;
+      clusters.push({ label: box.label, x: cx, y: cursorY + 8, count: box.list.length });
 
-      const sorted = list.slice().sort((a, b) => b.supply + b.demand - (a.supply + a.demand));
+      const sorted = box.list
+        .slice()
+        .sort((a, b) => b.supply + b.demand - (a.supply + a.demand));
+      const rings = Math.max(1, Math.ceil(Math.sqrt(sorted.length / 3)));
       sorted.forEach((n, i) => {
-        const r = 6 + Math.round(((n.supply + n.demand) / maxMass) * 14);
-        // Spiral: ring 0 is the centre, then 6, 12, 18 slots outward.
+        const r = 5 + Math.round(((n.supply + n.demand) / maxMass) * 13);
         let ring = 0;
         let seen = 0;
         while (seen + Math.max(1, ring * 6) <= i) {
@@ -76,19 +88,23 @@ export function OntologyGraph({
         }
         const inRing = i - seen;
         const slots = Math.max(1, ring * 6);
-        const angle = (inRing / slots) * Math.PI * 2 + ring * 0.5;
-        const spread = Math.min(cellW, cellH) / 2 - 26;
-        const radius = ring === 0 ? 0 : (ring / Math.max(1, rows + 2)) * spread * 1.6;
+        const angle = (inRing / slots) * Math.PI * 2 + ring * 0.55;
+        const radius = ring === 0 ? 0 : (ring / rings) * (box.side / 2 - 14);
         placed.push({
           ...n,
           r,
-          x: Math.min(width - 26, Math.max(26, cx + Math.cos(angle) * radius)),
-          y: Math.min(height - 26, Math.max(30, cy + Math.sin(angle) * radius)),
+          x: cx + Math.cos(angle) * radius,
+          y: cy + Math.sin(angle) * radius,
         });
       });
-    });
 
-    return { width, height, placed, links, clusters };
+      rowH = Math.max(rowH, box.side + 12);
+      cursorX += box.side + gap;
+    }
+
+    const contentHeight = Math.max(360, cursorY + rowH + gap);
+    return { width, height: contentHeight, placed, links, clusters };
+
   }, [nodes, edges, limit]);
 
   const byslug = new Map(layout.placed.map((p) => [p.slug, p]));
