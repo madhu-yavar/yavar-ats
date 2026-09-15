@@ -93,7 +93,8 @@ export const setCandidateOwner = createServerFn({ method: "POST" })
       .eq("org_id", me.org_id)
       .in("id", data.candidateIds);
     if (error) throw new Error(error.message);
-    if (!rows?.length) throw new Error("No candidates in your organisation matched that selection.");
+    if (!rows?.length)
+      throw new Error("No candidates in your organisation matched that selection.");
 
     const ids = rows.map((r) => r.id);
     const { error: updErr } = await db
@@ -187,7 +188,8 @@ export const respondReferral = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!ref) throw new Error("That referral no longer exists.");
-    if (ref.to_user !== context.userId) throw new Error("Only the recruiter it was sent to can respond.");
+    if (ref.to_user !== context.userId)
+      throw new Error("Only the recruiter it was sent to can respond.");
     if (ref.status !== "pending") throw new Error("This referral has already been answered.");
 
     await db
@@ -331,7 +333,8 @@ export const suggestToRequest = createServerFn({ method: "POST" })
       .select("id, org_id, status")
       .eq("id", data.requestId)
       .maybeSingle();
-    if (!req || req.org_id !== me.org_id) throw new Error("That request is not open in your organisation.");
+    if (!req || req.org_id !== me.org_id)
+      throw new Error("That request is not open in your organisation.");
     if (req.status !== "open") throw new Error("This request has already been closed.");
 
     const { data: cand } = await db
@@ -442,7 +445,8 @@ export const offerPoolShare = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const me = await membership(context.userId);
-    if (!me.is_owner) throw new Error("Only an organisation owner can agree to share the talent pool.");
+    if (!me.is_owner)
+      throw new Error("Only an organisation owner can agree to share the talent pool.");
     const db = await admin();
 
     const { data: matches } = await db
@@ -454,7 +458,9 @@ export const offerPoolShare = createServerFn({ method: "POST" })
     const found = (matches ?? []).filter((o) => o.id !== me.org_id);
     if (found.length === 0) throw new Error("No active organisation matched that name.");
     if (found.length > 1)
-      throw new Error(`Several organisations matched: ${found.map((o) => o.name).join(", ")}. Be more specific.`);
+      throw new Error(
+        `Several organisations matched: ${found.map((o) => o.name).join(", ")}. Be more specific.`,
+      );
 
     const { error } = await db.from("org_pool_shares").insert({
       owner_org: me.org_id,
@@ -492,7 +498,11 @@ export const respondPoolShare = createServerFn({ method: "POST" })
     if (data.action === "revoke") {
       await db
         .from("org_pool_shares")
-        .update({ status: "revoked", revoked_at: new Date().toISOString(), responded_by: context.userId })
+        .update({
+          status: "revoked",
+          revoked_at: new Date().toISOString(),
+          responded_by: context.userId,
+        })
         .eq("id", share.id);
       return { ok: true, status: "revoked" };
     }

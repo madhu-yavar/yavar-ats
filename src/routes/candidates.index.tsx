@@ -298,6 +298,14 @@ function Candidates() {
   const reverify = useServerFn(verifyCandidates);
   const getResumeUrl = useServerFn(getResumeDownloadUrl);
   const removeCandidates = useServerFn(deleteCandidates);
+  const assignOwner = useServerFn(setCandidateOwner);
+  const fetchTeam = useServerFn(poolTeam);
+  const me = useMe();
+  const team = useQuery({
+    queryKey: ["pool_team"],
+    queryFn: () => fetchTeam({}),
+    staleTime: 300_000,
+  });
 
   const [q, setQ] = useState("");
   const [view, setView] = useState<ViewId>("all");

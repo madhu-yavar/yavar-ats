@@ -11,7 +11,12 @@ import {
   referralsQuery,
   requisitionsQuery,
 } from "@/lib/data";
-import { addCandidateNote, poolTeam, referCandidate, setCandidateOwner } from "@/lib/collaboration.functions";
+import {
+  addCandidateNote,
+  poolTeam,
+  referCandidate,
+  setCandidateOwner,
+} from "@/lib/collaboration.functions";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,7 +38,11 @@ export function CandidateCollab({
   const qc = useQueryClient();
   const me = useMe();
   const fetchTeam = useServerFn(poolTeam);
-  const team = useQuery({ queryKey: ["pool_team"], queryFn: () => fetchTeam({}), staleTime: 300_000 });
+  const team = useQuery({
+    queryKey: ["pool_team"],
+    queryFn: () => fetchTeam({}),
+    staleTime: 300_000,
+  });
   const notes = useQuery(candidateNotesQuery(candidateId));
   const history = useQuery(ownershipEventsQuery(candidateId));
   const refs = useQuery(referralsQuery);
@@ -82,8 +91,8 @@ export function CandidateCollab({
         <div>
           <h2 className="font-semibold">Ownership & team</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Everyone in your organisation can see this candidate. Ownership says who is
-            responsible for them.
+            Everyone in your organisation can see this candidate. Ownership says who is responsible
+            for them.
           </p>
         </div>
         <Badge variant={ownerId ? "secondary" : "outline"}>
@@ -237,11 +246,15 @@ export function CandidateCollab({
                   key={m.userId}
                   type="button"
                   className={`rounded-full border px-2 py-0.5 text-xs ${
-                    on ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"
+                    on
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground"
                   }`}
                   onClick={() =>
                     setMentions((prev) =>
-                      prev.includes(m.userId) ? prev.filter((x) => x !== m.userId) : [...prev, m.userId],
+                      prev.includes(m.userId)
+                        ? prev.filter((x) => x !== m.userId)
+                        : [...prev, m.userId],
                     )
                   }
                 >
@@ -269,7 +282,9 @@ export function CandidateCollab({
           {(notes.data ?? []).map((n) => (
             <li key={n.id} className="rounded-md border border-border p-3">
               <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">{n.author_name ?? nameOf(n.author_id)}</span>
+                <span className="font-medium text-foreground">
+                  {n.author_name ?? nameOf(n.author_id)}
+                </span>
                 <span>{new Date(n.created_at).toLocaleString()}</span>
               </div>
               <p className="mt-1 whitespace-pre-wrap text-sm">{n.body}</p>

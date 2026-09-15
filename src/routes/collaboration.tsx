@@ -60,7 +60,11 @@ function Collaboration() {
 
   const fetchTeam = useServerFn(poolTeam);
   const fetchShares = useServerFn(listPoolShares);
-  const team = useQuery({ queryKey: ["pool_team"], queryFn: () => fetchTeam({}), staleTime: 300_000 });
+  const team = useQuery({
+    queryKey: ["pool_team"],
+    queryFn: () => fetchTeam({}),
+    staleTime: 300_000,
+  });
   const shares = useQuery({ queryKey: ["pool_shares"], queryFn: () => fetchShares({}) });
   const refs = useQuery(referralsQuery);
   const requests = useQuery(talentRequestsQuery);
@@ -137,7 +141,11 @@ function Collaboration() {
             <li key={r.id} className="rounded-md border border-border p-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <Link to="/candidates/$id" params={{ id: r.candidate_id }} className="font-medium hover:underline">
+                  <Link
+                    to="/candidates/$id"
+                    params={{ id: r.candidate_id }}
+                    className="font-medium hover:underline"
+                  >
                     {candName(r.candidate_id)}
                   </Link>
                   <p className="text-xs text-muted-foreground">
@@ -151,7 +159,11 @@ function Collaboration() {
                   <Button
                     size="sm"
                     disabled={busy}
-                    onClick={() => run("Referral accepted", () => answer({ data: { referralId: r.id, accept: true } }))}
+                    onClick={() =>
+                      run("Referral accepted", () =>
+                        answer({ data: { referralId: r.id, accept: true } }),
+                      )
+                    }
                   >
                     Accept
                   </Button>
@@ -159,7 +171,11 @@ function Collaboration() {
                     size="sm"
                     variant="outline"
                     disabled={busy}
-                    onClick={() => run("Referral declined", () => answer({ data: { referralId: r.id, accept: false } }))}
+                    onClick={() =>
+                      run("Referral declined", () =>
+                        answer({ data: { referralId: r.id, accept: false } }),
+                      )
+                    }
                   >
                     Decline
                   </Button>
@@ -192,7 +208,8 @@ function Collaboration() {
           <h2 className="font-semibold">Requests for talent</h2>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          Ask the team for people you cannot find yourself; anyone can suggest a candidate from the pool.
+          Ask the team for people you cannot find yourself; anyone can suggest a candidate from the
+          pool.
         </p>
 
         <div className="mt-4 grid gap-2 rounded-md border border-border p-3 md:grid-cols-4">
@@ -288,7 +305,9 @@ function Collaboration() {
                       size="sm"
                       variant="ghost"
                       disabled={busy}
-                      onClick={() => run("Request closed", () => close({ data: { requestId: r.id } }))}
+                      onClick={() =>
+                        run("Request closed", () => close({ data: { requestId: r.id } }))
+                      }
                     >
                       Close
                     </Button>
@@ -334,7 +353,9 @@ function Collaboration() {
                         >
                           {candName(s.candidate_id)}
                         </Link>{" "}
-                        <span className="text-muted-foreground">suggested by {nameOf(s.suggested_by)}</span>
+                        <span className="text-muted-foreground">
+                          suggested by {nameOf(s.suggested_by)}
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -354,8 +375,8 @@ function Collaboration() {
           <h2 className="font-semibold">Sharing with another organisation</h2>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          Opt-in only. Nothing is visible to a partner until their owner accepts, and either side can
-          stop it at any time. Only share where candidate consent allows it.
+          Opt-in only. Nothing is visible to a partner until their owner accepts, and either side
+          can stop it at any time. Only share where candidate consent allows it.
         </p>
 
         {isOwner ? (
@@ -385,7 +406,9 @@ function Collaboration() {
                 disabled={busy || partner.trim().length < 2}
                 onClick={() =>
                   run("Sharing offer sent", async () => {
-                    await offer({ data: { partnerName: partner.trim(), scope: scope || undefined } });
+                    await offer({
+                      data: { partnerName: partner.trim(), scope: scope || undefined },
+                    });
                     setPartner("");
                     setScope("");
                   })
@@ -403,11 +426,15 @@ function Collaboration() {
 
         <ul className="mt-4 space-y-2">
           {(shares.data ?? []).map((s) => (
-            <li key={s.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border p-3">
+            <li
+              key={s.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border p-3"
+            >
               <div>
                 <p className="text-sm font-medium">{s.partnerName}</p>
                 <p className="text-xs text-muted-foreground">
-                  {s.direction === "outgoing" ? "We share with them" : "They share with us"} · {s.status}
+                  {s.direction === "outgoing" ? "We share with them" : "They share with us"} ·{" "}
+                  {s.status}
                   {s.scope ? ` · ${s.scope}` : ""}
                 </p>
               </div>
@@ -418,7 +445,11 @@ function Collaboration() {
                       <Button
                         size="sm"
                         disabled={busy}
-                        onClick={() => run("Sharing accepted", () => decide({ data: { shareId: s.id, action: "accept" } }))}
+                        onClick={() =>
+                          run("Sharing accepted", () =>
+                            decide({ data: { shareId: s.id, action: "accept" } }),
+                          )
+                        }
                       >
                         Accept
                       </Button>
@@ -426,7 +457,11 @@ function Collaboration() {
                         size="sm"
                         variant="outline"
                         disabled={busy}
-                        onClick={() => run("Sharing declined", () => decide({ data: { shareId: s.id, action: "decline" } }))}
+                        onClick={() =>
+                          run("Sharing declined", () =>
+                            decide({ data: { shareId: s.id, action: "decline" } }),
+                          )
+                        }
                       >
                         Decline
                       </Button>
@@ -437,7 +472,11 @@ function Collaboration() {
                       size="sm"
                       variant="ghost"
                       disabled={busy}
-                      onClick={() => run("Sharing stopped", () => decide({ data: { shareId: s.id, action: "revoke" } }))}
+                      onClick={() =>
+                        run("Sharing stopped", () =>
+                          decide({ data: { shareId: s.id, action: "revoke" } }),
+                        )
+                      }
                     >
                       Stop sharing
                     </Button>
