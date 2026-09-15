@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -304,8 +304,8 @@ export function HrPerformance() {
               </thead>
               <tbody>
                 {data.rows.map((r) => (
-                  <>
-                    <tr key={r.recruiter} className="border-b align-top">
+                  <Fragment key={r.recruiter}>
+                    <tr className="border-b align-top">
                       <td className="py-2 pr-3">
                         <button
                           type="button"
@@ -347,7 +347,7 @@ export function HrPerformance() {
                       </td>
                     </tr>
                     {open === r.recruiter ? (
-                      <tr key={`${r.recruiter}-workings`} className="border-b bg-muted/30">
+                      <tr className="border-b bg-muted/30">
                         <td colSpan={11} className="px-3 py-2 text-xs text-muted-foreground">
                           <ul className="list-inside list-disc space-y-0.5">
                             {r.workings.map((w) => (
@@ -357,7 +357,7 @@ export function HrPerformance() {
                         </td>
                       </tr>
                     ) : null}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
