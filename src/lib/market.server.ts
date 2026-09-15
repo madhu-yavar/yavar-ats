@@ -10,6 +10,9 @@
 
 import { aiJson } from "./ai-gateway.server";
 
+/** One quoted figure from a live page that supports a level's band. */
+export type MarketEvidence = { source: string; url: string; quote: string };
+
 export type MarketLevel = {
   level: string;
   experience_band: string;
@@ -18,6 +21,7 @@ export type MarketLevel = {
   high: number;
   confidence: "high" | "medium" | "low";
   note: string;
+  evidence: MarketEvidence[];
 };
 
 export type MarketSource = { title: string; url: string; read: boolean };
@@ -31,6 +35,8 @@ export type MarketBenchmark = {
   recommended: { budget: number; band_min: number; band_max: number; rationale: string };
   caveats: string[];
   sources: MarketSource[];
+  /** Which model actually did the reasoning, so nobody has to guess. */
+  engine: { provider: string; model: string };
 };
 
 const UA =
