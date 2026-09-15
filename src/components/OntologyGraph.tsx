@@ -35,7 +35,9 @@ export function OntologyGraph({
 
   const layout = useMemo(() => {
     const width = 960;
+    const top = nodes.slice(0, limit);
     const slugs = new Set(top.map((n) => n.slug));
+
     const links = edges.filter((e) => slugs.has(e.from) && slugs.has(e.to)).slice(0, 220);
 
     // Families ordered by size so the biggest neighbourhoods get the roomiest slots.
