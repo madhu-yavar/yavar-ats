@@ -723,6 +723,7 @@ function Dashboard() {
           </div>
         </aside>
       </div>
+      )}
 
       {isExecutive ? (
         <section className="border-t border-border p-5 sm:p-7">
