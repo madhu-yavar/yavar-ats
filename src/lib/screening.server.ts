@@ -346,7 +346,11 @@ export async function transcribeScreeningAudio(input: {
 
   const form = new FormData();
   form.append("model", model);
-  form.append("file", new Blob([Uint8Array.from(input.bytes)], { type: input.contentType }), input.filename);
+  form.append(
+    "file",
+    new Blob([Uint8Array.from(input.bytes)], { type: input.contentType }),
+    input.filename,
+  );
   const res = await fetch(endpoint, {
     method: "POST",
     headers: { Authorization: `Bearer ${cfg.apiKey}` },

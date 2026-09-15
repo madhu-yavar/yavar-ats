@@ -86,7 +86,9 @@ async function loadPairingImpl(supabase: Sb, candidateId: string, requisitionId:
       requisition.responsibilities ?? "",
       `Must-have: ${(requisition.must_have_skills ?? []).join(", ")}`,
       `Good to have: ${(requisition.good_to_have_skills ?? []).join(", ")}`,
-      requisition.education_requirement ? `Qualification: ${requisition.education_requirement}` : "",
+      requisition.education_requirement
+        ? `Qualification: ${requisition.education_requirement}`
+        : "",
     ]
       .filter(Boolean)
       .join("\n");
@@ -204,9 +206,7 @@ export const gradeScreeningAnswers = createServerFn({ method: "POST" })
     z
       .object({
         kitId: z.string().uuid(),
-        answers: z
-          .array(z.object({ question_id: z.string(), answer: z.string() }))
-          .default([]),
+        answers: z.array(z.object({ question_id: z.string(), answer: z.string() })).default([]),
         notes: z.string().optional().nullable(),
         audio: z
           .object({
@@ -341,6 +341,7 @@ export const getScreeningAudioUrl = createServerFn({ method: "POST" })
     const { data: signed, error: sErr } = await supabaseAdmin.storage
       .from("screening-audio")
       .createSignedUrl(run.audio_path, 120);
-    if (sErr || !signed?.signedUrl) throw new Error(sErr?.message ?? "Could not open the recording.");
+    if (sErr || !signed?.signedUrl)
+      throw new Error(sErr?.message ?? "Could not open the recording.");
     return { url: signed.signedUrl };
   });

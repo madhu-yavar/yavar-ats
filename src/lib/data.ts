@@ -43,7 +43,12 @@ export const masterItemsQuery = queryOptions({
   queryKey: ["master_items"],
   queryFn: () =>
     unwrap<MasterItem[]>(
-      supabase.from("master_items").select("*").eq("active", true).order("sort_order").order("name"),
+      supabase
+        .from("master_items")
+        .select("*")
+        .eq("active", true)
+        .order("sort_order")
+        .order("name"),
     ),
 });
 
@@ -52,21 +57,29 @@ export function byKind(items: MasterItem[] | undefined, kind: MasterKind) {
 }
 
 export async function addMasterItem(kind: MasterKind, name: string, category?: string | null) {
-  const { error } = await supabase.from("master_items").insert({ kind, name: name.trim(), category: category ?? null });
+  const { error } = await supabase
+    .from("master_items")
+    .insert({ kind, name: name.trim(), category: category ?? null });
   if (error && !/duplicate|unique/i.test(error.message)) throw new Error(error.message);
 }
 
 export const requisitionsQuery = queryOptions({
   queryKey: ["requisitions"],
   queryFn: () =>
-    unwrap<Requisition[]>(supabase.from("requisitions").select("*").order("created_at", { ascending: false })),
+    unwrap<Requisition[]>(
+      supabase.from("requisitions").select("*").order("created_at", { ascending: false }),
+    ),
 });
 
 export const requisitionQuery = (id: string) =>
   queryOptions({
     queryKey: ["requisition", id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("requisitions").select("*").eq("id", id).maybeSingle();
+      const { data, error } = await supabase
+        .from("requisitions")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
       if (error) throw new Error(error.message);
       return data as Requisition | null;
     },
@@ -88,14 +101,20 @@ export const jdQuery = (requisitionId: string) =>
 export const candidatesQuery = queryOptions({
   queryKey: ["candidates"],
   queryFn: () =>
-    unwrap<Candidate[]>(supabase.from("candidates").select("*").order("created_at", { ascending: false })),
+    unwrap<Candidate[]>(
+      supabase.from("candidates").select("*").order("created_at", { ascending: false }),
+    ),
 });
 
 export const candidateQuery = (id: string) =>
   queryOptions({
     queryKey: ["candidate", id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("candidates").select("*").eq("id", id).maybeSingle();
+      const { data, error } = await supabase
+        .from("candidates")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
       if (error) throw new Error(error.message);
       return data as Candidate | null;
     },
@@ -109,7 +128,9 @@ export const applicationsQuery = queryOptions({
 export const matchScoresQuery = queryOptions({
   queryKey: ["match_scores"],
   queryFn: () =>
-    unwrap<MatchScore[]>(supabase.from("match_scores").select("*").order("computed_at", { ascending: false })),
+    unwrap<MatchScore[]>(
+      supabase.from("match_scores").select("*").order("computed_at", { ascending: false }),
+    ),
 });
 
 export const socialProfilesQuery = queryOptions({
@@ -120,7 +141,9 @@ export const socialProfilesQuery = queryOptions({
 export const evaluationsQuery = queryOptions({
   queryKey: ["evaluations"],
   queryFn: () =>
-    unwrap<Evaluation[]>(supabase.from("evaluations").select("*").order("created_at", { ascending: false })),
+    unwrap<Evaluation[]>(
+      supabase.from("evaluations").select("*").order("created_at", { ascending: false }),
+    ),
 });
 
 export const interviewsQuery = queryOptions({
@@ -130,7 +153,8 @@ export const interviewsQuery = queryOptions({
 
 export const offersQuery = queryOptions({
   queryKey: ["offers"],
-  queryFn: () => unwrap<Offer[]>(supabase.from("offers").select("*").order("created_at", { ascending: false })),
+  queryFn: () =>
+    unwrap<Offer[]>(supabase.from("offers").select("*").order("created_at", { ascending: false })),
 });
 
 export const aiInterviewsQuery = queryOptions({
@@ -160,7 +184,10 @@ export const verificationsQuery = queryOptions({
   queryKey: ["candidate_verifications"],
   queryFn: () =>
     unwrap<CandidateVerification[]>(
-      supabase.from("candidate_verifications").select("*").order("created_at", { ascending: false }),
+      supabase
+        .from("candidate_verifications")
+        .select("*")
+        .order("created_at", { ascending: false }),
     ),
 });
 
@@ -206,3 +233,33 @@ export function latestScores(scores: MatchScore[]) {
   return map;
 }
 
+export type ScreeningKit = Tables<"screening_kits">;
+export type ScreeningRun = Tables<"screening_runs">;
+
+/** Screening question kits prepared for one candidate, newest first. */
+export const screeningKitsQuery = (candidateId: string) =>
+  queryOptions({
+    queryKey: ["screening_kits", candidateId],
+    queryFn: () =>
+      unwrap<ScreeningKit[]>(
+        supabase
+          .from("screening_kits")
+          .select("*")
+          .eq("candidate_id", candidateId)
+          .order("created_at", { ascending: false }),
+      ),
+  });
+
+/** Graded screening calls for one candidate, newest first. */
+export const screeningRunsQuery = (candidateId: string) =>
+  queryOptions({
+    queryKey: ["screening_runs", candidateId],
+    queryFn: () =>
+      unwrap<ScreeningRun[]>(
+        supabase
+          .from("screening_runs")
+          .select("*")
+          .eq("candidate_id", candidateId)
+          .order("created_at", { ascending: false }),
+      ),
+  });
