@@ -673,6 +673,50 @@ export type Database = {
           },
         ]
       }
+      hr_incentive_schemes: {
+        Row: {
+          currency: string
+          monthly_cap: number | null
+          notes: string | null
+          org_id: string
+          payout_per_closure: number
+          quality_bands: Json
+          target_closures_per_month: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          currency?: string
+          monthly_cap?: number | null
+          notes?: string | null
+          org_id: string
+          payout_per_closure?: number
+          quality_bands?: Json
+          target_closures_per_month?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          currency?: string
+          monthly_cap?: number | null
+          notes?: string | null
+          org_id?: string
+          payout_per_closure?: number
+          quality_bands?: Json
+          target_closures_per_month?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_incentive_schemes_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inbox_messages: {
         Row: {
           attachment_bytes: number | null
@@ -1489,6 +1533,188 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      screening_kits: {
+        Row: {
+          application_id: string | null
+          candidate_id: string
+          created_at: string
+          created_by: string | null
+          engine: Json
+          focus_summary: string | null
+          id: string
+          org_id: string | null
+          questions: Json
+          requisition_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          application_id?: string | null
+          candidate_id: string
+          created_at?: string
+          created_by?: string | null
+          engine?: Json
+          focus_summary?: string | null
+          id?: string
+          org_id?: string | null
+          questions?: Json
+          requisition_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          application_id?: string | null
+          candidate_id?: string
+          created_at?: string
+          created_by?: string | null
+          engine?: Json
+          focus_summary?: string | null
+          id?: string
+          org_id?: string | null
+          questions?: Json
+          requisition_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "screening_kits_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "screening_kits_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "screening_kits_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "screening_kits_requisition_id_fkey"
+            columns: ["requisition_id"]
+            isOneToOne: false
+            referencedRelation: "requisitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      screening_runs: {
+        Row: {
+          answers: Json
+          application_id: string | null
+          audio_engine: string | null
+          audio_path: string | null
+          candidate_id: string
+          combined_score: number | null
+          created_at: string
+          created_by: string | null
+          engine: Json
+          id: string
+          input_kind: string
+          kit_id: string
+          match_score: number | null
+          org_id: string | null
+          rationale: string | null
+          recommendation: string | null
+          recommendation_reason: string | null
+          red_flags: string[]
+          requisition_id: string | null
+          screening_score: number
+          transcript: string | null
+          verdicts: Json
+        }
+        Insert: {
+          answers?: Json
+          application_id?: string | null
+          audio_engine?: string | null
+          audio_path?: string | null
+          candidate_id: string
+          combined_score?: number | null
+          created_at?: string
+          created_by?: string | null
+          engine?: Json
+          id?: string
+          input_kind?: string
+          kit_id: string
+          match_score?: number | null
+          org_id?: string | null
+          rationale?: string | null
+          recommendation?: string | null
+          recommendation_reason?: string | null
+          red_flags?: string[]
+          requisition_id?: string | null
+          screening_score?: number
+          transcript?: string | null
+          verdicts?: Json
+        }
+        Update: {
+          answers?: Json
+          application_id?: string | null
+          audio_engine?: string | null
+          audio_path?: string | null
+          candidate_id?: string
+          combined_score?: number | null
+          created_at?: string
+          created_by?: string | null
+          engine?: Json
+          id?: string
+          input_kind?: string
+          kit_id?: string
+          match_score?: number | null
+          org_id?: string | null
+          rationale?: string | null
+          recommendation?: string | null
+          recommendation_reason?: string | null
+          red_flags?: string[]
+          requisition_id?: string | null
+          screening_score?: number
+          transcript?: string | null
+          verdicts?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "screening_runs_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "screening_runs_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "screening_runs_kit_id_fkey"
+            columns: ["kit_id"]
+            isOneToOne: false
+            referencedRelation: "screening_kits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "screening_runs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "screening_runs_requisition_id_fkey"
+            columns: ["requisition_id"]
+            isOneToOne: false
+            referencedRelation: "requisitions"
             referencedColumns: ["id"]
           },
         ]
