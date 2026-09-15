@@ -20,7 +20,11 @@ async function requireSuperUser(context: { claims?: Record<string, unknown> | nu
   const email = raw ? raw.toLowerCase() : null;
   if (!email) throw new Error("Your account has no email address.");
   const db = await admin();
-  const { data } = await db.from("platform_admins").select("id").ilike("email", email).maybeSingle();
+  const { data } = await db
+    .from("platform_admins")
+    .select("id")
+    .ilike("email", email)
+    .maybeSingle();
   if (!data) throw new Error("Super-user access only.");
   return email;
 }
@@ -60,7 +64,8 @@ export const readCatalogue = createServerFn({ method: "GET" })
           commercials: {
             moduleId: m.id,
             tier: s?.tier ?? m.defaultTier,
-            listPrice: s?.list_price === null || s?.list_price === undefined ? null : Number(s.list_price),
+            listPrice:
+              s?.list_price === null || s?.list_price === undefined ? null : Number(s.list_price),
             currency: s?.currency ?? "USD",
             unit: s?.unit ?? "per user / month",
             notes: s?.notes ?? "",

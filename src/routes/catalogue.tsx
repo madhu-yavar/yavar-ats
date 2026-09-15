@@ -5,7 +5,11 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Download, FileSpreadsheet, Search } from "lucide-react";
 
-import { readCatalogue, saveCatalogueCommercials, type CatalogueRow } from "@/lib/catalogue.functions";
+import {
+  readCatalogue,
+  saveCatalogueCommercials,
+  type CatalogueRow,
+} from "@/lib/catalogue.functions";
 import { CATALOGUE_SUMMARY, CATALOGUE_TIERS, totalCapabilities } from "@/lib/product-catalogue";
 import { downloadCataloguePdf, downloadCatalogueXlsx } from "@/lib/catalogue-export";
 import { usePlatform } from "@/hooks/usePlatform";
@@ -32,7 +36,8 @@ export const Route = createFileRoute("/catalogue")({
       { property: "og:title", content: "ATSIQ product catalogue" },
       {
         property: "og:description",
-        content: "Live module and capability catalogue with editable commercial terms, exportable to PDF and Excel.",
+        content:
+          "Live module and capability catalogue with editable commercial terms, exportable to PDF and Excel.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -69,14 +74,15 @@ function Catalogue() {
     });
   }, [cat.data, q, tier]);
 
-  if (loadingRole) return <p className="p-6 text-sm text-muted-foreground">Checking your access…</p>;
+  if (loadingRole)
+    return <p className="p-6 text-sm text-muted-foreground">Checking your access…</p>;
   if (!isSuperUser) {
     return (
       <div className="p-6">
         <h1 className="font-display text-xl">Product catalogue</h1>
         <p className="mt-2 max-w-prose text-sm text-muted-foreground">
-          The product catalogue is available to the product owner only. Ask the super admin if you need a
-          copy for a client conversation.
+          The product catalogue is available to the product owner only. Ask the super admin if you
+          need a copy for a client conversation.
         </p>
       </div>
     );
@@ -86,9 +92,13 @@ function Catalogue() {
     <div className="space-y-6 p-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-[11px] font-mono uppercase tracking-widest text-primary">Product owner</p>
+          <p className="text-[11px] font-mono uppercase tracking-widest text-primary">
+            Product owner
+          </p>
           <h1 className="font-display text-2xl">Product catalogue</h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{CATALOGUE_SUMMARY.positioning}</p>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            {CATALOGUE_SUMMARY.positioning}
+          </p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -139,7 +149,9 @@ function Catalogue() {
         <span className="text-xs text-muted-foreground">{rows.length} shown</span>
       </div>
 
-      {cat.isLoading ? <p className="text-sm text-muted-foreground">Building the catalogue…</p> : null}
+      {cat.isLoading ? (
+        <p className="text-sm text-muted-foreground">Building the catalogue…</p>
+      ) : null}
       {cat.error ? (
         <p className="text-sm text-destructive">{(cat.error as Error).message}</p>
       ) : null}
@@ -156,7 +168,9 @@ function Catalogue() {
 function Figure({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border bg-card p-4">
-      <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">{label}</p>
+      <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
+        {label}
+      </p>
       <p className="mt-1 truncate font-display text-lg">{value}</p>
     </div>
   );
@@ -255,7 +269,11 @@ function ModuleCard({ m }: { m: CatalogueRow }) {
           </label>
           <label className="text-xs">
             Currency
-            <Input className="mt-1" value={currency} onChange={(e) => setCurrency(e.target.value)} />
+            <Input
+              className="mt-1"
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+            />
           </label>
           <label className="text-xs">
             List price

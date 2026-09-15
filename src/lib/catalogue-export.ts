@@ -46,7 +46,13 @@ export function downloadCataloguePdf(cat: CatalogueResult) {
     head: [["Module", "Category", "Tier", "List price"]],
     body: cat.modules.map((m) => [m.name, m.category, m.commercials.tier, price(m.commercials)]),
     theme: "grid",
-    styles: { font: "helvetica", fontSize: 9, cellPadding: 5, textColor: INK, lineColor: [226, 226, 232] },
+    styles: {
+      font: "helvetica",
+      fontSize: 9,
+      cellPadding: 5,
+      textColor: INK,
+      lineColor: [226, 226, 232],
+    },
     headStyles: { fillColor: VIOLET, textColor: [255, 255, 255], fontStyle: "bold" },
     margin: { left: margin, right: margin },
   });
@@ -60,12 +66,20 @@ export function downloadCataloguePdf(cat: CatalogueResult) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(110, 110, 120);
-    doc.text(`${m.category}  ·  ${m.audience}  ·  ${m.commercials.tier}  ·  ${price(m.commercials)}`, margin, 74);
+    doc.text(
+      `${m.category}  ·  ${m.audience}  ·  ${m.commercials.tier}  ·  ${price(m.commercials)}`,
+      margin,
+      74,
+    );
 
     doc.setTextColor(...INK);
     doc.setFontSize(10);
     let y = 98;
-    for (const para of [m.summary, `Outcome: ${m.outcome}`, m.commercials.notes ? `Commercial notes: ${m.commercials.notes}` : ""]) {
+    for (const para of [
+      m.summary,
+      `Outcome: ${m.outcome}`,
+      m.commercials.notes ? `Commercial notes: ${m.commercials.notes}` : "",
+    ]) {
       if (!para) continue;
       const lines = doc.splitTextToSize(para, width - margin * 2);
       doc.text(lines, margin, y);
