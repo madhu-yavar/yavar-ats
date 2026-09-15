@@ -24,10 +24,18 @@ const confidenceTone: Record<string, string> = {
   low: "text-muted-foreground",
 };
 
+const engineLabel: Record<string, string> = {
+  lovable: "Built-in Lovable AI (uses Lovable credits)",
+  openai: "Your OpenAI key",
+  anthropic: "Your Claude key",
+  gemini: "Your Google Gemini key",
+};
+
 export function MarketBenchmarkPanel(props: Props) {
   const run = useServerFn(benchmarkCompensation);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<MarketBenchmark | null>(null);
+  const [openLevel, setOpenLevel] = useState<string | null>(null);
   const currency = props.currency ?? "INR";
   const money = (n: number) => (currency === "INR" ? inr(n) : `${currency} ${n.toLocaleString()}`);
 
