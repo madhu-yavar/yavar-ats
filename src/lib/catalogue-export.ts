@@ -49,7 +49,12 @@ export function buildCataloguePdf(cat: CatalogueResult) {
   autoTable(doc, {
     startY: 126 + intro.length * 13 + 14,
     head: [["Module", "Category", "Tier", "List price"]],
-    body: cat.modules.map((m) => [pdfText(m.name), m.category, m.commercials.tier, price(m.commercials)]),
+    body: cat.modules.map((m) => [
+      pdfText(m.name),
+      m.category,
+      m.commercials.tier,
+      price(m.commercials),
+    ]),
     theme: "grid",
     styles: {
       font: "helvetica",
