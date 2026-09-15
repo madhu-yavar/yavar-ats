@@ -60,7 +60,12 @@ export async function resolveAiConfig(): Promise<AiConfig> {
       .select("api_key")
       .eq("provider", provider)
       .maybeSingle();
-    const envKey = provider === "openai" ? process.env["OPENAI_API_KEY"] : process.env["ANTHROPIC_API_KEY"];
+    const envKey =
+      provider === "openai"
+        ? process.env["OPENAI_API_KEY"]
+        : provider === "gemini"
+          ? (process.env["GEMINI_API_KEY"] ?? process.env["GOOGLE_API_KEY"])
+          : process.env["ANTHROPIC_API_KEY"];
     return { provider, model, apiKey: cred?.api_key ?? envKey ?? null };
   } catch {
     return fallback;
