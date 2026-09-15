@@ -93,6 +93,24 @@ export async function clearProviderKey(provider: AiProvider) {
   await db.from("ai_provider_credentials").delete().eq("provider", provider);
 }
 
+/** Stored (or env) key for a bring-your-own provider. */
+export async function readProviderKey(provider: AiProvider): Promise<string | null> {
+  if (provider === "lovable") return process.env["LOVABLE_API_KEY"] ?? null;
+  const db = await admin();
+  const { data } = await db
+    .from("ai_provider_credentials")
+    .select("api_key")
+    .eq("provider", provider)
+    .maybeSingle();
+  const envKey =
+    provider === "openai"
+      ? process.env["OPENAI_API_KEY"]
+      : provider === "gemini"
+        ? (process.env["GEMINI_API_KEY"] ?? process.env["GOOGLE_API_KEY"])
+        : process.env["ANTHROPIC_API_KEY"];
+  return data?.api_key ?? envKey ?? null;
+}
+
 export async function hasProviderKey(provider: AiProvider) {
   const db = await admin();
   const { data } = await db
