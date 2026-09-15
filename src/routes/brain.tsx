@@ -252,8 +252,8 @@ function TalentBrainPage() {
                 {data?.diff.grown.length ?? 0} grew
               </li>
               <li className="flex items-center gap-2 text-amber-600">
-                <TrendingDown className="size-3.5" /> {data?.diff.dormant.length ?? 0} went dormant ·{" "}
-                {data?.diff.retired.length ?? 0} retired
+                <TrendingDown className="size-3.5" /> {data?.diff.dormant.length ?? 0} went dormant
+                · {data?.diff.retired.length ?? 0} retired
               </li>
             </ul>
             {data?.history.length ? (
@@ -330,17 +330,15 @@ function Figure({
   tone,
 }: {
   label: string;
-  value?: number | string;
-  tone?: "warn";
+  value?: number | string | undefined;
+  tone?: "warn" | undefined;
 }) {
   return (
     <div className="rounded-xl border bg-card p-4">
       <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
         {label}
       </p>
-      <p className={`mt-1 text-2xl ${tone === "warn" ? "text-amber-600" : ""}`}>
-        {value ?? "—"}
-      </p>
+      <p className={`mt-1 text-2xl ${tone === "warn" ? "text-amber-600" : ""}`}>{value ?? "—"}</p>
     </div>
   );
 }

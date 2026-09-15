@@ -85,7 +85,7 @@ export function OntologyGraph({
           const dx = b.x - a.x;
           const dy = b.y - a.y;
           const d2 = Math.max(400, dx * dx + dy * dy);
-          const push = (a.r + b.r) * 26 / d2;
+          const push = ((a.r + b.r) * 26) / d2;
           a.vx -= dx * push;
           a.vy -= dy * push;
           b.vx += dx * push;
@@ -189,7 +189,9 @@ export function OntologyGraph({
         <Legend colour="hsl(35 92% 52% / 0.85)" label="Tightening" />
         <Legend colour="hsl(0 72% 55% / 0.85)" label="Scarce vs demand" />
         <Legend colour="hsl(var(--muted-foreground) / 0.35)" label="Dormant" />
-        <span>Bubble size = people + weighted openings. Lines = skills your people actually pair.</span>
+        <span>
+          Bubble size = people + weighted openings. Lines = skills your people actually pair.
+        </span>
       </div>
     </div>
   );
