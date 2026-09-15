@@ -1222,6 +1222,7 @@ function AiModelCard() {
             <option value="lovable">Built-in Lovable AI (Gemini + OpenAI, no key)</option>
             <option value="openai">OpenAI — your own API key</option>
             <option value="anthropic">Anthropic Claude — your own API key</option>
+            <option value="gemini">Google Gemini — your own API key</option>
           </select>
         </div>
 
