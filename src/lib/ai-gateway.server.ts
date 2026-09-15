@@ -9,18 +9,21 @@
  *   lovable   — built-in Lovable AI gateway (Gemini + OpenAI models, no key)
  *   openai    — your own OpenAI API key
  *   anthropic — your own Anthropic (Claude) API key
+ *   gemini    — your own Google Gemini API key
  */
 
 const LOVABLE_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const OPENAI_ENDPOINT = "https://api.openai.com/v1/chat/completions";
 const ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1/messages";
+const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 
-export type AiProvider = "lovable" | "openai" | "anthropic";
+export type AiProvider = "lovable" | "openai" | "anthropic" | "gemini";
 
 export const DEFAULT_MODEL: Record<AiProvider, string> = {
   lovable: "google/gemini-3.7-flash",
   openai: "gpt-5.5",
   anthropic: "claude-sonnet-4-5",
+  gemini: "gemini-2.5-flash",
 };
 
 export type AiConfig = { provider: AiProvider; model: string; apiKey: string | null };
@@ -46,19 +49,26 @@ export async function resolveAiConfig(): Promise<AiConfig> {
     const { data } = await db.from("ai_settings").select("provider, model").limit(1).maybeSingle();
     if (!data) return fallback;
 
-    const provider = (["lovable", "openai", "anthropic"] as const).includes(data.provider as AiProvider)
+    const known: AiProvider[] = ["lovable", "openai", "anthropic", "gemini"];
+    const provider = known.includes(data.provider as AiProvider)
       ? (data.provider as AiProvider)
       : "lovable";
     const model = data.model?.trim() || DEFAULT_MODEL[provider];
 
-    if (provider === "lovable") return { provider, model, apiKey: process.env["LOVABLE_API_KEY"] ?? null };
+    if (provider === "lovable")
+      return { provider, model, apiKey: process.env["LOVABLE_API_KEY"] ?? null };
 
     const { data: cred } = await db
       .from("ai_provider_credentials")
       .select("api_key")
       .eq("provider", provider)
       .maybeSingle();
-    const envKey = provider === "openai" ? process.env["OPENAI_API_KEY"] : process.env["ANTHROPIC_API_KEY"];
+    const envKey =
+      provider === "openai"
+        ? process.env["OPENAI_API_KEY"]
+        : provider === "gemini"
+          ? (process.env["GEMINI_API_KEY"] ?? process.env["GOOGLE_API_KEY"])
+          : process.env["ANTHROPIC_API_KEY"];
     return { provider, model, apiKey: cred?.api_key ?? envKey ?? null };
   } catch {
     return fallback;
@@ -204,7 +214,9 @@ export async function aiJson<T>(opts: {
     ? ANTHROPIC_ENDPOINT
     : cfg.provider === "openai"
       ? OPENAI_ENDPOINT
-      : LOVABLE_GATEWAY;
+      : cfg.provider === "gemini"
+        ? GEMINI_ENDPOINT
+        : LOVABLE_GATEWAY;
 
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (isAnthropic) {
@@ -255,7 +267,8 @@ export async function aiJson<T>(opts: {
 
   const text = isAnthropic ? await readAnthropicStream(res.body) : await readOpenAiStream(res.body);
   const parsed = parseJsonish<T>(text);
-  if (!parsed) return { ok: false, status: 502, message: "AI returned a response that could not be parsed." };
+  if (!parsed)
+    return { ok: false, status: 502, message: "AI returned a response that could not be parsed." };
 
   return { ok: true, data: parsed, model: cfg.model, provider: cfg.provider };
 }

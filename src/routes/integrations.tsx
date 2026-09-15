@@ -17,8 +17,17 @@ import {
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
-import { disconnectIntegration, saveIntegration, testIntegration } from "@/lib/integrations.functions";
-import { getAiSettings, removeAiKey, saveAiSettings, testAiModel } from "@/lib/ai-settings.functions";
+import {
+  disconnectIntegration,
+  saveIntegration,
+  testIntegration,
+} from "@/lib/integrations.functions";
+import {
+  getAiSettings,
+  removeAiKey,
+  saveAiSettings,
+  testAiModel,
+} from "@/lib/ai-settings.functions";
 import {
   disconnectLinkedIn,
   linkedinCapabilities,
@@ -139,14 +148,22 @@ const SETUP_GUIDE: Record<string, SetupGuide> = {
     who: "Nothing to configure — this is the built-in careers page source.",
     minutes: "0 min",
     links: [],
-    steps: ["Leave this on. Applicants from your own careers page land straight in the talent pool."],
+    steps: [
+      "Leave this on. Applicants from your own careers page land straight in the talent pool.",
+    ],
   },
   zoom: {
     who: "Needs a paid Zoom plan and someone with the Zoom admin role.",
     minutes: "10 min",
     links: [
-      { label: "Zoom App Marketplace (Build app)", href: "https://marketplace.zoom.us/develop/create" },
-      { label: "Zoom setup guide (with screenshots)", href: "https://developers.zoom.us/docs/internal-apps/create/" },
+      {
+        label: "Zoom App Marketplace (Build app)",
+        href: "https://marketplace.zoom.us/develop/create",
+      },
+      {
+        label: "Zoom setup guide (with screenshots)",
+        href: "https://developers.zoom.us/docs/internal-apps/create/",
+      },
     ],
     steps: [
       "Open the Marketplace link, choose Build App → “Server-to-Server OAuth”, and give it the name “ATS interviews”.",
@@ -159,9 +176,18 @@ const SETUP_GUIDE: Record<string, SetupGuide> = {
     who: "Needs a Google Workspace account for the recruiting calendar and its admin.",
     minutes: "15 min",
     links: [
-      { label: "Google Cloud credentials page", href: "https://console.cloud.google.com/apis/credentials" },
-      { label: "Turn on Calendar API", href: "https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" },
-      { label: "OAuth Playground (get refresh token)", href: "https://developers.google.com/oauthplayground/" },
+      {
+        label: "Google Cloud credentials page",
+        href: "https://console.cloud.google.com/apis/credentials",
+      },
+      {
+        label: "Turn on Calendar API",
+        href: "https://console.cloud.google.com/apis/library/calendar-json.googleapis.com",
+      },
+      {
+        label: "OAuth Playground (get refresh token)",
+        href: "https://developers.google.com/oauthplayground/",
+      },
     ],
     steps: [
       "In Google Cloud, create a project, then press “Turn on Calendar API”.",
@@ -176,7 +202,10 @@ const SETUP_GUIDE: Record<string, SetupGuide> = {
     who: "Needs Microsoft 365 and a Global/Application admin in Microsoft Entra (Azure AD).",
     minutes: "15 min",
     links: [
-      { label: "Register an Entra app", href: "https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" },
+      {
+        label: "Register an Entra app",
+        href: "https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade",
+      },
       {
         label: "Microsoft setup guide",
         href: "https://learn.microsoft.com/en-us/graph/cloud-communications-online-meeting-application-access-policy",
@@ -225,13 +254,12 @@ function SetupHelp({ provider, label }: { provider: string; label: string }) {
         ))}
       </ol>
       <p className="mt-3 text-xs text-muted-foreground">
-        Stuck on a step? Forward this list to whoever administers the account — everything above happens on the
-        provider’s own website, not here.
+        Stuck on a step? Forward this list to whoever administers the account — everything above
+        happens on the provider’s own website, not here.
       </p>
     </details>
   );
 }
-
 
 export const Route = createFileRoute("/integrations")({
   head: () => ({
@@ -245,7 +273,8 @@ export const Route = createFileRoute("/integrations")({
       { property: "og:title", content: "Sourcing Integrations" },
       {
         property: "og:description",
-        content: "HR-configurable job board and profile API credentials with live connection tests.",
+        content:
+          "HR-configurable job board and profile API credentials with live connection tests.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -299,7 +328,9 @@ function CredentialFields({
             value={secrets[field] ?? ""}
             onChange={(e) => setSecrets((p) => ({ ...p, [field]: e.target.value }))}
           />
-          {FIELD_HINT[field] ? <p className="mt-1 text-xs text-muted-foreground">{FIELD_HINT[field]}</p> : null}
+          {FIELD_HINT[field] ? (
+            <p className="mt-1 text-xs text-muted-foreground">{FIELD_HINT[field]}</p>
+          ) : null}
         </div>
       ))}
       {showBaseUrl ? (
@@ -311,7 +342,8 @@ function CredentialFields({
             onChange={(e) => setBaseUrl(e.target.value)}
           />
           <p className="mt-1 text-xs text-muted-foreground">
-            Supplied in your partner onboarding pack. Required before search and applicant pulls can run.
+            Supplied in your partner onboarding pack. Required before search and applicant pulls can
+            run.
           </p>
         </div>
       ) : null}
@@ -346,7 +378,6 @@ Thank you,
 [Your name] — [Company] — [Contact number]`;
 
 function LinkedinOneClick() {
-
   const qc = useQueryClient();
   const start = useServerFn(startLinkedInConnect);
   const drop = useServerFn(disconnectLinkedIn);
@@ -436,7 +467,6 @@ function LinkedinOneClick() {
     }
   }
 
-
   async function onDisconnect() {
     setBusy(true);
     try {
@@ -479,11 +509,10 @@ function LinkedinOneClick() {
       <p className="mt-2 text-sm text-muted-foreground">{body}</p>
       {awaiting ? (
         <p className="mt-2 inline-flex items-center gap-2 text-sm text-primary">
-          <Loader2 className="size-4 animate-spin" /> Waiting for you to finish signing in on the LinkedIn tab that
-          just opened — you can close it once LinkedIn says you're done.
+          <Loader2 className="size-4 animate-spin" /> Waiting for you to finish signing in on the
+          LinkedIn tab that just opened — you can close it once LinkedIn says you're done.
         </p>
       ) : null}
-
 
       {s?.connected ? (
         <div className="mt-3 rounded-lg border border-border bg-background p-3">
@@ -499,7 +528,9 @@ function LinkedinOneClick() {
             </Button>
           </div>
           {caps.isLoading ? (
-            <p className="mt-2 text-sm text-muted-foreground">Asking LinkedIn what your seat allows…</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Asking LinkedIn what your seat allows…
+            </p>
           ) : caps.error ? (
             <p className="mt-2 text-sm text-destructive">
               {caps.error instanceof Error ? caps.error.message : "Could not check this account."}
@@ -532,12 +563,12 @@ function LinkedinOneClick() {
             Ask LinkedIn to switch on the missing pieces — ready-to-send note
           </summary>
           <p className="mt-2 text-xs text-muted-foreground">
-            A Recruiter seat on its own does not include the job-posting or applicant products. Only LinkedIn can add
-            them to your contract, so send this to your LinkedIn account manager. Everything else in ATSIQ keeps
-            working while you wait.
+            A Recruiter seat on its own does not include the job-posting or applicant products. Only
+            LinkedIn can add them to your contract, so send this to your LinkedIn account manager.
+            Everything else in ATSIQ keeps working while you wait.
           </p>
           <pre className="mt-2 whitespace-pre-wrap rounded-md border border-border bg-surface-2 p-3 text-xs">
-{LINKEDIN_REQUEST}
+            {LINKEDIN_REQUEST}
           </pre>
           <Button
             size="sm"
@@ -553,7 +584,6 @@ function LinkedinOneClick() {
         </details>
       ) : null}
 
-
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={onConnect} disabled={busy || !s?.configured}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : null}
@@ -561,7 +591,11 @@ function LinkedinOneClick() {
         </Button>
         {s?.connected ? (
           <Button size="sm" variant="outline" onClick={onCollect} disabled={collecting}>
-            {collecting ? <Loader2 className="size-4 animate-spin" /> : <Inbox className="size-4" />}
+            {collecting ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Inbox className="size-4" />
+            )}
             {collecting ? "Collecting CVs and scoring…" : "Collect CVs from live posts"}
           </Button>
         ) : null}
@@ -604,16 +638,18 @@ function LinkedinOneClick() {
 
       <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
         <li>
-          Each organisation connects its own account. Your posts, and the applications they bring in, stay inside
-          your workspace.
+          Each organisation connects its own account. Your posts, and the applications they bring
+          in, stay inside your workspace.
         </li>
         <li>
-          CVs come back automatically: through the apply link inside each post, and through the careers mailbox
-          import below, which reads LinkedIn application emails and files the attached CVs on its own.
+          CVs come back automatically: through the apply link inside each post, and through the
+          careers mailbox import below, which reads LinkedIn application emails and files the
+          attached CVs on its own.
         </li>
         <li>
-          Reading other people's LinkedIn profiles directly needs a paid LinkedIn Talent Solutions data agreement —
-          a Recruiter seat alone does not include it. Use the request below to start that with LinkedIn.
+          Reading other people's LinkedIn profiles directly needs a paid LinkedIn Talent Solutions
+          data agreement — a Recruiter seat alone does not include it. Use the request below to
+          start that with LinkedIn.
         </li>
       </ul>
 
@@ -622,7 +658,7 @@ function LinkedinOneClick() {
           Ask LinkedIn to switch on data access for ATSIQ — ready-to-send request
         </summary>
         <pre className="mt-3 whitespace-pre-wrap rounded-md bg-surface-2 p-3 text-[11px] leading-relaxed text-muted-foreground">
-{LINKEDIN_ACCESS_REQUEST}
+          {LINKEDIN_ACCESS_REQUEST}
         </pre>
         <Button
           size="sm"
@@ -639,7 +675,6 @@ function LinkedinOneClick() {
     </div>
   );
 }
-
 
 const LINKEDIN_ACCESS_REQUEST = `Subject: Recruiter System Connect / Talent Solutions data access for our ATS
 
@@ -723,11 +758,14 @@ function CareersInboxPanel() {
       {address ? (
         <>
           <p className="mt-2 text-sm text-muted-foreground">
-            Your organisation has its own address. Put it on your LinkedIn posts and job-board alerts, or forward
-            application mail to it, and every attached CV is read, filed against the right role and scored on its own.
+            Your organisation has its own address. Put it on your LinkedIn posts and job-board
+            alerts, or forward application mail to it, and every attached CV is read, filed against
+            the right role and scored on its own.
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <code className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm">{address}</code>
+            <code className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm">
+              {address}
+            </code>
             <Button
               size="sm"
               variant="outline"
@@ -740,14 +778,15 @@ function CareersInboxPanel() {
             </Button>
           </div>
           <p className="num mt-3 text-xs text-muted-foreground">
-            {mine.data?.counts.total ?? 0} mails received · {mine.data?.counts.imported ?? 0} new candidates ·{" "}
-            {mine.data?.counts.updated ?? 0} refreshed · {mine.data?.counts.errors ?? 0} need a look
+            {mine.data?.counts.total ?? 0} mails received · {mine.data?.counts.imported ?? 0} new
+            candidates · {mine.data?.counts.updated ?? 0} refreshed ·{" "}
+            {mine.data?.counts.errors ?? 0} need a look
           </p>
         </>
       ) : (
         <p className="mt-2 text-sm text-muted-foreground">
-          Your careers address is created with your organisation. If it is missing, ask your ATSIQ administrator to
-          finish onboarding for this workspace.
+          Your careers address is created with your organisation. If it is missing, ask your ATSIQ
+          administrator to finish onboarding for this workspace.
         </p>
       )}
 
@@ -759,12 +798,11 @@ function CareersInboxPanel() {
         </Button>
       ) : null}
 
-
       {result ? (
         <div className="mt-3 rounded-md border border-border bg-background p-3">
           <p className="num text-xs text-muted-foreground">
-            {result.scanned} emails scanned · {result.imported} new candidates · {result.updated} refreshed ·{" "}
-            {result.skipped} skipped · {result.errors} failed
+            {result.scanned} emails scanned · {result.imported} new candidates · {result.updated}{" "}
+            refreshed · {result.skipped} skipped · {result.errors} failed
           </p>
           {result.outcomes.length ? (
             <ul className="mt-2 space-y-1 text-xs">
@@ -848,14 +886,14 @@ function CapturePanel() {
       </div>
 
       <p className="mt-2 text-sm text-muted-foreground">
-        Stay signed in to LinkedIn Recruiter or any job board as you normally do. Looking at a single CV or
-        job description, press the companion once and it comes across. On a Recruiter applicant list, press
-        <span className="font-medium text-foreground"> Start sweep</span> instead: the job becomes a role
-        here, then each applicant is opened in turn in your own browser, read, de-duplicated, matched and
-        scored — up to 25 per run, at a deliberately slow human pace, with a live count and a Stop button.
-        Your sign-in never leaves your machine and nothing runs unattended.
+        Stay signed in to LinkedIn Recruiter or any job board as you normally do. Looking at a
+        single CV or job description, press the companion once and it comes across. On a Recruiter
+        applicant list, press
+        <span className="font-medium text-foreground"> Start sweep</span> instead: the job becomes a
+        role here, then each applicant is opened in turn in your own browser, read, de-duplicated,
+        matched and scored — up to 25 per run, at a deliberately slow human pace, with a live count
+        and a Stop button. Your sign-in never leaves your machine and nothing runs unattended.
       </p>
-
 
       <div className="mt-3 grid gap-2 text-xs">
         <div className="flex flex-wrap items-center gap-2">
@@ -880,8 +918,8 @@ function CapturePanel() {
           ) : null}
         </div>
         <p className="text-muted-foreground">
-          Paste it into the companion together with your ATSIQ address. Treat it like a password — anyone
-          holding it can add candidates to your workspace.
+          Paste it into the companion together with your ATSIQ address. Treat it like a password —
+          anyone holding it can add candidates to your workspace.
         </p>
       </div>
 
@@ -891,11 +929,10 @@ function CapturePanel() {
         <li>Choose “Load unpacked” and pick the unzipped folder.</li>
         <li>Open it once, paste your ATSIQ address and the key above, and save.</li>
         <li>
-          In LinkedIn Recruiter open a job, choose the applicants view, then press Start sweep in the
-          companion.
+          In LinkedIn Recruiter open a job, choose the applicants view, then press Start sweep in
+          the companion.
         </li>
       </ol>
-
 
       <p className="mt-3 text-xs text-muted-foreground">
         Captured CVs and roles appear in the Talent pool and Requisitions pages.
@@ -904,9 +941,7 @@ function CapturePanel() {
   );
 }
 
-
 function IntegrationCard({ row }: { row: Integration }) {
-
   const qc = useQueryClient();
   const save = useServerFn(saveIntegration);
 
@@ -917,21 +952,16 @@ function IntegrationCard({ row }: { row: Integration }) {
   const [enabled, setEnabled] = useState(row.enabled);
   // Keep the switch in sync with the saved value after any refetch.
   useEffect(() => setEnabled(row.enabled), [row.enabled]);
-  const [baseUrl, setBaseUrl] = useState(typeof cfg["base_url"] === "string" ? (cfg["base_url"] as string) : "");
+  const [baseUrl, setBaseUrl] = useState(
+    typeof cfg["base_url"] === "string" ? (cfg["base_url"] as string) : "",
+  );
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<"save" | "test" | "clear" | null>(null);
   // Collapsed by default so the page reads as a short, calm list.
   const [expanded, setExpanded] = useState(false);
 
   const provider = row.provider as
-    | "linkedin"
-    | "naukri"
-    | "indeed"
-    | "github"
-    | "careers"
-    | "zoom"
-    | "google_meet"
-    | "teams";
+    "linkedin" | "naukri" | "indeed" | "github" | "careers" | "zoom" | "google_meet" | "teams";
   const isMeeting = row.category === "meeting";
   const notes = typeof cfg["notes"] === "string" ? (cfg["notes"] as string) : null;
   const docs = typeof cfg["docs"] === "string" ? (cfg["docs"] as string) : null;
@@ -988,7 +1018,6 @@ function IntegrationCard({ row }: { row: Integration }) {
     }
   }
 
-
   async function onClear() {
     setBusy("clear");
     try {
@@ -1006,8 +1035,14 @@ function IntegrationCard({ row }: { row: Integration }) {
   return (
     <article className="panel p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <button type="button" onClick={() => setExpanded((v) => !v)} className="flex min-w-0 items-center gap-2 text-left">
-          <ChevronDown className={`size-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "" : "-rotate-90"}`} />
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex min-w-0 items-center gap-2 text-left"
+        >
+          <ChevronDown
+            className={`size-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "" : "-rotate-90"}`}
+          />
           <Plug className="size-4 shrink-0 text-primary" />
           <span className="truncate font-medium">{row.label}</span>
           <StatusPill status={row.last_test_status} />
@@ -1051,7 +1086,9 @@ function IntegrationCard({ row }: { row: Integration }) {
         <div className="mt-4 border-t border-border pt-4">
           {notes ? <p className="text-sm text-muted-foreground">{notes}</p> : null}
           {row.last_test_message ? (
-            <p className="mt-2 rounded-md bg-surface-2 p-3 text-xs text-muted-foreground">{row.last_test_message}</p>
+            <p className="mt-2 rounded-md bg-surface-2 p-3 text-xs text-muted-foreground">
+              {row.last_test_message}
+            </p>
           ) : null}
           {row.last_tested_at ? (
             <p className="num mt-2 text-xs text-muted-foreground">
@@ -1086,7 +1123,8 @@ function IntegrationCard({ row }: { row: Integration }) {
                   {busy === "save" ? <Loader2 className="size-4 animate-spin" /> : null} Save
                 </Button>
                 <Button size="sm" variant="outline" onClick={onTest} disabled={busy !== null}>
-                  {busy === "test" ? <Loader2 className="size-4 animate-spin" /> : null} Test connection
+                  {busy === "test" ? <Loader2 className="size-4 animate-spin" /> : null} Test
+                  connection
                 </Button>
                 {row.has_credentials ? (
                   <Button size="sm" variant="ghost" onClick={onClear} disabled={busy !== null}>
@@ -1112,7 +1150,6 @@ function IntegrationCard({ row }: { row: Integration }) {
   );
 }
 
-
 const PROVIDER_MODELS: Record<string, { id: string; label: string }[]> = {
   lovable: [
     { id: "google/gemini-3.7-flash", label: "Gemini 3.7 Flash — fast, default" },
@@ -1130,10 +1167,18 @@ const PROVIDER_MODELS: Record<string, { id: string; label: string }[]> = {
     { id: "claude-opus-4-1", label: "Claude Opus 4.1" },
     { id: "claude-3-5-haiku-latest", label: "Claude 3.5 Haiku" },
   ],
+  gemini: [
+    { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash — fast, low cost" },
+    { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro — deeper reasoning" },
+    { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+  ],
 };
 
 function AiModelCard() {
-  const settings = useQuery({ queryKey: ["ai_settings"], queryFn: () => getAiSettings({ data: undefined }) });
+  const settings = useQuery({
+    queryKey: ["ai_settings"],
+    queryFn: () => getAiSettings({ data: undefined }),
+  });
   const qc = useQueryClient();
   const save = useServerFn(saveAiSettings);
   const test = useServerFn(testAiModel);
@@ -1147,8 +1192,10 @@ function AiModelCard() {
   const s = settings.data;
   const activeProvider = provider ?? s?.provider ?? "lovable";
   const models = PROVIDER_MODELS[activeProvider] ?? [];
-  const activeModel = model ?? (provider && provider !== s?.provider ? models[0]?.id : s?.model) ?? "";
-  const keyStored = activeProvider !== "lovable" && s?.keys?.[activeProvider as "openai" | "anthropic"];
+  const activeModel =
+    model ?? (provider && provider !== s?.provider ? models[0]?.id : s?.model) ?? "";
+  const keyStored =
+    activeProvider !== "lovable" && s?.keys?.[activeProvider as "openai" | "anthropic" | "gemini"];
 
   async function onSave() {
     setBusy("save");
@@ -1199,8 +1246,9 @@ function AiModelCard() {
         {s ? <StatusPill status={s.last_test_status} /> : null}
       </div>
       <p className="mt-1 text-sm text-muted-foreground">
-        Drives every AI step: JD drafting, resume parsing, JD↔CV skill mapping, LinkedIn narrative scoring and AI
-        screening. Deterministic scoring (experience band, GitHub signals, weighted roll-up) never uses a model.
+        Drives every AI step: JD drafting, resume parsing, JD↔CV skill mapping, LinkedIn narrative
+        scoring and AI screening. Deterministic scoring (experience band, GitHub signals, weighted
+        roll-up) never uses a model.
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -1217,6 +1265,7 @@ function AiModelCard() {
             <option value="lovable">Built-in Lovable AI (Gemini + OpenAI, no key)</option>
             <option value="openai">OpenAI — your own API key</option>
             <option value="anthropic">Anthropic Claude — your own API key</option>
+            <option value="gemini">Google Gemini — your own API key</option>
           </select>
         </div>
 
@@ -1239,7 +1288,11 @@ function AiModelCard() {
         {!models.some((m) => m.id === activeModel) && (
           <div className="space-y-1.5 sm:col-span-2">
             <Label>Model id</Label>
-            <Input value={activeModel} onChange={(e) => setModel(e.target.value)} placeholder="exact model id" />
+            <Input
+              value={activeModel}
+              onChange={(e) => setModel(e.target.value)}
+              placeholder="exact model id"
+            />
           </div>
         )}
 
@@ -1247,7 +1300,11 @@ function AiModelCard() {
           <div className="space-y-1.5 sm:col-span-2">
             <Label className="flex items-center gap-1.5">
               <KeyRound className="size-3.5" />
-              {activeProvider === "openai" ? "OpenAI API key" : "Anthropic API key"}
+              {activeProvider === "openai"
+                ? "OpenAI API key"
+                : activeProvider === "gemini"
+                  ? "Google Gemini API key"
+                  : "Anthropic API key"}
             </Label>
             <Input
               type="password"
@@ -1262,7 +1319,9 @@ function AiModelCard() {
         )}
       </div>
 
-      {s?.last_test_message ? <p className="mt-3 text-xs text-muted-foreground">{s.last_test_message}</p> : null}
+      {s?.last_test_message ? (
+        <p className="mt-3 text-xs text-muted-foreground">{s.last_test_message}</p>
+      ) : null}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={onSave} disabled={busy !== null || !activeModel}>
@@ -1308,23 +1367,25 @@ function Integrations() {
               .map((row) => <IntegrationCard key={row.id} row={row} />)
           )}
           <details className="panel p-4 text-sm text-muted-foreground">
-            <summary className="cursor-pointer font-medium text-foreground">What each source can do</summary>
+            <summary className="cursor-pointer font-medium text-foreground">
+              What each source can do
+            </summary>
             <ul className="mt-3 space-y-1.5">
               <li>
-                <strong className="text-foreground">LinkedIn</strong> — sign in once as a company; job posts publish
-                from a requisition and applicants arrive through your apply link.
+                <strong className="text-foreground">LinkedIn</strong> — sign in once as a company;
+                job posts publish from a requisition and applicants arrive through your apply link.
               </li>
               <li>
-                <strong className="text-foreground">Careers inbox</strong> — CVs emailed to your careers address are
-                filed, read and scored automatically.
+                <strong className="text-foreground">Careers inbox</strong> — CVs emailed to your
+                careers address are filed, read and scored automatically.
               </li>
               <li>
-                <strong className="text-foreground">Naukri / Indeed</strong> — need an employer subscription; paste the
-                keys your account manager sends.
+                <strong className="text-foreground">Naukri / Indeed</strong> — need an employer
+                subscription; paste the keys your account manager sends.
               </li>
               <li>
-                <strong className="text-foreground">GitHub</strong> — works without setup; a token only makes it
-                faster.
+                <strong className="text-foreground">GitHub</strong> — works without setup; a token
+                only makes it faster.
               </li>
             </ul>
           </details>
@@ -1332,7 +1393,8 @@ function Integrations() {
 
         <TabsContent value="meetings" className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Connect one conferencing account and every interview gets a real join link and calendar invite.
+            Connect one conferencing account and every interview gets a real join link and calendar
+            invite.
           </p>
           {rows.isLoading ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
@@ -1350,4 +1412,3 @@ function Integrations() {
     </>
   );
 }
-

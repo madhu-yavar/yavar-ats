@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
-const Provider = z.enum(["lovable", "openai", "anthropic"]);
+const Provider = z.enum(["lovable", "openai", "anthropic", "gemini"]);
 
 const SaveInput = z.object({
   provider: Provider,
@@ -31,6 +31,7 @@ export const getAiSettings = createServerFn({ method: "POST" })
       keys: {
         openai: await hasProviderKey("openai"),
         anthropic: await hasProviderKey("anthropic"),
+        gemini: await hasProviderKey("gemini"),
       },
     };
   });
@@ -44,8 +45,16 @@ export const saveAiSettings = createServerFn({ method: "POST" })
       await writeProviderKey(data.provider, data.apiKey);
     }
 
-    const { data: existing } = await context.supabase.from("ai_settings").select("id").limit(1).maybeSingle();
-    const payload = { provider: data.provider, model: data.model.trim(), updated_at: new Date().toISOString() };
+    const { data: existing } = await context.supabase
+      .from("ai_settings")
+      .select("id")
+      .limit(1)
+      .maybeSingle();
+    const payload = {
+      provider: data.provider,
+      model: data.model.trim(),
+      updated_at: new Date().toISOString(),
+    };
 
     const { error } = existing
       ? await context.supabase.from("ai_settings").update(payload).eq("id", existing.id)
@@ -77,7 +86,10 @@ export const testAiModel = createServerFn({ method: "POST" })
     });
 
     const outcome = res.ok
-      ? { status: "ok", message: `${cfg.provider} · ${cfg.model} responded in ${Date.now() - started}ms.` }
+      ? {
+          status: "ok",
+          message: `${cfg.provider} · ${cfg.model} responded in ${Date.now() - started}ms.`,
+        }
       : { status: "failed", message: res.message };
 
     const stamp = {
@@ -85,7 +97,11 @@ export const testAiModel = createServerFn({ method: "POST" })
       last_test_message: outcome.message,
       last_tested_at: new Date().toISOString(),
     };
-    const { data: existing } = await context.supabase.from("ai_settings").select("id").limit(1).maybeSingle();
+    const { data: existing } = await context.supabase
+      .from("ai_settings")
+      .select("id")
+      .limit(1)
+      .maybeSingle();
     if (existing) {
       await context.supabase.from("ai_settings").update(stamp).eq("id", existing.id);
     } else {
