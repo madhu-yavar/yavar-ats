@@ -144,8 +144,11 @@ export async function benchmarkMarket(input: {
       "Figures are absolute annual amounts in the requested currency (not lakhs, not abbreviated). " +
       "Set confidence 'high' only when a supplied source states figures for that level; 'medium' when " +
       "interpolated from supplied sources; 'low' when no source covered it and you are estimating. " +
-      "Never invent a source. Return ONLY JSON with keys: currency, role, location, as_of (ISO date), " +
-      "levels (array of {level, experience_band, low, median, high, confidence, note}), " +
+      "Never invent a source. For every level, list the evidence you actually used: each entry is a short " +
+      "VERBATIM quote from a supplied extract that mentions the pay figure, with the source title and its URL. " +
+      "Leave evidence as an empty array when the level is an estimate with no supporting extract. " +
+      "Return ONLY JSON with keys: currency, role, location, as_of (ISO date), " +
+      "levels (array of {level, experience_band, low, median, high, confidence, note, evidence: [{source, url, quote}]}), " +
       "recommended ({budget, band_min, band_max, rationale}) sized for the requisition's own experience range, " +
       "caveats (2-4 short strings, including whether live sources were readable).",
     prompt: JSON.stringify({
