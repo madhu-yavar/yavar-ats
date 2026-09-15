@@ -55,6 +55,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     ...(isSuperUser || claimable
       ? [{ to: "/platform", label: "Platform console", icon: Globe2 } as const]
       : []),
+    ...(isSuperUser
+      ? [{ to: "/catalogue", label: "Product catalogue", icon: BookMarked } as const]
+      : []),
   ];
 
   // Collapsed state is remembered per browser so the choice survives reloads.
