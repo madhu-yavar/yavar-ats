@@ -57,7 +57,7 @@ export function OntologyGraph({
     // left to right and wrap — big neighbourhoods stay legible, small ones stay tight.
     const gap = 18;
     const boxes = ordered.map(([label, list]) => {
-      const side = Math.min(300, Math.max(96, 60 + Math.sqrt(list.length) * 46));
+      const side = Math.min(300, Math.max(124, 60 + Math.sqrt(list.length) * 46));
       return { label, list, side };
     });
 
@@ -133,7 +133,7 @@ export function OntologyGraph({
               className="fill-muted-foreground"
               style={{ fontSize: 10, letterSpacing: 1.4, textTransform: "uppercase" }}
             >
-              {c.label} · {c.count}
+              {`${c.label.length > 16 ? `${c.label.slice(0, 15)}…` : c.label} · ${c.count}`}
             </text>
           ))}
         </g>
