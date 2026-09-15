@@ -1153,7 +1153,7 @@ function AiModelCard() {
   const activeProvider = provider ?? s?.provider ?? "lovable";
   const models = PROVIDER_MODELS[activeProvider] ?? [];
   const activeModel = model ?? (provider && provider !== s?.provider ? models[0]?.id : s?.model) ?? "";
-  const keyStored = activeProvider !== "lovable" && s?.keys?.[activeProvider as "openai" | "anthropic"];
+  const keyStored = activeProvider !== "lovable" && s?.keys?.[activeProvider as "openai" | "anthropic" | "gemini"];
 
   async function onSave() {
     setBusy("save");
