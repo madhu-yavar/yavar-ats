@@ -211,19 +211,43 @@ const MODULES = [
 ] as const;
 
 const WEIGHTS = [
-  { label: "Skills match", value: 40, note: "Must-have and good-to-have coverage, weighted by recency" },
+  {
+    label: "Skills match",
+    value: 40,
+    note: "Must-have and good-to-have coverage, weighted by recency",
+  },
   { label: "Experience", value: 15, note: "Relevant years against the requisition band" },
   { label: "Career history", value: 10, note: "Tenure, stints, gaps and progression" },
   { label: "Impact & innovation", value: 10, note: "Ownership and outcomes evidenced in the CV" },
   { label: "Education", value: 10, note: "Qualification fit and institution signals" },
-  { label: "Social & public proof", value: 15, note: "LinkedIn, GitHub, portfolio and public writing" },
+  {
+    label: "Social & public proof",
+    value: 15,
+    note: "LinkedIn, GitHub, portfolio and public writing",
+  },
 ] as const;
 
 const GOVERNANCE = [
-  { icon: ShieldCheck, title: "Tenant isolation", body: "Row-level security scopes every record to your organisation." },
-  { icon: Lock, title: "Role-based access", body: "Owner, CHRO, HR head, recruiter and interviewer scopes." },
-  { icon: ScrollText, title: "Full audit trail", body: "Approvals, stage moves, reschedules and score runs are logged." },
-  { icon: Database, title: "Your data, your keys", body: "Bring your own Gemini, OpenAI or Claude key for scoring." },
+  {
+    icon: ShieldCheck,
+    title: "Tenant isolation",
+    body: "Row-level security scopes every record to your organisation.",
+  },
+  {
+    icon: Lock,
+    title: "Role-based access",
+    body: "Owner, CHRO, HR head, recruiter and interviewer scopes.",
+  },
+  {
+    icon: ScrollText,
+    title: "Full audit trail",
+    body: "Approvals, stage moves, reschedules and score runs are logged.",
+  },
+  {
+    icon: Database,
+    title: "Your data, your keys",
+    body: "Bring your own Gemini, OpenAI or Claude key for scoring.",
+  },
 ] as const;
 
 const STATS = [
@@ -277,14 +301,26 @@ function TopBar() {
       <div className="mx-auto flex max-w-[1200px] items-center justify-between gap-4 px-5 py-3">
         <div className="flex items-center gap-3">
           <BrandLogo className="h-6" />
-          <span className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">ATSIQ</span>
+          <span className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+            ATSIQ
+          </span>
         </div>
         <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
-          <a href="#capabilities" className="hover:text-foreground">Capabilities</a>
-          <a href="#how" className="hover:text-foreground">How it works</a>
-          <a href="#scoring" className="hover:text-foreground">Scoring model</a>
-          <a href="#security" className="hover:text-foreground">Security</a>
-          <a href="#faq" className="hover:text-foreground">FAQ</a>
+          <a href="#capabilities" className="hover:text-foreground">
+            Capabilities
+          </a>
+          <a href="#how" className="hover:text-foreground">
+            How it works
+          </a>
+          <a href="#scoring" className="hover:text-foreground">
+            Scoring model
+          </a>
+          <a href="#security" className="hover:text-foreground">
+            Security
+          </a>
+          <a href="#faq" className="hover:text-foreground">
+            FAQ
+          </a>
         </nav>
         <a
           href="#signin"
@@ -307,12 +343,13 @@ function Hero() {
             Enterprise recruiting operating system
           </span>
           <h1 className="text-4xl font-semibold leading-[1.12] xl:text-5xl">
-            <span className="text-primary">Recruiting infrastructure</span> for high-performance hiring teams.
+            <span className="text-primary">Recruiting infrastructure</span> for high-performance
+            hiring teams.
           </h1>
           <p className="text-base leading-relaxed text-muted-foreground">
-            ATSIQ connects source-aware intake, live market benchmarking, explainable matching, guided screening,
-            recruiter collaboration and leadership governance. Every hiring decision stays attached to one
-            organisation-safe, auditable record.
+            ATSIQ connects source-aware intake, live market benchmarking, explainable matching,
+            guided screening, recruiter collaboration and leadership governance. Every hiring
+            decision stays attached to one organisation-safe, auditable record.
           </p>
           <ul className="grid gap-2.5">
             {HERO_PROOF.map((p) => (
@@ -344,7 +381,9 @@ function TrustStrip() {
   return (
     <div className="border-b border-border bg-surface-2">
       <div className="mx-auto flex max-w-[1200px] flex-wrap items-center justify-between gap-4 px-5 py-4 text-xs text-muted-foreground">
-        <span className="font-medium uppercase tracking-[0.18em]">Built for enterprise hiring teams</span>
+        <span className="font-medium uppercase tracking-[0.18em]">
+          Built for enterprise hiring teams
+        </span>
         <span className="flex flex-wrap items-center gap-x-5 gap-y-2">
           <span>Multi-tenant</span>
           <span>Role-based access</span>
@@ -369,7 +408,10 @@ function PainOutcomes() {
         />
         <div className="mt-10 divide-y divide-border border-y border-border">
           {PAIN_OUTCOMES.map((item, index) => (
-            <article key={item.pain} className="grid gap-3 py-5 md:grid-cols-[2rem_0.9fr_1fr] md:items-start md:gap-6">
+            <article
+              key={item.pain}
+              className="grid gap-3 py-5 md:grid-cols-[2rem_0.9fr_1fr] md:items-start md:gap-6"
+            >
               <span className="num text-xs font-semibold text-primary">0{index + 1}</span>
               <div>
                 <p className="text-xs font-medium uppercase text-muted-foreground">The pain</p>
@@ -388,18 +430,12 @@ function PainOutcomes() {
   );
 }
 
-function SectionHead({
-  eyebrow,
-  title,
-  body,
-}: {
-  eyebrow: string;
-  title: string;
-  body?: string;
-}) {
+function SectionHead({ eyebrow, title, body }: { eyebrow: string; title: string; body?: string }) {
   return (
     <div className="mx-auto max-w-2xl text-center">
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">&bull; {eyebrow}</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+        &bull; {eyebrow}
+      </p>
       <h2 className="mt-3 text-3xl font-semibold">{title}</h2>
       {body ? <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{body}</p> : null}
     </div>
@@ -460,12 +496,16 @@ function ScoringModel() {
     <section id="scoring" className="scroll-mt-20 border-b border-border">
       <div className="mx-auto grid max-w-[1200px] gap-10 px-5 py-16 lg:grid-cols-[0.95fr_1.05fr]">
         <div className="space-y-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">&bull; Scoring model</p>
-          <h2 className="text-3xl font-semibold">A match score you can defend in a review meeting</h2>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+            &bull; Scoring model
+          </p>
+          <h2 className="text-3xl font-semibold">
+            A match score you can defend in a review meeting
+          </h2>
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Every candidate is scored out of 100 across six dimensions. The weights are visible, configurable per
-            organisation, and the AI returns the evidence it used for each dimension — the CV lines, the public
-            profile it verified, and what it could not confirm.
+            Every candidate is scored out of 100 across six dimensions. The weights are visible,
+            configurable per organisation, and the AI returns the evidence it used for each
+            dimension — the CV lines, the public profile it verified, and what it could not confirm.
           </p>
           <ul className="space-y-2.5 text-sm text-muted-foreground">
             <li className="flex items-start gap-2.5">
@@ -490,7 +530,10 @@ function ScoringModel() {
                 <p className="text-sm font-medium">{w.label}</p>
                 <p className="mt-1 text-xs text-muted-foreground">{w.note}</p>
                 <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                  <div className="h-full rounded-full bg-primary" style={{ width: `${(w.value / 40) * 100}%` }} />
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${(w.value / 40) * 100}%` }}
+                  />
                 </div>
               </div>
               <span className="num text-sm font-semibold text-primary">{w.value}%</span>
@@ -504,16 +547,21 @@ function ScoringModel() {
 
 function Governance() {
   return (
-    <section id="security" className="scroll-mt-20 border-b border-border bg-sidebar text-sidebar-foreground">
+    <section
+      id="security"
+      className="scroll-mt-20 border-b border-border bg-sidebar text-sidebar-foreground"
+    >
       <div className="mx-auto max-w-[1200px] px-5 py-16">
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sidebar-primary">
             &bull; Security &amp; governance
           </p>
-          <h2 className="mt-3 text-3xl font-semibold">Enterprise controls, not bolted-on afterwards</h2>
+          <h2 className="mt-3 text-3xl font-semibold">
+            Enterprise controls, not bolted-on afterwards
+          </h2>
           <p className="mt-3 text-sm leading-relaxed text-sidebar-foreground/70">
-            Organisations are approved before they operate, users exist only inside a tenant, and every consequential
-            action is recorded.
+            Organisations are approved before they operate, users exist only inside a tenant, and
+            every consequential action is recorded.
           </p>
         </div>
         <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -555,8 +603,8 @@ function ClosingCta() {
         <div>
           <h2 className="text-2xl font-semibold">Register your organisation on ATSIQ</h2>
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-            Registration takes a work email. A platform administrator approves your organisation, then you configure
-            departments, locations and invite your internal hiring team.
+            Registration takes a work email. A platform administrator approves your organisation,
+            then you configure departments, locations and invite your internal hiring team.
           </p>
         </div>
         <a
@@ -652,7 +700,9 @@ function SignInCard() {
 
       <div className="flex items-center gap-3">
         <span className="h-px flex-1 bg-border" />
-        <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">or</span>
+        <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+          or
+        </span>
         <span className="h-px flex-1 bg-border" />
       </div>
 

@@ -58,7 +58,8 @@ export const MANUAL_SECTIONS: ManualSection[] = [
   {
     id: "requisitions",
     title: "4. Requisitions and job descriptions",
-    summary: "A requisition is the hiring demand; the JD is its published description. Both move through approval.",
+    summary:
+      "A requisition is the hiring demand; the JD is its published description. Both move through approval.",
     steps: [
       "Create a requisition (/requisitions) with department, openings, experience band, budget, location, must-have and good-to-have skills.",
       "Use role-profile assistance to fill missing skills, qualifications and responsibilities from the role title; existing HR entries are preserved and remain editable.",
@@ -72,7 +73,8 @@ export const MANUAL_SECTIONS: ManualSection[] = [
   {
     id: "talent-pool",
     title: "5. Talent pool and CV intake",
-    summary: "A shared organisation pool with clear recruiter ownership, source history, duplicate control and freshness tracking.",
+    summary:
+      "A shared organisation pool with clear recruiter ownership, source history, duplicate control and freshness tracking.",
     steps: [
       "Add candidates individually or upload CVs in bulk (PDF/DOCX) on Talent pool (/candidates) — parsing fills name, contact, skills, experience and employment history automatically.",
       "Use Mine, Unassigned or All to focus the list. Every candidate can have an owning recruiter; assignment and hand-over history remains visible.",
@@ -112,7 +114,8 @@ export const MANUAL_SECTIONS: ManualSection[] = [
   {
     id: "screening",
     title: "8. Preliminary screening-call support",
-    summary: "A JD-and-CV-specific helper for consistent recruiter screening and explainable second-level matching.",
+    summary:
+      "A JD-and-CV-specific helper for consistent recruiter screening and explainable second-level matching.",
     steps: [
       "Open Screening calls (/screening), choose a requisition and candidate, or open the Screening section on the candidate profile.",
       "Generate a question kit. Each question includes why HR should ask it, the most relevant answer expected, and weak-answer guidance grounded in the JD and candidate evidence.",
@@ -149,7 +152,8 @@ export const MANUAL_SECTIONS: ManualSection[] = [
   {
     id: "collaboration",
     title: "11. Recruiter ownership, referrals and talent sharing",
-    summary: "The organisation shares one talent pool while ownership and every hand-over remain explicit.",
+    summary:
+      "The organisation shares one talent pool while ownership and every hand-over remain explicit.",
     steps: [
       "Assign or take ownership from Talent pool, including bulk assignment. Mine shows your candidates, Unassigned shows work needing an owner, and All preserves organisation-wide visibility.",
       "On a candidate profile, use Ownership & team to hand the candidate to a colleague, refer them to a colleague's requisition, add notes and mention teammates. Ownership events form a permanent trail.",
@@ -161,7 +165,8 @@ export const MANUAL_SECTIONS: ManualSection[] = [
   {
     id: "reports",
     title: "12. Dashboards, reports and HR performance",
-    summary: "Operational work for recruiters and governance, quality and performance views for HR leadership.",
+    summary:
+      "Operational work for recruiters and governance, quality and performance views for HR leadership.",
     steps: [
       "Dashboard (/) changes with the signed-in role. Recruiters see operational priorities; CHROs, HR heads and owners see decisions and prescriptions such as approval aging, weak pipeline coverage, screening gaps, SLA breaches, offer health, budget risk and funnel drop-off.",
       "Reports (/reports) adds filters by department, requisition, location, skill, source and date, plus funnel conversion, score distribution, drop-off, interviewer load and CSV export.",

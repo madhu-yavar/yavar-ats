@@ -18,7 +18,8 @@ export const Route = createFileRoute("/help")({
       { property: "og:title", content: "ATSIQ user manual" },
       {
         property: "og:description",
-        content: "Everything an organisation needs to configure and operate ATSIQ, from hiring demand through joining and governance.",
+        content:
+          "Everything an organisation needs to configure and operate ATSIQ, from hiring demand through joining and governance.",
       },
       { property: "og:type", content: "article" },
       { name: "twitter:card", content: "summary" },
