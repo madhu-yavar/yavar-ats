@@ -10,9 +10,9 @@ import {
   FileSignature,
   Inbox,
   LayoutDashboard,
-  LogOut,
   PanelLeftClose,
   PanelLeftOpen,
+  PhoneCall,
   Plug,
   ShieldCheck,
   Target,
@@ -20,11 +20,11 @@ import {
 } from "lucide-react";
 
 
-import { supabase } from "@/integrations/supabase/client";
 import { usePlatform } from "@/hooks/usePlatform";
 import { Button } from "@/components/ui/button";
 import { Copilot } from "@/components/Copilot";
 import { NotificationBell } from "@/components/NotificationBell";
+import { AccountMenu } from "@/components/AccountMenu";
 import { BrandFooter, BrandLogo } from "@/components/Brand";
 
 const NAV = [
@@ -34,6 +34,7 @@ const NAV = [
   { to: "/candidates", label: "Talent pool", icon: Users },
   { to: "/inbox", label: "Careers inbox", icon: Inbox },
   { to: "/matching", label: "JD ↔ CV matching", icon: Target },
+  { to: "/screening", label: "Screening calls", icon: PhoneCall },
   { to: "/interviews", label: "Interviews", icon: CalendarClock },
 
   { to: "/offers", label: "Offers", icon: FileSignature },
