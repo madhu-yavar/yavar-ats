@@ -142,6 +142,15 @@ export const referCandidate = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!cand) throw new Error("That candidate is not in your organisation's pool.");
 
+    const { data: peer } = await db
+      .from("org_members")
+      .select("id")
+      .eq("org_id", me.org_id)
+      .eq("user_id", data.toUser)
+      .eq("status", "active")
+      .maybeSingle();
+    if (!peer) throw new Error("That colleague is not an active member of your organisation.");
+
     const { error } = await db.from("candidate_referrals").insert({
       org_id: me.org_id,
       candidate_id: data.candidateId,
@@ -242,13 +251,33 @@ export const addCandidateNote = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const me = await membership(context.userId);
     const db = await admin();
+
+    const { data: cand } = await db
+      .from("candidates")
+      .select("id")
+      .eq("id", data.candidateId)
+      .eq("org_id", me.org_id)
+      .maybeSingle();
+    if (!cand) throw new Error("That candidate is not in your organisation's pool.");
+
+    let mentions: string[] = [];
+    if (data.mentions.length) {
+      const { data: peers } = await db
+        .from("org_members")
+        .select("user_id")
+        .eq("org_id", me.org_id)
+        .eq("status", "active")
+        .in("user_id", data.mentions);
+      mentions = (peers ?? []).map((p) => p.user_id as string);
+    }
+
     const { error } = await db.from("candidate_notes").insert({
       org_id: me.org_id,
       candidate_id: data.candidateId,
       author_id: context.userId,
       author_name: me.full_name || me.email,
       body: data.body,
-      mentions: data.mentions,
+      mentions,
     });
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -304,6 +333,14 @@ export const suggestToRequest = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!req || req.org_id !== me.org_id) throw new Error("That request is not open in your organisation.");
     if (req.status !== "open") throw new Error("This request has already been closed.");
+
+    const { data: cand } = await db
+      .from("candidates")
+      .select("id")
+      .eq("id", data.candidateId)
+      .eq("org_id", me.org_id)
+      .maybeSingle();
+    if (!cand) throw new Error("That candidate is not in your organisation's pool.");
 
     const { error } = await db.from("talent_request_suggestions").insert({
       org_id: me.org_id,
