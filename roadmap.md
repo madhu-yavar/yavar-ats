@@ -51,6 +51,12 @@
 - [x] Slice 3: embedded HR copilot — floating panel on every page, one ongoing conversation per user persisted in `copilot_messages` (org-scoped, RLS own-rows), grounded in a live org data snapshot via the configured AI provider.
 - [x] Org registration path made explicit on the sign-in screen ("New company? Register your organisation" → owner account → 4-step setup wizard).
 
+## Role-aware dashboard redesign (done)
+
+- [x] Replace the card-heavy dashboard opening with a refined enterprise command grid.
+- [x] Show signed-in role and organisation scope prominently, with role-specific executive metrics and action queues.
+- [x] Preserve organisation-scoped backend access and expose only actions appropriate to the member's role.
+
 ## Landing page (done)
 
 - [x] Replace the terse split-screen sign-in with an information-rich, Zoho-Recruit-style enterprise landing page (hero + sign-in card, capability grid, module walkthrough, scoring model, governance, FAQ, CTA) while keeping email/Google sign-in and org registration intact.

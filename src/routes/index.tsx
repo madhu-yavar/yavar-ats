@@ -2,7 +2,21 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowUpRight, Clock, Copy, Sparkles, TrendingUp } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  ArrowUpRight,
+  BriefcaseBusiness,
+  CalendarClock,
+  CheckCircle2,
+  Clock,
+  Copy,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  TrendingUp,
+  Users,
+} from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -20,9 +34,9 @@ import {
 import { canonical, stalledDays, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
 import { findDuplicateGroups, freshness } from "@/lib/dedupe";
 import { rankPool } from "@/lib/shortlist";
-import { PageHeader, ScoreChip, StageBadge, StatCard, StatusBadge, inr } from "@/components/ats";
-import { LeadershipBoard } from "@/components/LeadershipBoard";
+import { ScoreChip, StageBadge, StatusBadge, inr } from "@/components/ats";
 import { useRoles } from "@/hooks/useRoles";
+import { useOrg } from "@/hooks/useOrg";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/")({
@@ -117,11 +131,21 @@ function Panel({
 function Dashboard() {
   const qc = useQueryClient();
   const { roles, isAdmin } = useRoles();
-  const execScope: "CHRO" | "HR head" | null = isAdmin
-    ? "CHRO"
-    : roles.includes("hr_head")
-      ? "HR head"
-      : null;
+  const { org, isOwner } = useOrg();
+  const roleLabel = isOwner
+    ? "Organisation owner"
+    : isAdmin
+      ? "CHRO"
+      : roles.includes("hr_head")
+        ? "HR head"
+        : roles.includes("department_head")
+          ? "Department head"
+          : roles.includes("hiring_manager")
+            ? "Hiring manager"
+            : "Recruiter";
+  const isExecutive = isAdmin || roles.includes("hr_head");
+  const [queueView, setQueueView] = useState<"priority" | "matches" | "recent">("priority");
+  const [queueSearch, setQueueSearch] = useState("");
   const reqs = useQuery(requisitionsQuery);
   const apps = useQuery(applicationsQuery);
   const scores = useQuery(matchScoresQuery);
@@ -262,47 +286,147 @@ function Dashboard() {
   const candidateName = (id: string) => candidates.find((c) => c.id === id)?.full_name ?? "Unknown";
   const reqTitle = (id: string) => requisitions.find((r) => r.id === id)?.title ?? "—";
 
+  const queueRows = useMemo(() => {
+    const rows = applications
+      .map((app) => {
+        const candidate = candidates.find((c) => c.id === app.candidate_id);
+        const requisition = requisitions.find((r) => r.id === app.requisition_id);
+        const score = scoreMap.get(app.id)?.overall_score ?? 0;
+        return candidate && requisition ? { app, candidate, requisition, score } : null;
+      })
+      .filter((row): row is NonNullable<typeof row> => Boolean(row));
+
+    const term = queueSearch.trim().toLowerCase();
+    return rows
+      .filter((row) => {
+        if (term && !`${row.candidate.full_name} ${row.requisition.title} ${row.candidate.current_employer ?? ""}`.toLowerCase().includes(term)) return false;
+        if (queueView === "matches") return row.score >= 70;
+        if (queueView === "recent") return Date.now() - new Date(row.app.last_activity_at).getTime() < 7 * 86_400_000;
+        return !["joined", "rejected", "withdrawn"].includes(canonical(row.app.stage as Stage));
+      })
+      .sort((a, b) => {
+        if (queueView === "recent") return new Date(b.app.last_activity_at).getTime() - new Date(a.app.last_activity_at).getTime();
+        return b.score - a.score;
+      })
+      .slice(0, 8);
+  }, [applications, candidates, requisitions, scoreMap, queueSearch, queueView]);
+
   return (
-    <>
-      <PageHeader
-        eyebrow="Command centre"
-        title="Talent acquisition at a glance"
-        description="Pipeline health, match quality, pool hygiene and the candidates your history already knows about."
-        actions={
-          <div className="flex gap-2">
-            <Button asChild variant="outline">
-              <Link to="/candidates">Talent pool</Link>
-            </Button>
-            <Button asChild>
-              <Link to="/matching">Open matching engine</Link>
-            </Button>
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
+      <header className="flex flex-col gap-4 border-b border-border px-5 py-5 sm:px-7 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <div className="mb-1 flex flex-wrap items-center gap-2 text-xs font-semibold text-muted-foreground">
+            <span className="uppercase">Talent acquisition</span>
+            <span aria-hidden="true" className="size-1 rounded-full bg-border" />
+            <span>Command centre</span>
           </div>
-        }
-      />
+          <h1 className="truncate text-2xl font-bold">{org?.name ?? "Organisation"}</h1>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-primary" />{roleLabel} view</span>
+            <span>Organisation-scoped access</span>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline"><Link to="/candidates"><Users />Talent pool</Link></Button>
+          <Button asChild><Link to="/requisitions">Raise requisition</Link></Button>
+        </div>
+      </header>
 
-      {execScope ? <LeadershipBoard scope={execScope} /> : null}
+      <section className="grid border-b border-border bg-surface-2/50 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: "Open requisitions", value: open.length, note: `${pending.length} awaiting approval` },
+          { label: "Candidates in play", value: applications.filter((a) => !["joined", "rejected", "withdrawn"].includes(canonical(a.stage as Stage))).length, note: `${candidates.length} in talent pool` },
+          { label: "Average match", value: `${avgMatch}%`, note: `${scored.length} of ${applications.length} scored` },
+          isExecutive
+            ? { label: "Salary committed", value: inr(committed), note: `${inr(budgeted)} budgeted` }
+            : { label: "Upcoming interviews", value: upcoming.length, note: `${stalled.length} candidates need attention` },
+        ].map((metric) => (
+          <div key={metric.label} className="border-b border-border px-5 py-4 last:border-b-0 sm:[&:nth-child(odd)]:border-r xl:border-b-0 xl:border-r xl:last:border-r-0">
+            <p className="text-xs font-medium text-muted-foreground">{metric.label}</p>
+            <p className="num mt-1 text-2xl font-bold">{metric.value}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{metric.note}</p>
+          </div>
+        ))}
+      </section>
 
+      <div className="grid lg:grid-cols-[minmax(0,1.65fr)_minmax(280px,0.75fr)]">
+        <section className="border-b border-border p-5 sm:p-7 lg:border-b-0 lg:border-r">
+          <div className="mb-5 flex items-start justify-between gap-3">
+            <div>
+              <h2 className="font-semibold">Priority workspace</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">The next candidates and decisions for your role.</p>
+            </div>
+            <Button asChild variant="ghost" size="sm"><Link to="/matching">Matching engine <ArrowUpRight /></Link></Button>
+          </div>
 
+          <div className="mb-4 flex flex-col gap-3 xl:flex-row">
+            <label className="relative min-w-0 flex-1">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <span className="sr-only">Search candidates or roles</span>
+              <input value={queueSearch} onChange={(event) => setQueueSearch(event.target.value)} placeholder="Search candidates or roles" className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none transition-shadow focus:ring-2 focus:ring-ring/30" />
+            </label>
+            <div className="flex rounded-md bg-secondary p-1" aria-label="Queue view">
+              {([['priority', 'Priority'], ['matches', 'Top matches'], ['recent', 'Recent']] as const).map(([value, label]) => (
+                <Button key={value} type="button" size="sm" variant={queueView === value ? "outline" : "ghost"} onClick={() => setQueueView(value)} className="flex-1 shadow-none xl:flex-none">{label}</Button>
+              ))}
+            </div>
+          </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Open requisitions" value={open.length} hint={`${pending.length} awaiting approval`} />
-        <StatCard label="Talent pool" value={candidates.length} hint={`${poolHealth.untapped} not in any pipeline`} />
-        <StatCard
-          label="Avg match score"
-          value={avgMatch}
-          hint={`${scored.length} of ${applications.length} CVs scored`}
-          tone={avgMatch >= 75 ? "success" : avgMatch >= 60 ? "warning" : "destructive"}
-        />
-        <StatCard
-          label="Cost committed"
-          value={inr(committed)}
-          hint={`of ${inr(budgeted)} budgeted`}
-          tone={committed > budgeted ? "destructive" : "default"}
-        />
+          <div className="overflow-x-auto rounded-md border border-border">
+            <table className="w-full min-w-[680px] text-left text-sm">
+              <thead className="border-b border-border bg-surface-2/70 text-xs text-muted-foreground">
+                <tr><th className="px-4 py-3 font-semibold">Candidate</th><th className="px-4 py-3 font-semibold">Role</th><th className="px-4 py-3 font-semibold">Fit</th><th className="px-4 py-3 font-semibold">Stage</th><th className="px-4 py-3 text-right font-semibold">Action</th></tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {queueRows.map(({ app, candidate, requisition, score }) => (
+                  <tr key={app.id} className="transition-colors hover:bg-surface-2/70">
+                    <td className="px-4 py-3"><div className="font-semibold">{candidate.full_name}</div><div className="text-xs text-muted-foreground">{candidate.current_employer || candidate.location || "Profile available"}</div></td>
+                    <td className="px-4 py-3"><div className="font-medium">{requisition.title}</div><div className="num text-xs text-muted-foreground">{requisition.code}</div></td>
+                    <td className="px-4 py-3">{score ? <ScoreChip score={score} size="sm" /> : <span className="text-xs text-muted-foreground">Not scored</span>}</td>
+                    <td className="px-4 py-3"><StageBadge stage={app.stage} /></td>
+                    <td className="px-4 py-3 text-right"><Button asChild variant="ghost" size="sm"><Link to="/candidates/$id" params={{ id: candidate.id }}>Review <ArrowRight /></Link></Button></td>
+                  </tr>
+                ))}
+                {queueRows.length === 0 ? <tr><td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">No candidates match this view.</td></tr> : null}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <aside className="p-5 sm:p-7">
+          <h2 className="font-semibold">Action queue</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">Only actions available to {roleLabel.toLowerCase()}.</p>
+          <div className="mt-5 divide-y divide-border border-y border-border">
+            {pending.length > 0 && (isExecutive || roles.includes("department_head")) ? <ActionRow icon={CheckCircle2} label="Requisitions awaiting approval" value={pending.length} to="/requisitions" /> : null}
+            <ActionRow icon={Clock} label="Candidates past stage SLA" value={stalled.length} to="/candidates" tone={stalled.length ? "warning" : "default"} />
+            <ActionRow icon={CalendarClock} label="Upcoming interviews" value={upcoming.length} to="/interviews" />
+            <ActionRow icon={BriefcaseBusiness} label="Open requisitions" value={open.length} to="/requisitions" />
+          </div>
+          <div className="mt-6">
+            <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-semibold">Pipeline movement</h3><span className="text-xs text-muted-foreground">All active stages</span></div>
+            <div className="space-y-3">
+              {funnel.slice(0, 6).map((row) => <Bar key={row.stage} label={STAGE_LABEL[row.stage] ?? row.stage} value={row.reached} max={funnelTop} />)}
+              {funnel.length === 0 ? <p className="text-sm text-muted-foreground">No applications yet.</p> : null}
+            </div>
+          </div>
+        </aside>
       </div>
+
+      {isExecutive ? (
+        <section className="border-t border-border p-5 sm:p-7">
+          <div className="mb-4 flex items-end justify-between gap-3"><div><h2 className="font-semibold">Organisation health</h2><p className="mt-0.5 text-xs text-muted-foreground">Executive demand, quality and cost signals.</p></div><Button asChild variant="ghost" size="sm"><Link to="/reports">Full reports <ArrowUpRight /></Link></Button></div>
+          <div className="grid gap-px overflow-hidden rounded-md border border-border bg-border md:grid-cols-4">
+            <Signal label="Offer acceptance" value={offerRows.length ? `${acceptRate}%` : "—"} note={`${accepted} accepted or released`} />
+            <Signal label="Pool freshness" value={candidates.length ? `${Math.round((poolHealth.fresh / candidates.length) * 100)}%` : "—"} note={`${poolHealth.stale} stale profiles`} />
+            <Signal label="Incomplete profiles" value={poolHealth.noSkills + poolHealth.noEmail} note={`${poolHealth.groups} duplicate sets`} />
+            <Signal label="Budget position" value={budgeted ? `${Math.round((committed / budgeted) * 100)}%` : "—"} note="of workforce budget committed" />
+          </div>
+        </section>
+      ) : null}
 
       {/* Historic matching — the pool works for every new requisition automatically. */}
       <Panel
+        className="m-5 sm:m-7"
         title="Suggested from your existing pool"
         subtitle="Deterministic must-have / experience / location overlap against every open requisition — no AI spend until you shortlist."
         action={
@@ -388,7 +512,7 @@ function Dashboard() {
         )}
       </Panel>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="m-5 grid gap-4 sm:m-7 lg:grid-cols-3">
         <Panel title="Pipeline funnel" subtitle="Cumulative candidates that reached each stage" className="lg:col-span-1">
           <div className="space-y-3 p-4">
             {funnel.length === 0 ? (
@@ -454,7 +578,7 @@ function Dashboard() {
         </Panel>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-5">
+      <div className="m-5 grid gap-4 sm:m-7 lg:grid-cols-5">
         <Panel
           title="Requisition pipeline"
           subtitle="Applicants and match quality per requisition"
@@ -532,7 +656,7 @@ function Dashboard() {
         </Panel>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="m-5 grid gap-4 sm:m-7 lg:grid-cols-3">
         <Panel title="Needs attention" subtitle="Candidates sitting past the stage SLA">
           <div className="divide-y divide-border">
             {stalled.length === 0 ? (
@@ -622,8 +746,16 @@ function Dashboard() {
           </div>
         </Panel>
       </div>
-    </>
+    </div>
   );
+}
+
+function ActionRow({ icon: Icon, label, value, to, tone = "default" }: { icon: React.ComponentType<{ className?: string }>; label: string; value: number; to: "/requisitions" | "/candidates" | "/interviews"; tone?: "default" | "warning" }) {
+  return <Link to={to} className="group flex items-center gap-3 py-3.5"><span className={`flex size-8 items-center justify-center rounded-md ${tone === "warning" ? "bg-warning/15 text-warning" : "bg-secondary text-muted-foreground"}`}><Icon className="size-4" /></span><span className="min-w-0 flex-1 text-sm font-medium">{label}</span><span className="num text-sm font-semibold">{value}</span><ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" /></Link>;
+}
+
+function Signal({ label, value, note }: { label: string; value: string | number; note: string }) {
+  return <div className="bg-card p-4"><p className="text-xs font-medium text-muted-foreground">{label}</p><p className="num mt-1 text-xl font-bold">{value}</p><p className="mt-1 text-xs text-muted-foreground">{note}</p></div>;
 }
 
 /** Kept for type-narrowing of the pool candidates in suggestions. */
