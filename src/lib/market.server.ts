@@ -176,6 +176,14 @@ export async function benchmarkMarket(input: {
     high: num(l.high),
     confidence: (["high", "medium", "low"] as const).includes(l.confidence) ? l.confidence : "low",
     note: String(l.note ?? ""),
+    evidence: (Array.isArray(l.evidence) ? l.evidence : [])
+      .map((e) => ({
+        source: String(e?.source ?? ""),
+        url: String(e?.url ?? ""),
+        quote: String(e?.quote ?? "").slice(0, 320),
+      }))
+      .filter((e) => e.quote)
+      .slice(0, 4),
   }));
 
   return {
