@@ -114,16 +114,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
         </div>
-        <Button
-          variant="ghost"
-          title="Sign out"
-          className={`text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
-            collapsed ? "justify-center px-2" : "justify-start"
-          }`}
-          onClick={() => supabase.auth.signOut()}
-        >
-          <LogOut className="size-4" /> {collapsed ? null : "Sign out"}
-        </Button>
       </aside>
 
 
@@ -135,7 +125,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               ATSIQ
             </span>
           </Link>
-          <NotificationBell />
+          <div className="flex items-center gap-1">
+            <NotificationBell />
+            <AccountMenu />
+          </div>
         </div>
         <div className="flex gap-1 overflow-x-auto border-b border-border bg-card px-4 py-2 lg:hidden">
           {nav.map(({ to, label }) => (
