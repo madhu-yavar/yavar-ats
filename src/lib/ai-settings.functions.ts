@@ -72,12 +72,37 @@ export const removeAiKey = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** Fire a tiny real completion at the saved provider/model and record the outcome. */
+const TestInput = z
+  .object({
+    /** Test what is on screen instead of what is saved. */
+    provider: Provider.optional(),
+    model: z.string().max(120).optional(),
+    apiKey: z.string().optional(),
+  })
+  .optional();
+
+/** Fire a tiny real completion at the chosen (or saved) provider/model and record the outcome. */
 export const testAiModel = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { aiJson, resolveAiConfig } = await import("./ai-gateway.server");
-    const cfg = await resolveAiConfig();
+  .inputValidator((data: unknown) => TestInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const { aiJson, resolveAiConfig, DEFAULT_MODEL, readProviderKey } = await import(
+      "./ai-gateway.server"
+    );
+
+    let cfg = await resolveAiConfig();
+    // When the page passes a provider, test exactly that — never silently fall
+    // back to the built-in gateway (which is what caused "needs AI credits"
+    // while the user's own key was selected).
+    if (data?.provider) {
+      const provider = data.provider;
+      const model = data.model?.trim() || DEFAULT_MODEL[provider];
+      const apiKey =
+        provider === "lovable"
+          ? (process.env["LOVABLE_API_KEY"] ?? null)
+          : data.apiKey?.trim() || (await readProviderKey(provider));
+      cfg = { provider, model, apiKey };
+    }
     const started = Date.now();
     const res = await aiJson<{ ok: boolean }>({
       system: 'Reply with exactly {"ok": true} and nothing else.',
