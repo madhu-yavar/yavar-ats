@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 
@@ -86,6 +86,9 @@ export function MarketBenchmarkPanel(props: Props) {
             <span>
               {data.role} · {data.location || "Location not set"} · as of {data.as_of}
             </span>
+            <span className="rounded-full border px-2 py-0.5">
+              {engineLabel[data.engine.provider] ?? data.engine.provider} · {data.engine.model}
+            </span>
           </div>
 
           <div className="overflow-x-auto">
@@ -103,8 +106,8 @@ export function MarketBenchmarkPanel(props: Props) {
               </thead>
               <tbody>
                 {data.levels.map((l) => (
-                  <>
-                    <tr key={l.level} className="border-t">
+                  <Fragment key={l.level}>
+                    <tr className="border-t">
                       <td className="py-1.5 pr-2 font-medium">{l.level}</td>
                       <td className="py-1.5 pr-2 text-muted-foreground">{l.experience_band}</td>
                       <td className="py-1.5 pr-2">{money(l.low)}</td>
@@ -138,7 +141,7 @@ export function MarketBenchmarkPanel(props: Props) {
                       </td>
                     </tr>
                     {openLevel === l.level && (
-                      <tr key={`${l.level}-evidence`} className="border-t bg-muted/40">
+                      <tr className="border-t bg-muted/40">
                         <td colSpan={7} className="p-2.5">
                           {l.note && <p className="text-xs">{l.note}</p>}
                           {l.evidence.length > 0 ? (
@@ -172,7 +175,7 @@ export function MarketBenchmarkPanel(props: Props) {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
