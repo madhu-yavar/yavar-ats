@@ -35,7 +35,6 @@ export function OntologyGraph({
 
   const layout = useMemo(() => {
     const width = 960;
-    const top = nodes.slice(0, limit);
     const slugs = new Set(top.map((n) => n.slug));
     const links = edges.filter((e) => slugs.has(e.from) && slugs.has(e.to)).slice(0, 220);
 
@@ -73,9 +72,7 @@ export function OntologyGraph({
       const cy = cursorY + box.side / 2 + 12;
       clusters.push({ label: box.label, x: cx, y: cursorY + 8, count: box.list.length });
 
-      const sorted = box.list
-        .slice()
-        .sort((a, b) => b.supply + b.demand - (a.supply + a.demand));
+      const sorted = box.list.slice().sort((a, b) => b.supply + b.demand - (a.supply + a.demand));
       const rings = Math.max(1, Math.ceil(Math.sqrt(sorted.length / 3)));
       sorted.forEach((n, i) => {
         const r = 5 + Math.round(((n.supply + n.demand) / maxMass) * 13);
@@ -103,7 +100,6 @@ export function OntologyGraph({
 
     const contentHeight = Math.max(360, cursorY + rowH + gap);
     return { width, height: contentHeight, placed, links, clusters };
-
   }, [nodes, edges, limit]);
 
   const byslug = new Map(layout.placed.map((p) => [p.slug, p]));
