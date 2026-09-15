@@ -267,6 +267,21 @@ function Requisitions() {
                     onCreate={createRoleTitle}
                     placeholder="Search role titles, or type a new one"
                   />
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={drafting}
+                      onClick={autofillFromRole}
+                    >
+                      {drafting ? "Drafting…" : "Auto-fill skills & qualifications"}
+                    </Button>
+                    <span className="text-xs text-muted-foreground">
+                      Suggests must-have and good-to-have skills, acceptable qualifications and
+                      responsibilities for this role — edit anything before saving.
+                    </span>
+                  </div>
                 </Field>
                 <Field label="Department">
                   <CreatableSelect
