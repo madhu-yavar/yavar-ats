@@ -13,11 +13,18 @@ import {
   requisitionsQuery,
 } from "@/lib/data";
 import { canonical, FLOW, isTerminal, stalledDays, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
+import { HrPerformance } from "@/components/HrPerformance";
 import { EmptyState, PageHeader, ScoreBar, StatCard, inr } from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/reports")({
   head: () => ({
@@ -107,7 +114,10 @@ function Reports() {
   const scoreMap = latestScores(scores.data ?? []);
 
   const locations = useMemo(
-    () => Array.from(new Set(requisitions.map((r) => r.location).filter((l): l is string => Boolean(l)))).sort(),
+    () =>
+      Array.from(
+        new Set(requisitions.map((r) => r.location).filter((l): l is string => Boolean(l))),
+      ).sort(),
     [requisitions],
   );
 
@@ -117,7 +127,11 @@ function Reports() {
   const reqScope = useMemo(() => {
     const set = new Set(
       requisitions
-        .filter((r) => (dept === "all" || r.department_id === dept) && (location === "all" || r.location === location))
+        .filter(
+          (r) =>
+            (dept === "all" || r.department_id === dept) &&
+            (location === "all" || r.location === location),
+        )
         .filter((r) => reqId === "all" || r.id === reqId)
         .map((r) => r.id),
     );
@@ -166,19 +180,27 @@ function Reports() {
   const active = applications.filter((a) => !isTerminal(canonical(a.stage)));
   const stalled = active.filter((a) => stalledDays(a.stage as Stage, a.last_activity_at) !== null);
   const joined = applications.filter((a) => canonical(a.stage) === "joined");
-  const released = scopedOffers.filter((o) => ["released", "accepted", "declined"].includes(o.status));
+  const released = scopedOffers.filter((o) =>
+    ["released", "accepted", "declined"].includes(o.status),
+  );
   const accepted = scopedOffers.filter((o) => o.status === "accepted");
 
   const timeToHire = median(
-    joined.map((a) => (new Date(a.last_activity_at).getTime() - new Date(a.applied_at).getTime()) / 86_400_000),
+    joined.map(
+      (a) =>
+        (new Date(a.last_activity_at).getTime() - new Date(a.applied_at).getTime()) / 86_400_000,
+    ),
   );
 
   /** Drop-off reasons — the audited stage_reason on closed applications. */
   const dropOff = Object.entries(
     applications
-      .filter((a) => ["rejected", "withdrawn", "offer_declined", "no_show"].includes(canonical(a.stage)))
+      .filter((a) =>
+        ["rejected", "withdrawn", "offer_declined", "no_show"].includes(canonical(a.stage)),
+      )
       .reduce<Record<string, number>>((acc, a) => {
-        const key = a.stage_reason?.trim() || `${STAGE_LABEL[canonical(a.stage)]} — no reason recorded`;
+        const key =
+          a.stage_reason?.trim() || `${STAGE_LABEL[canonical(a.stage)]} — no reason recorded`;
         acc[key] = (acc[key] ?? 0) + 1;
         return acc;
       }, {}),
@@ -233,12 +255,16 @@ function Reports() {
         location: r.location ?? "—",
         openings: r.openings,
         pipeline: as.filter((a) => !isTerminal(canonical(a.stage))).length,
-        interviews: scopedInterviews.filter((i) => as.some((a) => a.id === i.application_id)).length,
+        interviews: scopedInterviews.filter((i) => as.some((a) => a.id === i.application_id))
+          .length,
         joined: j,
         gap: r.openings - j,
-        stalled: as.filter((a) => stalledDays(a.stage as Stage, a.last_activity_at) !== null).length,
+        stalled: as.filter((a) => stalledDays(a.stage as Stage, a.last_activity_at) !== null)
+          .length,
         avgScore: scored.length
-          ? Math.round(scored.reduce((s, a) => s + scoreMap.get(a.id)!.overall_score, 0) / scored.length)
+          ? Math.round(
+              scored.reduce((s, a) => s + scoreMap.get(a.id)!.overall_score, 0) / scored.length,
+            )
           : null,
         ageDays: Math.floor((Date.now() - new Date(r.opened_at).getTime()) / 86_400_000),
       };
@@ -249,15 +275,18 @@ function Reports() {
   /** Interviewer load — who is over-committed this week. */
   const weekAhead = Date.now() + 7 * 86_400_000;
   const panelRows = Object.entries(
-    scopedInterviews.reduce<Record<string, { total: number; upcoming: number; done: number }>>((acc, i) => {
-      const key = i.interviewer?.trim() || i.interviewer_email?.trim() || "Unassigned";
-      const row = (acc[key] ??= { total: 0, upcoming: 0, done: 0 });
-      row.total += 1;
-      const at = i.scheduled_at ? new Date(i.scheduled_at).getTime() : null;
-      if (at && at >= Date.now() && at <= weekAhead) row.upcoming += 1;
-      if (i.status === "completed") row.done += 1;
-      return acc;
-    }, {}),
+    scopedInterviews.reduce<Record<string, { total: number; upcoming: number; done: number }>>(
+      (acc, i) => {
+        const key = i.interviewer?.trim() || i.interviewer_email?.trim() || "Unassigned";
+        const row = (acc[key] ??= { total: 0, upcoming: 0, done: 0 });
+        row.total += 1;
+        const at = i.scheduled_at ? new Date(i.scheduled_at).getTime() : null;
+        if (at && at >= Date.now() && at <= weekAhead) row.upcoming += 1;
+        if (i.status === "completed") row.done += 1;
+        return acc;
+      },
+      {},
+    ),
   )
     .sort((a, b) => b[1].upcoming - a[1].upcoming || b[1].total - a[1].total)
     .slice(0, 12);
@@ -275,7 +304,17 @@ function Reports() {
 
   function exportPipeline() {
     downloadCsv("pipeline", [
-      ["Candidate", "Requisition", "Department", "Location", "Stage", "Match", "Source", "Applied", "Stalled days"],
+      [
+        "Candidate",
+        "Requisition",
+        "Department",
+        "Location",
+        "Stage",
+        "Match",
+        "Source",
+        "Applied",
+        "Stalled days",
+      ],
       ...applications.map((a) => {
         const c = candById.get(a.candidate_id);
         const r = reqById.get(a.requisition_id);
@@ -358,7 +397,9 @@ function Reports() {
           </Select>
         </div>
         <div>
-          <Label className="mb-1.5 block text-xs text-muted-foreground">Period (applied date)</Label>
+          <Label className="mb-1.5 block text-xs text-muted-foreground">
+            Period (applied date)
+          </Label>
           <Select value={period} onValueChange={setPeriod}>
             <SelectTrigger>
               <SelectValue />
@@ -373,13 +414,23 @@ function Reports() {
           </Select>
         </div>
         <div>
-          <Label className="mb-1.5 block text-xs text-muted-foreground">Candidate, skill or role</Label>
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="e.g. Kubernetes" />
+          <Label className="mb-1.5 block text-xs text-muted-foreground">
+            Candidate, skill or role
+          </Label>
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="e.g. Kubernetes"
+          />
         </div>
       </section>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Applications in scope" value={applications.length} hint={`${scored.length} AI scored`} />
+        <StatCard
+          label="Applications in scope"
+          value={applications.length}
+          hint={`${scored.length} AI scored`}
+        />
         <StatCard
           label="Active pipeline"
           value={active.length}
@@ -421,7 +472,10 @@ function Reports() {
                     </span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-muted">
-                    <div className="h-full rounded-full bg-primary" style={{ width: `${(f.count / top) * 100}%` }} />
+                    <div
+                      className="h-full rounded-full bg-primary"
+                      style={{ width: `${(f.count / top) * 100}%` }}
+                    />
                   </div>
                   <div className="mt-1 text-[11px] text-muted-foreground">
                     {stageCount(f.stage)} sitting here right now
@@ -437,24 +491,40 @@ function Reports() {
             <h2 className="font-semibold">Average score by dimension</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <ScoreBar label="Skills" score={avg((id) => scoreMap.get(id)!.skills_score)} />
-              <ScoreBar label="Experience" score={avg((id) => scoreMap.get(id)!.experience_score)} />
-              <ScoreBar label="Career history" score={avg((id) => scoreMap.get(id)!.career_score ?? 0)} />
-              <ScoreBar label="Impact & innovation" score={avg((id) => scoreMap.get(id)!.impact_score ?? 0)} />
+              <ScoreBar
+                label="Experience"
+                score={avg((id) => scoreMap.get(id)!.experience_score)}
+              />
+              <ScoreBar
+                label="Career history"
+                score={avg((id) => scoreMap.get(id)!.career_score ?? 0)}
+              />
+              <ScoreBar
+                label="Impact & innovation"
+                score={avg((id) => scoreMap.get(id)!.impact_score ?? 0)}
+              />
               <ScoreBar label="Education" score={avg((id) => scoreMap.get(id)!.education_score)} />
-              <ScoreBar label="Social profile" score={avg((id) => scoreMap.get(id)!.social_score)} />
+              <ScoreBar
+                label="Social profile"
+                score={avg((id) => scoreMap.get(id)!.social_score)}
+              />
             </div>
           </section>
 
           <section className="panel p-4">
             <h2 className="font-semibold">Scarcest skills (missing must-haves)</h2>
             {skillGaps.length === 0 ? (
-              <p className="mt-3 text-sm text-muted-foreground">Nothing scored in this scope yet.</p>
+              <p className="mt-3 text-sm text-muted-foreground">
+                Nothing scored in this scope yet.
+              </p>
             ) : (
               <ul className="mt-3 space-y-2 text-sm">
                 {skillGaps.map(([skill, count]) => (
                   <li key={skill} className="flex items-center justify-between gap-3">
                     <span>{skill}</span>
-                    <span className="num text-xs text-muted-foreground">missing in {count} candidates</span>
+                    <span className="num text-xs text-muted-foreground">
+                      missing in {count} candidates
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -482,11 +552,16 @@ function Reports() {
       <section className="panel">
         <div className="border-b border-border p-4">
           <h2 className="font-semibold">Department scoreboard</h2>
-          <p className="text-xs text-muted-foreground">Demand, pipeline and fill rate against budgeted cost.</p>
+          <p className="text-xs text-muted-foreground">
+            Demand, pipeline and fill rate against budgeted cost.
+          </p>
         </div>
         {deptRows.length === 0 ? (
           <div className="p-4">
-            <EmptyState title="No departments yet" hint="Create departments on the Master data page." />
+            <EmptyState
+              title="No departments yet"
+              hint="Create departments on the Master data page."
+            />
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -531,7 +606,9 @@ function Reports() {
       <section className="panel">
         <div className="border-b border-border p-4">
           <h2 className="font-semibold">Requisitions needing attention</h2>
-          <p className="text-xs text-muted-foreground">Largest open gap first, then stalled candidates.</p>
+          <p className="text-xs text-muted-foreground">
+            Largest open gap first, then stalled candidates.
+          </p>
         </div>
         {reqRows.length === 0 ? (
           <div className="p-4">
@@ -567,7 +644,9 @@ function Reports() {
                     <td className="num p-3 text-right">{r.pipeline}</td>
                     <td className="num p-3 text-right">{r.interviews}</td>
                     <td className="num p-3 text-right">{r.joined}</td>
-                    <td className={`num p-3 text-right ${r.gap > 0 ? "font-semibold text-destructive" : ""}`}>
+                    <td
+                      className={`num p-3 text-right ${r.gap > 0 ? "font-semibold text-destructive" : ""}`}
+                    >
                       {r.gap}
                     </td>
                     <td className="num p-3 text-right">{r.stalled}</td>
@@ -583,9 +662,13 @@ function Reports() {
       <div className="grid gap-4 xl:grid-cols-2">
         <section className="panel p-4">
           <h2 className="font-semibold">Interviewer load</h2>
-          <p className="text-xs text-muted-foreground">Rounds owned, and how many land in the next seven days.</p>
+          <p className="text-xs text-muted-foreground">
+            Rounds owned, and how many land in the next seven days.
+          </p>
           {panelRows.length === 0 ? (
-            <p className="mt-3 text-sm text-muted-foreground">No interviews scheduled in this scope.</p>
+            <p className="mt-3 text-sm text-muted-foreground">
+              No interviews scheduled in this scope.
+            </p>
           ) : (
             <ul className="mt-3 space-y-2 text-sm">
               {panelRows.map(([name, row]) => (
@@ -602,7 +685,9 @@ function Reports() {
 
         <section className="panel p-4">
           <h2 className="font-semibold">Why candidates dropped off</h2>
-          <p className="text-xs text-muted-foreground">Audited reasons captured on every closing stage change.</p>
+          <p className="text-xs text-muted-foreground">
+            Audited reasons captured on every closing stage change.
+          </p>
           {dropOff.length === 0 ? (
             <p className="mt-3 text-sm text-muted-foreground">No closures in this scope.</p>
           ) : (
@@ -616,6 +701,10 @@ function Reports() {
             </ul>
           )}
         </section>
+      </div>
+
+      <div className="mt-6">
+        <HrPerformance />
       </div>
     </>
   );

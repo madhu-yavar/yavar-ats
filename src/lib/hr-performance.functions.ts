@@ -63,9 +63,7 @@ async function loadScheme(supabase: Sb, orgId: string): Promise<IncentiveScheme>
 export const getHrPerformance = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
-    z
-      .object({ days: z.number().int().min(7).max(730).default(90) })
-      .parse(input ?? {}),
+    z.object({ days: z.number().int().min(7).max(730).default(90) }).parse(input ?? {}),
   )
   .handler(async ({ data, context }) => {
     const supabase = context.supabase as unknown as Sb;
@@ -144,7 +142,12 @@ export const saveIncentiveScheme = createServerFn({ method: "POST" })
         target_closures_per_month: z.number().int().min(1).max(100),
         payout_per_closure: z.number().min(0),
         quality_bands: z
-          .array(z.object({ min_score: z.number().min(0).max(100), multiplier: z.number().min(0).max(5) }))
+          .array(
+            z.object({
+              min_score: z.number().min(0).max(100),
+              multiplier: z.number().min(0).max(5),
+            }),
+          )
           .min(1),
         monthly_cap: z.number().min(0).nullable(),
         notes: z.string().max(2000).nullable(),

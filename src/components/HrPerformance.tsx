@@ -224,9 +224,7 @@ export function HrPerformance() {
               <span>
                 Quality bands{" "}
                 <strong>
-                  {scheme.quality_bands
-                    .map((b) => `≥${b.min_score} → ×${b.multiplier}`)
-                    .join(", ")}
+                  {scheme.quality_bands.map((b) => `≥${b.min_score} → ×${b.multiplier}`).join(", ")}
                 </strong>
               </span>
               <span>
@@ -328,17 +326,24 @@ export function HrPerformance() {
                       <td className="py-2 pr-3">{r.joined}</td>
                       <td className="py-2 pr-3">{r.days_to_offer ?? "—"}</td>
                       <td className="py-2 pr-3">
-                        {r.quality_score === null ? "—" : <ScoreChip score={r.quality_score} size="sm" />}
+                        {r.quality_score === null ? (
+                          "—"
+                        ) : (
+                          <ScoreChip score={r.quality_score} size="sm" />
+                        )}
                       </td>
                       <td className="py-2 pr-3">
-                        {r.attainment_pct}% <span className="text-muted-foreground">of {r.target}</span>
+                        {r.attainment_pct}%{" "}
+                        <span className="text-muted-foreground">of {r.target}</span>
                       </td>
                       <td className="py-2 pr-3">
                         <ScoreChip score={r.performance_score} size="sm" />
                       </td>
                       <td className="py-2 pr-3 font-medium">
                         {r.payout.toLocaleString()}
-                        {r.capped ? <span className="ml-1 text-xs text-amber-600">capped</span> : null}
+                        {r.capped ? (
+                          <span className="ml-1 text-xs text-amber-600">capped</span>
+                        ) : null}
                       </td>
                     </tr>
                     {open === r.recruiter ? (
@@ -360,8 +365,8 @@ export function HrPerformance() {
 
           {data.unattributed > 0 ? (
             <p className="mt-3 text-xs text-muted-foreground">
-              {data.unattributed} stage change(s) in this period carry no recruiter name, so they are
-              not counted against anyone.
+              {data.unattributed} stage change(s) in this period carry no recruiter name, so they
+              are not counted against anyone.
             </p>
           ) : null}
         </>

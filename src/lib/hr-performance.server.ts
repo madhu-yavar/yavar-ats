@@ -220,7 +220,8 @@ export function buildRecruiterPerformance(input: {
       const band = bandFor(input.scheme.quality_bands, quality);
       const multiplier = band.multiplier;
       const raw = Math.round(base * multiplier);
-      const cap = input.scheme.monthly_cap === null ? null : input.scheme.monthly_cap * input.months;
+      const cap =
+        input.scheme.monthly_cap === null ? null : input.scheme.monthly_cap * input.months;
       const capped = cap !== null && raw > cap;
       const payout = capped ? Math.round(cap!) : raw;
 
