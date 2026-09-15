@@ -1622,6 +1622,39 @@ export type Database = {
         }
         Relationships: []
       }
+      product_catalogue_commercials: {
+        Row: {
+          currency: string
+          list_price: number | null
+          module_id: string
+          notes: string | null
+          tier: string | null
+          unit: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          currency?: string
+          list_price?: number | null
+          module_id: string
+          notes?: string | null
+          tier?: string | null
+          unit?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          currency?: string
+          list_price?: number | null
+          module_id?: string
+          notes?: string | null
+          tier?: string | null
+          unit?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       requisitions: {
         Row: {
           approval_trail: Json

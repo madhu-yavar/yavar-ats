@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   BarChart3,
+  BookMarked,
   Briefcase,
   Building2,
   CalendarClock,
@@ -54,6 +55,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     ...NAV,
     ...(isSuperUser || claimable
       ? [{ to: "/platform", label: "Platform console", icon: Globe2 } as const]
+      : []),
+    ...(isSuperUser
+      ? [{ to: "/catalogue", label: "Product catalogue", icon: BookMarked } as const]
       : []),
   ];
 

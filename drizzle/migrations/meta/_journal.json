@@ -218,6 +218,13 @@
       "when": 1789445196997,
       "tag": "0030_candidate_ownership_and_collaboration",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1789447068522,
+      "tag": "0031_product_catalogue_commercials",
+      "breakpoints": true
     }
   ]
 }
