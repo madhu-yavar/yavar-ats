@@ -263,3 +263,21 @@ export const screeningRunsQuery = (candidateId: string) =>
           .order("created_at", { ascending: false }),
       ),
   });
+
+/** Every screening kit in the organisation, newest first. */
+export const allScreeningKitsQuery = queryOptions({
+  queryKey: ["screening_kits", "all"],
+  queryFn: () =>
+    unwrap<ScreeningKit[]>(
+      supabase.from("screening_kits").select("*").order("created_at", { ascending: false }),
+    ),
+});
+
+/** Every graded screening call in the organisation, newest first. */
+export const allScreeningRunsQuery = queryOptions({
+  queryKey: ["screening_runs", "all"],
+  queryFn: () =>
+    unwrap<ScreeningRun[]>(
+      supabase.from("screening_runs").select("*").order("created_at", { ascending: false }),
+    ),
+});
