@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
-const Provider = z.enum(["lovable", "openai", "anthropic"]);
+const Provider = z.enum(["lovable", "openai", "anthropic", "gemini"]);
 
 const SaveInput = z.object({
   provider: Provider,
