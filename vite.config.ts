@@ -7,6 +7,9 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
+  // Self-hosted deploys (Docker/GKE) need a Node server, not the Lovable
+  // Cloudflare default. Produces .output/server/index.mjs via `vite build`.
+  nitro: { preset: "node-server" },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
@@ -18,7 +21,10 @@ export default defineConfig({
     // (src/lib/auth.middleware.ts) stays real so the server-fn compiler can
     // introspect .middleware([...]) arrays without hitting a mock.
     importProtection: {
-      behavior: { dev: "mock" },
+      // build:"mock" too — the production client bundle keeps server-fn/middleware
+      // module-graph references, and without it `vite build` errors exactly like
+      // dev did. Mocks are never invoked client-side (only .server() bodies run).
+      behavior: { dev: "mock", build: "mock" },
       client: { files: ["**/server/db.ts", "**/server/storage.ts"] },
     },
   },
