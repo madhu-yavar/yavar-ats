@@ -17,7 +17,7 @@ import {
   userRoles,
   users,
 } from "../drizzle/schema";
-import { activeOrgOf, assertRole } from "../src/server/auth";
+import { activeOrgOf, assertRole } from "../src/lib/auth.middleware";
 import { capture, orgForCaptureToken } from "../src/lib/capture.server";
 import { submitApplicationImpl } from "../src/lib/apply.functions";
 import { storeResumeFile } from "../src/lib/intake.server";
@@ -97,7 +97,7 @@ afterAll(async () => {
   await sql.end();
 });
 
-describe("authz seam (src/server/auth.ts)", () => {
+describe("authz seam (src/lib/auth.middleware.ts)", () => {
   test("activeOrgOf resolves first active membership", async () => {
     const ctx = await activeOrgOf(ownerA);
     expect(ctx).not.toBeNull();

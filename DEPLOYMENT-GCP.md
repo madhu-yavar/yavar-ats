@@ -88,7 +88,20 @@ DATABASE_URL="postgresql://USER:PASS@PRIVATE_IP:5432/atsiq" bunx drizzle-kit mig
 | Scheduler/cron routes | `LOVABLE_CRON_SECRET` (random 32+; optional `LOVABLE_CRON_SECRET_PREVIOUS` for rotation) |
 | Transactional email | `SMTP_URL` (e.g. `smtps://user:pass@smtp.example.com:465`), `EMAIL_FROM` |
 
-**Secrets to generate:** `SESSION_SECRET`, `OAUTH_STATE_SECRET`, `LINKEDIN_STATE_SECRET`, `INBOUND_EMAIL_SECRET`, `LOVABLE_CRON_SECRET` — `openssl rand -hex 32` each, stored in Secret Manager.
+**Secrets to generate:** `SESSION_SECRET`, `SECRET_ENCRYPTION_KEY` (AES-256 key for credentials at rest; `openssl rand -base64 32`), `OAUTH_STATE_SECRET`, `LINKEDIN_STATE_SECRET`, `INBOUND_EMAIL_SECRET`, `LOVABLE_CRON_SECRET` — stored in Secret Manager. Setting `SECRET_ENCRYPTION_KEY` enables encryption of OAuth/AI/capture credentials; without it they are stored in the clear (a one-time warning is logged). Rotate-sensitive: decryptSecret returns empty on mismatch rather than erroring.
+
+### Rate limiter — proxy positioning (required)
+
+The in-process rate limiter keys on the client IP taken from the **right-most**
+`X-Forwarded-For` hop (spoof-proof behind exactly one trusted proxy). Set:
+
+```
+TRUSTED_PROXY_COUNT=1     # number of trusted proxy hops (GKE L7 LB = 1)
+```
+
+The container must only be reachable **through** that proxy (no direct-to-node
+traffic): a client that bypasses the LB can send an arbitrary XFF and rotate
+limiter buckets. If you add a second proxy hop, raise the count to 2.
 
 ## 5. OAuth redirect URIs to register (per provider console)
 
