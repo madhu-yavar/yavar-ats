@@ -132,7 +132,11 @@
     <h1>ATSIQ Capture</h1>
 
     <label for="site">Your ATSIQ address</label>
-    <input id="site" type="url" placeholder="https://atsiq.yavar.ai" />
+    <input id="site" type="url" list="site-options" placeholder="https://atsiq.yavar.ai" />
+    <datalist id="site-options">
+      <option value="https://atsiq.yavar.ai"></option>
+      <option value="http://localhost:8080"></option>
+    </datalist>
 
     <label for="token">Capture key</label>
     <input id="token" type="password" placeholder="Paste from Integrations" />
