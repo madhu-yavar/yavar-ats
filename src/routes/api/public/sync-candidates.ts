@@ -112,6 +112,34 @@ async function run(request: Request) {
     }
   }
 
+  // Daily bias watch: selection-rate parity by intake source (four-fifths).
+  // Breaches are written to audit_log so they surface in the platform trail.
+  try {
+    const { selectionParity } = await import("@/lib/bias.server");
+    const { writeAudit } = await import("../../../server/audit");
+    const orgs = await db
+      .select({ id: applications.orgId })
+      .from(applications)
+      .groupBy(applications.orgId)
+      .limit(200);
+    for (const { id: orgId } of orgs) {
+      if (!orgId) continue;
+      const { breaches } = await selectionParity(orgId);
+      if (breaches.length) {
+        await writeAudit({
+          actor: "system",
+          orgId,
+          action: "bias.parity.breach",
+          entityType: "organization",
+          entityId: orgId,
+          detail: { breaches },
+        });
+      }
+    }
+  } catch (e) {
+    console.error("bias watch failed", e);
+  }
+
   return Response.json({
     scanned: staleCandidates.length,
     processed: queue.length,
