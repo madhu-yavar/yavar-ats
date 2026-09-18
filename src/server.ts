@@ -111,18 +111,57 @@ function applySecurityHeaders(response: Response, request: Request): Response {
   if (!contentType.includes("text/html")) return response;
 
   const headers = new Headers(response.headers);
-  // Deliberately script-src-free for now: SSR hydration needs nonce
-  // infrastructure before a script policy can ship without breakage.
+
+  // Per-response nonce for inline scripts: stamp every <script> tag in the
+  // payload, then allow only self + that nonce. Any injected inline script
+  // (XSS) without the nonce is refused by the browser.
+  const nonce = generateNonce();
   headers.set(
     "Content-Security-Policy",
-    "frame-ancestors 'self'; object-src 'none'; base-uri 'self'",
+    `frame-ancestors 'self'; object-src 'none'; base-uri 'self'; script-src 'self' 'nonce-${nonce}'`,
   );
   headers.set("X-Frame-Options", "SAMEORIGIN");
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
+
+  if (!response.body) return new Response(null, { status: response.status, statusText: response.statusText, headers });
+  return stampNonces(response, nonce, headers);
+}
+
+function generateNonce(): string {
+  return crypto.getRandomValues(new Uint8Array(16)).reduce(
+    (s, b) => s + b.toString(16).padStart(2, "0"),
+    "",
+  );
+}
+
+async function stampNonces(
+  response: Response,
+  nonce: string,
+  headers: Headers,
+): Promise<Response> {
+  try {
+    const html = await response.text();
+    const stamped = html.replace(/<script(?![^>]*\bnonce=)([^>]*)/gi, (_m, attrs: string) => {
+      // Self-closing or foreign tags are not a concern here; SSR output is ours.
+      return `<script nonce="${nonce}"${attrs}`;
+    });
+    return new Response(stamped, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  } catch {
+    // Transform failure must never blank a page: fall back to the
+    // script-src-free policy rather than breaking rendering.
+    headers.set(
+      "Content-Security-Policy",
+      "frame-ancestors 'self'; object-src 'none'; base-uri 'self'",
+    );
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  }
 }
 
 function tooManyRequests(): Response {
