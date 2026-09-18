@@ -25,7 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-export const Route = createFileRoute("/interviews")({
+export const Route = createFileRoute("/interviews/")({
   head: () => ({
     meta: [
       { title: "Interviews & 3-Level Evaluations — ATS" },
@@ -261,11 +261,6 @@ function Interviews() {
         eyebrow="Selection"
         title="Interviews & evaluations"
         description="Assign a panel member by email, send the invite, and let the scorecard drive the pipeline: select advances a level (L3 select raises the offer), hold parks the candidate, reject closes them — every move audited."
-        actions={
-          <Button variant="outline" asChild>
-            <Link to="/interviews/mine">My interviews</Link>
-          </Button>
-        }
       />
 
       <div className="space-y-6">

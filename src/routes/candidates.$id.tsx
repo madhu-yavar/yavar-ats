@@ -7,7 +7,6 @@ import { ScreeningPanel } from "@/components/ScreeningPanel";
 import { CandidateCollab } from "@/components/CandidateCollab";
 import { ArrowLeft, Download, ExternalLink, ShieldCheck, Sparkles } from "lucide-react";
 
-import { supabase } from "@/integrations/supabase/client";
 import {
   aiInterviewsQuery,
   applicationsQuery,
@@ -23,6 +22,7 @@ import {
   stageEventsQuery,
 } from "@/lib/data";
 import { runAiScreening } from "@/lib/matching.functions";
+import { saveAiInterview } from "@/lib/interviews.functions";
 import { verifyCandidate } from "@/lib/verification.functions";
 import { createAssessment } from "@/lib/assessment.functions";
 import { getResumeDownloadUrl } from "@/lib/resume.functions";
@@ -73,6 +73,7 @@ function CandidateDetail() {
   const evals = useQuery(evaluationsQuery);
   const aiRuns = useQuery(aiInterviewsQuery);
   const screen = useServerFn(runAiScreening);
+  const saveScreen = useServerFn(saveAiInterview);
   const verify = useServerFn(verifyCandidate);
   const makeAssessment = useServerFn(createAssessment);
   const getResumeUrl = useServerFn(getResumeDownloadUrl);
@@ -115,17 +116,17 @@ function CandidateDetail() {
           matchRationale: scoreMap.get(applicationId)?.rationale ?? null,
         },
       });
-      const { error } = await supabase.from("ai_interviews").insert({
-        application_id: applicationId,
-        jd_match_score: out.jd_match_score,
-        skillset_score: out.skillset_score,
-        culture_role_score: out.culture_role_score,
-        culture_org_score: out.culture_org_score,
-        transcript: out.transcript as never,
-        summary: out.summary,
+      await saveScreen({
+        data: {
+          applicationId,
+          jdMatchScore: out.jd_match_score,
+          skillsetScore: out.skillset_score,
+          cultureRoleScore: out.culture_role_score,
+          cultureOrgScore: out.culture_org_score,
+          transcript: out.transcript,
+          summary: out.summary,
+        },
       });
-      if (error) throw new Error(error.message);
-      await supabase.from("applications").update({ stage: "ai_screened" }).eq("id", applicationId);
       toast.success("AI screening interview completed");
       qc.invalidateQueries({ queryKey: ["ai_interviews"] });
       qc.invalidateQueries({ queryKey: ["applications"] });

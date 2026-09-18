@@ -12,13 +12,15 @@
  */
 import { createHmac, timingSafeEqual } from "crypto";
 
+import { env } from "../server/env";
+
 const AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
 const TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
 const API_URL = "https://api.linkedin.com";
 
 /** Overridable so the LinkedIn app only asks for the products it has been granted. */
 export function linkedinScopes(): string {
-  return process.env["LINKEDIN_SCOPES"] ?? "openid profile email w_member_social";
+  return env.LINKEDIN_SCOPES ?? "openid profile email w_member_social";
 }
 
 /** Thrown when the organisation's connection is unusable and only a re-connect fixes it. */
@@ -31,14 +33,12 @@ export class LinkedinAuthError extends Error {
 /* -------------------------------------------------------------------- config */
 
 export function linkedinEnvConfigured(): boolean {
-  return Boolean(process.env["LINKEDIN_CLIENT_ID"] && process.env["LINKEDIN_CLIENT_SECRET"]);
+  return Boolean(env.LINKEDIN_CLIENT_ID && env.LINKEDIN_CLIENT_SECRET);
 }
 
 /** The single redirect URI registered in the ATSIQ LinkedIn app. */
 export function redirectUri(): string {
-  return (
-    process.env["LINKEDIN_REDIRECT_URI"] ?? "https://atsiq.yavar.ai/api/public/linkedin/callback"
-  );
+  return env.LINKEDIN_REDIRECT_URI ?? "https://atsiq.yavar.ai/api/public/linkedin/callback";
 }
 
 /* --------------------------------------------------------------------- state */
@@ -46,7 +46,7 @@ export function redirectUri(): string {
 type StatePayload = { orgId: string; userId: string; origin: string; ts: number };
 
 function stateKey(): string {
-  return process.env["LINKEDIN_STATE_SECRET"] ?? "";
+  return env.LINKEDIN_STATE_SECRET ?? "";
 }
 
 function b64url(input: string): string {
@@ -80,7 +80,7 @@ export function verifyState(state: string | null): StatePayload | null {
 export function authorizeUrl(state: string): string {
   const params = new URLSearchParams({
     response_type: "code",
-    client_id: process.env["LINKEDIN_CLIENT_ID"] ?? "",
+    client_id: env.LINKEDIN_CLIENT_ID ?? "",
     redirect_uri: redirectUri(),
     state,
     scope: linkedinScopes(),
@@ -100,8 +100,8 @@ async function tokenRequest(body: Record<string, string>): Promise<TokenSet> {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: process.env["LINKEDIN_CLIENT_ID"] ?? "",
-      client_secret: process.env["LINKEDIN_CLIENT_SECRET"] ?? "",
+      client_id: env.LINKEDIN_CLIENT_ID ?? "",
+      client_secret: env.LINKEDIN_CLIENT_SECRET ?? "",
       ...body,
     }).toString(),
   });
@@ -142,7 +142,8 @@ export async function fetchMember(accessToken: string): Promise<{
   });
   const text = await res.text();
   if (res.status === 401) throw new LinkedinAuthError();
-  if (!res.ok) throw new Error(`LinkedIn profile read failed [${res.status}]: ${text.slice(0, 300)}`);
+  if (!res.ok)
+    throw new Error(`LinkedIn profile read failed [${res.status}]: ${text.slice(0, 300)}`);
   const body = JSON.parse(text) as { sub?: string; name?: string; email?: string };
   if (!body.sub) throw new Error("LinkedIn did not return a member id.");
   return { sub: body.sub, name: body.name ?? null, email: body.email ?? null };
@@ -258,9 +259,10 @@ export async function probeCapabilities(
         },
   );
 
-  const jobStatus = await probeRest(accessToken, "/rest/jobPostings?q=criteria&start=0&count=1").catch(
-    () => 0,
-  );
+  const jobStatus = await probeRest(
+    accessToken,
+    "/rest/jobPostings?q=criteria&start=0&count=1",
+  ).catch(() => 0);
   out.push({
     id: "job_postings",
     label: "Structured job listings on the Jobs board",

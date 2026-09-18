@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -80,6 +81,14 @@ function OrganisationSettings() {
 
   return (
     <>
+      <div className="panel mb-4 flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
+        <span className="text-muted-foreground">
+          Next setup step: invite your team and assign the approval roles.
+        </span>
+        <Button asChild size="sm" variant="outline">
+          <Link to="/team">Users &amp; roles</Link>
+        </Button>
+      </div>
       <PageHeader
         eyebrow="Administration"
         title="Organisation"

@@ -29,31 +29,44 @@ export const Route = createFileRoute("/api/public/linkedin/callback")({
           });
 
         const code = url.searchParams.get("code");
-        if (!code) return back(state.origin, { linkedin: "error", detail: "No sign-in code returned." });
+        if (!code)
+          return back(state.origin, { linkedin: "error", detail: "No sign-in code returned." });
 
         try {
           const token = await exchangeCode(code);
           const member = await fetchMember(token.access_token);
-          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-          const { error: dbError } = await supabaseAdmin
-            .from("org_linkedin_connections")
-            .upsert(
-              {
-                org_id: state.orgId,
-                member_sub: member.sub,
-                member_name: member.name,
-                member_email: member.email,
-                access_token: token.access_token,
-                refresh_token: token.refresh_token,
-                expires_at: new Date(Date.now() + token.expires_in * 1000).toISOString(),
+          const { db } = await import("../../../../server/db");
+          const { orgLinkedinConnections } = await import("../../../../../drizzle/schema");
+          const now = new Date();
+          await db
+            .insert(orgLinkedinConnections)
+            .values({
+              orgId: state.orgId,
+              memberSub: member.sub,
+              memberName: member.name,
+              memberEmail: member.email,
+              accessToken: token.access_token,
+              refreshToken: token.refresh_token,
+              expiresAt: new Date(Date.now() + token.expires_in * 1000),
+              scope: token.scope,
+              connectedBy: state.userId,
+              connectedAt: now,
+              updatedAt: now,
+            })
+            .onConflictDoUpdate({
+              target: orgLinkedinConnections.orgId,
+              set: {
+                memberSub: member.sub,
+                memberName: member.name,
+                memberEmail: member.email,
+                accessToken: token.access_token,
+                refreshToken: token.refresh_token,
+                expiresAt: new Date(Date.now() + token.expires_in * 1000),
                 scope: token.scope,
-                connected_by: state.userId,
-                connected_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
+                connectedBy: state.userId,
+                updatedAt: now,
               },
-              { onConflict: "org_id" },
-            );
-          if (dbError) throw new Error(dbError.message);
+            });
           return back(state.origin, { linkedin: "connected" });
         } catch (e) {
           return back(state.origin, {

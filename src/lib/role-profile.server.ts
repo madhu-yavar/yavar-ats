@@ -25,6 +25,8 @@ const clean = (v: unknown, max: number) =>
     .slice(0, max);
 
 export async function draftRoleProfile(input: {
+  /** Org context for AI credential resolution. */
+  orgId: string;
   role: string;
   department?: string | null | undefined;
   location?: string | undefined;
@@ -33,6 +35,7 @@ export async function draftRoleProfile(input: {
   industry?: string | null | undefined;
 }): Promise<RoleProfile> {
   const result = await aiJson<RoleProfile>({
+    orgId: input.orgId,
     system:
       "You are a senior talent-acquisition partner writing a hiring specification. For the given role title and " +
       "experience range, list the skills and qualifications a strong candidate must have. Use the exact, " +

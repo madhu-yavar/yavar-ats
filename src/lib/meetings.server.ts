@@ -6,6 +6,8 @@
  * Nothing is taken from the builder's own accounts.
  */
 
+import { env } from "../server/env";
+
 export type MeetingProviderId = "zoom" | "google_meet" | "teams";
 
 export type MeetingRequest = {
@@ -51,6 +53,25 @@ async function jsonOrThrow(res: Response, label: string) {
 /* ------------------------------------------------------------------- Zoom */
 
 async function zoomToken(s: Record<string, string>) {
+  // Delegated user OAuth (Connect button): refresh the user's token instead of S2S.
+  if (s["refresh_token"]) {
+    const basic = Buffer.from(
+      `${env.ZOOM_OAUTH_CLIENT_ID ?? ""}:${env.ZOOM_OAUTH_CLIENT_SECRET ?? ""}`,
+    ).toString("base64");
+    const res = await fetch("https://zoom.us/oauth/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Basic ${basic}`,
+      },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: s["refresh_token"]!,
+      }),
+    });
+    const body = await jsonOrThrow(res, "Zoom token refresh");
+    return String(body["access_token"] ?? "");
+  }
   need(s, ["account_id", "client_id", "client_secret"], "Zoom");
   const basic = Buffer.from(`${s["client_id"]}:${s["client_secret"]}`).toString("base64");
   const res = await fetch(
@@ -82,14 +103,20 @@ async function zoomMeeting(s: Record<string, string>, req: MeetingRequest): Prom
 /* ---------------------------------------------------------- Google / Meet */
 
 async function googleToken(s: Record<string, string>) {
-  need(s, ["client_id", "client_secret", "refresh_token"], "Google Calendar");
+  const clientId = s["client_id"] ?? env.GOOGLE_CALENDAR_OAUTH_CLIENT_ID ?? env.GOOGLE_OAUTH_CLIENT_ID;
+  const clientSecret =
+    s["client_secret"] ?? env.GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET ?? env.GOOGLE_OAUTH_CLIENT_SECRET;
+  if (!clientId || !clientSecret || !s["refresh_token"])
+    throw new Error(
+      "Google Calendar is not fully configured (missing client id, secret or refresh token).",
+    );
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       grant_type: "refresh_token",
-      client_id: s["client_id"]!,
-      client_secret: s["client_secret"]!,
+      client_id: clientId!,
+      client_secret: clientSecret!,
       refresh_token: s["refresh_token"]!,
     }),
   });
@@ -151,7 +178,50 @@ const TEAMS_PERMISSION_HELP =
   "run an application access policy (New-CsApplicationAccessPolicy / Grant-CsApplicationAccessPolicy) for the " +
   "organizer mailbox so the app may create meetings on their behalf.";
 
+async function msDelegatedToken(s: Record<string, string>): Promise<string> {
+  const tenant = s["tenant_id"] || "organizations";
+  const res = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: env.MICROSOFT_OAUTH_CLIENT_ID ?? "",
+      client_secret: env.MICROSOFT_OAUTH_CLIENT_SECRET ?? "",
+      refresh_token: s["refresh_token"]!,
+      scope: "https://graph.microsoft.com/.default offline_access",
+    }),
+  });
+  const body = await jsonOrThrow(res, "Microsoft token refresh");
+  return String(body["access_token"] ?? "");
+}
+
 async function teamsMeeting(s: Record<string, string>, req: MeetingRequest): Promise<MeetingResult> {
+  // Delegated consent tokens mint the meeting as the connected HR user via /me —
+  // no application-permission access policy involved.
+  if (s["refresh_token"]) {
+    const token = await msDelegatedToken(s);
+    const start = new Date(req.startIso);
+    const end = new Date(start.getTime() + req.durationMins * 60_000);
+    const res = await fetch("https://graph.microsoft.com/v1.0/me/onlineMeetings", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subject: req.topic,
+        startDateTime: start.toISOString(),
+        endDateTime: end.toISOString(),
+      }),
+    });
+    if (!res.ok) {
+      const detail = (await res.text()).slice(0, 300);
+      throw new Error(`Teams meeting creation failed [${res.status}]: ${detail}`);
+    }
+    const body = (await res.json()) as Record<string, unknown>;
+    return {
+      joinUrl: String(body["joinWebUrl"] ?? ""),
+      externalId: (body["id"] as string | undefined) ?? null,
+      provider: "teams",
+    };
+  }
   const token = await graphToken(s);
   const start = new Date(req.startIso);
   const end = new Date(start.getTime() + req.durationMins * 60_000);

@@ -1,7 +1,21 @@
 import { createServerFn } from "@tanstack/react-start";
+import { and, desc, eq, ilike, inArray, isNotNull, or } from "drizzle-orm";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { db } from "../server/db";
+import {
+  applications,
+  candidateNotes,
+  candidateOwnershipEvents,
+  candidateReferrals,
+  candidates,
+  orgMembers,
+  orgPoolShares,
+  organizations,
+  talentRequestSuggestions,
+  talentRequests,
+} from "@db/schema";
 
 /**
  * Recruiter-to-recruiter collaboration on a shared talent pool: every candidate
@@ -10,25 +24,21 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
  * The pool itself stays visible to the whole organisation.
  */
 
-async function admin() {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin;
-}
-
 /** The signed-in user's active organisation, and whether they own it. */
 async function membership(userId: string) {
-  const db = await admin();
-  const { data, error } = await db
-    .from("org_members")
-    .select("org_id, is_owner, full_name, email")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .order("created_at")
-    .limit(1)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error("You are not a member of an organisation yet.");
-  return data;
+  const [row] = await db
+    .select({
+      orgId: orgMembers.orgId,
+      isOwner: orgMembers.isOwner,
+      fullName: orgMembers.fullName,
+      email: orgMembers.email,
+    })
+    .from(orgMembers)
+    .where(and(eq(orgMembers.userId, userId), eq(orgMembers.status, "active")))
+    .orderBy(orgMembers.createdAt)
+    .limit(1);
+  if (!row) throw new Error("You are not a member of an organisation yet.");
+  return row;
 }
 
 export type PoolTeammate = {
@@ -43,20 +53,21 @@ export const poolTeam = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<PoolTeammate[]> => {
     const me = await membership(context.userId);
-    const db = await admin();
-    const { data, error } = await db
-      .from("org_members")
-      .select("user_id, full_name, email, is_owner")
-      .eq("org_id", me.org_id)
-      .eq("status", "active")
-      .not("user_id", "is", null)
-      .order("full_name");
-    if (error) throw new Error(error.message);
-    return (data ?? []).map((m) => ({
-      userId: m.user_id as string,
-      name: m.full_name || m.email,
+    const rows = await db
+      .select({
+        userId: orgMembers.userId,
+        fullName: orgMembers.fullName,
+        email: orgMembers.email,
+        isOwner: orgMembers.isOwner,
+      })
+      .from(orgMembers)
+      .where(and(eq(orgMembers.orgId, me.orgId), eq(orgMembers.status, "active"), isNotNull(orgMembers.userId)))
+      .orderBy(orgMembers.fullName);
+    return rows.map((m) => ({
+      userId: m.userId as string,
+      name: m.fullName || m.email,
       email: m.email,
-      isOwner: m.is_owner,
+      isOwner: m.isOwner,
     }));
   });
 
@@ -74,41 +85,37 @@ export const setCandidateOwner = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const me = await membership(context.userId);
-    const db = await admin();
 
     if (data.ownerId) {
-      const { data: target } = await db
-        .from("org_members")
-        .select("id")
-        .eq("org_id", me.org_id)
-        .eq("user_id", data.ownerId)
-        .eq("status", "active")
-        .maybeSingle();
+      const [target] = await db
+        .select({ id: orgMembers.id })
+        .from(orgMembers)
+        .where(
+          and(
+            eq(orgMembers.orgId, me.orgId),
+            eq(orgMembers.userId, data.ownerId),
+            eq(orgMembers.status, "active"),
+          ),
+        )
+        .limit(1);
       if (!target) throw new Error("That colleague is not an active member of your organisation.");
     }
 
-    const { data: rows, error } = await db
-      .from("candidates")
-      .select("id, owner_id")
-      .eq("org_id", me.org_id)
-      .in("id", data.candidateIds);
-    if (error) throw new Error(error.message);
-    if (!rows?.length)
-      throw new Error("No candidates in your organisation matched that selection.");
+    const rows = await db
+      .select({ id: candidates.id, ownerId: candidates.ownerId })
+      .from(candidates)
+      .where(and(eq(candidates.orgId, me.orgId), inArray(candidates.id, data.candidateIds)));
+    if (!rows.length) throw new Error("No candidates in your organisation matched that selection.");
 
     const ids = rows.map((r) => r.id);
-    const { error: updErr } = await db
-      .from("candidates")
-      .update({ owner_id: data.ownerId })
-      .in("id", ids);
-    if (updErr) throw new Error(updErr.message);
+    await db.update(candidates).set({ ownerId: data.ownerId }).where(inArray(candidates.id, ids));
 
-    await db.from("candidate_ownership_events").insert(
+    await db.insert(candidateOwnershipEvents).values(
       rows.map((r) => ({
-        org_id: me.org_id,
-        candidate_id: r.id,
-        from_owner: r.owner_id,
-        to_owner: data.ownerId,
+        orgId: me.orgId,
+        candidateId: r.id,
+        fromOwner: r.ownerId,
+        toOwner: data.ownerId,
         actor: context.userId,
         reason: data.reason ?? null,
       })),
@@ -133,34 +140,31 @@ export const referCandidate = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const me = await membership(context.userId);
     if (data.toUser === context.userId) throw new Error("Pick a colleague other than yourself.");
-    const db = await admin();
 
-    const { data: cand } = await db
-      .from("candidates")
-      .select("id")
-      .eq("id", data.candidateId)
-      .eq("org_id", me.org_id)
-      .maybeSingle();
+    const [cand] = await db
+      .select({ id: candidates.id })
+      .from(candidates)
+      .where(and(eq(candidates.id, data.candidateId), eq(candidates.orgId, me.orgId)))
+      .limit(1);
     if (!cand) throw new Error("That candidate is not in your organisation's pool.");
 
-    const { data: peer } = await db
-      .from("org_members")
-      .select("id")
-      .eq("org_id", me.org_id)
-      .eq("user_id", data.toUser)
-      .eq("status", "active")
-      .maybeSingle();
+    const [peer] = await db
+      .select({ id: orgMembers.id })
+      .from(orgMembers)
+      .where(
+        and(eq(orgMembers.orgId, me.orgId), eq(orgMembers.userId, data.toUser), eq(orgMembers.status, "active")),
+      )
+      .limit(1);
     if (!peer) throw new Error("That colleague is not an active member of your organisation.");
 
-    const { error } = await db.from("candidate_referrals").insert({
-      org_id: me.org_id,
-      candidate_id: data.candidateId,
-      requisition_id: data.requisitionId ?? null,
-      from_user: context.userId,
-      to_user: data.toUser,
+    await db.insert(candidateReferrals).values({
+      orgId: me.orgId,
+      candidateId: data.candidateId,
+      requisitionId: data.requisitionId ?? null,
+      fromUser: context.userId,
+      toUser: data.toUser,
       note: data.note ?? null,
     });
-    if (error) throw new Error(error.message);
     return { ok: true };
   });
 
@@ -180,58 +184,61 @@ export const respondReferral = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
-    const db = await admin();
-    const { data: ref, error } = await db
-      .from("candidate_referrals")
-      .select("id, org_id, candidate_id, requisition_id, to_user, status")
-      .eq("id", data.referralId)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
+    const [ref] = await db
+      .select({
+        id: candidateReferrals.id,
+        orgId: candidateReferrals.orgId,
+        candidateId: candidateReferrals.candidateId,
+        requisitionId: candidateReferrals.requisitionId,
+        toUser: candidateReferrals.toUser,
+        status: candidateReferrals.status,
+      })
+      .from(candidateReferrals)
+      .where(eq(candidateReferrals.id, data.referralId))
+      .limit(1);
     if (!ref) throw new Error("That referral no longer exists.");
-    if (ref.to_user !== context.userId)
-      throw new Error("Only the recruiter it was sent to can respond.");
+    if (ref.toUser !== context.userId) throw new Error("Only the recruiter it was sent to can respond.");
     if (ref.status !== "pending") throw new Error("This referral has already been answered.");
 
     await db
-      .from("candidate_referrals")
-      .update({
+      .update(candidateReferrals)
+      .set({
         status: data.accept ? "accepted" : "declined",
-        response_note: data.note ?? null,
-        responded_at: new Date().toISOString(),
+        responseNote: data.note ?? null,
+        respondedAt: new Date(),
       })
-      .eq("id", ref.id);
+      .where(eq(candidateReferrals.id, ref.id));
 
     if (data.accept) {
-      const { data: prev } = await db
-        .from("candidates")
-        .select("owner_id")
-        .eq("id", ref.candidate_id)
-        .maybeSingle();
-      await db.from("candidates").update({ owner_id: context.userId }).eq("id", ref.candidate_id);
-      await db.from("candidate_ownership_events").insert({
-        org_id: ref.org_id,
-        candidate_id: ref.candidate_id,
-        from_owner: prev?.owner_id ?? null,
-        to_owner: context.userId,
+      const [prev] = await db
+        .select({ ownerId: candidates.ownerId })
+        .from(candidates)
+        .where(eq(candidates.id, ref.candidateId))
+        .limit(1);
+      await db.update(candidates).set({ ownerId: context.userId }).where(eq(candidates.id, ref.candidateId));
+      await db.insert(candidateOwnershipEvents).values({
+        orgId: ref.orgId,
+        candidateId: ref.candidateId,
+        fromOwner: prev?.ownerId ?? null,
+        toOwner: context.userId,
         actor: context.userId,
         reason: "Accepted referral",
       });
 
-      if (ref.requisition_id) {
-        const { data: existing } = await db
-          .from("applications")
-          .select("id")
-          .eq("candidate_id", ref.candidate_id)
-          .eq("requisition_id", ref.requisition_id)
-          .maybeSingle();
+      if (ref.requisitionId) {
+        const [existing] = await db
+          .select({ id: applications.id })
+          .from(applications)
+          .where(and(eq(applications.candidateId, ref.candidateId), eq(applications.requisitionId, ref.requisitionId)))
+          .limit(1);
         if (!existing)
-          await db.from("applications").insert({
-            org_id: ref.org_id,
-            candidate_id: ref.candidate_id,
-            requisition_id: ref.requisition_id,
+          await db.insert(applications).values({
+            orgId: ref.orgId,
+            candidateId: ref.candidateId,
+            requisitionId: ref.requisitionId,
             stage: "sourced",
             source: "internal_referral",
-          } as never);
+          });
       }
     }
 
@@ -252,36 +259,31 @@ export const addCandidateNote = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const me = await membership(context.userId);
-    const db = await admin();
 
-    const { data: cand } = await db
-      .from("candidates")
-      .select("id")
-      .eq("id", data.candidateId)
-      .eq("org_id", me.org_id)
-      .maybeSingle();
+    const [cand] = await db
+      .select({ id: candidates.id })
+      .from(candidates)
+      .where(and(eq(candidates.id, data.candidateId), eq(candidates.orgId, me.orgId)))
+      .limit(1);
     if (!cand) throw new Error("That candidate is not in your organisation's pool.");
 
     let mentions: string[] = [];
     if (data.mentions.length) {
-      const { data: peers } = await db
-        .from("org_members")
-        .select("user_id")
-        .eq("org_id", me.org_id)
-        .eq("status", "active")
-        .in("user_id", data.mentions);
-      mentions = (peers ?? []).map((p) => p.user_id as string);
+      const peers = await db
+        .select({ userId: orgMembers.userId })
+        .from(orgMembers)
+        .where(and(eq(orgMembers.orgId, me.orgId), eq(orgMembers.status, "active"), inArray(orgMembers.userId, data.mentions)));
+      mentions = peers.map((p) => p.userId);
     }
 
-    const { error } = await db.from("candidate_notes").insert({
-      org_id: me.org_id,
-      candidate_id: data.candidateId,
-      author_id: context.userId,
-      author_name: me.full_name || me.email,
+    await db.insert(candidateNotes).values({
+      orgId: me.orgId,
+      candidateId: data.candidateId,
+      authorId: context.userId,
+      authorName: me.fullName || me.email,
       body: data.body,
       mentions,
     });
-    if (error) throw new Error(error.message);
     return { ok: true };
   });
 
@@ -300,16 +302,14 @@ export const createTalentRequest = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const me = await membership(context.userId);
-    const db = await admin();
-    const { error } = await db.from("talent_requests").insert({
-      org_id: me.org_id,
-      requester_id: context.userId,
-      requisition_id: data.requisitionId ?? null,
+    await db.insert(talentRequests).values({
+      orgId: me.orgId,
+      requesterId: context.userId,
+      requisitionId: data.requisitionId ?? null,
       title: data.title,
       skills: data.skills,
       note: data.note ?? null,
     });
-    if (error) throw new Error(error.message);
     return { ok: true };
   });
 
@@ -327,34 +327,34 @@ export const suggestToRequest = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const me = await membership(context.userId);
-    const db = await admin();
-    const { data: req } = await db
-      .from("talent_requests")
-      .select("id, org_id, status")
-      .eq("id", data.requestId)
-      .maybeSingle();
-    if (!req || req.org_id !== me.org_id)
-      throw new Error("That request is not open in your organisation.");
+    const [req] = await db
+      .select({ id: talentRequests.id, orgId: talentRequests.orgId, status: talentRequests.status })
+      .from(talentRequests)
+      .where(eq(talentRequests.id, data.requestId))
+      .limit(1);
+    if (!req || req.orgId !== me.orgId) throw new Error("That request is not open in your organisation.");
     if (req.status !== "open") throw new Error("This request has already been closed.");
 
-    const { data: cand } = await db
-      .from("candidates")
-      .select("id")
-      .eq("id", data.candidateId)
-      .eq("org_id", me.org_id)
-      .maybeSingle();
+    const [cand] = await db
+      .select({ id: candidates.id })
+      .from(candidates)
+      .where(and(eq(candidates.id, data.candidateId), eq(candidates.orgId, me.orgId)))
+      .limit(1);
     if (!cand) throw new Error("That candidate is not in your organisation's pool.");
 
-    const { error } = await db.from("talent_request_suggestions").insert({
-      org_id: me.org_id,
-      request_id: data.requestId,
-      candidate_id: data.candidateId,
-      suggested_by: context.userId,
-      note: data.note ?? null,
-    });
-    if (error && /duplicate|unique/i.test(error.message))
-      throw new Error("That candidate has already been suggested for this request.");
-    if (error) throw new Error(error.message);
+    try {
+      await db.insert(talentRequestSuggestions).values({
+        orgId: me.orgId,
+        requestId: data.requestId,
+        candidateId: data.candidateId,
+        suggestedBy: context.userId,
+        note: data.note ?? null,
+      });
+    } catch (e) {
+      if (/duplicate|unique/i.test((e as Error).message))
+        throw new Error("That candidate has already been suggested for this request.");
+      throw e;
+    }
     return { ok: true };
   });
 
@@ -364,19 +364,18 @@ export const closeTalentRequest = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => z.object({ requestId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
     const me = await membership(context.userId);
-    const db = await admin();
-    const { data: req } = await db
-      .from("talent_requests")
-      .select("id, org_id, requester_id")
-      .eq("id", data.requestId)
-      .maybeSingle();
-    if (!req || req.org_id !== me.org_id) throw new Error("Request not found.");
-    if (req.requester_id !== context.userId && !me.is_owner)
+    const [req] = await db
+      .select({ id: talentRequests.id, orgId: talentRequests.orgId, requesterId: talentRequests.requesterId })
+      .from(talentRequests)
+      .where(eq(talentRequests.id, data.requestId))
+      .limit(1);
+    if (!req || req.orgId !== me.orgId) throw new Error("Request not found.");
+    if (req.requesterId !== context.userId && !me.isOwner)
       throw new Error("Only the recruiter who raised it, or an organisation owner, can close it.");
     await db
-      .from("talent_requests")
-      .update({ status: "closed", closed_at: new Date().toISOString() })
-      .eq("id", req.id);
+      .update(talentRequests)
+      .set({ status: "closed", closedAt: new Date() })
+      .where(eq(talentRequests.id, req.id));
     return { ok: true };
   });
 
@@ -395,28 +394,33 @@ export const listPoolShares = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<PoolShare[]> => {
     const me = await membership(context.userId);
-    const db = await admin();
-    const { data, error } = await db
-      .from("org_pool_shares")
-      .select("id, owner_org, partner_org, status, scope, created_at")
-      .or(`owner_org.eq.${me.org_id},partner_org.eq.${me.org_id}`)
-      .order("created_at", { ascending: false });
-    if (error) throw new Error(error.message);
+    const shares = await db
+      .select({
+        id: orgPoolShares.id,
+        ownerOrg: orgPoolShares.ownerOrg,
+        partnerOrg: orgPoolShares.partnerOrg,
+        status: orgPoolShares.status,
+        scope: orgPoolShares.scope,
+        createdAt: orgPoolShares.createdAt,
+      })
+      .from(orgPoolShares)
+      .where(or(eq(orgPoolShares.ownerOrg, me.orgId), eq(orgPoolShares.partnerOrg, me.orgId)))
+      .orderBy(desc(orgPoolShares.createdAt));
 
     const ids = new Set<string>();
-    for (const s of data ?? []) {
-      ids.add(s.owner_org);
-      ids.add(s.partner_org);
+    for (const s of shares) {
+      ids.add(s.ownerOrg);
+      ids.add(s.partnerOrg);
     }
-    const { data: orgs } = await db
-      .from("organizations")
-      .select("id, name")
-      .in("id", [...ids].length ? [...ids] : [me.org_id]);
-    const nameOf = new Map((orgs ?? []).map((o) => [o.id, o.name]));
+    const orgs = await db
+      .select({ id: organizations.id, name: organizations.name })
+      .from(organizations)
+      .where(inArray(organizations.id, ids.size ? [...ids] : [me.orgId]));
+    const nameOf = new Map(orgs.map((o) => [o.id, o.name]));
 
-    return (data ?? []).map((s) => {
-      const outgoing = s.owner_org === me.org_id;
-      const partner = outgoing ? s.partner_org : s.owner_org;
+    return shares.map((s) => {
+      const outgoing = s.ownerOrg === me.orgId;
+      const partner = outgoing ? s.partnerOrg : s.ownerOrg;
       return {
         id: s.id,
         direction: outgoing ? ("outgoing" as const) : ("incoming" as const),
@@ -424,7 +428,7 @@ export const listPoolShares = createServerFn({ method: "GET" })
         scope: s.scope,
         partnerOrg: partner,
         partnerName: nameOf.get(partner) ?? "Unknown organisation",
-        createdAt: s.created_at,
+        createdAt: s.createdAt.toISOString(),
       };
     });
   });
@@ -445,32 +449,32 @@ export const offerPoolShare = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const me = await membership(context.userId);
-    if (!me.is_owner)
-      throw new Error("Only an organisation owner can agree to share the talent pool.");
-    const db = await admin();
+    if (!me.isOwner) throw new Error("Only an organisation owner can agree to share the talent pool.");
 
-    const { data: matches } = await db
-      .from("organizations")
-      .select("id, name")
-      .ilike("name", `%${data.partnerName}%`)
-      .eq("status", "active")
+    const matches = await db
+      .select({ id: organizations.id, name: organizations.name })
+      .from(organizations)
+      .where(ilike(organizations.name, `%${data.partnerName}%`))
       .limit(5);
-    const found = (matches ?? []).filter((o) => o.id !== me.org_id);
+    const found = matches.filter((o) => o.id !== me.orgId);
     if (found.length === 0) throw new Error("No active organisation matched that name.");
     if (found.length > 1)
       throw new Error(
         `Several organisations matched: ${found.map((o) => o.name).join(", ")}. Be more specific.`,
       );
 
-    const { error } = await db.from("org_pool_shares").insert({
-      owner_org: me.org_id,
-      partner_org: found[0]!.id,
-      scope: data.scope ?? null,
-      requested_by: context.userId,
-    });
-    if (error && /duplicate|unique/i.test(error.message))
-      throw new Error(`An agreement with ${found[0]!.name} already exists.`);
-    if (error) throw new Error(error.message);
+    try {
+      await db.insert(orgPoolShares).values({
+        ownerOrg: me.orgId,
+        partnerOrg: found[0]!.id,
+        scope: data.scope ?? null,
+        requestedBy: context.userId,
+      });
+    } catch (e) {
+      if (/duplicate|unique/i.test((e as Error).message))
+        throw new Error(`An agreement with ${found[0]!.name} already exists.`);
+      throw e;
+    }
     return { ok: true, partnerName: found[0]!.name };
   });
 
@@ -484,35 +488,35 @@ export const respondPoolShare = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const me = await membership(context.userId);
-    if (!me.is_owner) throw new Error("Only an organisation owner can change a sharing agreement.");
-    const db = await admin();
-    const { data: share } = await db
-      .from("org_pool_shares")
-      .select("id, owner_org, partner_org, status")
-      .eq("id", data.shareId)
-      .maybeSingle();
+    if (!me.isOwner) throw new Error("Only an organisation owner can change a sharing agreement.");
+    const [share] = await db
+      .select({
+        id: orgPoolShares.id,
+        ownerOrg: orgPoolShares.ownerOrg,
+        partnerOrg: orgPoolShares.partnerOrg,
+        status: orgPoolShares.status,
+      })
+      .from(orgPoolShares)
+      .where(eq(orgPoolShares.id, data.shareId))
+      .limit(1);
     if (!share) throw new Error("Agreement not found.");
-    const mine = share.owner_org === me.org_id || share.partner_org === me.org_id;
+    const mine = share.ownerOrg === me.orgId || share.partnerOrg === me.orgId;
     if (!mine) throw new Error("This agreement does not involve your organisation.");
 
     if (data.action === "revoke") {
       await db
-        .from("org_pool_shares")
-        .update({
-          status: "revoked",
-          revoked_at: new Date().toISOString(),
-          responded_by: context.userId,
-        })
-        .eq("id", share.id);
+        .update(orgPoolShares)
+        .set({ status: "revoked", revokedAt: new Date(), respondedBy: context.userId })
+        .where(eq(orgPoolShares.id, share.id));
       return { ok: true, status: "revoked" };
     }
 
-    if (share.partner_org !== me.org_id)
+    if (share.partnerOrg !== me.orgId)
       throw new Error("Only the receiving organisation can accept or decline.");
     const status = data.action === "accept" ? "active" : "declined";
     await db
-      .from("org_pool_shares")
-      .update({ status, responded_at: new Date().toISOString(), responded_by: context.userId })
-      .eq("id", share.id);
+      .update(orgPoolShares)
+      .set({ status, respondedAt: new Date(), respondedBy: context.userId })
+      .where(eq(orgPoolShares.id, share.id));
     return { ok: true, status };
   });

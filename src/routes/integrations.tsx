@@ -13,12 +13,13 @@ import {
   Loader2,
   Plug,
   Sparkles,
+  Video,
 } from "lucide-react";
 
-import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import {
   disconnectIntegration,
+  listSourceIntegrations,
   saveIntegration,
   testIntegration,
 } from "@/lib/integrations.functions";
@@ -35,6 +36,11 @@ import {
   startLinkedInConnect,
 } from "@/lib/linkedin.functions";
 import { careersInboxStatus, importCareersInbox } from "@/lib/inbox.functions";
+import {
+  startGoogleMeetConnect,
+  startMicrosoftConnect,
+  startZoomConnect,
+} from "@/lib/integrations-oauth.functions";
 import { orgInbox } from "@/lib/local-inbox.functions";
 
 import { collectApplicants, type CollectSummary } from "@/lib/collect.functions";
@@ -51,11 +57,7 @@ type Integration = Tables<"source_integrations">;
 
 const integrationsQuery = queryOptions({
   queryKey: ["source_integrations"],
-  queryFn: async () => {
-    const { data, error } = await supabase.from("source_integrations").select("*").order("label");
-    if (error) throw new Error(error.message);
-    return (data ?? []) as Integration[];
-  },
+  queryFn: async () => (await listSourceIntegrations()) as Integration[],
 });
 
 const FIELD_LABEL: Record<string, string> = {
@@ -153,71 +155,33 @@ const SETUP_GUIDE: Record<string, SetupGuide> = {
     ],
   },
   zoom: {
-    who: "Needs a paid Zoom plan and someone with the Zoom admin role.",
-    minutes: "10 min",
-    links: [
-      {
-        label: "Zoom App Marketplace (Build app)",
-        href: "https://marketplace.zoom.us/develop/create",
-      },
-      {
-        label: "Zoom setup guide (with screenshots)",
-        href: "https://developers.zoom.us/docs/internal-apps/create/",
-      },
-    ],
+    who: "One person with a Zoom account (licensed plan recommended for longer interviews).",
+    minutes: "2 min",
+    links: [],
     steps: [
-      "Open the Marketplace link, choose Build App → “Server-to-Server OAuth”, and give it the name “ATS interviews”.",
-      "On the App Credentials page copy Account ID, Client ID and Client Secret into the boxes below.",
-      "Open the Scopes page, press Add Scopes and tick meeting:write:admin and meeting:read:admin.",
-      "Press Activate your app in Zoom, then Test connection here.",
+      "Press Connect Zoom below and sign in with that Zoom account.",
+      "Accept the meeting:write permission screen.",
+      "Done: scheduled interviews get a Zoom join link automatically.",
     ],
   },
   google_meet: {
-    who: "Needs a Google Workspace account for the recruiting calendar and its admin.",
-    minutes: "15 min",
-    links: [
-      {
-        label: "Google Cloud credentials page",
-        href: "https://console.cloud.google.com/apis/credentials",
-      },
-      {
-        label: "Turn on Calendar API",
-        href: "https://console.cloud.google.com/apis/library/calendar-json.googleapis.com",
-      },
-      {
-        label: "OAuth Playground (get refresh token)",
-        href: "https://developers.google.com/oauthplayground/",
-      },
-    ],
+    who: "One person with a Google account that owns the recruiting calendar.",
+    minutes: "2 min",
+    links: [],
     steps: [
-      "In Google Cloud, create a project, then press “Turn on Calendar API”.",
-      "On the credentials page choose Create credentials → OAuth client ID → Web application, and add https://developers.google.com/oauthplayground as an authorised redirect URI.",
-      "Copy the Client ID and Client secret into the boxes below.",
-      "Open the OAuth Playground, press the gear icon, tick “Use your own OAuth credentials” and paste the same ID and secret.",
-      "In step 1 enter the scope https://www.googleapis.com/auth/calendar, authorise with the recruiting calendar account, then exchange the code and copy the refresh token into the box below.",
-      "Press Test connection.",
+      "Press Connect Google Meet below and sign in with that Google account.",
+      "Accept the calendar permission screen — Meet links are then minted on every online interview.",
+      "Done: invites with the Meet link go to the candidate and the interviewer automatically.",
     ],
   },
   teams: {
-    who: "Needs Microsoft 365 and a Global/Application admin in Microsoft Entra (Azure AD).",
-    minutes: "15 min",
-    links: [
-      {
-        label: "Register an Entra app",
-        href: "https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade",
-      },
-      {
-        label: "Microsoft setup guide",
-        href: "https://learn.microsoft.com/en-us/graph/cloud-communications-online-meeting-application-access-policy",
-      },
-    ],
+    who: "One person with a Microsoft 365 work account (the mailbox that hosts interviews).",
+    minutes: "2 min",
+    links: [],
     steps: [
-      "Open the Entra link and press New registration; name it “ATS interviews”.",
-      "From the Overview page copy the Application (client) ID and Directory (tenant) ID below.",
-      "Go to Certificates & secrets → New client secret, copy the value immediately into the box below.",
-      "Go to API permissions → Add a permission → Microsoft Graph → Application permissions → OnlineMeetings.ReadWrite.All, then press Grant admin consent.",
-      "Ask IT to run the Teams application access policy (see the Microsoft guide) for the organiser mailbox you enter below.",
-      "Enter that mailbox and press Test connection.",
+      "Press Connect Microsoft Teams below and sign in with that work account.",
+      "Accept the permissions screen — the app may need a one-time approval from your Microsoft 365 admin.",
+      "Done: every scheduled interview gets a real Teams join link, and the invite reaches the candidate's inbox.",
     ],
   },
 };
@@ -437,6 +401,7 @@ function LinkedinOneClick() {
     window.history.replaceState({}, "", "/integrations");
     qc.invalidateQueries({ queryKey: ["linkedin_connect"] });
   }, [qc]);
+
 
   async function onConnect() {
     setBusy(true);
@@ -703,6 +668,81 @@ Thank you,
  * then on every application email — LinkedIn, job boards, direct applicants —
  * has its CV read, parsed and filed against the matching open role by itself.
  */
+/** One-click delegated connect for a meeting provider — no secrets to paste. */
+function MeetingOAuthPanel({ row }: { row: Integration }) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const startMs = useServerFn(startMicrosoftConnect);
+  const startGm = useServerFn(startGoogleMeetConnect);
+  const startZm = useServerFn(startZoomConnect);
+  const drop = useServerFn(disconnectIntegration);
+
+  const cfg = (row.config ?? {}) as Record<string, unknown>;
+  const connectedEmail = typeof cfg["connected_email"] === "string" ? (cfg["connected_email"] as string) : "";
+
+  const provider = row.provider as "teams" | "google_meet" | "zoom";
+  const startFn = provider === "teams" ? startMs : provider === "google_meet" ? startGm : startZm;
+  const label = provider === "teams" ? "Microsoft Teams" : provider === "google_meet" ? "Google Meet" : "Zoom";
+
+  async function onConnect() {
+    setBusy(true);
+    const tab = window.open("", `atsiq-${provider}-connect`);
+    try {
+      const { url } = await startFn({ data: { origin: window.location.origin } });
+      if (tab) tab.location.replace(url);
+      else window.location.href = url;
+    } catch (e) {
+      tab?.close();
+      setBusy(false);
+      toast.error(e instanceof Error ? e.message : "Could not start the connect flow");
+    }
+  }
+
+  async function onDisconnect() {
+    setBusy(true);
+    try {
+      await drop({ data: { integrationId: row.id } });
+      toast.success(`${label} disconnected`);
+      qc.invalidateQueries({ queryKey: ["source_integrations"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Disconnect failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border bg-surface-2/40 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Plug className="size-4 text-primary" />
+          One-click connect — no secrets to paste
+        </div>
+        {connectedEmail ? (
+          <Badge variant="secondary">Connected as {connectedEmail}</Badge>
+        ) : null}
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Sign in with the work account that hosts your {label} meetings. An organisation
+        owner or HR head connects it once; every recruiter's schedule reuses the same
+        account for invites and links.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {connectedEmail ? (
+          <Button size="sm" variant="outline" onClick={onDisconnect} disabled={busy}>
+            Disconnect {connectedEmail}
+          </Button>
+        ) : (
+          <Button size="sm" onClick={onConnect} disabled={busy}>
+            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Video className="size-3.5" />}
+            Connect {label}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CareersInboxPanel() {
   const mine = useQuery({
     queryKey: ["org_inbox"],
@@ -1099,6 +1139,7 @@ function IntegrationCard({ row }: { row: Integration }) {
           {provider === "linkedin" ? <LinkedinOneClick /> : null}
           {provider === "linkedin" || provider === "careers" ? <CareersInboxPanel /> : null}
           {provider === "linkedin" || provider === "careers" ? <CapturePanel /> : null}
+          {isMeeting ? <MeetingOAuthPanel row={row} /> : null}
 
           <SetupHelp provider={provider} label={row.label} />
 
@@ -1151,14 +1192,6 @@ function IntegrationCard({ row }: { row: Integration }) {
 }
 
 const PROVIDER_MODELS: Record<string, { id: string; label: string }[]> = {
-  lovable: [
-    { id: "google/gemini-3.8-flash", label: "Gemini 3.8 Flash — newest, fast" },
-    { id: "google/gemini-3.7-flash", label: "Gemini 3.7 Flash — fast, default" },
-    { id: "google/gemini-3.5-flash", label: "Gemini 3.5 Flash" },
-    { id: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro — deeper reasoning" },
-    { id: "openai/gpt-5.5", label: "GPT-5.5 — strongest reasoning" },
-    { id: "openai/gpt-5.4-mini", label: "GPT-5.4 mini — cheap, high volume" },
-  ],
   openai: [
     { id: "gpt-5.5", label: "GPT-5.5" },
     { id: "gpt-4.1", label: "GPT-4.1" },
@@ -1169,7 +1202,7 @@ const PROVIDER_MODELS: Record<string, { id: string; label: string }[]> = {
     { id: "claude-opus-4-1", label: "Claude Opus 4.1" },
     { id: "claude-3-5-haiku-latest", label: "Claude 3.5 Haiku" },
   ],
-  gemini: [
+  google: [
     { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash — newest, fast" },
     { id: "gemini-3.7-flash", label: "Gemini 3.7 Flash" },
     { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash" },
@@ -1197,17 +1230,22 @@ function AiModelCard() {
   const [busy, setBusy] = useState<"save" | "test" | "clear" | null>(null);
 
   const s = settings.data;
-  const activeProvider = provider ?? s?.provider ?? "lovable";
+  const activeProvider = provider ?? s?.provider ?? "openai";
   const models = PROVIDER_MODELS[activeProvider] ?? [];
   const activeModel =
     model ?? (provider && provider !== s?.provider ? models[0]?.id : s?.model) ?? "";
-  const keyStored =
-    activeProvider !== "lovable" && s?.keys?.[activeProvider as "openai" | "anthropic" | "gemini"];
+  const keyStored = s?.keys?.[activeProvider as "openai" | "anthropic" | "google"];
 
   async function onSave() {
     setBusy("save");
     try {
-      await save({ data: { provider: activeProvider as "lovable", model: activeModel, apiKey } });
+      await save({
+        data: {
+          provider: activeProvider as "openai" | "anthropic" | "google",
+          model: activeModel,
+          apiKey,
+        },
+      });
       setApiKey("");
       toast.success("Scoring model updated");
       qc.invalidateQueries({ queryKey: ["ai_settings"] });
@@ -1223,12 +1261,17 @@ function AiModelCard() {
     try {
       const out = await test({
         data: {
-          provider: activeProvider as "gemini",
+          provider: activeProvider as "openai" | "anthropic" | "google",
           model: activeModel,
           ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
         },
       });
-      if (out.status === "ok") toast.success(out.message);
+      if (out.status === "ok") {
+        // Testing uses the on-screen key directly; it is not stored until saved.
+        toast.success(
+          apiKey.trim() ? `${out.message} Now press Save to store this key.` : out.message,
+        );
+      }
       else toast.error(out.message);
       qc.invalidateQueries({ queryKey: ["ai_settings"] });
     } catch (e) {
@@ -1241,7 +1284,7 @@ function AiModelCard() {
   async function onClearKey() {
     setBusy("clear");
     try {
-      await removeKey({ data: { provider: activeProvider as "openai" } });
+      await removeKey({ data: { provider: activeProvider as "openai" | "anthropic" | "google" } });
       toast.success("API key removed");
       qc.invalidateQueries({ queryKey: ["ai_settings"] });
     } catch (e) {
@@ -1275,10 +1318,9 @@ function AiModelCard() {
               setModel(PROVIDER_MODELS[e.target.value]?.[0]?.id ?? "");
             }}
           >
-            <option value="lovable">Built-in Lovable AI (Gemini + OpenAI, no key)</option>
             <option value="openai">OpenAI — your own API key</option>
             <option value="anthropic">Anthropic Claude — your own API key</option>
-            <option value="gemini">Google Gemini — your own API key</option>
+            <option value="google">Google Gemini — your own API key</option>
           </select>
         </div>
 
@@ -1309,15 +1351,15 @@ function AiModelCard() {
           </div>
         )}
 
-        {activeProvider !== "lovable" && (
+        {(
           <div className="space-y-1.5 sm:col-span-2">
             <Label className="flex items-center gap-1.5">
               <KeyRound className="size-3.5" />
               {activeProvider === "openai"
                 ? "OpenAI API key"
-                : activeProvider === "gemini"
-                  ? "Google Gemini API key"
-                  : "Anthropic API key"}
+                : activeProvider === "anthropic"
+                  ? "Anthropic API key"
+                  : "Google Gemini API key"}
             </Label>
             <Input
               type="password"
@@ -1329,26 +1371,6 @@ function AiModelCard() {
               Stored server-side only; it is never returned to the browser.
             </p>
           </div>
-        )}
-      </div>
-
-      <div className="mt-4 rounded-md border bg-muted/40 p-3 text-xs">
-        <p className="font-semibold">Who pays for AI</p>
-        {(s?.provider ?? "lovable") === "lovable" ? (
-          <p className="mt-1 text-muted-foreground">
-            Saved setting: <span className="font-medium">Built-in Lovable AI</span> ·{" "}
-            {s?.model ?? "default model"}. Every AI action is billed to Lovable credits. Switch the
-            provider above and save your own key to stop that.
-          </p>
-        ) : (
-          <p className="mt-1 text-muted-foreground">
-            Saved setting: <span className="font-medium">your own {s?.provider} key</span> ·{" "}
-            {s?.model}. Every AI action — matching, parsing, screening, market benchmarking — is
-            sent straight to {s?.provider} with your key and billed by them. No Lovable credits are
-            used, and if your key is missing or rejected the action fails with that provider&apos;s
-            error instead of falling back. Results across the app show the engine that produced
-            them.
-          </p>
         )}
       </div>
 
@@ -1369,12 +1391,42 @@ function AiModelCard() {
           </Button>
         ) : null}
       </div>
+
+      <div className="mt-4 rounded-md border bg-muted/40 p-3 text-xs">
+        <p className="font-semibold">Who pays for AI</p>
+        <p className="mt-1 text-muted-foreground">
+          Saved setting:{" "}
+          <span className="font-medium">
+            your own {s?.provider ?? "openai"} key
+          </span>{" "}
+          · {s?.model ?? "no model saved yet"}. Every AI action — matching, parsing, screening,
+          market benchmarking — is sent straight to {s?.provider ?? "the provider"} with your key
+          and billed by them. If your key is missing or rejected the action fails with that
+          provider&apos;s error instead of falling back. Results across the app show the engine
+          that produced them.
+        </p>
+      </div>
     </article>
   );
 }
 
 function Integrations() {
+  const qc = useQueryClient();
   const rows = useQuery(integrationsQuery);
+
+  // Meeting-provider connects return with ?meetings=connected|error&provider=…
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const outcome = params.get("meetings");
+    if (!outcome) return;
+    const provider = params.get("provider");
+    const name =
+      provider === "microsoft" ? "Microsoft Teams" : provider === "google" ? "Google Meet" : provider === "zoom" ? "Zoom" : "The provider";
+    if (outcome === "connected") toast.success(`${name} connected for your organisation`);
+    else toast.error(`${name} connect did not complete${params.get("detail") ? `: ${params.get("detail")}` : ""}`);
+    window.history.replaceState({}, "", window.location.pathname);
+    qc.invalidateQueries({ queryKey: ["source_integrations"] });
+  }, []);
 
   return (
     <>
@@ -1409,6 +1461,18 @@ function Integrations() {
                 job posts publish from a requisition and applicants arrive through your apply link.
               </li>
               <li>
+                <strong className="text-foreground">ATSIQ Capture (Chrome extension)</strong> — while
+                you browse LinkedIn Recruiter, capture the CV or job description you are looking at or
+                run a guided sweep of an applicant list; everything lands in your talent pool,
+                deduplicated and ready to score. Pair it with this organisation using the capture
+                token shown above.
+              </li>
+              <li>
+                <strong className="text-foreground">Public apply link</strong> — every requisition
+                gets a shareable link; candidates apply without an account and land straight in the
+                pipeline with their CV parsed.
+              </li>
+              <li>
                 <strong className="text-foreground">Careers inbox</strong> — CVs emailed to your
                 careers address are filed, read and scored automatically.
               </li>
@@ -1417,8 +1481,14 @@ function Integrations() {
                 subscription; paste the keys your account manager sends.
               </li>
               <li>
-                <strong className="text-foreground">GitHub</strong> — works without setup; a token
-                only makes it faster.
+                <strong className="text-foreground">GitHub</strong> — not an applicant source; it
+                verifies the public engineering signals behind a candidate's claims. Works without
+                setup; a token only makes it faster.
+              </li>
+              <li>
+                <strong className="text-foreground">Bulk upload &amp; referrals</strong> — drop
+                PDF/DOCX CVs into the talent pool or add candidates by hand; every source feeds the
+                same deduplicated, scored pipeline.
               </li>
             </ul>
           </details>

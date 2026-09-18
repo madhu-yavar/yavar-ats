@@ -18,7 +18,6 @@ import {
   Filter,
 } from "lucide-react";
 
-import { supabase } from "@/integrations/supabase/client";
 import {
   applicationsQuery,
   candidatesQuery,
@@ -34,7 +33,7 @@ import { parseResume } from "@/lib/matching.functions";
 import { verifyCandidates } from "@/lib/verification.functions";
 import { getResumeDownloadUrl } from "@/lib/resume.functions";
 import { downloadResume } from "@/lib/resume-download";
-import { deleteCandidates } from "@/lib/candidates.functions";
+import { createCandidate, deleteCandidates } from "@/lib/candidates.functions";
 import { intakeCvs, type IntakeStatus } from "@/lib/cv-intake";
 import { normalizeExternalUrl } from "@/lib/external-links";
 import { canonical, nextAction, stalledDays, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
@@ -667,46 +666,34 @@ function Candidates() {
       return;
     }
     setBusy(true);
-    const { data, error } = await supabase
-      .from("candidates")
-      .insert({
-        full_name: form.full_name,
-        email: form.email,
-        location: form.location || null,
-        experience_years: Number(form.experience_years) || 0,
-        education: form.education || null,
-        skills: form.skills
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean),
-        linkedin_url: form.linkedin_url || null,
-        github_url: form.github_url || null,
-        website_url: form.website_url || null,
-        x_url: form.x_url || null,
-        source: form.source,
-        current_employer: form.current_employer || null,
-        notice_period_days: form.notice_period_days ? Number(form.notice_period_days) : null,
-        current_ctc: form.current_ctc ? Number(form.current_ctc) : null,
-        expected_ctc: form.expected_ctc ? Number(form.expected_ctc) : null,
-        work_authorization: form.work_authorization || null,
-        willing_to_relocate: willingToRelocate === "unknown" ? null : willingToRelocate === "yes",
-        resume_text: resume || null,
-      })
-      .select("id")
-      .single();
-
-    if (error || !data) {
-      setBusy(false);
-      toast.error(error?.message ?? "Could not save candidate");
-      return;
-    }
-    if (reqId) {
-      await supabase.from("applications").insert({
-        requisition_id: reqId,
-        candidate_id: data.id,
-        source: form.source,
-        stage: "sourced",
+    try {
+      await createCandidate({
+        data: {
+          fullName: form.full_name,
+          email: form.email,
+          location: form.location,
+          experienceYears: form.experience_years,
+          education: form.education,
+          skills: form.skills,
+          linkedinUrl: form.linkedin_url,
+          githubUrl: form.github_url,
+          websiteUrl: form.website_url,
+          xUrl: form.x_url,
+          source: form.source,
+          currentEmployer: form.current_employer,
+          noticePeriodDays: form.notice_period_days,
+          currentCtc: form.current_ctc,
+          expectedCtc: form.expected_ctc,
+          workAuthorization: form.work_authorization,
+          willingToRelocate,
+          resumeText: resume,
+          requisitionId: reqId || null,
+        },
       });
+    } catch (e) {
+      setBusy(false);
+      toast.error(e instanceof Error ? e.message : "Could not save candidate");
+      return;
     }
     setBusy(false);
     setOpen(false);
@@ -802,7 +789,7 @@ function Candidates() {
                     </Label>
                     <Select
                       value={willingToRelocate}
-                      onValueChange={(v) => setWillingToRelocate(v as never)}
+                      onValueChange={(v) => setWillingToRelocate(v as "yes" | "no" | "unknown")}
                     >
                       <SelectTrigger>
                         <SelectValue />

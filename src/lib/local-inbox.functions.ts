@@ -2,10 +2,13 @@
  * Server functions for the organisation's own careers inbox: the address, the
  * mail that has arrived, and the manual retry / remove actions.
  */
+import { and, desc, eq, ilike, ne } from "drizzle-orm";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { db } from "../server/db";
+import { inboxMessages, organizations } from "@db/schema";
+import { requireOrg } from "./auth.middleware";
 
 export type InboxRow = {
   id: string;
@@ -28,59 +31,42 @@ export type InboxView = {
   counts: { total: number; imported: number; updated: number; skipped: number; errors: number };
 };
 
-
-async function admin() {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin;
-}
-
-async function myOrgId(userId: string): Promise<string | null> {
-  const db = await admin();
-  const { data } = await db
-    .from("org_members")
-    .select("org_id")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .order("created_at")
-    .limit(1)
-    .maybeSingle();
-  return data?.org_id ?? null;
-}
-
 export const orgInbox = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .handler(async ({ context }): Promise<InboxView> => {
-    const empty: InboxView = {
-      address: null,
-      slug: null,
-      careersEmail: null,
-      messages: [],
-      counts: { total: 0, imported: 0, updated: 0, skipped: 0, errors: 0 },
-    };
-    const orgId = await myOrgId(context.userId);
-    if (!orgId) return empty;
-
-    const db = await admin();
     const { inboxAddress } = await import("./local-inbox.server");
-    const { data: org } = await db
-      .from("organizations")
-      .select("inbox_slug, careers_email")
-      .eq("id", orgId)
-      .maybeSingle();
-    const { data: rows } = await db
-      .from("inbox_messages")
-      .select(
-        "id, from_email, from_name, subject, attachment_name, status, detail, candidate_id, requisition_id, received_at",
-      )
-      .eq("org_id", orgId)
-      .order("received_at", { ascending: false })
+    const [org] = await db
+      .select({ inboxSlug: organizations.inboxSlug, careersEmail: organizations.careersEmail })
+      .from(organizations)
+      .where(eq(organizations.id, context.orgId))
+      .limit(1);
+
+    const rows = await db
+      .select({
+        id: inboxMessages.id,
+        from_email: inboxMessages.fromEmail,
+        from_name: inboxMessages.fromName,
+        subject: inboxMessages.subject,
+        attachment_name: inboxMessages.attachmentName,
+        status: inboxMessages.status,
+        detail: inboxMessages.detail,
+        candidate_id: inboxMessages.candidateId,
+        requisition_id: inboxMessages.requisitionId,
+        received_at: inboxMessages.receivedAt,
+      })
+      .from(inboxMessages)
+      .where(eq(inboxMessages.orgId, context.orgId))
+      .orderBy(desc(inboxMessages.receivedAt))
       .limit(500);
 
-    const messages = (rows ?? []) as InboxRow[];
+    const messages: InboxRow[] = rows.map((r) => ({
+      ...r,
+      received_at: r.received_at.toISOString(),
+    }));
     return {
-      slug: org?.inbox_slug ?? null,
-      careersEmail: org?.careers_email ?? null,
-      address: inboxAddress(org?.inbox_slug),
+      slug: org?.inboxSlug ?? null,
+      careersEmail: org?.careersEmail ?? null,
+      address: inboxAddress(org?.inboxSlug),
       messages,
       counts: {
         total: messages.length,
@@ -93,28 +79,20 @@ export const orgInbox = createServerFn({ method: "GET" })
   });
 
 export const retryInboxMessage = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => z.object({ messageId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
-    const orgId = await myOrgId(context.userId);
-    if (!orgId) throw new Error("You are not part of an organisation.");
     const { retryMessage } = await import("./local-inbox.server");
-    return retryMessage(orgId, data.messageId);
+    return retryMessage(context.orgId, data.messageId);
   });
 
 export const removeInboxMessage = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => z.object({ messageId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
-    const orgId = await myOrgId(context.userId);
-    if (!orgId) throw new Error("You are not part of an organisation.");
-    const db = await admin();
-    const { error } = await db
-      .from("inbox_messages")
-      .delete()
-      .eq("id", data.messageId)
-      .eq("org_id", orgId);
-    if (error) throw new Error(error.message);
+    await db
+      .delete(inboxMessages)
+      .where(and(eq(inboxMessages.id, data.messageId), eq(inboxMessages.orgId, context.orgId)));
     return { ok: true as const };
   });
 
@@ -125,22 +103,15 @@ export const removeInboxMessage = createServerFn({ method: "POST" })
  * can claim the same one.
  */
 export const saveCareersEmail = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) =>
-    z.object({ email: z.string().max(320).nullish() }).parse(data),
-  )
+  .middleware([requireOrg])
+  .inputValidator((data: unknown) => z.object({ email: z.string().max(320).nullish() }).parse(data))
   .handler(async ({ data, context }) => {
-    const orgId = await myOrgId(context.userId);
-    if (!orgId) throw new Error("You are not part of an organisation.");
-    const db = await admin();
-
     const email = (data.email ?? "").trim().toLowerCase();
     if (!email) {
-      const { error } = await db
-        .from("organizations")
-        .update({ careers_email: null } as never)
-        .eq("id", orgId);
-      if (error) throw new Error(error.message);
+      await db
+        .update(organizations)
+        .set({ careersEmail: null })
+        .where(eq(organizations.id, context.orgId));
       return { ok: true as const, careersEmail: null };
     }
 
@@ -149,28 +120,26 @@ export const saveCareersEmail = createServerFn({ method: "POST" })
     }
 
     const { registrableDomain } = await import("./work-email");
-    const { data: org } = await db
-      .from("organizations")
-      .select("email_domain")
-      .eq("id", orgId)
-      .maybeSingle();
-    const own = org?.email_domain ? registrableDomain(org.email_domain) : null;
+    const [org] = await db
+      .select({ emailDomain: organizations.emailDomain })
+      .from(organizations)
+      .where(eq(organizations.id, context.orgId))
+      .limit(1);
+    const own = org?.emailDomain ? registrableDomain(org.emailDomain) : null;
     if (own && registrableDomain(email) !== own) {
       throw new Error(`Use an address on your own domain (@${own}).`);
     }
 
-    const { data: taken } = await db
-      .from("organizations")
-      .select("id")
-      .ilike("careers_email", email)
-      .neq("id", orgId)
-      .maybeSingle();
+    const [taken] = await db
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(and(ilike(organizations.careersEmail, email), ne(organizations.id, context.orgId)))
+      .limit(1);
     if (taken) throw new Error("Another organisation has already registered that address.");
 
-    const { error } = await db
-      .from("organizations")
-      .update({ careers_email: email } as never)
-      .eq("id", orgId);
-    if (error) throw new Error(error.message);
+    await db
+      .update(organizations)
+      .set({ careersEmail: email })
+      .where(eq(organizations.id, context.orgId));
     return { ok: true as const, careersEmail: email };
   });

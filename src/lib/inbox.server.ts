@@ -6,6 +6,10 @@
  * ATSIQ reads that mailbox itself, pulls the CV out of the mail, and files the
  * candidate. The mailbox is authorised once, centrally — HR configures nothing.
  */
+import { eq } from "drizzle-orm";
+
+import { db } from "../server/db";
+import { requisitions } from "@db/schema";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_mail";
 
@@ -42,7 +46,9 @@ async function gmail<T>(path: string): Promise<T> {
 
 /** Mailbox address the connector is authorised against. */
 export async function inboxProfile(): Promise<{ email: string; total: number }> {
-  const p = await gmail<{ emailAddress: string; messagesTotal: number }>("/gmail/v1/users/me/profile");
+  const p = await gmail<{ emailAddress: string; messagesTotal: number }>(
+    "/gmail/v1/users/me/profile",
+  );
   return { email: p.emailAddress, total: p.messagesTotal };
 }
 
@@ -132,7 +138,9 @@ export async function attachmentText(filename: string, bytes: Uint8Array): Promi
 
   if (name.endsWith(".pdf")) {
     const { extractText, getDocumentProxy } = await import("unpdf");
-    const doc = await getDocumentProxy(bytes);
+    // pdf.js transfers (detaches) the buffer it is given — hand it a copy so the
+    // caller keeps usable bytes for the resume vault and size reporting.
+    const doc = await getDocumentProxy(new Uint8Array(bytes));
     const { text } = await extractText(doc, { mergePages: true });
     return String(text).replace(/\s+/g, " ").trim();
   }
@@ -171,10 +179,10 @@ export const DEFAULT_INBOX_QUERY = "has:attachment is:unread newer_than:30d";
 
 function matchRequisition(
   text: string,
-  reqs: { id: string; title: string; org_id: string | null }[],
-): { id: string; title: string; org_id: string | null } | null {
+  reqs: { id: string; title: string; orgId: string | null }[],
+): { id: string; title: string; orgId: string | null } | null {
   const hay = text.toLowerCase();
-  let best: { id: string; title: string; org_id: string | null } | null = null;
+  let best: { id: string; title: string; orgId: string | null } | null = null;
   for (const r of reqs) {
     const t = r.title.trim().toLowerCase();
     if (t.length >= 3 && hay.includes(t) && (!best || t.length > best.title.length)) best = r;
@@ -190,16 +198,21 @@ export async function syncCareersInbox(opts?: {
   query?: string;
   max?: number;
   requisitionId?: string | null;
-}): Promise<{ scanned: number; imported: number; updated: number; skipped: number; errors: number; outcomes: SyncOutcome[] }> {
+}): Promise<{
+  scanned: number;
+  imported: number;
+  updated: number;
+  skipped: number;
+  errors: number;
+  outcomes: SyncOutcome[];
+}> {
   if (!inboxConfigured()) throw new Error("The careers inbox is not connected yet.");
   const { ingestCandidate, parseCv } = await import("./intake.server");
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-  const { data: reqRows } = await supabaseAdmin
-    .from("requisitions")
-    .select("id, title, org_id")
-    .eq("status", "approved");
-  const reqs = (reqRows ?? []) as { id: string; title: string; org_id: string | null }[];
+  const reqs = await db
+    .select({ id: requisitions.id, title: requisitions.title, orgId: requisitions.orgId })
+    .from(requisitions)
+    .where(eq(requisitions.status, "approved"));
 
   const ids = await searchInbox(opts?.query ?? DEFAULT_INBOX_QUERY, opts?.max ?? 20);
   const outcomes: SyncOutcome[] = [];
@@ -223,7 +236,7 @@ export async function syncCareersInbox(opts?: {
       }
 
       const target = opts?.requisitionId
-        ? reqs.find((r) => r.id === opts.requisitionId) ?? null
+        ? (reqs.find((r) => r.id === opts.requisitionId) ?? null)
         : matchRequisition(`${msg.subject}\n${msg.body}`, reqs);
 
       for (const att of cvs) {
@@ -248,7 +261,7 @@ export async function syncCareersInbox(opts?: {
           resumeText: text,
           fileName: att.filename,
           requisitionId: target?.id ?? null,
-          orgId: target?.org_id ?? null,
+          orgId: target?.orgId ?? null,
           source: "careers_inbox",
           parsed,
           email: parsed?.email ?? (fromEmail.includes("@") ? fromEmail : null),

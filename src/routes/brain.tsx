@@ -1,7 +1,8 @@
+import { Link } from "@tanstack/react-router";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Brain,
@@ -21,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { OntologyGraph } from "@/components/OntologyGraph";
+import { OntologyGraph3D } from "@/components/OntologyGraph3D";
 
 export const Route = createFileRoute("/brain")({
   head: () => ({
@@ -47,6 +49,9 @@ export const Route = createFileRoute("/brain")({
 function TalentBrainPage() {
   const { isSuperUser } = usePlatform();
   const [scope, setScope] = useState<"org" | "platform">("org");
+  const [view, setView] = useState<"3d" | "2d">("3d");
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [selected, setSelected] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const qc = useQueryClient();
@@ -211,20 +216,42 @@ function TalentBrainPage() {
               />
             </div>
           </section>
+          <div className="mb-3 flex items-center justify-end gap-1.5">
+            {(["3d", "2d"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  view === v
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {v.toUpperCase()}
+              </button>
+            ))}
+          </div>
           {brain.isLoading ? (
             <p className="text-sm text-muted-foreground">Reading the ontology…</p>
-          ) : nodes.length ? (
-            <OntologyGraph
+          ) : !nodes.length ? (
+            <p className="rounded-xl border bg-card p-6 text-sm text-muted-foreground">
+              No skill evidence yet. Add candidates or raise a requisition, then press “Relearn
+              ontology”.
+            </p>
+          ) : mounted && view === "3d" ? (
+            <OntologyGraph3D
               nodes={nodes}
               edges={data?.edges ?? []}
               selected={selected}
               onSelect={(slug) => setSelected((cur) => (cur === slug ? null : slug))}
             />
           ) : (
-            <p className="rounded-xl border bg-card p-6 text-sm text-muted-foreground">
-              No skill evidence yet. Add candidates or raise a requisition, then press “Relearn
-              ontology”.
-            </p>
+            <OntologyGraph
+              nodes={nodes}
+              edges={data?.edges ?? []}
+              selected={selected}
+              onSelect={(slug) => setSelected((cur) => (cur === slug ? null : slug))}
+            />
           )}
         </div>
 
@@ -349,6 +376,14 @@ function TalentBrainPage() {
                     </button>
                   ))}
                 </div>
+                {i.actionTo ? (
+                  <Link
+                    to={i.actionTo}
+                    className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  >
+                    {i.actionLabel ?? "Act on this"} →
+                  </Link>
+                ) : null}
               </article>
             ))}
           </div>

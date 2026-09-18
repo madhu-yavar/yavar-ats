@@ -3,8 +3,9 @@ import { defineConfig } from "drizzle-kit";
 export default defineConfig({
   dialect: "postgresql",
   schema: "./drizzle/schema.ts",
-  out: "./drizzle/migrations",
+  // Plain-Postgres migrations (Supabase-era SQL retained in drizzle/migrations for reference only)
+  out: "./drizzle/pg-migrations",
   dbCredentials: {
-    url: process.env.LOVABLE_DB_MIGRATION_URL ?? "",
+    url: process.env.DATABASE_URL ?? "",
   },
 });

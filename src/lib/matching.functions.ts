@@ -1,17 +1,21 @@
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { db } from "../server/db";
+import { applications, matchScores, socialProfiles, sourceIntegrations } from "@db/schema";
+import { requireOrg } from "./auth.middleware";
 import { aiJson } from "./ai-gateway.server";
 import {
-  mapWithConcurrency,
-  scoreCandidate,
-  type MatchResult,
-} from "./matching.server";
+  buildTemplateSystemPrompt,
+  resolveTemplate,
+  stripUnreplacedPlaceholders,
+} from "./templates.server";
+import { mapWithConcurrency, scoreCandidate, type MatchResult } from "./matching.server";
 import { type SocialSignal } from "./social.server";
 
 export type { MatchResult } from "./matching.server";
-
 
 /* ------------------------------------------------------------------ JD gen */
 
@@ -26,7 +30,23 @@ const JdInput = z.object({
   responsibilities: z.string().optional().nullable(),
   education: z.string().optional().nullable(),
   reportingTo: z.string().optional().nullable(),
+  templateId: z.string().uuid().optional().nullable(),
 });
+
+const BASE_JD_SYSTEM =
+  "You are an expert talent-acquisition writer. Draft a complete, specific job description. " +
+  "Return ONLY JSON with keys: purpose (2 sentences), responsibilities (markdown bullet list), " +
+  "must_have (string array), good_to_have (string array), qualifications, success_factors, " +
+  "reporting_to, full_text (the full JD as markdown). No fluff, no buzzwords, no emojis.";
+
+const stripAll = <T>(value: T): T => {
+  if (typeof value === "string") return stripUnreplacedPlaceholders(value) as T;
+  if (Array.isArray(value)) return value.map((v) => stripAll(v)) as T;
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, stripAll(v)])) as T;
+  }
+  return value;
+};
 
 export type GeneratedJd = {
   purpose: string;
@@ -40,19 +60,17 @@ export type GeneratedJd = {
 };
 
 export const generateJd = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => JdInput.parse(data))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const template = await resolveTemplate(context.orgId, "jd", data.templateId);
     const result = await aiJson<GeneratedJd>({
-      system:
-        "You are an expert talent-acquisition writer. Draft a complete, specific job description. " +
-        "Return ONLY JSON with keys: purpose (2 sentences), responsibilities (markdown bullet list), " +
-        "must_have (string array), good_to_have (string array), qualifications, success_factors, " +
-        "reporting_to, full_text (the full JD as markdown). No fluff, no buzzwords, no emojis.",
+      orgId: context.orgId,
+      system: buildTemplateSystemPrompt({ base: BASE_JD_SYSTEM, template }),
       prompt: JSON.stringify(data),
     });
     if (!result.ok) throw new Error(result.message);
-    return result.data;
+    return stripAll(result.data);
   });
 
 /* ------------------------------------------------- Existing JD import */
@@ -67,12 +85,13 @@ const JdImportInput = z.object({
  * same shape as an AI-drafted JD so scoring, must-have coverage and audit stay identical.
  */
 export const importJd = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => JdImportInput.parse(data))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const result = await aiJson<
       GeneratedJd & { experience_min: number; experience_max: number; detected_title: string }
     >({
+      orgId: context.orgId,
       system:
         "You are parsing an EXISTING job description supplied by a recruiter. Extract, never invent. " +
         "Keep the original wording where possible; only normalise structure. " +
@@ -115,10 +134,11 @@ export type WeightAdvice = {
  * for THIS job, then hard-normalise server-side so the total is always exactly 100.
  */
 export const suggestWeights = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => WeightAdviceInput.parse(data))
-  .handler(async ({ data }): Promise<WeightAdvice> => {
+  .handler(async ({ data, context }): Promise<WeightAdvice> => {
     const result = await aiJson<WeightAdvice>({
+      orgId: context.orgId,
       system:
         "You tune the scoring model for one specific job description. Distribute exactly 100 points across " +
         "six dimensions: skills, experience (years vs band), career (tenure stability, progression, gaps), " +
@@ -137,13 +157,15 @@ export const suggestWeights = createServerFn({ method: "POST" })
 
     const keys = ["skills", "experience", "career", "impact", "education", "social"] as const;
     const raw = Object.fromEntries(
-      keys.map((k) => [k, Math.max(0, Math.round(Number((result.data as never as Record<string, unknown>)[k]) || 0))]),
+      keys.map((k) => [
+        k,
+        Math.max(0, Math.round(Number((result.data as never as Record<string, unknown>)[k]) || 0)),
+      ]),
     ) as Record<(typeof keys)[number], number>;
     const total = keys.reduce((s, k) => s + raw[k], 0) || 1;
-    const scaled = Object.fromEntries(keys.map((k) => [k, Math.round((raw[k] / total) * 100)])) as Record<
-      (typeof keys)[number],
-      number
-    >;
+    const scaled = Object.fromEntries(
+      keys.map((k) => [k, Math.round((raw[k] / total) * 100)]),
+    ) as Record<(typeof keys)[number], number>;
     // Push any rounding drift onto the largest bucket so the total is exactly 100.
     const drift = 100 - keys.reduce((s, k) => s + scaled[k], 0);
     const biggest = keys.reduce((a, b) => (scaled[a] >= scaled[b] ? a : b));
@@ -170,7 +192,14 @@ const PostInput = z.object({
   jdText: z.string().optional().nullable(),
   tone: z.enum(["professional", "warm", "bold"]).default("professional"),
   applyUrl: z.string().optional().nullable(),
+  templateId: z.string().uuid().optional().nullable(),
 });
+
+const BASE_POST_SYSTEM =
+  "You write high-performing LinkedIn hiring posts. Concrete, specific, no buzzwords, no emojis except at " +
+  "most two, no 'rockstar/ninja'. Structure the body in short scannable lines with real detail on the role, " +
+  "the stack and what success looks like. Under 1300 characters. Return ONLY JSON with keys: headline " +
+  "(one line), body (the post text with line breaks), hashtags (5-8 strings without the # symbol), call_to_action.";
 
 export type SocialJobPost = {
   headline: string;
@@ -181,22 +210,28 @@ export type SocialJobPost = {
 
 /** Draft a ready-to-publish LinkedIn job post from the approved requisition + JD. */
 export const draftLinkedinPost = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => PostInput.parse(data))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const template = await resolveTemplate(context.orgId, "linkedin_post", data.templateId);
     const result = await aiJson<SocialJobPost>({
-      system:
-        "You write high-performing LinkedIn hiring posts. Concrete, specific, no buzzwords, no emojis except at " +
-        "most two, no 'rockstar/ninja'. Structure the body in short scannable lines with real detail on the role, " +
-        "the stack and what success looks like. Under 1300 characters. Return ONLY JSON with keys: headline " +
-        "(one line), body (the post text with line breaks), hashtags (5-8 strings without the # symbol), call_to_action.",
+      orgId: context.orgId,
+      system: buildTemplateSystemPrompt({
+        base: BASE_POST_SYSTEM,
+        template,
+        tone: data.tone,
+      }),
       prompt: JSON.stringify(data),
     });
     if (!result.ok) throw new Error(result.message);
-    return result.data;
+    return {
+      ...result.data,
+      headline: stripUnreplacedPlaceholders(result.data.headline ?? ""),
+      body: stripUnreplacedPlaceholders(result.data.body ?? ""),
+      hashtags: (result.data.hashtags ?? []).map((h) => stripUnreplacedPlaceholders(h)),
+      call_to_action: stripUnreplacedPlaceholders(result.data.call_to_action ?? ""),
+    };
   });
-
-
 
 /* -------------------------------------------------------------- JD vs CV */
 
@@ -253,12 +288,12 @@ const MatchInput = z.object({
   includeSocial: z.boolean().default(true),
 });
 
-
 export const matchJdToCv = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => MatchInput.parse(data))
-  .handler(async ({ data }): Promise<MatchResult> =>
+  .handler(async ({ data, context }): Promise<MatchResult> =>
     scoreCandidate({
+      orgId: context.orgId,
       jd: data.jd,
       candidate: data.candidate as never,
       weights: data.weights,
@@ -295,12 +330,13 @@ export type PipelineRowResult =
  * resume never kills the whole run.
  */
 export const matchPipeline = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => PipelineInput.parse(data))
-  .handler(async ({ data }): Promise<PipelineRowResult[]> =>
+  .handler(async ({ data, context }): Promise<PipelineRowResult[]> =>
     mapWithConcurrency(data.rows, data.concurrency, async (row) => {
       try {
         const result = await scoreCandidate({
+          orgId: context.orgId,
           jd: data.jd,
           candidate: row.candidate as never,
           weights: data.weights,
@@ -317,15 +353,14 @@ export const matchPipeline = createServerFn({ method: "POST" })
     }),
   );
 
-
 /* --------------------------------------------------- resume text parsing */
 
 const ParseInput = z.object({ resumeText: z.string().min(20) });
 
 export const parseResume = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => ParseInput.parse(data))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const result = await aiJson<{
       full_name: string;
       email: string;
@@ -338,6 +373,7 @@ export const parseResume = createServerFn({ method: "POST" })
       github_url: string | null;
       website_url: string | null;
     }>({
+      orgId: context.orgId,
       system:
         "Extract structured candidate data from a resume. Return ONLY JSON with keys: full_name, email, phone, " +
         "location, experience_years (number), education, skills (string array), linkedin_url, github_url, website_url. " +
@@ -359,9 +395,9 @@ const AiInterviewInput = z.object({
 });
 
 export const runAiScreening = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => AiInterviewInput.parse(data))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const result = await aiJson<{
       jd_match_score: number;
       skillset_score: number;
@@ -370,6 +406,7 @@ export const runAiScreening = createServerFn({ method: "POST" })
       summary: string;
       transcript: { question: string; expected_signal: string }[];
     }>({
+      orgId: context.orgId,
       system:
         "You design and evaluate an AI first-round screening interview. Produce 6 role-specific questions with the " +
         "signal each one probes, and score the candidate on jd_match_score, skillset_score, culture_role_score and " +
@@ -379,4 +416,176 @@ export const runAiScreening = createServerFn({ method: "POST" })
     });
     if (!result.ok) throw new Error(result.message);
     return result.data;
+  });
+
+/* ------------------------------------------------- scoring persistence */
+
+/** Enabled naukri/indeed boards for the caller's org, for the import picker. */
+export const listEnabledJobBoards = createServerFn({ method: "POST" })
+  .middleware([requireOrg])
+  .handler(async ({ context }) => {
+    return db
+      .select({
+        provider: sourceIntegrations.provider,
+        label: sourceIntegrations.label,
+        enabled: sourceIntegrations.enabled,
+      })
+      .from(sourceIntegrations)
+      .where(
+        and(
+          eq(sourceIntegrations.orgId, context.orgId),
+          eq(sourceIntegrations.enabled, true),
+          inArray(sourceIntegrations.provider, ["naukri", "indeed"]),
+        ),
+      );
+  });
+
+const PersistInput = z.object({
+  applicationId: z.string().uuid(),
+  /** Caller decides: overall ≥ 75 and the application sat on "applied". */
+  autoShortlist: z.boolean().default(false),
+  /** Fresh social signals to persist — omitted when they were served from cache. */
+  socialSignals: z
+    .array(
+      z.object({
+        provider: z.string(),
+        profileUrl: z.string().nullish(),
+        handle: z.string().nullish(),
+        score: z.number(),
+        signals: z.record(z.string(), z.unknown()),
+        rationale: z.string().nullish(),
+        status: z.string(),
+      }),
+    )
+    .nullish(),
+  score: z.object({
+    skillsScore: z.number(),
+    experienceScore: z.number(),
+    careerScore: z.number(),
+    impactScore: z.number(),
+    innovationScore: z.number(),
+    educationScore: z.number(),
+    socialScore: z.number(),
+    overallScore: z.number(),
+    weights: z.record(z.string(), z.number()),
+    matchedSkills: z.array(z.string()),
+    missingSkills: z.array(z.string()),
+    rationale: z.string().nullish(),
+    riskFlags: z.array(z.string()),
+    recommendation: z.enum(["select", "reject", "hold"]).nullish(),
+    model: z.string().nullish(),
+    careerMetrics: z.unknown(),
+    careerFlags: z.array(z.string()),
+    logisticsFlags: z.array(z.string()),
+    impactHighlights: z.array(z.string()),
+    innovationSignals: z.array(z.string()),
+  }),
+});
+
+/**
+ * Persist one scored candidate: the match_scores row (org-scoped via the
+ * application row), a multi-row upsert of fresh social signals on the
+ * (candidate_id, provider) unique index, and the optional applied →
+ * shortlisted promotion. Single-score and bulk-pipeline runs share this.
+ */
+export const persistMatchResult = createServerFn({ method: "POST" })
+  .middleware([requireOrg])
+  .inputValidator((data: unknown) => PersistInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const [application] = await db
+      .select({
+        id: applications.id,
+        candidateId: applications.candidateId,
+        stage: applications.stage,
+      })
+      .from(applications)
+      .where(and(eq(applications.id, data.applicationId), eq(applications.orgId, context.orgId)))
+      .limit(1);
+    if (!application) throw new Error("Application not found");
+
+    const s = data.score;
+    await db.insert(matchScores).values({
+      applicationId: application.id,
+      orgId: context.orgId,
+      skillsScore: s.skillsScore,
+      experienceScore: s.experienceScore,
+      careerScore: s.careerScore,
+      impactScore: s.impactScore,
+      innovationScore: s.innovationScore,
+      careerMetrics: s.careerMetrics,
+      careerFlags: s.careerFlags,
+      logisticsFlags: s.logisticsFlags,
+      impactHighlights: s.impactHighlights,
+      innovationSignals: s.innovationSignals,
+      educationScore: s.educationScore,
+      socialScore: s.socialScore,
+      overallScore: s.overallScore,
+      weights: s.weights,
+      matchedSkills: s.matchedSkills,
+      missingSkills: s.missingSkills,
+      rationale: s.rationale ?? null,
+      riskFlags: s.riskFlags,
+      recommendation: s.recommendation ?? null,
+      model: s.model ?? null,
+    });
+
+    if (data.socialSignals?.length) {
+      await db
+        .insert(socialProfiles)
+        .values(
+          data.socialSignals.map((signal) => ({
+            candidateId: application.candidateId,
+            orgId: context.orgId,
+            provider: signal.provider,
+            profileUrl: signal.profileUrl ?? null,
+            handle: signal.handle ?? null,
+            score: signal.score,
+            signals: signal.signals,
+            rationale: signal.rationale ?? null,
+            status: signal.status,
+            fetchedAt: new Date(),
+          })),
+        )
+        .onConflictDoUpdate({
+          target: [socialProfiles.candidateId, socialProfiles.provider],
+          set: {
+            profileUrl: sql`excluded.profile_url`,
+            handle: sql`excluded.handle`,
+            score: sql`excluded.score`,
+            signals: sql`excluded.signals`,
+            rationale: sql`excluded.rationale`,
+            status: sql`excluded.status`,
+            fetchedAt: sql`excluded.fetched_at`,
+          },
+        });
+    }
+
+    if (data.autoShortlist && application.stage === "applied") {
+      await db
+        .update(applications)
+        .set({ stage: "shortlisted" })
+        .where(and(eq(applications.id, application.id), eq(applications.orgId, context.orgId)));
+    }
+
+    return { ok: true as const };
+  });
+
+/** Record the recruiter's verdict over the AI recommendation, with a reason. */
+export const saveRecruiterOverride = createServerFn({ method: "POST" })
+  .middleware([requireOrg])
+  .inputValidator((data: unknown) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        verdict: z.enum(["select", "reject", "hold"]),
+        reason: z.string().nullish(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    await db
+      .update(matchScores)
+      .set({ recruiterOverride: data.verdict, overrideReason: data.reason || null })
+      .where(and(eq(matchScores.id, data.id), eq(matchScores.orgId, context.orgId)));
+    return { ok: true as const };
   });

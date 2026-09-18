@@ -31,8 +31,14 @@ dist-ssr
 *.sln
 *.sw?
 
+# Extension build artifacts are not shipped from /public
+public/*.zip
+
 # .env is tracked INTENTIONALLY (Lovable's build reads it) and must contain
 # only public values (Supabase URL + publishable key). Real secrets —
 # service-role key, LinkedIn/GitHub credentials — go in .env.local,
 # which is gitignored via *.local and loaded by Vite automatically.
 # .env.local
+
+# Local dev object-storage fallback (src/server/storage.ts)
+.local-storage/

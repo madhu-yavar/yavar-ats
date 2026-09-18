@@ -1,7 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { db } from "../server/db";
+import { applications, candidates, requisitions, sourceIntegrations } from "@db/schema";
+import { requireOrg } from "./auth.middleware";
 import {
   clearSecrets,
   importFromProvider,
@@ -12,90 +15,172 @@ import {
   type ProviderId,
 } from "./integrations.server";
 
-const PROVIDERS = ["linkedin", "naukri", "indeed", "github", "careers", "zoom", "google_meet", "teams"] as const;
+const PROVIDERS = [
+  "linkedin",
+  "naukri",
+  "indeed",
+  "github",
+  "careers",
+  "zoom",
+  "google_meet",
+  "teams",
+] as const;
+
+/** JSON-safe value — what a server function is allowed to return. */
+type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
+
+/** camelCase drizzle row → PostgREST-style snake_case row with ISO dates. */
+function snakeRow(row: Record<string, unknown>): Record<string, Json> {
+  const out: Record<string, Json> = {};
+  for (const [key, value] of Object.entries(row)) {
+    out[key.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`)] =
+      value instanceof Date ? value.toISOString() : (value as Json);
+  }
+  return out;
+}
+
+/**
+ * The caller organisation's integration rows for the Integrations page,
+ * returned in the same snake_case wire shape the browser used to read via
+ * PostgREST, ordered by label.
+ */
+export const listSourceIntegrations = createServerFn({ method: "POST" })
+  .middleware([requireOrg])
+  .handler(async ({ context }) => {
+    const rows = await db
+      .select()
+      .from(sourceIntegrations)
+      .where(eq(sourceIntegrations.orgId, context.orgId))
+      .orderBy(sourceIntegrations.label);
+    return rows.map(snakeRow);
+  });
 
 const SaveInput = z.object({
   integrationId: z.string().uuid(),
   provider: z.enum(PROVIDERS),
   enabled: z.boolean(),
-  config: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).default({}),
+  config: z
+    .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
+    .default({}),
   /** Blank values keep whatever is already stored. */
   secrets: z.record(z.string(), z.string()).default({}),
 });
 
 /** Persist non-secret config on the row, secrets in the server-only table. */
 export const saveIntegration = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => SaveInput.parse(data))
   .handler(async ({ data, context }) => {
+    const [row] = await db
+      .select({ id: sourceIntegrations.id })
+      .from(sourceIntegrations)
+      .where(
+        and(
+          eq(sourceIntegrations.id, data.integrationId),
+          eq(sourceIntegrations.orgId, context.orgId),
+        ),
+      )
+      .limit(1);
+    if (!row) throw new Error("Integration not found.");
+
     const keys = await writeSecrets(data.integrationId, data.secrets);
-    const { error } = await context.supabase
-      .from("source_integrations")
-      .update({
+    await db
+      .update(sourceIntegrations)
+      .set({
         enabled: data.enabled,
-        config: data.config as never,
-        has_credentials: keys.length > 0,
-        updated_at: new Date().toISOString(),
+        config: data.config,
+        hasCredentials: keys.length > 0,
+        updatedAt: new Date(),
       })
-      .eq("id", data.integrationId);
-    if (error) throw new Error(error.message);
+      .where(
+        and(
+          eq(sourceIntegrations.id, data.integrationId),
+          eq(sourceIntegrations.orgId, context.orgId),
+        ),
+      );
     return { ok: true, storedKeys: keys };
   });
 
 export const testIntegration = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) =>
     z.object({ integrationId: z.string().uuid(), provider: z.enum(PROVIDERS) }).parse(data),
   )
   .handler(async ({ data, context }) => {
-    const { data: row, error } = await context.supabase
-      .from("source_integrations")
-      .select("config")
-      .eq("id", data.integrationId)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
+    const [row] = await db
+      .select({ config: sourceIntegrations.config })
+      .from(sourceIntegrations)
+      .where(
+        and(
+          eq(sourceIntegrations.id, data.integrationId),
+          eq(sourceIntegrations.orgId, context.orgId),
+        ),
+      )
+      .limit(1);
+    if (!row) throw new Error("Integration not found.");
 
     const secrets = await readSecrets(data.integrationId);
     const outcome = await testProvider(
       data.provider as ProviderId,
       secrets,
-      (row?.config as IntegrationConfig) ?? {},
+      (row.config as IntegrationConfig) ?? {},
     );
 
-    await context.supabase
-      .from("source_integrations")
-      .update({
-        last_test_status: outcome.status,
-        last_test_message: outcome.message,
-        last_tested_at: new Date().toISOString(),
+    await db
+      .update(sourceIntegrations)
+      .set({
+        lastTestStatus: outcome.status,
+        lastTestMessage: outcome.message,
+        lastTestedAt: new Date(),
       })
-      .eq("id", data.integrationId);
+      .where(
+        and(
+          eq(sourceIntegrations.id, data.integrationId),
+          eq(sourceIntegrations.orgId, context.orgId),
+        ),
+      );
 
     return outcome;
   });
 
 export const disconnectIntegration = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => z.object({ integrationId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
+    const [row] = await db
+      .select({ id: sourceIntegrations.id })
+      .from(sourceIntegrations)
+      .where(
+        and(
+          eq(sourceIntegrations.id, data.integrationId),
+          eq(sourceIntegrations.orgId, context.orgId),
+        ),
+      )
+      .limit(1);
+    if (!row) throw new Error("Integration not found.");
+
     await clearSecrets(data.integrationId);
-    const { error } = await context.supabase
-      .from("source_integrations")
-      .update({
+    await db
+      .update(sourceIntegrations)
+      .set({
         enabled: false,
-        has_credentials: false,
-        last_test_status: "untested",
-        last_test_message: "Credentials removed.",
-        last_tested_at: null,
+        hasCredentials: false,
+        lastTestStatus: "untested",
+        lastTestMessage: "Credentials removed.",
+        lastTestedAt: null,
       })
-      .eq("id", data.integrationId);
-    if (error) throw new Error(error.message);
+      .where(
+        and(
+          eq(sourceIntegrations.id, data.integrationId),
+          eq(sourceIntegrations.orgId, context.orgId),
+        ),
+      );
     return { ok: true };
   });
 
 /** Search a configured board and upsert the results into the talent pool. */
 export const importCandidates = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) =>
     z
       .object({
@@ -106,21 +191,35 @@ export const importCandidates = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
-    const { data: integration, error: iErr } = await context.supabase
-      .from("source_integrations")
-      .select("id, config, enabled")
-      .eq("provider", data.provider)
-      .maybeSingle();
-    if (iErr) throw new Error(iErr.message);
+    const [integration] = await db
+      .select({
+        id: sourceIntegrations.id,
+        config: sourceIntegrations.config,
+        enabled: sourceIntegrations.enabled,
+      })
+      .from(sourceIntegrations)
+      .where(
+        and(
+          eq(sourceIntegrations.provider, data.provider),
+          eq(sourceIntegrations.orgId, context.orgId),
+        ),
+      )
+      .limit(1);
     if (!integration) throw new Error("Integration not found.");
-    if (!integration.enabled) throw new Error(`${data.provider} is disabled on the Integrations page.`);
+    if (!integration.enabled)
+      throw new Error(`${data.provider} is disabled on the Integrations page.`);
 
-    const { data: req, error: rErr } = await context.supabase
-      .from("requisitions")
-      .select("must_have_skills, good_to_have_skills, experience_min, experience_max, location")
-      .eq("id", data.requisitionId)
-      .maybeSingle();
-    if (rErr) throw new Error(rErr.message);
+    const [req] = await db
+      .select({
+        mustHaveSkills: requisitions.mustHaveSkills,
+        goodToHaveSkills: requisitions.goodToHaveSkills,
+        experienceMin: requisitions.experienceMin,
+        experienceMax: requisitions.experienceMax,
+        location: requisitions.location,
+      })
+      .from(requisitions)
+      .where(and(eq(requisitions.id, data.requisitionId), eq(requisitions.orgId, context.orgId)))
+      .limit(1);
     if (!req) throw new Error("Requisition not found.");
 
     const secrets = await readSecrets(integration.id);
@@ -128,45 +227,69 @@ export const importCandidates = createServerFn({ method: "POST" })
       provider: data.provider as ProviderId,
       secrets,
       config: (integration.config as IntegrationConfig) ?? {},
-      keywords: [...req.must_have_skills, ...req.good_to_have_skills],
-      experienceMin: req.experience_min,
-      experienceMax: req.experience_max,
+      keywords: [...req.mustHaveSkills, ...req.goodToHaveSkills],
+      experienceMin: req.experienceMin,
+      experienceMax: req.experienceMax,
       location: req.location,
       limit: data.limit,
     });
 
     let imported = 0;
     for (const c of found) {
-      const { data: cand, error: cErr } = await context.supabase
-        .from("candidates")
-        .upsert(
-          {
-            full_name: c.full_name,
+      const [cand] = await db
+        .insert(candidates)
+        .values({
+          orgId: context.orgId,
+          fullName: c.full_name,
+          email: c.email,
+          phone: c.phone,
+          location: c.location,
+          source: data.provider,
+          experienceYears: String(c.experience_years),
+          education: c.education,
+          skills: c.skills,
+          resumeText: c.resume_text,
+          linkedinUrl: c.linkedin_url,
+          githubUrl: c.github_url,
+          externalId: c.external_id,
+          externalProvider: data.provider,
+        })
+        .onConflictDoUpdate({
+          // Partial unique index candidates_external_unique on
+          // (external_provider, external_id) where external_id is not null.
+          target: [candidates.externalProvider, candidates.externalId],
+          targetWhere: sql`${candidates.externalId} is not null`,
+          // Never touch another organisation's candidate row on conflict.
+          setWhere: eq(candidates.orgId, context.orgId),
+          set: {
+            fullName: c.full_name,
             email: c.email,
             phone: c.phone,
             location: c.location,
             source: data.provider,
-            experience_years: c.experience_years,
+            experienceYears: String(c.experience_years),
             education: c.education,
             skills: c.skills,
-            resume_text: c.resume_text,
-            linkedin_url: c.linkedin_url,
-            github_url: c.github_url,
-            external_id: c.external_id,
-            external_provider: data.provider,
+            resumeText: c.resume_text,
+            linkedinUrl: c.linkedin_url,
+            githubUrl: c.github_url,
           },
-          { onConflict: "external_provider,external_id" },
-        )
-        .select("id")
-        .maybeSingle();
-      if (cErr || !cand) continue;
+        })
+        .returning({ id: candidates.id });
+      if (!cand) continue;
 
-      const { error: aErr } = await context.supabase.from("applications").insert({
-        requisition_id: data.requisitionId,
-        candidate_id: cand.id,
-        source: data.provider,
-      });
-      if (!aErr) imported += 1;
+      try {
+        await db.insert(applications).values({
+          requisitionId: data.requisitionId,
+          candidateId: cand.id,
+          orgId: context.orgId,
+          source: data.provider,
+        });
+        imported += 1;
+      } catch {
+        // Already applied to this requisition — the old code skipped the
+        // per-row error and kept counting only successful inserts.
+      }
     }
 
     return { found: found.length, imported };

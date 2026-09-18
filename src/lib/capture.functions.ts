@@ -2,9 +2,13 @@
  * Organisation-facing settings for the browser companion: the capture key it
  * signs with, and a short history of what it has brought in.
  */
+import { desc, eq } from "drizzle-orm";
 import { createServerFn } from "@tanstack/react-start";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { db } from "../server/db";
+import { env } from "../server/env";
+import { captureEvents, organizations } from "@db/schema";
+import { requireOrg, requireRole } from "./auth.middleware";
 
 export type CaptureEvent = {
   id: string;
@@ -22,74 +26,60 @@ export type CaptureSetup = {
   events: CaptureEvent[];
 };
 
-async function myOrgId(userId: string): Promise<string | null> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data } = await supabaseAdmin
-    .from("org_members")
-    .select("org_id")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .order("created_at")
-    .limit(1)
-    .maybeSingle();
-  return data?.org_id ?? null;
-}
-
 function endpointBase(): string {
-  return process.env["PUBLIC_SITE_URL"] ?? "https://atsiq.yavar.ai";
+  return env.PUBLIC_SITE_URL;
 }
 
 async function loadSetup(orgId: string): Promise<CaptureSetup> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data: org } = await supabaseAdmin
-    .from("organizations")
-    .select("capture_token")
-    .eq("id", orgId)
-    .maybeSingle();
-  const { data: events } = await supabaseAdmin
-    .from("capture_events")
-    .select("id, kind, title, status, detail, source_url, created_at")
-    .eq("org_id", orgId)
-    .order("created_at", { ascending: false })
+  const [org] = await db
+    .select({ captureToken: organizations.captureToken })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+  const events = await db
+    .select({
+      id: captureEvents.id,
+      kind: captureEvents.kind,
+      title: captureEvents.title,
+      status: captureEvents.status,
+      detail: captureEvents.detail,
+      sourceUrl: captureEvents.sourceUrl,
+      createdAt: captureEvents.createdAt,
+    })
+    .from(captureEvents)
+    .where(eq(captureEvents.orgId, orgId))
+    .orderBy(desc(captureEvents.createdAt))
     .limit(20);
   return {
-    token: org?.capture_token ?? null,
+    token: org?.captureToken ?? null,
     endpoint: `${endpointBase()}/api/public/capture`,
-    events: (events ?? []).map((e) => ({
+    events: events.map((e) => ({
       id: e.id,
       kind: e.kind,
       title: e.title,
       status: e.status,
       detail: e.detail,
-      sourceUrl: e.source_url,
-      createdAt: e.created_at,
+      sourceUrl: e.sourceUrl,
+      createdAt: e.createdAt.toISOString(),
     })),
   };
 }
 
 export const captureSetup = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<CaptureSetup> => {
-    const orgId = await myOrgId(context.userId);
-    if (!orgId) throw new Error("You are not part of an organisation yet.");
-    return loadSetup(orgId);
-  });
+  .middleware([requireOrg])
+  .handler(async ({ context }): Promise<CaptureSetup> => loadSetup(context.orgId));
 
 export const rotateCaptureToken = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRole("president_cbo")])
   .handler(async ({ context }): Promise<CaptureSetup> => {
-    const orgId = await myOrgId(context.userId);
-    if (!orgId) throw new Error("You are not part of an organisation yet.");
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const bytes = new Uint8Array(24);
     crypto.getRandomValues(bytes);
     const token = Array.from(bytes)
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
-    const { error } = await supabaseAdmin
-      .from("organizations")
-      .update({ capture_token: token } as never)
-      .eq("id", orgId);
-    if (error) throw new Error(error.message);
-    return loadSetup(orgId);
+    await db
+      .update(organizations)
+      .set({ captureToken: token })
+      .where(eq(organizations.id, context.orgId));
+    return loadSetup(context.orgId);
   });

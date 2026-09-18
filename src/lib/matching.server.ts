@@ -17,7 +17,6 @@ import {
 
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 
-
 export type JdInputShape = {
   title: string;
   mustHave: string[];
@@ -106,7 +105,6 @@ export type MatchResult = {
   model: string;
 };
 
-
 /**
  * Harvest public profile links straight out of the raw CV text.
  * Recruiter-entered fields always win; this only fills the blanks so a resume
@@ -135,7 +133,6 @@ export function experienceScore(years: number, min: number, max: number) {
   return clamp(100 - (years - max) * 10);
 }
 
-
 /**
  * Score one CV against one JD. Shared by the single-candidate server fn and the
  * bulk pipeline run so both produce byte-identical, auditable numbers.
@@ -145,6 +142,8 @@ export async function scoreCandidate(opts: {
   candidate: CandidateInputShape;
   weights: Weights;
   includeSocial: boolean;
+  /** Org context for AI credential resolution. */
+  orgId?: string | null | undefined;
 }): Promise<MatchResult> {
   const { jd, candidate, weights } = opts;
 
@@ -192,9 +191,9 @@ export async function scoreCandidate(opts: {
       job_description: jd,
       candidate: { ...candidate, cachedSocial: undefined },
     }),
+    orgId: opts.orgId,
   });
   if (!ai.ok) throw new Error(ai.message);
-
 
   /* 2 — Social profiling: reuse cached signals when the recruiter has them. */
   const harvested = harvestProfileLinks(candidate.resumeText);
@@ -219,6 +218,7 @@ export async function scoreCandidate(opts: {
       const settled = await Promise.all([
         fetchGithubSignal(links.githubUrl ?? null, jdSkills),
         fetchLinkedinSignal({
+          orgId: opts.orgId,
           url: links.linkedinUrl ?? null,
           jobTitle: jd.title,
           jdSkills,
@@ -226,6 +226,7 @@ export async function scoreCandidate(opts: {
           profileText: candidate.linkedinProfileText ?? null,
         }),
         fetchWritingSignal({
+          orgId: opts.orgId,
           urls: [links.websiteUrl ?? "", links.xUrl ?? ""].filter(Boolean),
           jobTitle: jd.title,
           jdSkills,
@@ -239,7 +240,9 @@ export async function scoreCandidate(opts: {
 
   /* 3 — Career history: AI extracts the roles, TypeScript does the maths. */
   const history = (ai.data.employment_history ?? []).filter((r) => r && (r.company || r.title));
-  const careerMetrics = computeCareerMetrics(history, { skillRecencyYears: ai.data.skill_recency_years ?? null });
+  const careerMetrics = computeCareerMetrics(history, {
+    skillRecencyYears: ai.data.skill_recency_years ?? null,
+  });
   const career = careerScore(careerMetrics);
 
   /* 4 — Impact & innovation, blended 60/40 into one scored dimension. */
@@ -277,11 +280,15 @@ export async function scoreCandidate(opts: {
     { label: "Social profile", raw: social.score, weight: weights.social },
   ];
   const totalWeight = parts.reduce((s, p) => s + p.weight, 0) || 100;
-  const contributions = parts.map((p) => ({ ...p, weighted: Math.round((p.raw * p.weight) / totalWeight) }));
+  const contributions = parts.map((p) => ({
+    ...p,
+    weighted: Math.round((p.raw * p.weight) / totalWeight),
+  }));
   const overall = clamp(contributions.reduce((s, p) => s + p.weighted, 0));
 
   const riskFlags = [...(ai.data.risk_flags ?? []), ...career.flags];
-  if (candidate.experienceYears < jd.experienceMin) riskFlags.push("Below requisition experience band");
+  if (candidate.experienceYears < jd.experienceMin)
+    riskFlags.push("Below requisition experience band");
   if (opts.includeSocial && !signals.some((s) => s.status === "ok"))
     riskFlags.push("No verifiable public profile signal — social score defaulted to 0");
 
@@ -322,7 +329,6 @@ export async function scoreCandidate(opts: {
     model: ai.model,
   };
 }
-
 
 /** Run an async mapper over a list with a hard concurrency ceiling. */
 export async function mapWithConcurrency<T, R>(

@@ -1,7 +1,18 @@
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { db } from "../server/db";
+import {
+  aiInterviews,
+  applications,
+  candidates,
+  evaluations,
+  interviews,
+  requisitions,
+  stageEvents,
+} from "@db/schema";
+import { requireOrg } from "./auth.middleware";
 import { canMove, REASON_REQUIRED, STAGE_LABEL, type Stage } from "./lifecycle";
 
 /* --------------------------------------------------------------- helpers */
@@ -15,7 +26,7 @@ function actorOf(context: { claims?: unknown; userId: string }) {
 export function nextStageFor(level: number, verdict: "select" | "hold" | "reject"): Stage {
   if (verdict === "reject") return "rejected";
   if (verdict === "hold") return "on_hold";
-  return level >= 3 ? "offer_pending" : ((`l${level + 1}`) as Stage);
+  return level >= 3 ? "offer_pending" : (`l${level + 1}` as Stage);
 }
 
 /* ---------------------------------------------------- interviewer queue */
@@ -39,52 +50,85 @@ export type MyInterview = {
 
 /** Every interview assigned to the signed-in user, newest first. */
 export const myInterviews = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .handler(async ({ context }): Promise<MyInterview[]> => {
     const email = actorOf(context).toLowerCase();
 
-    const { data: rounds, error } = await context.supabase
-      .from("interviews")
-      .select("id, application_id, level, scheduled_at, duration_mins, mode, agenda, teams_link, status, interviewer, interviewer_email")
-      .order("scheduled_at", { ascending: true });
-    if (error) throw new Error(error.message);
-
-    const mine = (rounds ?? []).filter(
-      (r) =>
-        (r.interviewer_email ?? "").toLowerCase() === email ||
-        (r.interviewer ?? "").toLowerCase() === email,
-    );
+    const mine = await db
+      .select({
+        id: interviews.id,
+        applicationId: interviews.applicationId,
+        level: interviews.level,
+        scheduledAt: interviews.scheduledAt,
+        durationMins: interviews.durationMins,
+        mode: interviews.mode,
+        agenda: interviews.agenda,
+        teamsLink: interviews.teamsLink,
+        status: interviews.status,
+        interviewer: interviews.interviewer,
+        interviewerEmail: interviews.interviewerEmail,
+      })
+      .from(interviews)
+      .where(
+        and(
+          eq(interviews.orgId, context.orgId),
+          or(
+            sql`lower(${interviews.interviewerEmail}) = ${email}`,
+            sql`lower(${interviews.interviewer}) = ${email}`,
+          ),
+        ),
+      )
+      .orderBy(asc(interviews.scheduledAt));
     if (!mine.length) return [];
 
-    const appIds = [...new Set(mine.map((r) => r.application_id))];
-    const [{ data: apps }, { data: evals }] = await Promise.all([
-      context.supabase.from("applications").select("id, stage, candidate_id, requisition_id").in("id", appIds),
-      context.supabase.from("evaluations").select("interview_id").in("application_id", appIds),
+    const appIds = [...new Set(mine.map((r) => r.applicationId))];
+    const [apps, evals] = await Promise.all([
+      db
+        .select({
+          id: applications.id,
+          stage: applications.stage,
+          candidateId: applications.candidateId,
+          requisitionId: applications.requisitionId,
+        })
+        .from(applications)
+        .where(and(eq(applications.orgId, context.orgId), inArray(applications.id, appIds))),
+      db
+        .select({ interviewId: evaluations.interviewId })
+        .from(evaluations)
+        .where(
+          and(eq(evaluations.orgId, context.orgId), inArray(evaluations.applicationId, appIds)),
+        ),
     ]);
 
-    const candIds = [...new Set((apps ?? []).map((a) => a.candidate_id))];
-    const reqIds = [...new Set((apps ?? []).map((a) => a.requisition_id))];
-    const [{ data: cands }, { data: reqs }] = await Promise.all([
-      context.supabase.from("candidates").select("id, full_name").in("id", candIds),
-      context.supabase.from("requisitions").select("id, title").in("id", reqIds),
+    const candIds = [...new Set(apps.map((a) => a.candidateId))];
+    const reqIds = [...new Set(apps.map((a) => a.requisitionId))];
+    const [cands, reqs] = await Promise.all([
+      db
+        .select({ id: candidates.id, fullName: candidates.fullName })
+        .from(candidates)
+        .where(and(eq(candidates.orgId, context.orgId), inArray(candidates.id, candIds))),
+      db
+        .select({ id: requisitions.id, title: requisitions.title })
+        .from(requisitions)
+        .where(and(eq(requisitions.orgId, context.orgId), inArray(requisitions.id, reqIds))),
     ]);
 
-    const submitted = new Set((evals ?? []).map((e) => e.interview_id).filter(Boolean) as string[]);
+    const submitted = new Set(evals.map((e) => e.interviewId).filter(Boolean) as string[]);
 
     return mine.map((r) => {
-      const app = (apps ?? []).find((a) => a.id === r.application_id);
+      const app = apps.find((a) => a.id === r.applicationId);
       return {
         id: r.id,
-        application_id: r.application_id,
-        candidate_id: app?.candidate_id ?? "",
-        candidate_name: (cands ?? []).find((c) => c.id === app?.candidate_id)?.full_name ?? "Candidate",
-        requisition_title: (reqs ?? []).find((q) => q.id === app?.requisition_id)?.title ?? "Requisition",
+        application_id: r.applicationId,
+        candidate_id: app?.candidateId ?? "",
+        candidate_name: cands.find((c) => c.id === app?.candidateId)?.fullName ?? "Candidate",
+        requisition_title: reqs.find((q) => q.id === app?.requisitionId)?.title ?? "Requisition",
         level: r.level,
-        scheduled_at: r.scheduled_at,
-        duration_mins: r.duration_mins,
+        scheduled_at: r.scheduledAt ? r.scheduledAt.toISOString() : null,
+        duration_mins: r.durationMins,
         mode: r.mode,
         agenda: r.agenda,
-        teams_link: r.teams_link,
+        teams_link: r.teamsLink,
         status: r.status,
         stage: (app?.stage ?? "shortlisted") as Stage,
         submitted: submitted.has(r.id),
@@ -123,27 +167,29 @@ export type ScorecardResult = {
  * next level or offer, hold → on hold, reject → rejected) with a stage_event.
  */
 export const submitScorecard = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => ScorecardInput.parse(data))
   .handler(async ({ data, context }): Promise<ScorecardResult> => {
     const actor = actorOf(context);
-    const now = new Date().toISOString();
+    const now = new Date();
 
     if (data.interviewId) {
-      const { data: existing } = await context.supabase
-        .from("evaluations")
-        .select("id")
-        .eq("interview_id", data.interviewId)
-        .maybeSingle();
-      if (existing) throw new Error("This interview round has already been scored — scorecards are final.");
+      const [existing] = await db
+        .select({ id: evaluations.id })
+        .from(evaluations)
+        .where(
+          and(eq(evaluations.orgId, context.orgId), eq(evaluations.interviewId, data.interviewId)),
+        )
+        .limit(1);
+      if (existing)
+        throw new Error("This interview round has already been scored — scorecards are final.");
     }
 
-    const { data: app, error: appErr } = await context.supabase
-      .from("applications")
-      .select("id, stage")
-      .eq("id", data.applicationId)
-      .maybeSingle();
-    if (appErr) throw new Error(appErr.message);
+    const [app] = await db
+      .select({ id: applications.id, stage: applications.stage })
+      .from(applications)
+      .where(and(eq(applications.orgId, context.orgId), eq(applications.id, data.applicationId)))
+      .limit(1);
     if (!app) throw new Error("Application not found");
 
     const target = nextStageFor(data.level, data.verdict);
@@ -151,30 +197,30 @@ export const submitScorecard = createServerFn({ method: "POST" })
       throw new Error(`A reason is required to move the candidate to ${STAGE_LABEL[target]}.`);
     }
 
-    const { data: evaluation, error: evalErr } = await context.supabase
-      .from("evaluations")
-      .insert({
-        application_id: data.applicationId,
-        interview_id: data.interviewId ?? null,
+    const [evaluation] = await db
+      .insert(evaluations)
+      .values({
+        applicationId: data.applicationId,
+        orgId: context.orgId,
+        interviewId: data.interviewId ?? null,
         level: data.level,
         evaluator: actor,
-        focus_area: data.focusArea?.trim() || null,
+        focusArea: data.focusArea?.trim() || null,
         rating: data.rating,
         recommendation: data.verdict,
         comments: data.comments?.trim() || null,
-        competencies: data.competencies as never,
-        submitted_by: actor,
-        submitted_at: now,
+        competencies: data.competencies,
+        submittedBy: actor,
+        submittedAt: now,
       })
-      .select("id")
-      .single();
-    if (evalErr) throw new Error(evalErr.message);
+      .returning({ id: evaluations.id });
+    if (!evaluation) throw new Error("The scorecard could not be saved.");
 
     if (data.interviewId) {
-      await context.supabase
-        .from("interviews")
-        .update({ status: "completed", completed_at: now })
-        .eq("id", data.interviewId);
+      await db
+        .update(interviews)
+        .set({ status: "completed", completedAt: now })
+        .where(and(eq(interviews.orgId, context.orgId), eq(interviews.id, data.interviewId)));
     }
 
     /* Auto-progression, audited exactly like a manual stage move. */
@@ -184,15 +230,20 @@ export const submitScorecard = createServerFn({ method: "POST" })
     const reason = data.reason?.trim() || `L${data.level} verdict: ${data.verdict}`;
 
     if (from !== target && canMove(from, target)) {
-      const { error: upErr } = await context.supabase
-        .from("applications")
-        .update({ stage: target, stage_reason: reason, stage_note: data.comments?.trim() || null, last_activity_at: now })
-        .eq("id", app.id);
-      if (upErr) throw new Error(upErr.message);
-      await context.supabase.from("stage_events").insert({
-        application_id: app.id,
-        from_stage: from,
-        to_stage: target,
+      await db
+        .update(applications)
+        .set({
+          stage: target,
+          stageReason: reason,
+          stageNote: data.comments?.trim() || null,
+          lastActivityAt: now,
+        })
+        .where(and(eq(applications.orgId, context.orgId), eq(applications.id, app.id)));
+      await db.insert(stageEvents).values({
+        applicationId: app.id,
+        orgId: context.orgId,
+        fromStage: from,
+        toStage: target,
         actor,
         reason,
         note: data.comments?.trim() || null,
@@ -200,25 +251,34 @@ export const submitScorecard = createServerFn({ method: "POST" })
       movedTo = target;
     } else if (from !== target) {
       blocked = `${STAGE_LABEL[from]} → ${STAGE_LABEL[target]} is not an allowed transition — move the candidate manually.`;
-      await context.supabase.from("applications").update({ last_activity_at: now }).eq("id", app.id);
+      await db
+        .update(applications)
+        .set({ lastActivityAt: now })
+        .where(and(eq(applications.orgId, context.orgId), eq(applications.id, app.id)));
     }
 
     /* A select below L3 queues the next round so nothing stalls unassigned. */
     let nextInterviewCreated = false;
     if (data.verdict === "select" && data.level < 3) {
       const nextLevel = data.level + 1;
-      const { data: already } = await context.supabase
-        .from("interviews")
-        .select("id")
-        .eq("application_id", app.id)
-        .eq("level", nextLevel)
-        .maybeSingle();
+      const [already] = await db
+        .select({ id: interviews.id })
+        .from(interviews)
+        .where(
+          and(
+            eq(interviews.orgId, context.orgId),
+            eq(interviews.applicationId, app.id),
+            eq(interviews.level, nextLevel),
+          ),
+        )
+        .limit(1);
       if (!already) {
-        await context.supabase.from("interviews").insert({
-          application_id: app.id,
+        await db.insert(interviews).values({
+          applicationId: app.id,
+          orgId: context.orgId,
           level: nextLevel,
           status: "pending_scheduling",
-          scheduled_at: null,
+          scheduledAt: null,
         });
         nextInterviewCreated = true;
       }
@@ -248,98 +308,161 @@ const ScheduleInput = z.object({
 
 /** Create or re-schedule a round and park the application on that interview stage. */
 export const scheduleInterview = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => ScheduleInput.parse(data))
   .handler(async ({ data, context }) => {
     const actor = actorOf(context);
-    const now = new Date().toISOString();
+    const now = new Date();
+    const scheduledAt = new Date(data.scheduledAt);
     const row = {
-      application_id: data.applicationId,
+      applicationId: data.applicationId,
       level: data.level,
       interviewer: data.interviewer?.trim() || null,
-      interviewer_email: data.interviewerEmail?.trim().toLowerCase() || null,
-      scheduled_at: new Date(data.scheduledAt).toISOString(),
-      duration_mins: data.durationMins,
+      interviewerEmail: data.interviewerEmail?.trim().toLowerCase() || null,
+      scheduledAt,
+      durationMins: data.durationMins,
       mode: data.mode,
-      teams_link: data.meetingLink?.trim() || null,
+      teamsLink: data.meetingLink?.trim() || null,
       agenda: data.agenda?.trim() || null,
       status: "scheduled",
     };
 
-    const { data: app } = await context.supabase
-      .from("applications")
-      .select("id, stage, candidate_id")
-      .eq("id", data.applicationId)
-      .maybeSingle();
+    const [app] = await db
+      .select({
+        id: applications.id,
+        stage: applications.stage,
+        candidateId: applications.candidateId,
+      })
+      .from(applications)
+      .where(and(eq(applications.orgId, context.orgId), eq(applications.id, data.applicationId)))
+      .limit(1);
 
     /* Candidate email is the invite address: confirm it before the round exists. */
     let candidateEmail: string | null = null;
     if (app) {
-      const { data: cand } = await context.supabase
-        .from("candidates")
-        .select("id, email")
-        .eq("id", app.candidate_id)
-        .maybeSingle();
+      const [cand] = await db
+        .select({ id: candidates.id, email: candidates.email })
+        .from(candidates)
+        .where(and(eq(candidates.orgId, context.orgId), eq(candidates.id, app.candidateId)))
+        .limit(1);
       candidateEmail = cand?.email ?? null;
       const typed = data.candidateEmail?.trim().toLowerCase() || null;
       if (typed && typed !== (candidateEmail ?? "").toLowerCase()) {
-        await context.supabase.from("candidates").update({ email: typed }).eq("id", app.candidate_id);
+        await db
+          .update(candidates)
+          .set({ email: typed })
+          .where(and(eq(candidates.orgId, context.orgId), eq(candidates.id, app.candidateId)));
         candidateEmail = typed;
       }
     }
     if (!candidateEmail) {
-      throw new Error("This candidate has no email on file — add one before scheduling, or the invite cannot be sent.");
+      throw new Error(
+        "This candidate has no email on file — add one before scheduling, or the invite cannot be sent.",
+      );
     }
 
     let rescheduled = false;
     if (data.interviewId) {
       const reason = data.rescheduleReason?.trim();
-      if (!reason) throw new Error("Give a reason for the re-schedule — it is written to the audit trail.");
-      const { data: previous } = await context.supabase
-        .from("interviews")
-        .select("scheduled_at")
-        .eq("id", data.interviewId)
-        .maybeSingle();
-      const { error } = await context.supabase
-        .from("interviews")
-        .update({ ...row, status: "rescheduled" })
-        .eq("id", data.interviewId);
-      if (error) throw new Error(error.message);
+      if (!reason)
+        throw new Error("Give a reason for the re-schedule — it is written to the audit trail.");
+      const [previous] = await db
+        .select({ scheduledAt: interviews.scheduledAt })
+        .from(interviews)
+        .where(and(eq(interviews.orgId, context.orgId), eq(interviews.id, data.interviewId)))
+        .limit(1);
+      await db
+        .update(interviews)
+        .set({ ...row, status: "rescheduled" })
+        .where(and(eq(interviews.orgId, context.orgId), eq(interviews.id, data.interviewId)));
       rescheduled = true;
 
       if (app) {
-        const wasAt = previous?.scheduled_at ? new Date(previous.scheduled_at).toISOString() : "unscheduled";
-        await context.supabase.from("stage_events").insert({
-          application_id: app.id,
-          from_stage: app.stage,
-          to_stage: app.stage,
+        const wasAt = previous?.scheduledAt ? previous.scheduledAt.toISOString() : "unscheduled";
+        await db.insert(stageEvents).values({
+          applicationId: app.id,
+          orgId: context.orgId,
+          fromStage: app.stage,
+          toStage: app.stage,
           actor,
           reason: `L${data.level} re-scheduled: ${reason}`,
-          note: `${wasAt} → ${row.scheduled_at}`,
+          note: `${wasAt} → ${scheduledAt.toISOString()}`,
         });
       }
     } else {
-      const { error } = await context.supabase.from("interviews").insert(row);
-      if (error) throw new Error(error.message);
+      await db.insert(interviews).values({ ...row, orgId: context.orgId });
     }
 
-    const target = (`l${data.level}`) as Stage;
+    const target = `l${data.level}` as Stage;
     if (app && app.stage !== target && canMove(app.stage as Stage, target)) {
-      await context.supabase
-        .from("applications")
-        .update({ stage: target, stage_reason: `L${data.level} scheduled`, last_activity_at: now })
-        .eq("id", app.id);
-      await context.supabase.from("stage_events").insert({
-        application_id: app.id,
-        from_stage: app.stage,
-        to_stage: target,
+      await db
+        .update(applications)
+        .set({ stage: target, stageReason: `L${data.level} scheduled`, lastActivityAt: now })
+        .where(and(eq(applications.orgId, context.orgId), eq(applications.id, app.id)));
+      await db.insert(stageEvents).values({
+        applicationId: app.id,
+        orgId: context.orgId,
+        fromStage: app.stage,
+        toStage: target,
         actor,
         reason: `L${data.level} interview scheduled`,
       });
     } else if (app) {
-      await context.supabase.from("applications").update({ last_activity_at: now }).eq("id", app.id);
+      await db
+        .update(applications)
+        .set({ lastActivityAt: now })
+        .where(and(eq(applications.orgId, context.orgId), eq(applications.id, app.id)));
     }
 
     return { ok: true as const, rescheduled, candidateEmail };
   });
 
+/* ------------------------------------------------------ AI screening filing */
+
+const AiScreenSaveInput = z.object({
+  applicationId: z.string().uuid(),
+  jdMatchScore: z.number().int(),
+  skillsetScore: z.number().int(),
+  cultureRoleScore: z.number().int(),
+  cultureOrgScore: z.number().int(),
+  transcript: z.array(z.object({ question: z.string(), expected_signal: z.string() })),
+  summary: z.string(),
+});
+
+/**
+ * File a completed AI screening interview against an org-owned application and
+ * park the application on "ai_screened". The legacy client never surfaced
+ * failures of that stage bump, so it stays best-effort.
+ */
+export const saveAiInterview = createServerFn({ method: "POST" })
+  .middleware([requireOrg])
+  .inputValidator((data: unknown) => AiScreenSaveInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const [application] = await db
+      .select({ id: applications.id })
+      .from(applications)
+      .where(and(eq(applications.orgId, context.orgId), eq(applications.id, data.applicationId)))
+      .limit(1);
+    if (!application) throw new Error("Application not found");
+
+    await db.insert(aiInterviews).values({
+      applicationId: data.applicationId,
+      orgId: context.orgId,
+      jdMatchScore: data.jdMatchScore,
+      skillsetScore: data.skillsetScore,
+      cultureRoleScore: data.cultureRoleScore,
+      cultureOrgScore: data.cultureOrgScore,
+      transcript: data.transcript,
+      summary: data.summary,
+    });
+
+    try {
+      await db
+        .update(applications)
+        .set({ stage: "ai_screened" })
+        .where(and(eq(applications.orgId, context.orgId), eq(applications.id, data.applicationId)));
+    } catch {
+      /* stage bump is best-effort, exactly as before */
+    }
+    return { ok: true as const };
+  });

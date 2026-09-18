@@ -10,7 +10,7 @@
  * Everything here is deterministic and explainable: no AI call is needed to
  * tell a recruiter *why* two rows look like the same human.
  */
-import { supabase } from "@/integrations/supabase/client";
+import { mergeCandidatesFn } from "./dedupe.functions";
 import type { Candidate } from "@/lib/data";
 
 export const normEmail = (v: string | null | undefined) => {
@@ -47,7 +47,8 @@ const normUrl = (v: string | null | undefined) =>
     .replace(/^www\./, "")
     .replace(/\/+$/, "");
 
-export type DuplicateReason = "email" | "phone" | "linkedin" | "github" | "name+employer" | "name+phone-area";
+export type DuplicateReason =
+  "email" | "phone" | "linkedin" | "github" | "name+employer" | "name+phone-area";
 
 export type DuplicateGroup = {
   key: string;
@@ -116,7 +117,10 @@ export function findDuplicateGroups(candidates: Candidate[]): DuplicateGroup[] {
   const groups = new Map<string, Bucket>();
   for (const c of candidates) {
     const root = find(c.id);
-    const bucket = groups.get(root) ?? { reasons: new Set<DuplicateReason>(), ids: new Set<string>() };
+    const bucket = groups.get(root) ?? {
+      reasons: new Set<DuplicateReason>(),
+      ids: new Set<string>(),
+    };
     bucket.ids.add(c.id);
     groups.set(root, bucket);
   }
@@ -135,7 +139,12 @@ export function findDuplicateGroups(candidates: Candidate[]): DuplicateGroup[] {
         .sort((x, y) => new Date(x.created_at).getTime() - new Date(y.created_at).getTime());
       const reasons = [...b.reasons];
       const strong = reasons.some((r) => r !== "name+employer");
-      return { key, reasons, confidence: strong ? ("certain" as const) : ("likely" as const), members };
+      return {
+        key,
+        reasons,
+        confidence: strong ? ("certain" as const) : ("likely" as const),
+        members,
+      };
     })
     .sort((a, b) => b.members.length - a.members.length);
 }
@@ -157,7 +166,12 @@ export function freshness(c: Candidate): Freshness {
   const ref = c.last_synced_at ?? c.created_at;
   const days = Math.max(0, Math.floor((Date.now() - new Date(ref).getTime()) / 86_400_000));
   const tier = days <= FRESH_DAYS ? "fresh" : days <= STALE_DAYS ? "aging" : "stale";
-  const label = days < 60 ? `${days}d old` : days < 730 ? `${Math.round(days / 30)}mo old` : `${(days / 365).toFixed(1)}y old`;
+  const label =
+    days < 60
+      ? `${days}d old`
+      : days < 730
+        ? `${Math.round(days / 30)}mo old`
+        : `${(days / 365).toFixed(1)}y old`;
   return { days, tier, label };
 }
 
@@ -180,8 +194,10 @@ export function mergeCandidateFields(survivor: Candidate, dupes: Candidate[]) {
 
   for (const d of dupes) {
     for (const [key, value] of Object.entries(d)) {
-      if (key === "id" || key === "created_at" || key === "skills" || key === "resume_text") continue;
-      const current = (patch[key] ?? (survivor as unknown as Record<string, unknown>)[key]) as unknown;
+      if (key === "id" || key === "created_at" || key === "skills" || key === "resume_text")
+        continue;
+      const current = (patch[key] ??
+        (survivor as unknown as Record<string, unknown>)[key]) as unknown;
       if (isBlank(current) && !isBlank(value)) patch[key] = value;
     }
     for (const s of d.skills ?? []) if (s.trim()) skills.add(s.trim());
@@ -197,87 +213,13 @@ export function mergeCandidateFields(survivor: Candidate, dupes: Candidate[]) {
  * Merge duplicates into one record: fill blanks, re-point applications and all
  * child records at the survivor, then delete the emptied duplicates. Nothing is
  * dropped silently — applications that already exist on the survivor for the
- * same requisition are removed as true duplicates.
+ * same requisition are removed as true duplicates. The writes run as an
+ * org-scoped server function (see dedupe.functions.ts).
  */
 export async function mergeCandidates(survivor: Candidate, dupes: Candidate[]) {
   const others = dupes.filter((d) => d.id !== survivor.id);
   if (others.length === 0) return { merged: 0, movedApplications: 0 };
-
-  const patch = mergeCandidateFields(survivor, others);
-  if (Object.keys(patch).length > 0) {
-    const { error } = await supabase
-      .from("candidates")
-      .update(patch as never)
-      .eq("id", survivor.id);
-    if (error) throw new Error(error.message);
-  }
-
-  const ids = others.map((d) => d.id);
-
-  const { data: survivorApps, error: saErr } = await supabase
-    .from("applications")
-    .select("id, requisition_id")
-    .eq("candidate_id", survivor.id);
-  if (saErr) throw new Error(saErr.message);
-  const taken = new Set((survivorApps ?? []).map((a) => a.requisition_id));
-
-  const { data: dupeApps, error: daErr } = await supabase
-    .from("applications")
-    .select("id, requisition_id")
-    .in("candidate_id", ids);
-  if (daErr) throw new Error(daErr.message);
-
-  let moved = 0;
-  for (const a of dupeApps ?? []) {
-    if (taken.has(a.requisition_id)) {
-      await supabase.from("applications").delete().eq("id", a.id);
-      continue;
-    }
-    const { error } = await supabase.from("applications").update({ candidate_id: survivor.id }).eq("id", a.id);
-    if (error) throw new Error(error.message);
-    taken.add(a.requisition_id);
-    moved++;
-  }
-
-  // Child records that hang off the candidate directly.
-  for (const table of ["social_profiles", "candidate_verifications", "candidate_assessments"] as const) {
-    await supabase.from(table).update({ candidate_id: survivor.id }).in("candidate_id", ids);
-  }
-
-  const { error: delErr } = await supabase.from("candidates").delete().in("id", ids);
-  if (delErr) throw new Error(delErr.message);
-
-  return { merged: others.length, movedApplications: moved };
-}
-
-/** Find an existing person for an incoming CV, before inserting a new row. */
-export async function findExistingCandidate(input: {
-  email?: string | null;
-  phone?: string | null;
-  linkedin_url?: string | null;
-  full_name?: string | null;
-}) {
-  const email = normEmail(input.email);
-  const phone = normPhone(input.phone);
-  const linkedin = normUrl(input.linkedin_url);
-  const name = normName(input.full_name);
-  if (!email && !phone && !linkedin) return null;
-
-  const { data, error } = await supabase
-    .from("candidates")
-    .select("*")
-    .order("created_at", { ascending: true })
-    .limit(2000);
-  if (error) throw new Error(error.message);
-
-  const rows = (data ?? []) as Candidate[];
-  const byEmail = email ? rows.find((r) => normEmail(r.email) === email) : undefined;
-  if (byEmail) return { candidate: byEmail, reason: "email" as DuplicateReason };
-  const byPhone = phone ? rows.find((r) => normPhone(r.phone) === phone) : undefined;
-  if (byPhone) return { candidate: byPhone, reason: "phone" as DuplicateReason };
-  const byLinkedin = linkedin ? rows.find((r) => normUrl(r.linkedin_url) === linkedin) : undefined;
-  if (byLinkedin) return { candidate: byLinkedin, reason: "linkedin" as DuplicateReason };
-  const byName = name ? rows.find((r) => normName(r.full_name) === name && normPhone(r.phone) && normPhone(r.phone) === phone) : undefined;
-  if (byName) return { candidate: byName, reason: "name+phone-area" as DuplicateReason };
-  return null;
+  return mergeCandidatesFn({
+    data: { survivorId: survivor.id, dupeIds: others.map((d) => d.id) },
+  });
 }

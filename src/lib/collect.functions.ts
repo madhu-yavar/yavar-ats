@@ -3,10 +3,14 @@
  * each CV, file it against the right requisition, then score it in the
  * background so the pipeline is already ranked when HR looks at it.
  */
+import { eq } from "drizzle-orm";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { db } from "../server/db";
+import { env } from "../server/env";
+import { orgLinkedinConnections, organizations } from "@db/schema";
+import { requireOrg } from "./auth.middleware";
 
 const Input = z.object({
   requisitionId: z.string().uuid().nullable().optional(),
@@ -29,25 +33,11 @@ export type CollectSummary = {
   top: { candidate: string; requisition: string; score: number }[];
 };
 
-async function myOrgId(userId: string): Promise<string | null> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data } = await supabaseAdmin
-    .from("org_members")
-    .select("org_id")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .order("created_at")
-    .limit(1)
-    .maybeSingle();
-  return data?.org_id ?? null;
-}
-
 export const collectApplicants = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => Input.parse(data ?? {}))
   .handler(async ({ data, context }): Promise<CollectSummary> => {
-    const orgId = await myOrgId(context.userId);
-    if (!orgId) throw new Error("You are not part of an organisation yet.");
+    const orgId = context.orgId;
 
     const summary: CollectSummary = {
       scanned: 0,
@@ -65,16 +55,18 @@ export const collectApplicants = createServerFn({ method: "POST" })
     // 1. LinkedIn's own applicant feed, when the contract opens it.
     try {
       const { probeCapabilities } = await import("./linkedin.server");
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      const { data: conn } = await supabaseAdmin
-        .from("org_linkedin_connections")
-        .select("access_token, scope")
-        .eq("org_id", orgId)
-        .maybeSingle();
+      const [conn] = await db
+        .select({
+          accessToken: orgLinkedinConnections.accessToken,
+          scope: orgLinkedinConnections.scope,
+        })
+        .from(orgLinkedinConnections)
+        .where(eq(orgLinkedinConnections.orgId, orgId))
+        .limit(1);
       if (!conn) {
         summary.linkedinNote = "LinkedIn is not connected for your organisation yet.";
       } else {
-        const caps = await probeCapabilities(conn.access_token, conn.scope ?? null);
+        const caps = await probeCapabilities(conn.accessToken, conn.scope ?? null);
         const apps = caps.find((c) => c.id === "applications");
         summary.linkedinNote = apps?.ready
           ? null
@@ -89,14 +81,13 @@ export const collectApplicants = createServerFn({ method: "POST" })
     // configure. LinkedIn application mail and direct CVs land here.
     try {
       const { processPendingMail, inboxAddress } = await import("./local-inbox.server");
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      const { data: org } = await supabaseAdmin
-        .from("organizations")
-        .select("inbox_slug")
-        .eq("id", orgId)
-        .maybeSingle();
-      const address = inboxAddress(org?.inbox_slug);
-      const mailReceivingLive = Boolean(process.env["INBOUND_EMAIL_SECRET"]);
+      const [org] = await db
+        .select({ inboxSlug: organizations.inboxSlug })
+        .from(organizations)
+        .where(eq(organizations.id, orgId))
+        .limit(1);
+      const address = inboxAddress(org?.inboxSlug);
+      const mailReceivingLive = Boolean(env.INBOUND_EMAIL_SECRET);
       if (address) {
         const run = await processPendingMail(orgId, data.max ?? 25);
         summary.scanned += run.scanned;
@@ -132,7 +123,6 @@ export const collectApplicants = createServerFn({ method: "POST" })
       // The built-in careers address above is the supported path; an extra
       // mailbox failing must never stop the collect run.
     }
-
 
     // 3. Score everything still unscored, so HR never has to run matching by hand.
     const { scoreUnscored } = await import("./autoscore.server");

@@ -1,0 +1,2 @@
+ALTER TABLE "content_templates" DROP CONSTRAINT "content_templates_kind_check";--> statement-breakpoint
+ALTER TABLE "content_templates" ADD CONSTRAINT "content_templates_kind_check" CHECK ("content_templates"."kind" in ('linkedin_post','jd','job_card','offer_letter'));

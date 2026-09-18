@@ -11,5 +11,15 @@ export default defineConfig({
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
     server: { entry: "server" },
+    // TEMPORARY (local e2e): *.functions.ts import src/server/db at module
+    // scope; mock ONLY the node-only modules (db/storage) in the dev client —
+    // their mocks are never invoked client-side because handlers and
+    // middleware .server() bodies only run on the server. Auth middleware
+    // (src/lib/auth.middleware.ts) stays real so the server-fn compiler can
+    // introspect .middleware([...]) arrays without hitting a mock.
+    importProtection: {
+      behavior: { dev: "mock" },
+      client: { files: ["**/server/db.ts", "**/server/storage.ts"] },
+    },
   },
 });

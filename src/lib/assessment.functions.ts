@@ -1,7 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { db } from "../server/db";
+import { candidateAssessments, candidates, requisitions } from "@db/schema";
+import { requireOrg } from "./auth.middleware";
 import { generateQuestions, scoreAnswers, type AssessmentQuestion } from "./assessment.server";
 
 /* ------------------------------------------------------------ recruiter side */
@@ -14,50 +17,65 @@ const CreateInput = z.object({
 
 /** Build a role-specific questionnaire and issue a private candidate link. */
 export const createAssessment = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => CreateInput.parse(data))
   .handler(async ({ data, context }) => {
-    const { data: candidate, error: cErr } = await context.supabase
-      .from("candidates")
-      .select("id, full_name, current_employer, skills")
-      .eq("id", data.candidateId)
-      .maybeSingle();
-    if (cErr) throw new Error(cErr.message);
+    const [candidate] = await db
+      .select({
+        id: candidates.id,
+        fullName: candidates.fullName,
+        currentEmployer: candidates.currentEmployer,
+        skills: candidates.skills,
+      })
+      .from(candidates)
+      .where(and(eq(candidates.id, data.candidateId), eq(candidates.orgId, context.orgId)))
+      .limit(1);
     if (!candidate) throw new Error("Candidate not found");
 
-    let title = candidate.current_employer ? `their next role after ${candidate.current_employer}` : "the role";
+    let title = candidate.currentEmployer
+      ? `their next role after ${candidate.currentEmployer}`
+      : "the role";
     let mustHave: string[] = candidate.skills ?? [];
     let responsibilities: string | null = null;
 
     if (data.requisitionId) {
-      const { data: req } = await context.supabase
-        .from("requisitions")
-        .select("title, must_have_skills, responsibilities")
-        .eq("id", data.requisitionId)
-        .maybeSingle();
+      const [req] = await db
+        .select({
+          title: requisitions.title,
+          mustHaveSkills: requisitions.mustHaveSkills,
+          responsibilities: requisitions.responsibilities,
+        })
+        .from(requisitions)
+        .where(and(eq(requisitions.id, data.requisitionId), eq(requisitions.orgId, context.orgId)))
+        .limit(1);
       if (req) {
         title = req.title;
-        mustHave = req.must_have_skills ?? mustHave;
+        mustHave = req.mustHaveSkills ?? mustHave;
         responsibilities = req.responsibilities ?? null;
       }
     }
 
-    const questions = await generateQuestions({ title, mustHave, responsibilities, count: data.count });
+    const questions = await generateQuestions({
+      orgId: context.orgId,
+      title,
+      mustHave,
+      responsibilities,
+      count: data.count,
+    });
     const token = crypto.randomUUID().replace(/-/g, "");
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: row, error } = await supabaseAdmin
-      .from("candidate_assessments")
-      .insert({
-        candidate_id: candidate.id,
-        requisition_id: data.requisitionId ?? null,
+    const [row] = await db
+      .insert(candidateAssessments)
+      .values({
+        candidateId: candidate.id,
+        requisitionId: data.requisitionId ?? null,
+        orgId: context.orgId,
         token,
         status: "sent",
-        questions: questions as never,
+        questions,
       })
-      .select("id, token")
-      .single();
-    if (error) throw new Error(error.message);
+      .returning({ id: candidateAssessments.id, token: candidateAssessments.token });
+    if (!row) throw new Error("The assessment could not be created.");
 
     return { id: row.id, token: row.token, questions };
   });
@@ -70,25 +88,28 @@ const TokenInput = z.object({ token: z.string().min(16) });
 export const getAssessment = createServerFn({ method: "GET" })
   .inputValidator((data: unknown) => TokenInput.parse(data))
   .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: row, error } = await supabaseAdmin
-      .from("candidate_assessments")
-      .select("id, status, questions, candidate_id")
-      .eq("token", data.token)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
+    const [row] = await db
+      .select({
+        id: candidateAssessments.id,
+        status: candidateAssessments.status,
+        questions: candidateAssessments.questions,
+        candidateId: candidateAssessments.candidateId,
+      })
+      .from(candidateAssessments)
+      .where(eq(candidateAssessments.token, data.token))
+      .limit(1);
     if (!row) throw new Error("This assessment link is not valid");
 
-    const { data: candidate } = await supabaseAdmin
-      .from("candidates")
-      .select("full_name")
-      .eq("id", row.candidate_id)
-      .maybeSingle();
+    const [candidate] = await db
+      .select({ fullName: candidates.fullName })
+      .from(candidates)
+      .where(eq(candidates.id, row.candidateId))
+      .limit(1);
 
     const questions = (row.questions as unknown as AssessmentQuestion[]) ?? [];
     return {
       status: row.status,
-      candidateName: candidate?.full_name ?? "",
+      candidateName: candidate?.fullName ?? "",
       // 'looks_like' is the recruiter's rubric — never send it to the candidate.
       questions: questions.map((q) => ({ id: q.id, dimension: q.dimension, prompt: q.prompt })),
     };
@@ -103,44 +124,47 @@ const SubmitInput = z.object({
 export const submitAssessment = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => SubmitInput.parse(data))
   .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: row, error } = await supabaseAdmin
-      .from("candidate_assessments")
-      .select("id, status, questions, requisition_id")
-      .eq("token", data.token)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
+    const [row] = await db
+      .select({
+        id: candidateAssessments.id,
+        status: candidateAssessments.status,
+        questions: candidateAssessments.questions,
+        requisitionId: candidateAssessments.requisitionId,
+        orgId: candidateAssessments.orgId,
+      })
+      .from(candidateAssessments)
+      .where(eq(candidateAssessments.token, data.token))
+      .limit(1);
     if (!row) throw new Error("This assessment link is not valid");
     if (row.status === "completed") throw new Error("This assessment has already been submitted");
 
     const questions = (row.questions as unknown as AssessmentQuestion[]) ?? [];
     let title = "the role";
-    if (row.requisition_id) {
-      const { data: req } = await supabaseAdmin
-        .from("requisitions")
-        .select("title")
-        .eq("id", row.requisition_id)
-        .maybeSingle();
+    if (row.requisitionId) {
+      const [req] = await db
+        .select({ title: requisitions.title })
+        .from(requisitions)
+        .where(eq(requisitions.id, row.requisitionId))
+        .limit(1);
       if (req) title = req.title;
     }
 
-    const result = await scoreAnswers({ title, questions, answers: data.answers });
+    const result = await scoreAnswers({ orgId: row.orgId, title, questions, answers: data.answers });
 
-    const { error: upErr } = await supabaseAdmin
-      .from("candidate_assessments")
-      .update({
+    await db
+      .update(candidateAssessments)
+      .set({
         status: "completed",
-        answers: data.answers as never,
-        mindset_score: result.mindset_score,
-        dimensions: result.dimensions as never,
+        answers: data.answers,
+        mindsetScore: result.mindset_score,
+        dimensions: result.dimensions,
         strengths: result.strengths,
-        red_flags: result.red_flags,
+        redFlags: result.red_flags,
         summary: result.summary,
         model: result.model,
-        completed_at: new Date().toISOString(),
+        completedAt: new Date(),
       })
-      .eq("id", row.id);
-    if (upErr) throw new Error(upErr.message);
+      .where(eq(candidateAssessments.id, row.id));
 
     return { ok: true as const };
   });

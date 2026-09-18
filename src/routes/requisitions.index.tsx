@@ -4,7 +4,11 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { supabase } from "@/integrations/supabase/client";
+import {
+  addDepartment as addDepartmentFn,
+  createDepartment as createDepartmentFn,
+  createRequisition,
+} from "@/lib/requisitions.functions";
 import {
   addMasterItem,
   applicationsQuery,
@@ -140,18 +144,14 @@ function Requisitions() {
   }
 
   async function createDepartment(name: string) {
-    const { data, error } = await supabase
-      .from("departments")
-      .insert({ name: name.trim(), budgeted_headcount: 0, budgeted_cost: 0 })
-      .select("id")
-      .maybeSingle();
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      const data = await createDepartmentFn({ data: { name: name.trim() } });
+      await qc.invalidateQueries({ queryKey: ["departments"] });
+      if (data?.id) setForm((f) => ({ ...f, department_id: data.id }));
+      toast.success(`${name.trim()} added — set its budget below`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not add the department");
     }
-    await qc.invalidateQueries({ queryKey: ["departments"] });
-    if (data?.id) setForm((f) => ({ ...f, department_id: data.id }));
-    toast.success(`${name.trim()} added — set its budget below`);
   }
 
   // Skills and qualifications drafted from the role title. Existing picks are
@@ -238,37 +238,38 @@ function Requisitions() {
     }
     setSaving(true);
     const code = `REQ-${new Date().getFullYear()}-${String(requisitions.length + 1).padStart(3, "0")}`;
-    const { error } = await supabase.from("requisitions").insert({
-      code,
-      title: form.title,
-      department_id: form.department_id || null,
-      location: form.location,
-      openings: Number(form.openings) || 1,
-      experience_min: Number(form.experience_min) || 0,
-      experience_max: Number(form.experience_max) || 0,
-      budget_ctc: Number(form.budget_ctc) || 0,
-      ctc_band_min: form.ctc_band_min ? Number(form.ctc_band_min) : null,
-      ctc_band_max: form.ctc_band_max ? Number(form.ctc_band_max) : null,
-      max_notice_period_days: form.max_notice_period_days
-        ? Number(form.max_notice_period_days)
-        : null,
-      work_authorization_required: form.work_authorization_required || null,
-      hiring_manager: form.hiring_manager || null,
-      must_have_skills: form.must,
-      good_to_have_skills: form.good,
-      responsibilities: form.responsibilities || null,
-      education_requirement: form.education_requirement || null,
-      billing_type: form.billing_type,
-      engagement_type: form.engagement_type,
-      client_name: form.client_name || null,
-      cost_center: form.cost_center || null,
-      status: "pending_dh",
-    });
-    setSaving(false);
-    if (error) {
-      toast.error(error.message);
+    try {
+      await createRequisition({
+        data: {
+          code,
+          title: form.title,
+          departmentId: form.department_id || null,
+          location: form.location,
+          openings: form.openings,
+          experienceMin: form.experience_min,
+          experienceMax: form.experience_max,
+          budgetCtc: form.budget_ctc,
+          ctcBandMin: form.ctc_band_min,
+          ctcBandMax: form.ctc_band_max,
+          maxNoticePeriodDays: form.max_notice_period_days,
+          workAuthorizationRequired: form.work_authorization_required,
+          hiringManager: form.hiring_manager,
+          mustHaveSkills: form.must,
+          goodToHaveSkills: form.good,
+          responsibilities: form.responsibilities,
+          educationRequirement: form.education_requirement,
+          billingType: form.billing_type,
+          engagementType: form.engagement_type,
+          clientName: form.client_name,
+          costCenter: form.cost_center,
+        },
+      });
+    } catch (e) {
+      setSaving(false);
+      toast.error(e instanceof Error ? e.message : "Could not raise the requisition");
       return;
     }
+    setSaving(false);
     toast.success(`${code} raised and sent for Department Head approval`);
     setDupAck(false);
     setOpen(false);
@@ -668,17 +669,21 @@ function DepartmentBudgets() {
       return;
     }
     setSaving(true);
-    const { error } = await supabase.from("departments").insert({
-      name: form.name.trim(),
-      head_name: form.head_name.trim() || null,
-      budgeted_headcount: Number(form.budgeted_headcount) || 0,
-      budgeted_cost: Number(form.budgeted_cost) || 0,
-    });
-    setSaving(false);
-    if (error) {
-      toast.error(error.message);
+    try {
+      await addDepartmentFn({
+        data: {
+          name: form.name.trim(),
+          headName: form.head_name,
+          budgetedHeadcount: form.budgeted_headcount,
+          budgetedCost: form.budgeted_cost,
+        },
+      });
+    } catch (e) {
+      setSaving(false);
+      toast.error(e instanceof Error ? e.message : "Could not add the department");
       return;
     }
+    setSaving(false);
     toast.success(`${form.name.trim()} added to workforce plan`);
     setForm({ name: "", head_name: "", budgeted_headcount: "", budgeted_cost: "" });
     qc.invalidateQueries({ queryKey: ["departments"] });

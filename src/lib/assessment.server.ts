@@ -39,6 +39,8 @@ export const MINDSET_DIMENSIONS = [
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 
 export async function generateQuestions(opts: {
+  /** Org context for AI credential resolution. */
+  orgId: string;
   title: string;
   mustHave: string[];
   responsibilities?: string | null;
@@ -47,6 +49,7 @@ export async function generateQuestions(opts: {
 }) {
   const count = Math.max(4, Math.min(10, opts.count ?? 6));
   const ai = await aiJson<{ questions: AssessmentQuestion[] }>({
+    orgId: opts.orgId,
     system:
       `You design a short situational-judgement questionnaire for one specific role. Write exactly ${count} ` +
       "open questions, each targeting ONE of these dimensions: " +
@@ -68,11 +71,14 @@ export async function generateQuestions(opts: {
 }
 
 export async function scoreAnswers(opts: {
-  title: string;
+
+  /** Org context for AI credential resolution. */
+  orgId: string;  title: string;
   questions: AssessmentQuestion[];
   answers: { id: string; answer: string }[];
 }): Promise<MindsetResult> {
   const ai = await aiJson<Omit<MindsetResult, "model">>({
+    orgId: opts.orgId,
     system:
       "You are an assessment psychologist scoring written situational answers for a hiring team. Score ONLY " +
       "what the candidate wrote. Reward specific lived examples with a decision, an action and an outcome; " +

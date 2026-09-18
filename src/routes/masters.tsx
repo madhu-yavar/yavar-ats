@@ -4,8 +4,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 
-import { supabase } from "@/integrations/supabase/client";
 import { addMasterItem, byKind, masterItemsQuery, type MasterKind } from "@/lib/data";
+import { deleteMasterItem } from "@/lib/master.functions";
 import { PageHeader } from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +24,8 @@ export const Route = createFileRoute("/masters")({
       { property: "og:title", content: "Master Data Library" },
       {
         property: "og:description",
-        content: "One governed taxonomy of skills, locations and qualifications powering every requisition and match score.",
+        content:
+          "One governed taxonomy of skills, locations and qualifications powering every requisition and match score.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -53,17 +54,42 @@ const GROUPS: { kind: MasterKind; title: string; hint: string; placeholder: stri
     hint: "Used for the 10-point education dimension.",
     placeholder: "M.Tech",
   },
-  { kind: "location", title: "Locations", hint: "Job locations and work models.", placeholder: "Ahmedabad" },
-  { kind: "employment_type", title: "Employment types", hint: "Full-time, contract, internship…", placeholder: "Retainer" },
-  { kind: "billing_type", title: "Billing types", hint: "Billable vs non-billable positions.", placeholder: "Partially billable" },
+  {
+    kind: "location",
+    title: "Locations",
+    hint: "Job locations and work models.",
+    placeholder: "Ahmedabad",
+  },
+  {
+    kind: "employment_type",
+    title: "Employment types",
+    hint: "Full-time, contract, internship…",
+    placeholder: "Retainer",
+  },
+  {
+    kind: "billing_type",
+    title: "Billing types",
+    hint: "Billable vs non-billable positions.",
+    placeholder: "Partially billable",
+  },
   {
     kind: "engagement_type",
     title: "Engagement types",
     hint: "Client project, R&D, internal, pre-sales…",
     placeholder: "Innovation lab",
   },
-  { kind: "client", title: "Clients / accounts", hint: "Accounts that billable requisitions map to.", placeholder: "Acme Corp" },
-  { kind: "industry", title: "Industries", hint: "Optional classification for reporting.", placeholder: "Logistics" },
+  {
+    kind: "client",
+    title: "Clients / accounts",
+    hint: "Accounts that billable requisitions map to.",
+    placeholder: "Acme Corp",
+  },
+  {
+    kind: "industry",
+    title: "Industries",
+    hint: "Optional classification for reporting.",
+    placeholder: "Logistics",
+  },
 ];
 
 function Masters() {
@@ -116,13 +142,13 @@ function MasterCard({
 
   async function remove(id: string, name: string) {
     if (!confirm(`Delete "${name}"? This permanently removes it from the library.`)) return;
-    const { error } = await supabase.from("master_items").delete().eq("id", id);
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      await deleteMasterItem({ data: { id } });
+      toast.success(`${name} deleted`);
+      qc.invalidateQueries({ queryKey: ["master_items"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not delete entry");
     }
-    toast.success(`${name} deleted`);
-    qc.invalidateQueries({ queryKey: ["master_items"] });
   }
 
   return (
@@ -136,11 +162,19 @@ function MasterCard({
       <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
         <div>
           <Label className="mb-1.5 block text-xs text-muted-foreground">Name</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={group.placeholder} />
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={group.placeholder}
+          />
         </div>
         <div>
           <Label className="mb-1.5 block text-xs text-muted-foreground">Group (optional)</Label>
-          <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="DevOps" />
+          <Input
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            placeholder="DevOps"
+          />
         </div>
         <div className="flex items-end">
           <Button size="sm" onClick={add} disabled={busy}>
@@ -153,7 +187,11 @@ function MasterCard({
         {list.map((i) => (
           <Badge key={i.id} variant="secondary" className="gap-1">
             {i.name}
-            <button type="button" onClick={() => remove(i.id, i.name)} aria-label={`Delete ${i.name}`}>
+            <button
+              type="button"
+              onClick={() => remove(i.id, i.name)}
+              aria-label={`Delete ${i.name}`}
+            >
               <Trash2 className="h-3 w-3" />
             </button>
           </Badge>

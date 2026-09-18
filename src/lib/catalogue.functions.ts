@@ -1,7 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
+import { ilike } from "drizzle-orm";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { db } from "../server/db";
+import { platformAdmins, productCatalogueCommercials } from "@db/schema";
 import { CATALOGUE_MODULES, type CatalogueModule } from "@/lib/product-catalogue";
 
 /**
@@ -10,22 +13,16 @@ import { CATALOGUE_MODULES, type CatalogueModule } from "@/lib/product-catalogue
  * layer (tier, list price, unit, notes) is editable and stored in the database.
  */
 
-async function admin() {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin;
-}
-
 async function requireSuperUser(context: { claims?: Record<string, unknown> | null }) {
   const raw = (context.claims?.["email"] as string | undefined) ?? null;
   const email = raw ? raw.toLowerCase() : null;
   if (!email) throw new Error("Your account has no email address.");
-  const db = await admin();
-  const { data } = await db
-    .from("platform_admins")
-    .select("id")
-    .ilike("email", email)
-    .maybeSingle();
-  if (!data) throw new Error("Super-user access only.");
+  const [row] = await db
+    .select({ id: platformAdmins.id })
+    .from(platformAdmins)
+    .where(ilike(platformAdmins.email, email))
+    .limit(1);
+  if (!row) throw new Error("Super-user access only.");
   return email;
 }
 
@@ -51,10 +48,11 @@ export const readCatalogue = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<CatalogueResult> => {
     await requireSuperUser(context);
-    const db = await admin();
-    const { data, error } = await db.from("product_catalogue_commercials").select("*");
-    if (error) throw new Error(error.message);
-    const saved = new Map((data ?? []).map((r) => [r.module_id, r]));
+    const saved = new Map(
+      (
+        await db.select({ row: productCatalogueCommercials }).from(productCatalogueCommercials)
+      ).map(({ row }) => [row.moduleId, row]),
+    );
     return {
       generatedAt: new Date().toISOString(),
       modules: CATALOGUE_MODULES.map((m) => {
@@ -65,11 +63,11 @@ export const readCatalogue = createServerFn({ method: "GET" })
             moduleId: m.id,
             tier: s?.tier ?? m.defaultTier,
             listPrice:
-              s?.list_price === null || s?.list_price === undefined ? null : Number(s.list_price),
+              s?.listPrice === null || s?.listPrice === undefined ? null : Number(s.listPrice),
             currency: s?.currency ?? "USD",
             unit: s?.unit ?? "per user / month",
             notes: s?.notes ?? "",
-            updatedAt: s?.updated_at ?? null,
+            updatedAt: s?.updatedAt ? s.updatedAt.toISOString() : null,
           },
         };
       }),
@@ -94,20 +92,28 @@ export const saveCatalogueCommercials = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await requireSuperUser(context);
     if (!CATALOGUE_MODULES.some((m) => m.id === data.moduleId)) throw new Error("Unknown module.");
-    const db = await admin();
-    const { error } = await db.from("product_catalogue_commercials").upsert(
-      {
-        module_id: data.moduleId,
+    await db
+      .insert(productCatalogueCommercials)
+      .values({
+        moduleId: data.moduleId,
         tier: data.tier,
-        list_price: data.listPrice,
+        listPrice: data.listPrice === null ? null : String(data.listPrice),
         currency: data.currency,
         unit: data.unit,
         notes: data.notes,
-        updated_at: new Date().toISOString(),
-        updated_by: context.userId,
-      },
-      { onConflict: "module_id" },
-    );
-    if (error) throw new Error(error.message);
+        updatedBy: context.userId,
+      })
+      .onConflictDoUpdate({
+        target: productCatalogueCommercials.moduleId,
+        set: {
+          tier: data.tier,
+          listPrice: data.listPrice === null ? null : String(data.listPrice),
+          currency: data.currency,
+          unit: data.unit,
+          notes: data.notes,
+          updatedBy: context.userId,
+          updatedAt: new Date(),
+        },
+      });
     return { ok: true };
   });

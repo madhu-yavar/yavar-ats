@@ -12,6 +12,7 @@ import {
   FileSignature,
   Inbox,
   LayoutDashboard,
+  LayoutTemplate,
   PanelLeftClose,
   PanelLeftOpen,
   PhoneCall,
@@ -23,50 +24,96 @@ import {
   Brain,
 } from "lucide-react";
 
-import { usePlatform } from "@/hooks/usePlatform";
-import { useOrg } from "@/hooks/useOrg";
 import { Button } from "@/components/ui/button";
 import { Copilot } from "@/components/Copilot";
 import { NotificationBell } from "@/components/NotificationBell";
 import { AccountMenu } from "@/components/AccountMenu";
+import { useNavCtx, type NavCtx } from "@/hooks/useNavCtx";
 import { BrandFooter, BrandLogo } from "@/components/Brand";
 
-const NAV = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/requisitions", label: "Requisitions & JD", icon: Briefcase },
-  { to: "/ijp", label: "Internal postings", icon: Building2 },
-  { to: "/candidates", label: "Talent pool", icon: Users },
-  { to: "/collaboration", label: "Team & sharing", icon: Handshake },
-  { to: "/inbox", label: "Careers inbox", icon: Inbox },
-  { to: "/matching", label: "JD ↔ CV matching", icon: Target },
-  { to: "/screening", label: "Screening calls", icon: PhoneCall },
-  { to: "/interviews", label: "Interviews", icon: CalendarClock },
+/**
+ * Role-scoped journey. Each item carries its own visibility predicate; groups give the
+ * sidebar its sections (Sourcing / Pipeline / Intelligence / Governance). Predicates
+ * mirror — never replace — the server-side role enforcement on every server function.
+ */
+type NavItem = {
+  to: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  show: (c: NavCtx) => boolean;
+};
+type NavGroup = { heading: string | null; items: NavItem[] };
 
-  { to: "/offers", label: "Offers", icon: FileSignature },
-  { to: "/reports", label: "Reports", icon: BarChart3 },
-  { to: "/team", label: "Users & roles", icon: ShieldCheck },
-  { to: "/organisation", label: "Organisation", icon: Building2 },
-  { to: "/integrations", label: "Integrations", icon: Plug },
-  { to: "/masters", label: "Master data", icon: Database },
-  { to: "/help", label: "User manual", icon: BookOpen },
-] as const;
+const NAV_GROUPS: NavGroup[] = [
+  {
+    heading: null,
+    items: [
+      { to: "/", label: "Dashboard", icon: LayoutDashboard, show: (c) => c.inOrg },
+      { to: "/collaboration", label: "Team & sharing", icon: Handshake, show: (c) => c.inOrg },
+    ],
+  },
+  {
+    heading: "Pipeline",
+    items: [
+      { to: "/requisitions", label: "Requisitions & JD", icon: Briefcase, show: (c) => c.inOrg },
+      { to: "/candidates", label: "Talent pool", icon: Users, show: (c) => c.recruiterView },
+      { to: "/matching", label: "JD ↔ CV matching", icon: Target, show: (c) => c.recruiterView },
+      { to: "/screening", label: "Screening calls", icon: PhoneCall, show: (c) => c.recruiterView },
+      { to: "/interviews", label: "Interviews", icon: CalendarClock, show: (c) => c.recruiterView },
+      { to: "/interviews/mine", label: "My interviews", icon: CalendarClock, show: (c) => c.inOrg },
+      { to: "/offers", label: "Offers", icon: FileSignature, show: (c) => c.recruiterView },
+    ],
+  },
+  {
+    heading: "Sourcing",
+    items: [
+      { to: "/inbox", label: "Careers inbox", icon: Inbox, show: (c) => c.recruiterView },
+      { to: "/ijp", label: "Internal postings", icon: Building2, show: (c) => c.recruiterView },
+    ],
+  },
+  {
+    heading: "Intelligence",
+    items: [
+      { to: "/reports", label: "Reports", icon: BarChart3, show: (c) => c.approver },
+      { to: "/brain", label: "Talent Brain", icon: Brain, show: (c) => c.leadership },
+    ],
+  },
+  {
+    heading: "Governance",
+    items: [
+      { to: "/team", label: "Users & roles", icon: ShieldCheck, show: (c) => c.governance },
+      { to: "/organisation", label: "Organisation", icon: Building2, show: (c) => c.isOwner },
+      { to: "/integrations", label: "Integrations", icon: Plug, show: (c) => c.governance },
+      { to: "/masters", label: "Master data", icon: Database, show: (c) => c.governance },
+      {
+        to: "/templates",
+        label: "Content templates",
+        icon: LayoutTemplate,
+        show: (c) => c.governance,
+      },
+      {
+        to: "/platform",
+        label: "Platform console",
+        icon: Globe2,
+        show: (c) => c.isSuperUser || c.claimable,
+      },
+      {
+        to: "/catalogue",
+        label: "Product catalogue",
+        icon: BookMarked,
+        show: (c) => c.isSuperUser,
+      },
+    ],
+  },
+  {
+    heading: null,
+    items: [{ to: "/help", label: "User manual", icon: BookOpen, show: () => true }],
+  },
+];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { isSuperUser, claimable } = usePlatform();
-  const { roles, isOwner } = useOrg();
-  // The Talent Brain is a governance view: CHRO, HR head, owner or the product owner.
-  const leadership =
-    isSuperUser || isOwner || roles.some((r) => r === "president_cbo" || r === "hr_head");
-  const nav = [
-    ...NAV,
-    ...(leadership ? [{ to: "/brain", label: "Talent Brain", icon: Brain } as const] : []),
-    ...(isSuperUser || claimable
-      ? [{ to: "/platform", label: "Platform console", icon: Globe2 } as const]
-      : []),
-    ...(isSuperUser
-      ? [{ to: "/catalogue", label: "Product catalogue", icon: BookMarked } as const]
-      : []),
-  ];
+  const ctx = useNavCtx();
+  const nav = NAV_GROUPS.flatMap((g) => g.items).filter((i) => i.show(ctx));
 
   // Collapsed state is remembered per browser so the choice survives reloads.
   const [collapsed, setCollapsed] = useState(false);
@@ -81,10 +128,42 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     });
   }
 
+  function renderLink({
+    to,
+    label,
+    icon: Icon,
+  }: {
+    to: string;
+    label: string;
+    icon: typeof LayoutDashboard;
+  }) {
+    // /interviews must not stay highlighted while on /interviews/mine.
+    const exact = to === "/" || to === "/interviews";
+    return (
+      <Link
+        key={to}
+        to={to}
+        title={label}
+        activeOptions={{ exact }}
+        className={`flex items-center gap-3 rounded-md py-2 text-sm text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
+          collapsed ? "justify-center px-2" : "px-3"
+        }`}
+        activeProps={{
+          className: `flex items-center gap-3 rounded-md py-2 text-sm bg-sidebar-accent text-sidebar-accent-foreground font-medium ${
+            collapsed ? "justify-center px-2" : "px-3"
+          }`,
+        }}
+      >
+        <Icon className="size-4 shrink-0" />
+        {collapsed ? null : label}
+      </Link>
+    );
+  }
+
   return (
     <div className="flex min-h-screen">
       <aside
-        className={`sticky top-0 hidden h-screen shrink-0 flex-col justify-between bg-sidebar text-sidebar-foreground transition-[width] duration-200 lg:flex ${
+        className={`sticky top-0 hidden h-screen shrink-0 flex-col overflow-y-auto bg-sidebar text-sidebar-foreground transition-[width] duration-200 lg:flex ${
           collapsed ? "w-[68px] p-3" : "w-64 p-5"
         }`}
       >
@@ -116,25 +195,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Button>
           </div>
           <nav className="space-y-1">
-            {nav.map(({ to, label, icon: Icon }) => (
-              <Link
-                key={to}
-                to={to}
-                title={label}
-                activeOptions={{ exact: to === "/" }}
-                className={`flex items-center gap-3 rounded-md py-2 text-sm text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
-                  collapsed ? "justify-center px-2" : "px-3"
-                }`}
-                activeProps={{
-                  className: `flex items-center gap-3 rounded-md py-2 text-sm bg-sidebar-accent text-sidebar-accent-foreground font-medium ${
-                    collapsed ? "justify-center px-2" : "px-3"
-                  }`,
-                }}
-              >
-                <Icon className="size-4 shrink-0" />
-                {collapsed ? null : label}
-              </Link>
-            ))}
+            {NAV_GROUPS.map((group, gi) => {
+              const items = group.items.filter((i) => i.show(ctx));
+              if (!items.length) return null;
+              return (
+                <div key={group.heading ?? `core-${gi}`} className={group.heading ? "pt-3" : ""}>
+                  {group.heading && !collapsed ? (
+                    <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40">
+                      {group.heading}
+                    </div>
+                  ) : null}
+                  <div className="space-y-1">{items.map((item) => renderLink(item))}</div>
+                </div>
+              );
+            })}
           </nav>
         </div>
       </aside>
@@ -157,7 +231,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link
               key={to}
               to={to}
-              activeOptions={{ exact: to === "/" }}
+              activeOptions={{ exact: to === "/" || to === "/interviews" }}
               className="whitespace-nowrap rounded-md px-3 py-1.5 text-xs text-muted-foreground"
               activeProps={{
                 className:

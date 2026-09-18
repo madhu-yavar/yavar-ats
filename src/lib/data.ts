@@ -1,6 +1,42 @@
+/**
+ * UI read layer — thin React Query wrappers over org-scoped server functions.
+ * The browser never queries Postgres directly; rows arrive in the same
+ * PostgREST wire shapes the routes were written against.
+ */
 import { queryOptions } from "@tanstack/react-query";
 
-import { supabase } from "@/integrations/supabase/client";
+import {
+  listAiInterviews,
+  listAllScreeningRuns,
+  listApplications,
+  listCandidateAssessments,
+  listCandidates,
+  listCandidateNotes,
+  listCandidateReferrals,
+  listCandidateScreeningKits,
+  listCandidateScreeningRuns,
+  listCandidateVerifications,
+  listDepartments,
+  listEvaluations,
+  listInterviews,
+  listJobDescriptions,
+  listOwnershipEvents,
+  listMasterItems,
+  listMatchScores,
+  listOffers,
+  listRequisitions,
+  listScreeningKits,
+  listSocialProfiles,
+  listTalentRequestSuggestions,
+  listTalentRequests,
+  listStageEvents,
+  listVerifications,
+  getRequisition,
+  getCandidate,
+} from "./queries.functions";
+import { addMasterItem as addMasterItemFn } from "./master.functions";
+import { getLatestBenchmark, type BenchmarkRow } from "./salary-benchmark.functions";
+import { listTemplates, type TemplateWire } from "./templates.functions";
 import type { Tables } from "@/integrations/supabase/types";
 
 export type Department = Tables<"departments">;
@@ -27,29 +63,15 @@ export type MasterKind =
   | "client"
   | "rejection_reason";
 
-async function unwrap<T>(p: PromiseLike<{ data: T | null; error: { message: string } | null }>) {
-  const { data, error } = await p;
-  if (error) throw new Error(error.message);
-  return (data ?? []) as T;
-}
-
 export const departmentsQuery = queryOptions({
   queryKey: ["departments"],
-  queryFn: () => unwrap<Department[]>(supabase.from("departments").select("*").order("name")),
+  queryFn: async () => (await listDepartments()) as Department[],
 });
 
 /** Global reference library: skills, locations, education, employment types, industries. */
 export const masterItemsQuery = queryOptions({
   queryKey: ["master_items"],
-  queryFn: () =>
-    unwrap<MasterItem[]>(
-      supabase
-        .from("master_items")
-        .select("*")
-        .eq("active", true)
-        .order("sort_order")
-        .order("name"),
-    ),
+  queryFn: async () => (await listMasterItems()) as MasterItem[],
 });
 
 export function byKind(items: MasterItem[] | undefined, kind: MasterKind) {
@@ -57,109 +79,95 @@ export function byKind(items: MasterItem[] | undefined, kind: MasterKind) {
 }
 
 export async function addMasterItem(kind: MasterKind, name: string, category?: string | null) {
-  const { error } = await supabase
-    .from("master_items")
-    .insert({ kind, name: name.trim(), category: category ?? null });
-  if (error && !/duplicate|unique/i.test(error.message)) throw new Error(error.message);
+  await addMasterItemFn({ data: { kind, name: name.trim(), category: category ?? null } });
 }
 
 export const requisitionsQuery = queryOptions({
   queryKey: ["requisitions"],
-  queryFn: () =>
-    unwrap<Requisition[]>(
-      supabase.from("requisitions").select("*").order("created_at", { ascending: false }),
-    ),
+  queryFn: async () => (await listRequisitions()) as Requisition[],
 });
 
 export const requisitionQuery = (id: string) =>
   queryOptions({
     queryKey: ["requisition", id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("requisitions")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle();
-      if (error) throw new Error(error.message);
-      return data as Requisition | null;
-    },
+    queryFn: async () => (await getRequisition({ data: { id } })) as Requisition | null,
+  });
+
+export type { BenchmarkRow } from "./salary-benchmark.functions";
+export type { TemplateWire } from "./templates.functions";
+
+export const templatesQuery = queryOptions({
+  queryKey: ["templates"],
+  queryFn: async () => (await listTemplates()) as TemplateWire[],
+});
+
+export const benchmarkQuery = (input: {
+  title: string;
+  location?: string | null;
+  experienceMin: number;
+  experienceMax: number;
+}) =>
+  queryOptions({
+    queryKey: ["salary_benchmark", input],
+    enabled: input.title.trim().length > 0,
+    queryFn: async () =>
+      (await getLatestBenchmark({ data: input })) as {
+        benchmark: BenchmarkRow;
+        stale: boolean;
+      } | null,
   });
 
 export const jdQuery = (requisitionId: string) =>
   queryOptions({
     queryKey: ["jd", requisitionId],
-    queryFn: () =>
-      unwrap<JobDescription[]>(
-        supabase
-          .from("job_descriptions")
-          .select("*")
-          .eq("requisition_id", requisitionId)
-          .order("version", { ascending: false }),
-      ),
+    queryFn: async () =>
+      (await listJobDescriptions({ data: { requisitionId } })) as JobDescription[],
   });
 
 export const candidatesQuery = queryOptions({
   queryKey: ["candidates"],
-  queryFn: () =>
-    unwrap<Candidate[]>(
-      supabase.from("candidates").select("*").order("created_at", { ascending: false }),
-    ),
+  queryFn: async () => (await listCandidates()) as Candidate[],
 });
 
 export const candidateQuery = (id: string) =>
   queryOptions({
     queryKey: ["candidate", id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("candidates")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle();
-      if (error) throw new Error(error.message);
-      return data as Candidate | null;
-    },
+    queryFn: async () => (await getCandidate({ data: { id } })) as Candidate | null,
   });
 
 export const applicationsQuery = queryOptions({
   queryKey: ["applications"],
-  queryFn: () => unwrap<Application[]>(supabase.from("applications").select("*")),
+  queryFn: async () => (await listApplications()) as Application[],
 });
 
 export const matchScoresQuery = queryOptions({
   queryKey: ["match_scores"],
-  queryFn: () =>
-    unwrap<MatchScore[]>(
-      supabase.from("match_scores").select("*").order("computed_at", { ascending: false }),
-    ),
+  queryFn: async () => (await listMatchScores()) as MatchScore[],
 });
 
 export const socialProfilesQuery = queryOptions({
   queryKey: ["social_profiles"],
-  queryFn: () => unwrap<SocialProfile[]>(supabase.from("social_profiles").select("*")),
+  queryFn: async () => (await listSocialProfiles()) as SocialProfile[],
 });
 
 export const evaluationsQuery = queryOptions({
   queryKey: ["evaluations"],
-  queryFn: () =>
-    unwrap<Evaluation[]>(
-      supabase.from("evaluations").select("*").order("created_at", { ascending: false }),
-    ),
+  queryFn: async () => (await listEvaluations()) as Evaluation[],
 });
 
 export const interviewsQuery = queryOptions({
   queryKey: ["interviews"],
-  queryFn: () => unwrap<Interview[]>(supabase.from("interviews").select("*").order("scheduled_at")),
+  queryFn: async () => (await listInterviews()) as Interview[],
 });
 
 export const offersQuery = queryOptions({
   queryKey: ["offers"],
-  queryFn: () =>
-    unwrap<Offer[]>(supabase.from("offers").select("*").order("created_at", { ascending: false })),
+  queryFn: async () => (await listOffers()) as Offer[],
 });
 
 export const aiInterviewsQuery = queryOptions({
   queryKey: ["ai_interviews"],
-  queryFn: () => unwrap<AiInterview[]>(supabase.from("ai_interviews").select("*")),
+  queryFn: async () => (await listAiInterviews()) as AiInterview[],
 });
 
 export type StageEvent = Tables<"stage_events">;
@@ -169,39 +177,20 @@ export const stageEventsQuery = (applicationIds: string[]) =>
   queryOptions({
     queryKey: ["stage_events", [...applicationIds].sort().join(",")],
     enabled: applicationIds.length > 0,
-    queryFn: () =>
-      unwrap<StageEvent[]>(
-        supabase
-          .from("stage_events")
-          .select("*")
-          .in("application_id", applicationIds)
-          .order("created_at", { ascending: false }),
-      ),
+    queryFn: async () => (await listStageEvents({ data: { applicationIds } })) as StageEvent[],
   });
 
 /** Every verification run; newest first, so the head of each candidate group is current. */
 export const verificationsQuery = queryOptions({
   queryKey: ["candidate_verifications"],
-  queryFn: () =>
-    unwrap<CandidateVerification[]>(
-      supabase
-        .from("candidate_verifications")
-        .select("*")
-        .order("created_at", { ascending: false }),
-    ),
+  queryFn: async () => (await listVerifications()) as CandidateVerification[],
 });
 
 export const candidateVerificationsQuery = (candidateId: string) =>
   queryOptions({
     queryKey: ["candidate_verifications", candidateId],
-    queryFn: () =>
-      unwrap<CandidateVerification[]>(
-        supabase
-          .from("candidate_verifications")
-          .select("*")
-          .eq("candidate_id", candidateId)
-          .order("created_at", { ascending: false }),
-      ),
+    queryFn: async () =>
+      (await listCandidateVerifications({ data: { candidateId } })) as CandidateVerification[],
   });
 
 export type CandidateAssessment = Tables<"candidate_assessments">;
@@ -209,14 +198,8 @@ export type CandidateAssessment = Tables<"candidate_assessments">;
 export const candidateAssessmentsQuery = (candidateId: string) =>
   queryOptions({
     queryKey: ["candidate_assessments", candidateId],
-    queryFn: () =>
-      unwrap<CandidateAssessment[]>(
-        supabase
-          .from("candidate_assessments")
-          .select("*")
-          .eq("candidate_id", candidateId)
-          .order("created_at", { ascending: false }),
-      ),
+    queryFn: async () =>
+      (await listCandidateAssessments({ data: { candidateId } })) as CandidateAssessment[],
   });
 
 /** Latest verification per candidate. */
@@ -240,47 +223,29 @@ export type ScreeningRun = Tables<"screening_runs">;
 export const screeningKitsQuery = (candidateId: string) =>
   queryOptions({
     queryKey: ["screening_kits", candidateId],
-    queryFn: () =>
-      unwrap<ScreeningKit[]>(
-        supabase
-          .from("screening_kits")
-          .select("*")
-          .eq("candidate_id", candidateId)
-          .order("created_at", { ascending: false }),
-      ),
+    queryFn: async () => (await listCandidateScreeningKits(candidateId)) as ScreeningKit[],
   });
 
 /** Graded screening calls for one candidate, newest first. */
 export const screeningRunsQuery = (candidateId: string) =>
   queryOptions({
     queryKey: ["screening_runs", candidateId],
-    queryFn: () =>
-      unwrap<ScreeningRun[]>(
-        supabase
-          .from("screening_runs")
-          .select("*")
-          .eq("candidate_id", candidateId)
-          .order("created_at", { ascending: false }),
-      ),
+    queryFn: async () => (await listCandidateScreeningRuns(candidateId)) as ScreeningRun[],
   });
 
 /** Every screening kit in the organisation, newest first. */
 export const allScreeningKitsQuery = queryOptions({
   queryKey: ["screening_kits", "all"],
-  queryFn: () =>
-    unwrap<ScreeningKit[]>(
-      supabase.from("screening_kits").select("*").order("created_at", { ascending: false }),
-    ),
+  queryFn: async () => (await listScreeningKits()) as ScreeningKit[],
 });
 
 /** Every graded screening call in the organisation, newest first. */
 export const allScreeningRunsQuery = queryOptions({
   queryKey: ["screening_runs", "all"],
-  queryFn: () =>
-    unwrap<ScreeningRun[]>(
-      supabase.from("screening_runs").select("*").order("created_at", { ascending: false }),
-    ),
+  queryFn: async () => (await listAllScreeningRuns()) as ScreeningRun[],
 });
+
+/* ----------------------------- team & sharing queries (ported to drizzle) */
 
 export type CandidateNote = Tables<"candidate_notes">;
 export type CandidateReferral = Tables<"candidate_referrals">;
@@ -292,55 +257,30 @@ export type OwnershipEvent = Tables<"candidate_ownership_events">;
 export const candidateNotesQuery = (candidateId: string) =>
   queryOptions({
     queryKey: ["candidate_notes", candidateId],
-    queryFn: () =>
-      unwrap<CandidateNote[]>(
-        supabase
-          .from("candidate_notes")
-          .select("*")
-          .eq("candidate_id", candidateId)
-          .order("created_at", { ascending: false }),
-      ),
+    queryFn: async () => (await listCandidateNotes(candidateId)) as CandidateNote[],
   });
 
-/** Every referral in the organisation; filter by sender/receiver in the UI. */
-export const referralsQuery = queryOptions({
-  queryKey: ["candidate_referrals"],
-  queryFn: () =>
-    unwrap<CandidateReferral[]>(
-      supabase.from("candidate_referrals").select("*").order("created_at", { ascending: false }),
-    ),
-});
-
-/** Open and closed "who has someone for this?" requests. */
-export const talentRequestsQuery = queryOptions({
-  queryKey: ["talent_requests"],
-  queryFn: () =>
-    unwrap<TalentRequest[]>(
-      supabase.from("talent_requests").select("*").order("created_at", { ascending: false }),
-    ),
-});
-
-export const talentSuggestionsQuery = queryOptions({
-  queryKey: ["talent_request_suggestions"],
-  queryFn: () =>
-    unwrap<TalentRequestSuggestion[]>(
-      supabase
-        .from("talent_request_suggestions")
-        .select("*")
-        .order("created_at", { ascending: false }),
-    ),
-});
-
-/** Hand-over history for one candidate. */
+/** Ownership hand-over audit trail for one candidate, newest first. */
 export const ownershipEventsQuery = (candidateId: string) =>
   queryOptions({
-    queryKey: ["candidate_ownership_events", candidateId],
-    queryFn: () =>
-      unwrap<OwnershipEvent[]>(
-        supabase
-          .from("candidate_ownership_events")
-          .select("*")
-          .eq("candidate_id", candidateId)
-          .order("created_at", { ascending: false }),
-      ),
+    queryKey: ["ownership_events", candidateId],
+    queryFn: async () => (await listOwnershipEvents(candidateId)) as OwnershipEvent[],
   });
+
+/** Referrals sent between colleagues. */
+export const referralsQuery = queryOptions({
+  queryKey: ["candidate_referrals"],
+  queryFn: async () => (await listCandidateReferrals()) as CandidateReferral[],
+});
+
+/** Open + closed "who has people for this?" requests from the team. */
+export const talentRequestsQuery = queryOptions({
+  queryKey: ["talent_requests"],
+  queryFn: async () => (await listTalentRequests()) as TalentRequest[],
+});
+
+/** Candidates suggested against those requests. */
+export const talentSuggestionsQuery = queryOptions({
+  queryKey: ["talent_request_suggestions"],
+  queryFn: async () => (await listTalentRequestSuggestions()) as TalentRequestSuggestion[],
+});

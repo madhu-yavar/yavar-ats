@@ -18,7 +18,6 @@ import {
   Users,
 } from "lucide-react";
 
-import { supabase } from "@/integrations/supabase/client";
 import {
   allScreeningRunsQuery,
   applicationsQuery,
@@ -39,6 +38,7 @@ import { ScoreChip, StageBadge, StatusBadge, inr } from "@/components/ats";
 import { RolePeek } from "@/components/RolePeek";
 import { useRoles } from "@/hooks/useRoles";
 import { useOrg } from "@/hooks/useOrg";
+import { Brain } from "lucide-react";
 import { usePlatform } from "@/hooks/usePlatform";
 import { getHrPerformance } from "@/lib/hr-performance.functions";
 import { listAllOrganizations } from "@/lib/platform.functions";
@@ -153,6 +153,7 @@ function Dashboard() {
   const qc = useQueryClient();
   const { roles, isAdmin } = useRoles();
   const { org, isOwner } = useOrg();
+  const { isSuperUser } = usePlatform();
   const roleLabel = isOwner
     ? "Organisation owner"
     : isAdmin
@@ -165,6 +166,7 @@ function Dashboard() {
             ? "Hiring manager"
             : "Recruiter";
   const isExecutive = isAdmin || roles.includes("hr_head");
+  const canBrain = isOwner || isExecutive || isSuperUser;
   const [queueView, setQueueView] = useState<"priority" | "matches" | "recent">("priority");
   const [queueSearch, setQueueSearch] = useState("");
   const reqs = useQuery(requisitionsQuery);
@@ -234,12 +236,7 @@ function Dashboard() {
   const [addingKey, setAddingKey] = useState<string | null>(null);
   const addToPipeline = useMutation({
     mutationFn: async (v: { requisitionId: string; candidateId: string }) => {
-      const { error } = await supabase.from("applications").insert({
-        requisition_id: v.requisitionId,
-        candidate_id: v.candidateId,
-        source: "talent_pool",
-      });
-      if (error) throw new Error(error.message);
+      await attachApplication({ data: { ...v, source: "talent_pool" } });
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["applications"] });
@@ -392,7 +389,14 @@ function Dashboard() {
       evidence: string;
       action: string;
       cta: string;
-      to: "/requisitions" | "/candidates" | "/interviews" | "/offers" | "/matching" | "/screening";
+      to:
+        | "/requisitions"
+        | "/candidates"
+        | "/interviews"
+        | "/offers"
+        | "/matching"
+        | "/screening"
+        | "/brain";
       tone: "risk" | "watch" | "opportunity";
       icon: React.ComponentType<{ className?: string }>;
     }[] = [];
@@ -518,6 +522,20 @@ function Dashboard() {
       });
     }
 
+    // Leadership only: the skill-gap read belongs to the Talent Brain's ontology.
+    if (canBrain && scarceSkills.length) {
+      out.push({
+        title: `"${scarceSkills[0]?.[0]}" is scarce in your pool`,
+        evidence: `Missing on ${scarceSkills[0]?.[1]} scored candidates — the org-wide gap is larger still.`,
+        action:
+          "Open Talent Brain for the skill heatmap, then close the gap through training or targeted sourcing.",
+        cta: "Talent Brain",
+        to: "/brain",
+        tone: "opportunity",
+        icon: Brain,
+      });
+    }
+
     const order = { risk: 0, watch: 1, opportunity: 2 } as const;
     return out.sort((a, b) => order[a.tone] - order[b.tone]).slice(0, 6);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -531,6 +549,7 @@ function Dashboard() {
     scored.length,
     avgMatch,
     scarceSkills,
+    canBrain,
     candidates.length,
     poolHealth,
     budgeted,
@@ -623,11 +642,20 @@ function Dashboard() {
                     What the numbers say you should act on, with the evidence behind each call.
                   </p>
                 </div>
-                <Button asChild variant="ghost" size="sm">
-                  <Link to="/reports">
-                    Full reports <ArrowUpRight />
-                  </Link>
-                </Button>
+                <div className="flex items-center gap-2">
+                  {canBrain ? (
+                    <Button asChild variant="ghost" size="sm">
+                      <Link to="/brain">
+                        Talent Brain <ArrowUpRight />
+                      </Link>
+                    </Button>
+                  ) : null}
+                  <Button asChild variant="ghost" size="sm">
+                    <Link to="/reports">
+                      Full reports <ArrowUpRight />
+                    </Link>
+                  </Button>
+                </div>
               </div>
               <div className="divide-y divide-border border-y border-border">
                 {prescriptions.map((p) => (

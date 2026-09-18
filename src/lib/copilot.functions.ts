@@ -1,96 +1,147 @@
 import { createServerFn } from "@tanstack/react-start";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { db } from "../server/db";
+import {
+  applications,
+  candidates,
+  copilotMessages,
+  departments,
+  interviews,
+  offers,
+  requisitions,
+} from "@db/schema";
+import { requireOrg } from "./auth.middleware";
 import { MANUAL_TEXT } from "@/lib/user-manual";
 
-export type CopilotMessage = { id: string; role: "user" | "assistant"; content: string; createdAt: string };
-
-async function admin() {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin;
-}
-
-async function orgOf(userId: string) {
-  const db = await admin();
-  const { data } = await db
-    .from("org_members")
-    .select("org_id")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .maybeSingle();
-  if (!data) throw new Error("You do not belong to an organisation yet.");
-  return data.org_id as string;
-}
+export type CopilotMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+};
 
 /** The single ongoing copilot conversation for the signed-in user. */
 export const copilotHistory = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .handler(async ({ context }): Promise<CopilotMessage[]> => {
-    const db = await admin();
-    const { data, error } = await db
-      .from("copilot_messages")
-      .select("id, role, content, created_at")
-      .eq("user_id", context.userId)
-      .order("created_at")
+    const rows = await db
+      .select({
+        id: copilotMessages.id,
+        role: copilotMessages.role,
+        content: copilotMessages.content,
+        createdAt: copilotMessages.createdAt,
+      })
+      .from(copilotMessages)
+      .where(
+        and(eq(copilotMessages.userId, context.userId), eq(copilotMessages.orgId, context.orgId)),
+      )
+      .orderBy(asc(copilotMessages.createdAt))
       .limit(200);
-    if (error) throw new Error(error.message);
-    return (data ?? []).map((r) => ({
+    return rows.map((r) => ({
       id: r.id,
       role: r.role as "user" | "assistant",
       content: r.content,
-      createdAt: r.created_at,
+      createdAt: r.createdAt.toISOString(),
     }));
   });
 
 export const clearCopilot = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .handler(async ({ context }) => {
-    const db = await admin();
-    const { error } = await db.from("copilot_messages").delete().eq("user_id", context.userId);
-    if (error) throw new Error(error.message);
+    await db
+      .delete(copilotMessages)
+      .where(
+        and(eq(copilotMessages.userId, context.userId), eq(copilotMessages.orgId, context.orgId)),
+      );
     return { ok: true };
   });
 
 /** Live, org-scoped facts handed to the model so answers are grounded in real data. */
 async function snapshot(orgId: string) {
-  const db = await admin();
-  const [reqs, cands, apps, ivs, offers, depts] = await Promise.all([
+  // Column aliases keep the snake_case snapshot payload the prompt has always used.
+  const [reqs, cands, apps, ivs, offerRows, depts] = await Promise.all([
     db
-      .from("requisitions")
-      .select("code, title, status, openings, location, budget_ctc, experience_min, experience_max, must_have_skills")
-      .eq("org_id", orgId)
-      .order("created_at", { ascending: false })
+      .select({
+        code: requisitions.code,
+        title: requisitions.title,
+        status: requisitions.status,
+        openings: requisitions.openings,
+        location: requisitions.location,
+        budget_ctc: requisitions.budgetCtc,
+        experience_min: requisitions.experienceMin,
+        experience_max: requisitions.experienceMax,
+        must_have_skills: requisitions.mustHaveSkills,
+      })
+      .from(requisitions)
+      .where(eq(requisitions.orgId, orgId))
+      .orderBy(desc(requisitions.createdAt))
       .limit(60),
-    db.from("candidates").select("id, skills, experience_years, created_at, last_synced_at").eq("org_id", orgId),
-    db.from("applications").select("stage, requisition_id, last_activity_at").eq("org_id", orgId),
     db
-      .from("interviews")
-      .select("level, status, scheduled_at, interviewer")
-      .eq("org_id", orgId)
-      .order("scheduled_at", { ascending: true })
+      .select({
+        id: candidates.id,
+        skills: candidates.skills,
+        experience_years: candidates.experienceYears,
+        created_at: candidates.createdAt,
+        last_synced_at: candidates.lastSyncedAt,
+      })
+      .from(candidates)
+      .where(eq(candidates.orgId, orgId)),
+    db
+      .select({
+        stage: applications.stage,
+        requisition_id: applications.requisitionId,
+        last_activity_at: applications.lastActivityAt,
+      })
+      .from(applications)
+      .where(eq(applications.orgId, orgId)),
+    db
+      .select({
+        level: interviews.level,
+        status: interviews.status,
+        scheduled_at: interviews.scheduledAt,
+        interviewer: interviews.interviewer,
+      })
+      .from(interviews)
+      .where(eq(interviews.orgId, orgId))
+      .orderBy(asc(interviews.scheduledAt))
       .limit(60),
-    db.from("offers").select("status, offered_ctc, joining_date").eq("org_id", orgId),
-    db.from("departments").select("name, budgeted_headcount, budgeted_cost").eq("org_id", orgId),
+    db
+      .select({
+        status: offers.status,
+        offered_ctc: offers.offeredCtc,
+        joining_date: offers.joiningDate,
+      })
+      .from(offers)
+      .where(eq(offers.orgId, orgId)),
+    db
+      .select({
+        name: departments.name,
+        budgeted_headcount: departments.budgetedHeadcount,
+        budgeted_cost: departments.budgetedCost,
+      })
+      .from(departments)
+      .where(eq(departments.orgId, orgId)),
   ]);
 
   const stageCounts: Record<string, number> = {};
-  for (const a of apps.data ?? []) stageCounts[a.stage] = (stageCounts[a.stage] ?? 0) + 1;
+  for (const a of apps) stageCounts[a.stage] = (stageCounts[a.stage] ?? 0) + 1;
 
   const skillCounts: Record<string, number> = {};
-  for (const c of cands.data ?? []) for (const s of c.skills ?? []) skillCounts[s] = (skillCounts[s] ?? 0) + 1;
+  for (const c of cands) for (const s of c.skills ?? []) skillCounts[s] = (skillCounts[s] ?? 0) + 1;
   const topSkills = Object.entries(skillCounts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 20);
 
   return {
-    requisitions: reqs.data ?? [],
-    departments: depts.data ?? [],
-    candidateCount: (cands.data ?? []).length,
+    requisitions: reqs,
+    departments: depts,
+    candidateCount: cands.length,
     stageCounts,
     topSkills,
-    interviews: ivs.data ?? [],
-    offers: offers.data ?? [],
+    interviews: ivs,
+    offers: offerRows,
   };
 }
 
@@ -126,32 +177,36 @@ USER MANUAL (authoritative product documentation):
 ${MANUAL_TEXT}`;
 
 export const askCopilot = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => z.object({ message: z.string().min(1).max(2000) }).parse(data))
   .handler(async ({ data, context }): Promise<{ answer: string }> => {
-    const orgId = await orgOf(context.userId);
-    const db = await admin();
     const { aiJson } = await import("@/lib/ai-gateway.server");
 
-    await db
-      .from("copilot_messages")
-      .insert({ user_id: context.userId, org_id: orgId, role: "user", content: data.message });
+    await db.insert(copilotMessages).values({
+      userId: context.userId,
+      orgId: context.orgId,
+      role: "user",
+      content: data.message,
+    });
 
-    const { data: prior } = await db
-      .from("copilot_messages")
-      .select("role, content")
-      .eq("user_id", context.userId)
-      .order("created_at", { ascending: false })
+    const prior = await db
+      .select({ role: copilotMessages.role, content: copilotMessages.content })
+      .from(copilotMessages)
+      .where(
+        and(eq(copilotMessages.userId, context.userId), eq(copilotMessages.orgId, context.orgId)),
+      )
+      .orderBy(desc(copilotMessages.createdAt))
       .limit(12);
 
-    const transcript = (prior ?? [])
+    const transcript = prior
       .reverse()
       .map((m) => `${m.role === "user" ? "HR" : "Copilot"}: ${m.content}`)
       .join("\n");
 
-    const facts = await snapshot(orgId);
+    const facts = await snapshot(context.orgId);
 
     const result = await aiJson<{ answer?: string }>({
+      orgId: context.orgId,
       system: SYSTEM,
       prompt: `DATA SNAPSHOT (live, this organisation only):\n${JSON.stringify(facts).slice(0, 24000)}\n\nCONVERSATION SO FAR:\n${transcript}\n\nAnswer the latest HR message.`,
     });
@@ -160,9 +215,12 @@ export const askCopilot = createServerFn({ method: "POST" })
       ? (result.data.answer ?? "").trim() || "I could not produce an answer for that."
       : `I could not reach the AI model: ${result.message}`;
 
-    await db
-      .from("copilot_messages")
-      .insert({ user_id: context.userId, org_id: orgId, role: "assistant", content: answer });
+    await db.insert(copilotMessages).values({
+      userId: context.userId,
+      orgId: context.orgId,
+      role: "assistant",
+      content: answer,
+    });
 
     return { answer };
   });

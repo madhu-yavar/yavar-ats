@@ -29,37 +29,45 @@ async function run(request: Request) {
   }
 
   const { inboxConfigured, syncCareersInbox } = await import("@/lib/inbox.server");
-  if (!inboxConfigured()) {
-    return Response.json({ skipped: true, reason: "careers inbox not connected" });
-  }
 
   try {
-    const result = await syncCareersInbox({
-      max: opts.max ?? 25,
-      ...(opts.query ? { query: opts.query } : {}),
-    });
-    // Score whatever just arrived, per organisation, so pipelines are already
-    // ranked before anyone opens them.
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    let sync: Awaited<ReturnType<typeof syncCareersInbox>> | null = null;
+    if (inboxConfigured()) {
+      sync = await syncCareersInbox({
+        max: opts.max ?? 25,
+        ...(opts.query ? { query: opts.query } : {}),
+      });
+    }
+
+    // Score whatever just arrived — through the gateway sync or the inbound
+    // webhook — per organisation, so pipelines are already ranked before
+    // anyone opens them.
+    const { db } = await import("../../../server/db");
+    const { organizations } = await import("@db/schema");
+    const { eq } = await import("drizzle-orm");
     const { scoreUnscored } = await import("@/lib/autoscore.server");
-    const { data: orgs } = await supabaseAdmin
-      .from("organizations")
-      .select("id")
-      .eq("status", "active");
+    const orgs = await db
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(eq(organizations.status, "active"));
     let scored = 0;
     let scoreErrors = 0;
-    for (const org of orgs ?? []) {
+    for (const org of orgs) {
       const run = await scoreUnscored({ orgId: org.id, limit: 25 });
       scored += run.scored;
       scoreErrors += run.errors;
     }
 
     return Response.json({
-      scanned: result.scanned,
-      imported: result.imported,
-      updated: result.updated,
-      skipped: result.skipped,
-      errors: result.errors,
+      ...(sync
+        ? {
+            scanned: sync.scanned,
+            imported: sync.imported,
+            updated: sync.updated,
+            skipped: sync.skipped,
+            errors: sync.errors,
+          }
+        : { skipped: true, reason: "careers inbox not connected" }),
       scored,
       scoreErrors,
     });

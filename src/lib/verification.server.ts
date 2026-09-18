@@ -86,7 +86,11 @@ async function githubEvidence(url: string | null) {
       })),
     };
   } catch (e) {
-    return { handle, error: `GitHub fetch failed: ${(e as Error).message}`, repos: [] as unknown[] };
+    return {
+      handle,
+      error: `GitHub fetch failed: ${(e as Error).message}`,
+      repos: [] as unknown[],
+    };
   }
 }
 
@@ -116,6 +120,7 @@ async function pageEvidence(urls: string[]) {
 }
 
 export async function verifyClaims(opts: {
+  orgId?: string | null | undefined;
   name: string;
   resumeText: string | null | undefined;
   skills: string[];
@@ -177,7 +182,8 @@ export async function verifyClaims(opts: {
 
   const redFlags = [...(ai.data.red_flags ?? [])];
   if (!github) redFlags.push("No GitHub profile on file — technical claims cannot be corroborated");
-  else if ((github as any).error) redFlags.push(`GitHub evidence unavailable: ${(github as any).error}`);
+  else if ((github as any).error)
+    redFlags.push(`GitHub evidence unavailable: ${(github as any).error}`);
   if (pages.some((p) => p.excerpt.startsWith("UNREACHABLE")))
     redFlags.push("A portfolio/writing link on the CV could not be opened");
   if (!links.linkedinUrl) redFlags.push("No professional profile link on file");

@@ -1,10 +1,23 @@
+import { and, eq, inArray } from "drizzle-orm";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { db } from "../server/db";
+import { applications, stageEvents } from "@db/schema";
+import { assertRole, requireOrg } from "./auth.middleware";
 import { canMove, REASON_REQUIRED, STAGE_LABEL, type Stage } from "./lifecycle";
 
 const STAGES = Object.keys(STAGE_LABEL) as [Stage, ...Stage[]];
+
+/** Offer and hiring stages are HR-controlled — not every org member may act. */
+const HR_CONTROLLED_TARGETS = new Set<string>([
+  "offer_pending",
+  "offer_released",
+  "offer_accepted",
+  "offer",
+  "hired",
+  "joined",
+]);
 
 const MoveInput = z.object({
   applicationId: z.string().uuid(),
@@ -15,23 +28,24 @@ const MoveInput = z.object({
 
 /**
  * The only sanctioned way to change an application's stage: the transition is
- * validated server-side and an immutable stage_event is written for the audit
- * trail. The UI never updates `applications.stage` directly.
+ * validated server-side, HR-controlled stages require the HR head (or owner),
+ * and an immutable stage_event is written for the audit trail. The UI never
+ * updates `applications.stage` directly.
  */
 export const moveStage = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => MoveInput.parse(data))
   .handler(async ({ data, context }) => {
-    const { data: app, error } = await context.supabase
-      .from("applications")
-      .select("id, stage")
-      .eq("id", data.applicationId)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
+    const [app] = await db
+      .select({ id: applications.id, stage: applications.stage })
+      .from(applications)
+      .where(and(eq(applications.id, data.applicationId), eq(applications.orgId, context.orgId)))
+      .limit(1);
     if (!app) throw new Error("Application not found");
 
     const from = app.stage as Stage;
-    if (from === data.toStage) return { ok: true as const, from, to: data.toStage, unchanged: true };
+    if (from === data.toStage)
+      return { ok: true as const, from, to: data.toStage, unchanged: true };
 
     if (!canMove(from, data.toStage)) {
       throw new Error(
@@ -41,36 +55,43 @@ export const moveStage = createServerFn({ method: "POST" })
     if (REASON_REQUIRED.includes(data.toStage) && !data.reason?.trim()) {
       throw new Error(`A reason is required to move a candidate to ${STAGE_LABEL[data.toStage]}.`);
     }
+    if (HR_CONTROLLED_TARGETS.has(data.toStage)) {
+      await assertRole(
+        context.userId,
+        context.orgId,
+        ["hr_head", "president_cbo"],
+        "Only the HR head or an owner can move a candidate into an offer or hiring stage.",
+      );
+    }
 
-    const now = new Date().toISOString();
-    const { error: upErr } = await context.supabase
-      .from("applications")
-      .update({
+    const now = new Date();
+    await db
+      .update(applications)
+      .set({
         stage: data.toStage,
-        stage_reason: data.reason?.trim() || null,
-        stage_note: data.note?.trim() || null,
-        last_activity_at: now,
+        stageReason: data.reason?.trim() || null,
+        stageNote: data.note?.trim() || null,
+        lastActivityAt: now,
       })
-      .eq("id", app.id);
-    if (upErr) throw new Error(upErr.message);
+      .where(eq(applications.id, app.id));
 
     const actor = (context.claims as Record<string, unknown> | undefined)?.["email"];
-    const { error: evErr } = await context.supabase.from("stage_events").insert({
-      application_id: app.id,
-      from_stage: from,
-      to_stage: data.toStage,
+    await db.insert(stageEvents).values({
+      applicationId: app.id,
+      orgId: context.orgId,
+      fromStage: from,
+      toStage: data.toStage,
       actor: typeof actor === "string" ? actor : context.userId,
       reason: data.reason?.trim() || null,
       note: data.note?.trim() || null,
     });
-    if (evErr) throw new Error(evErr.message);
 
     return { ok: true as const, from, to: data.toStage, unchanged: false };
   });
 
 /** Same validation, applied to a selection from the talent pool table. */
 export const moveStages = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) =>
     z
       .object({
@@ -85,44 +106,59 @@ export const moveStages = createServerFn({ method: "POST" })
     if (REASON_REQUIRED.includes(data.toStage) && !data.reason?.trim()) {
       throw new Error(`A reason is required to move candidates to ${STAGE_LABEL[data.toStage]}.`);
     }
+    if (HR_CONTROLLED_TARGETS.has(data.toStage)) {
+      await assertRole(
+        context.userId,
+        context.orgId,
+        ["hr_head", "president_cbo"],
+        "Only the HR head or an owner can move candidates into an offer or hiring stage.",
+      );
+    }
 
-    const { data: apps, error } = await context.supabase
-      .from("applications")
-      .select("id, stage")
-      .in("id", data.applicationIds);
-    if (error) throw new Error(error.message);
+    const apps = await db
+      .select({ id: applications.id, stage: applications.stage })
+      .from(applications)
+      .where(
+        and(inArray(applications.id, data.applicationIds), eq(applications.orgId, context.orgId)),
+      );
 
     const actorClaim = (context.claims as Record<string, unknown> | undefined)?.["email"];
     const actor = typeof actorClaim === "string" ? actorClaim : context.userId;
-    const now = new Date().toISOString();
+    const now = new Date();
 
-    const moved: string[] = [];
-    const blocked: { id: string; from: Stage }[] = [];
-    for (const a of apps ?? []) {
+    const moved: { id: string; from: Stage }[] = [];
+    let blocked = 0;
+    for (const a of apps) {
       const from = a.stage as Stage;
       if (from === data.toStage) continue;
       if (!canMove(from, data.toStage)) {
-        blocked.push({ id: a.id, from });
+        blocked += 1;
         continue;
       }
-      moved.push(a.id);
+      moved.push({ id: a.id, from });
     }
 
     if (moved.length) {
-      await context.supabase
-        .from("applications")
-        .update({
+      await db
+        .update(applications)
+        .set({
           stage: data.toStage,
-          stage_reason: data.reason?.trim() || null,
-          stage_note: data.note?.trim() || null,
-          last_activity_at: now,
+          stageReason: data.reason?.trim() || null,
+          stageNote: data.note?.trim() || null,
+          lastActivityAt: now,
         })
-        .in("id", moved);
-      await context.supabase.from("stage_events").insert(
-        moved.map((id) => ({
-          application_id: id,
-          from_stage: (apps ?? []).find((a) => a.id === id)!.stage,
-          to_stage: data.toStage,
+        .where(
+          inArray(
+            applications.id,
+            moved.map((m) => m.id),
+          ),
+        );
+      await db.insert(stageEvents).values(
+        moved.map((m) => ({
+          applicationId: m.id,
+          orgId: context.orgId,
+          fromStage: m.from,
+          toStage: data.toStage,
           actor,
           reason: data.reason?.trim() || null,
           note: data.note?.trim() || null,
@@ -130,5 +166,5 @@ export const moveStages = createServerFn({ method: "POST" })
       );
     }
 
-    return { moved: moved.length, blocked: blocked.length };
+    return { moved: moved.length, blocked };
   });

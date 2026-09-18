@@ -4,8 +4,13 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Building2 } from "lucide-react";
 
-import { supabase } from "@/integrations/supabase/client";
-import { applicationsQuery, candidatesQuery, departmentsQuery, requisitionsQuery } from "@/lib/data";
+import {
+  applicationsQuery,
+  candidatesQuery,
+  departmentsQuery,
+  requisitionsQuery,
+} from "@/lib/data";
+import { applyInternally } from "@/lib/requisitions.functions";
 import { EmptyState, PageHeader, SkillPills, inr } from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +37,8 @@ export const Route = createFileRoute("/ijp")({
       { property: "og:title", content: "Internal Job Postings (IJP)" },
       {
         property: "og:description",
-        content: "Employees apply internally; applications are tagged as IJP and scored against the approved JD.",
+        content:
+          "Employees apply internally; applications are tagged as IJP and scored against the approved JD.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -71,40 +77,18 @@ function Ijp() {
     }
     setBusy(true);
     try {
-      const { data: existing } = await supabase
-        .from("candidates")
-        .select("id")
-        .eq("email", form.email.trim())
-        .maybeSingle();
-
-      let candidateId = existing?.id ?? null;
-      if (!candidateId) {
-        const { data, error } = await supabase
-          .from("candidates")
-          .insert({
-            full_name: form.full_name.trim(),
-            email: form.email.trim(),
-            source: "ijp",
-            is_internal: true,
-            employee_id: form.employee_id.trim(),
-            current_department: form.current_department || null,
-            experience_years: Number(form.experience_years) || 0,
-            skills: form.skills
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean),
-            resume_text: form.note || null,
-          })
-          .select("id")
-          .single();
-        if (error || !data) throw new Error(error?.message ?? "Could not register the employee");
-        candidateId = data.id;
-      }
-
-      const { error: appErr } = await supabase
-        .from("applications")
-        .insert({ requisition_id: openReq, candidate_id: candidateId, source: "ijp" });
-      if (appErr) throw new Error(appErr.message);
+      await applyInternally({
+        data: {
+          requisitionId: openReq,
+          fullName: form.full_name,
+          email: form.email,
+          employeeId: form.employee_id,
+          currentDepartment: form.current_department,
+          experienceYears: form.experience_years,
+          skills: form.skills,
+          note: form.note,
+        },
+      });
 
       toast.success("Internal application submitted — it now sits in the requisition pipeline");
       setOpenReq(null);
@@ -140,7 +124,8 @@ function Ijp() {
           <h2 className="font-semibold">Internal applications</h2>
         </div>
         <p className="num mt-1 text-xs text-muted-foreground">
-          {internalApps.length} internal application(s) · {posted.length} requisition(s) currently open to employees
+          {internalApps.length} internal application(s) · {posted.length} requisition(s) currently
+          open to employees
         </p>
       </section>
 
@@ -161,8 +146,8 @@ function Ijp() {
                     <p className="num text-xs text-muted-foreground">{r.code}</p>
                     <h3 className="truncate font-semibold">{r.title}</h3>
                     <p className="num text-xs text-muted-foreground">
-                      {dept?.name ?? "Unassigned"} · {r.location ?? "—"} · {r.experience_min}–{r.experience_max} yrs ·{" "}
-                      {inr(Number(r.budget_ctc))}
+                      {dept?.name ?? "Unassigned"} · {r.location ?? "—"} · {r.experience_min}–
+                      {r.experience_max} yrs · {inr(Number(r.budget_ctc))}
                     </p>
                   </div>
                   <Button size="sm" onClick={() => setOpenReq(r.id)}>
@@ -175,7 +160,9 @@ function Ijp() {
                 </div>
                 <p className="num mt-3 text-xs text-muted-foreground">
                   {applicants.length} internal applicant(s) ·{" "}
-                  {r.ijp_posted_at ? `posted ${new Date(r.ijp_posted_at).toLocaleDateString()}` : "posted"}
+                  {r.ijp_posted_at
+                    ? `posted ${new Date(r.ijp_posted_at).toLocaleDateString()}`
+                    : "posted"}
                 </p>
                 <div className="mt-3 flex gap-2">
                   <Button asChild size="sm" variant="outline">
@@ -203,13 +190,19 @@ function Ijp() {
               .filter((c) => c.is_internal)
               .map((c) => (
                 <li key={c.id} className="flex items-center justify-between gap-3 py-2">
-                  <Link to="/candidates/$id" params={{ id: c.id }} className="min-w-0 hover:underline">
+                  <Link
+                    to="/candidates/$id"
+                    params={{ id: c.id }}
+                    className="min-w-0 hover:underline"
+                  >
                     <span className="font-medium">{c.full_name}</span>
                     <span className="num ml-2 text-xs text-muted-foreground">
                       {c.employee_id ?? "—"} · {c.current_department ?? "—"}
                     </span>
                   </Link>
-                  <span className="num text-xs text-muted-foreground">{c.experience_years} yrs</span>
+                  <span className="num text-xs text-muted-foreground">
+                    {c.experience_years} yrs
+                  </span>
                 </li>
               ))}
           </ul>
@@ -221,8 +214,8 @@ function Ijp() {
           <DialogHeader>
             <DialogTitle>Apply to an internal posting</DialogTitle>
             <DialogDescription>
-              Employee applications enter the same pipeline as external candidates and are scored against the approved
-              JD.
+              Employee applications enter the same pipeline as external candidates and are scored
+              against the approved JD.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -238,14 +231,21 @@ function Ijp() {
             ).map(([key, label]) => (
               <div key={key} className={key === "skills" ? "sm:col-span-2" : undefined}>
                 <Label className="mb-1.5 block text-xs text-muted-foreground">{label}</Label>
-                <Input value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
+                <Input
+                  value={form[key]}
+                  onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                />
               </div>
             ))}
             <div className="sm:col-span-2">
               <Label className="mb-1.5 block text-xs text-muted-foreground">
                 Why this move (used as the profile text for scoring)
               </Label>
-              <Textarea rows={5} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+              <Textarea
+                rows={5}
+                value={form.note}
+                onChange={(e) => setForm({ ...form, note: e.target.value })}
+              />
             </div>
           </div>
           <DialogFooter>

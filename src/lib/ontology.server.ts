@@ -20,6 +20,8 @@ export type OntologySourceRow = {
   skills: string[];
   observedAt: string;
   hired: boolean;
+  /** Raw CV text — mined for skill tokens the parser missed. */
+  resumeText?: string | null;
 };
 
 export type OntologyDemandRow = {
@@ -55,6 +57,9 @@ export type OntologyInsight = {
   detail: string;
   severity: "high" | "medium" | "low";
   skills: string[];
+  /** Where the CHRO acts on this insight (route), when one exists. */
+  actionTo?: string;
+  actionLabel?: string;
 };
 
 export type OntologyDiff = {
@@ -157,6 +162,27 @@ function categorise(slug: string) {
   return "general";
 }
 
+/**
+ * Mine raw CV text for skills the parser missed: word-boundary scan against the
+ * alias table, the stored graph's slugs/aliases and the slug itself. Returns
+ * canonical slugs found in the text. Bounded — only known tokens count, so free
+ * prose cannot invent nodes.
+ */
+function mineSkills(
+  text: string | null | undefined,
+  tokens: Map<string, string>,
+): string[] {
+  if (!text) return [];
+  const hay = text.toLowerCase();
+  const found = new Set<string>();
+  for (const [token, slug] of tokens) {
+    if (token.length < 2) continue;
+    const re = new RegExp(`(^|[^a-z0-9+#])${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9+#]|$)`);
+    if (re.test(hay)) found.add(slug);
+  }
+  return [...found];
+}
+
 function decay(observedAt: string, now: number) {
   const age = (now - new Date(observedAt).getTime()) / DAY;
   if (!Number.isFinite(age) || age <= 180) return 1;
@@ -199,6 +225,18 @@ export function buildOntology(input: {
   };
   const nodes = new Map<string, Acc>();
 
+  // Token index for CV-text mining: alias table + stored graph + parsed skills.
+  const knownSlugs = new Set<string>();
+  for (const c of input.candidates)
+    for (const raw of c.skills ?? []) {
+      const sl = slugify(raw);
+      if (sl && sl.length >= 2) knownSlugs.add(sl);
+    }
+  for (const p of input.previous) knownSlugs.add(p.slug);
+  const tokens = new Map<string, string>();
+  for (const [alias, slug] of Object.entries(ALIASES)) tokens.set(alias, slug);
+  for (const slug of knownSlugs) tokens.set(slug.replace(/-/g, " "), slug);
+
   function touch(slug: string, surface: string) {
     let acc = nodes.get(slug);
     if (!acc) {
@@ -228,7 +266,10 @@ export function buildOntology(input: {
     const w = decay(c.observedAt, now);
     const ageDays = (now - observed) / DAY;
     const unique = new Set<string>();
-    for (const raw of c.skills ?? []) {
+    // Skills mined straight from the CV text count exactly like parsed ones —
+    // the parser misses plenty, and the pool is the evidence, not the field.
+    const mined = mineSkills(c.resumeText, tokens);
+    for (const raw of [...(c.skills ?? []), ...mined.map((sl) => prettyName(sl))]) {
       if (!raw || typeof raw !== "string") continue;
       const slug = slugify(raw);
       if (!slug || slug.length < 2) continue;
@@ -383,6 +424,8 @@ export function deriveInsights(
         .join(", ")}. Open a sourcing campaign or relax these to good-to-have.`,
       severity: "high",
       skills: scarce.map((n) => n.slug),
+      actionTo: "/matching",
+      actionLabel: "Open matching",
     });
   }
 
@@ -397,6 +440,8 @@ export function deriveInsights(
       detail: `${bench.map((n) => `${n.name} (${n.supply})`).join(", ")} sit unused. Redeploy through internal postings before sourcing outside.`,
       severity: "low",
       skills: bench.map((n) => n.slug),
+      actionTo: "/ijp",
+      actionLabel: "Redeploy via internal postings",
     });
   }
 
@@ -411,6 +456,8 @@ export function deriveInsights(
       detail: `${emerging.map((n) => n.name).join(", ")} appeared in the last four months. Add them to job architecture and interview kits.`,
       severity: "medium",
       skills: emerging.map((n) => n.slug),
+      actionTo: "/masters",
+      actionLabel: "Update job architecture",
     });
   }
 
@@ -425,6 +472,8 @@ export function deriveInsights(
       detail: `${fading.map((n) => n.name).join(", ")} have had no fresh evidence for over a year. They are still searchable but will retire from the graph if nothing new arrives.`,
       severity: "low",
       skills: fading.map((n) => n.slug),
+      actionTo: "/candidates",
+      actionLabel: "Search the pool",
     });
   }
 
@@ -475,6 +524,8 @@ export function deriveInsights(
         .join("; "),
       severity: "high",
       skills: [...new Set(uncovered.flatMap((r) => r.missing))],
+      actionTo: "/requisitions",
+      actionLabel: "Open requisitions",
     });
   }
 

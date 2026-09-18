@@ -105,10 +105,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   errorComponent: ErrorComponent,
 });
 
+// react-dom's dev build logs a "Download the React DevTools" notice whenever
+// the global hook lacks `checkDCE` (react-refresh's own shim does, which is
+// why the notice appears). Installing the same hook shape react-refresh uses,
+// plus checkDCE, silences it while keeping Fast Refresh and a real DevTools
+// extension (which injects the hook before this runs) working.
+const REACT_DEVTOOLS_HOOK_SHIM = `(function(){if(window.__REACT_DEVTOOLS_GLOBAL_HOOK__)return;var n=0;window.__REACT_DEVTOOLS_GLOBAL_HOOK__={renderers:new Map(),supportsFiber:true,inject:function(){return n++},onScheduleFiberRoot:function(){},onCommitFiberRoot:function(){},onCommitFiberUnmount:function(){},checkDCE:function(){}}})();`;
+
 function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
+        <script dangerouslySetInnerHTML={{ __html: REACT_DEVTOOLS_HOOK_SHIM }} />
         <HeadContent />
       </head>
       <body>

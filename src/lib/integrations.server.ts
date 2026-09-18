@@ -1,20 +1,18 @@
 /**
  * Server-only integration plumbing.
  *
- * Credentials live in public.integration_credentials, which has RLS on and NO
- * policies for anon/authenticated — so they are only reachable through the
- * service-role client used here, never from the browser.
+ * Credentials live in the integration_credentials table, which is never read
+ * or written through any client-facing surface — only this module and the
+ * requireOrg-gated server functions in integrations.functions.ts reach it.
  */
+import { eq } from "drizzle-orm";
+
+import { db } from "../server/db";
+import { env } from "../server/env";
+import { integrationCredentials } from "@db/schema";
 
 export type ProviderId =
-  | "linkedin"
-  | "naukri"
-  | "indeed"
-  | "github"
-  | "careers"
-  | "zoom"
-  | "google_meet"
-  | "teams";
+  "linkedin" | "naukri" | "indeed" | "github" | "careers" | "zoom" | "google_meet" | "teams";
 
 export type TestOutcome = {
   status: "ok" | "pending" | "failed";
@@ -23,51 +21,46 @@ export type TestOutcome = {
 
 export type IntegrationConfig = Record<string, string | number | boolean | null>;
 
-async function admin() {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin;
-}
-
 export async function readSecrets(integrationId: string): Promise<Record<string, string>> {
-  const db = await admin();
-  const { data, error } = await db
-    .from("integration_credentials")
-    .select("secrets")
-    .eq("integration_id", integrationId)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  return (data?.secrets as Record<string, string> | undefined) ?? {};
+  const [row] = await db
+    .select({ secrets: integrationCredentials.secrets })
+    .from(integrationCredentials)
+    .where(eq(integrationCredentials.integrationId, integrationId))
+    .limit(1);
+  return (row?.secrets as Record<string, string> | undefined) ?? {};
 }
 
 export async function writeSecrets(integrationId: string, patch: Record<string, string>) {
-  const db = await admin();
   const current = await readSecrets(integrationId);
   const merged = { ...current };
   for (const [k, v] of Object.entries(patch)) {
     // An empty string means "leave the stored value alone".
     if (v.trim().length > 0) merged[k] = v.trim();
   }
-  const { error } = await db
-    .from("integration_credentials")
-    .upsert(
-      { integration_id: integrationId, secrets: merged as never, updated_at: new Date().toISOString() },
-      { onConflict: "integration_id" },
-    );
-  if (error) throw new Error(error.message);
+  await db
+    .insert(integrationCredentials)
+    .values({ integrationId, secrets: merged, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: integrationCredentials.integrationId,
+      set: { secrets: merged, updatedAt: new Date() },
+    });
   return Object.keys(merged);
 }
 
 export async function clearSecrets(integrationId: string) {
-  const db = await admin();
-  const { error } = await db.from("integration_credentials").delete().eq("integration_id", integrationId);
-  if (error) throw new Error(error.message);
+  await db
+    .delete(integrationCredentials)
+    .where(eq(integrationCredentials.integrationId, integrationId));
 }
 
 /* --------------------------------------------------------- provider tests */
 
 async function testGithub(secrets: Record<string, string>): Promise<TestOutcome> {
-  const token = secrets["token"] ?? process.env["GITHUB_TOKEN"] ?? "";
-  const headers: Record<string, string> = { Accept: "application/vnd.github+json", "User-Agent": "lovable-ats" };
+  const token = secrets["token"] ?? env.GITHUB_TOKEN ?? "";
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github+json",
+    "User-Agent": "lovable-ats",
+  };
   if (token) headers["Authorization"] = `Bearer ${token}`;
   try {
     const res = await fetch("https://api.github.com/rate_limit", { headers });
@@ -92,9 +85,11 @@ async function testTokenEndpoint(
   required: string[],
 ): Promise<TestOutcome> {
   const missing = required.filter((k) => !secrets[k]);
-  if (missing.length) return { status: "pending", message: `Missing credential(s): ${missing.join(", ")}.` };
+  if (missing.length)
+    return { status: "pending", message: `Missing credential(s): ${missing.join(", ")}.` };
 
-  const baseUrl = typeof config["base_url"] === "string" ? (config["base_url"] as string).trim() : "";
+  const baseUrl =
+    typeof config["base_url"] === "string" ? (config["base_url"] as string).trim() : "";
   if (!baseUrl)
     return {
       status: "pending",
@@ -131,7 +126,8 @@ export async function testProvider(
     case "linkedin":
       return {
         status: "ok",
-        message: "The LinkedIn account connection is managed on the LinkedIn panel above — no boxes to test here.",
+        message:
+          "The LinkedIn account connection is managed on the LinkedIn panel above — no boxes to test here.",
       };
     case "naukri":
       return testTokenEndpoint("Naukri", secrets, config, ["client_id", "client_secret"]);
@@ -181,7 +177,8 @@ export async function importFromProvider(opts: {
   location: string | null;
   limit: number;
 }): Promise<ExternalCandidate[]> {
-  const baseUrl = typeof opts.config["base_url"] === "string" ? (opts.config["base_url"] as string).trim() : "";
+  const baseUrl =
+    typeof opts.config["base_url"] === "string" ? (opts.config["base_url"] as string).trim() : "";
 
   if (opts.provider === "careers" || opts.provider === "github")
     throw new Error(
@@ -210,7 +207,8 @@ export async function importFromProvider(opts: {
   });
 
   const text = await res.text();
-  if (!res.ok) throw new Error(`${opts.provider} search failed [${res.status}]: ${text.slice(0, 300)}`);
+  if (!res.ok)
+    throw new Error(`${opts.provider} search failed [${res.status}]: ${text.slice(0, 300)}`);
 
   let payload: { candidates?: unknown[] } = {};
   try {

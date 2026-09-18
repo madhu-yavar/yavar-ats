@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireOrg } from "./auth.middleware";
 import { draftRoleProfile, type RoleProfile } from "./role-profile.server";
 
 export type { RoleProfile } from "./role-profile.server";
@@ -17,6 +17,7 @@ const Input = z.object({
 
 /** Draft skills, qualifications and responsibilities for a role title. */
 export const suggestRoleProfile = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => Input.parse(data))
-  .handler(async ({ data }): Promise<RoleProfile> => draftRoleProfile(data));
+  .handler(async ({ data, context }): Promise<RoleProfile> =>
+    draftRoleProfile({ ...data, orgId: context.orgId }));

@@ -1,7 +1,21 @@
 import { createServerFn } from "@tanstack/react-start";
+import { and, desc, eq, ilike, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { db } from "../server/db";
+import {
+  applications,
+  candidates,
+  ontologySnapshots,
+  organizations,
+  orgMembers,
+  platformAdmins,
+  requisitions,
+  skillEdges,
+  skillNodes,
+  userRoles,
+} from "@db/schema";
 import {
   buildOntology,
   prettyName,
@@ -9,8 +23,6 @@ import {
   type OntologyDemandRow,
   type OntologySourceRow,
 } from "./ontology.server";
-
-type Sb = { from: (t: string) => any };
 
 export type TalentBrain = OntologyBuild & {
   scope: "org" | "platform";
@@ -30,129 +42,156 @@ export type TalentBrain = OntologyBuild & {
 };
 
 /** The Talent Brain is a governance view: CHRO, HR head, owner or the product super admin. */
-async function requireBrainAccess(supabase: Sb, userId: string, email: string | null) {
-  const { data: member } = await supabase
-    .from("org_members")
-    .select("org_id, is_owner, organizations(name)")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .order("created_at")
-    .limit(1)
-    .maybeSingle();
+async function requireBrainAccess(userId: string, email: string | null) {
+  const [member] = await db
+    .select({
+      orgId: orgMembers.orgId,
+      isOwner: orgMembers.isOwner,
+      orgName: organizations.name,
+    })
+    .from(orgMembers)
+    .innerJoin(organizations, eq(organizations.id, orgMembers.orgId))
+    .where(and(eq(orgMembers.userId, userId), eq(orgMembers.status, "active")))
+    .orderBy(orgMembers.createdAt)
+    .limit(1);
 
   let superUser = false;
   if (email) {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: pa } = await supabaseAdmin
-      .from("platform_admins")
-      .select("id")
-      .ilike("email", email.toLowerCase())
-      .maybeSingle();
+    const [pa] = await db
+      .select({ id: platformAdmins.id })
+      .from(platformAdmins)
+      .where(ilike(platformAdmins.email, email.toLowerCase()))
+      .limit(1);
     superUser = Boolean(pa);
   }
 
-  if (!member?.org_id) {
+  if (!member?.orgId) {
     if (superUser) return { orgId: null as string | null, orgName: null, superUser: true };
     throw new Error("You are not part of an organisation yet.");
   }
 
-  if (member.is_owner || superUser) {
-    return {
-      orgId: member.org_id as string,
-      orgName: (member as any).organizations?.name ?? null,
-      superUser,
-    };
+  if (member.isOwner || superUser) {
+    return { orgId: member.orgId as string, orgName: member.orgName ?? null, superUser };
   }
 
-  const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-  const allowed = (roles ?? []).some((r: { role: string }) =>
-    ["president_cbo", "hr_head"].includes(r.role),
-  );
+  const roles = await db
+    .select({ role: userRoles.role })
+    .from(userRoles)
+    .where(eq(userRoles.userId, userId));
+  const allowed = roles.some((r) => ["president_cbo", "hr_head"].includes(r.role));
   if (!allowed) {
     throw new Error("The Talent Brain is available to the CHRO, HR Head and the account owner.");
   }
-  return {
-    orgId: member.org_id as string,
-    orgName: (member as any).organizations?.name ?? null,
-    superUser: false,
-  };
+  return { orgId: member.orgId as string, orgName: member.orgName ?? null, superUser: false };
 }
 
-async function loadSources(db: Sb, orgId: string | null) {
-  const scopeIt = (q: any) => (orgId ? q.eq("org_id", orgId) : q);
+async function loadSources(orgId: string | null) {
+  const cand = await db
+    .select({
+      id: candidates.id,
+      skills: candidates.skills,
+      resumeText: candidates.resumeText,
+      createdAt: candidates.createdAt,
+      lastSyncedAt: candidates.lastSyncedAt,
+    })
+    .from(candidates)
+    .where(orgId ? eq(candidates.orgId, orgId) : undefined)
+    .limit(5000);
 
-  const [cand, reqs, apps, prevNodes, snaps] = await Promise.all([
-    scopeIt(db.from("candidates").select("id, skills, created_at, last_synced_at")).limit(5000),
-    scopeIt(
-      db
-        .from("requisitions")
-        .select("id, title, openings, status, must_have_skills, good_to_have_skills"),
-    ).limit(2000),
-    scopeIt(db.from("applications").select("candidate_id, stage")).limit(10000),
-    scopeIt(
-      db
-        .from("skill_nodes")
-        .select("slug, first_seen_at, last_seen_at, evidence_count, status, category, aliases"),
-    ).limit(5000),
-    scopeIt(db.from("ontology_snapshots").select("*"))
-      .order("created_at", { ascending: false })
-      .limit(12),
-  ]);
+  const reqs = await db
+    .select({
+      id: requisitions.id,
+      title: requisitions.title,
+      openings: requisitions.openings,
+      status: requisitions.status,
+      mustHaveSkills: requisitions.mustHaveSkills,
+      goodToHaveSkills: requisitions.goodToHaveSkills,
+    })
+    .from(requisitions)
+    .where(orgId ? eq(requisitions.orgId, orgId) : undefined)
+    .limit(2000);
+
+  const apps = await db
+    .select({ candidateId: applications.candidateId, stage: applications.stage })
+    .from(applications)
+    .where(orgId ? eq(applications.orgId, orgId) : undefined)
+    .limit(10000);
+
+  const prevNodes = await db
+    .select({
+      slug: skillNodes.slug,
+      firstSeenAt: skillNodes.firstSeenAt,
+      lastSeenAt: skillNodes.lastSeenAt,
+      evidenceCount: skillNodes.evidenceCount,
+      status: skillNodes.status,
+      category: skillNodes.category,
+      aliases: skillNodes.aliases,
+    })
+    .from(skillNodes)
+    .where(orgId ? eq(skillNodes.orgId, orgId) : undefined)
+    .limit(5000);
+
+  const snaps = orgId
+    ? await db
+        .select()
+        .from(ontologySnapshots)
+        .where(eq(ontologySnapshots.orgId, orgId))
+        .orderBy(desc(ontologySnapshots.createdAt))
+        .limit(12)
+    : await db.select().from(ontologySnapshots).orderBy(desc(ontologySnapshots.createdAt)).limit(12);
 
   const hired = new Set(
-    (apps.data ?? [])
-      .filter((a: { stage: string }) =>
-        ["hired", "joined", "offer_accepted", "offer_released"].includes(a.stage),
-      )
-      .map((a: { candidate_id: string }) => a.candidate_id),
+    apps
+      .filter((a) => ["hired", "joined", "offer_accepted", "offer_released"].includes(a.stage))
+      .map((a) => a.candidateId),
   );
 
-  const candidates: OntologySourceRow[] = (cand.data ?? []).map((c: any) => ({
+  const candidatesOut: OntologySourceRow[] = cand.map((c) => ({
     candidateId: c.id,
     skills: Array.isArray(c.skills) ? c.skills : [],
-    observedAt: c.last_synced_at ?? c.created_at ?? new Date().toISOString(),
+    resumeText: c.resumeText,
+    observedAt: (c.lastSyncedAt ?? c.createdAt ?? new Date()).toISOString(),
     hired: hired.has(c.id),
   }));
 
   const openStatuses = new Set(["approved", "pending_hr", "pending_cbo", "pending_dh", "draft"]);
-  const demand: OntologyDemandRow[] = (reqs.data ?? []).map((r: any) => ({
+  const demand: OntologyDemandRow[] = reqs.map((r) => ({
     requisitionId: r.id,
     title: r.title,
     openings: Number(r.openings ?? 1),
-    mustHave: Array.isArray(r.must_have_skills) ? r.must_have_skills : [],
-    goodToHave: Array.isArray(r.good_to_have_skills) ? r.good_to_have_skills : [],
+    mustHave: Array.isArray(r.mustHaveSkills) ? r.mustHaveSkills : [],
+    goodToHave: Array.isArray(r.goodToHaveSkills) ? r.goodToHaveSkills : [],
     open: openStatuses.has(r.status),
   }));
 
-  const previous = (prevNodes.data ?? []).map((n: any) => ({
+  const previous = prevNodes.map((n) => ({
     slug: n.slug,
-    firstSeenAt: n.first_seen_at,
-    lastSeenAt: n.last_seen_at,
-    evidence: Number(n.evidence_count ?? 0),
+    firstSeenAt: n.firstSeenAt.toISOString(),
+    lastSeenAt: n.lastSeenAt.toISOString(),
+    evidence: Number(n.evidenceCount ?? 0),
     status: n.status ?? "active",
   }));
 
   // Curation already learned (families, merged aliases) is reused on every read.
   const curated: Record<string, { category?: string; aliases?: string[] }> = {};
-  for (const n of prevNodes.data ?? []) {
+  for (const n of prevNodes) {
     const entry: { category?: string; aliases?: string[] } = {};
-    if (typeof (n as any).category === "string" && (n as any).category !== "general")
-      entry.category = (n as any).category;
-    if (Array.isArray((n as any).aliases)) entry.aliases = (n as any).aliases;
-    if (entry.category || entry.aliases?.length) curated[(n as any).slug] = entry;
+    if (typeof n.category === "string" && n.category !== "general") entry.category = n.category;
+    if (Array.isArray(n.aliases)) entry.aliases = n.aliases;
+    if (entry.category || entry.aliases?.length) curated[n.slug] = entry;
   }
 
-  return { candidates, demand, previous, curated, snapshots: snaps.data ?? [] };
+  return { candidates: candidatesOut, demand, previous, curated, snapshots: snaps };
 }
 
-function history(snapshots: any[]) {
+function history(snapshots: Array<typeof ontologySnapshots.$inferSelect>) {
   return snapshots
     .slice()
     .reverse()
     .map((s) => ({
-      at: s.created_at,
-      nodes: Number(s.node_count ?? 0),
-      edges: Number(s.edge_count ?? 0),
+      at: s.createdAt.toISOString(),
+      nodes: Number(s.nodeCount ?? 0),
+      edges: Number(s.edgeCount ?? 0),
       added: (s.added ?? []).length,
       grown: (s.grown ?? []).length,
       dormant: (s.dormant ?? []).length,
@@ -167,21 +206,17 @@ export const readTalentBrain = createServerFn({ method: "POST" })
     z.object({ scope: z.enum(["org", "platform"]).default("org") }).parse(input ?? {}),
   )
   .handler(async ({ data, context }): Promise<TalentBrain> => {
-    const supabase = context.supabase as unknown as Sb;
     const email = (context.claims as any)?.email ?? null;
-    const access = await requireBrainAccess(supabase, context.userId, email);
+    const access = await requireBrainAccess(context.userId, email);
     const platform = data.scope === "platform" && access.superUser;
     if (data.scope === "platform" && !access.superUser) {
       throw new Error("Cross-organisation view is limited to the product super admin.");
     }
 
-    const db: Sb = platform
-      ? ((await import("@/integrations/supabase/client.server")).supabaseAdmin as unknown as Sb)
-      : supabase;
     const orgId = platform ? null : access.orgId;
     if (!platform && !orgId) throw new Error("You are not part of an organisation yet.");
 
-    const src = await loadSources(db, orgId);
+    const src = await loadSources(orgId);
     const build = buildOntology({
       candidates: src.candidates,
       demand: src.demand,
@@ -193,7 +228,7 @@ export const readTalentBrain = createServerFn({ method: "POST" })
       ...build,
       scope: platform ? "platform" : "org",
       orgName: platform ? "All organisations" : access.orgName,
-      builtAt: src.snapshots[0]?.created_at ?? null,
+      builtAt: src.snapshots[0]?.createdAt.toISOString() ?? null,
       history: history(src.snapshots),
       narrative: null,
       engine: null,
@@ -208,13 +243,12 @@ export const rebuildTalentBrain = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({}).parse(input ?? {}))
   .handler(async ({ context }): Promise<TalentBrain> => {
-    const supabase = context.supabase as unknown as Sb;
     const email = (context.claims as any)?.email ?? null;
-    const access = await requireBrainAccess(supabase, context.userId, email);
+    const access = await requireBrainAccess(context.userId, email);
     const orgId = access.orgId;
     if (!orgId) throw new Error("Choose an organisation before rebuilding its Talent Brain.");
 
-    const src = await loadSources(supabase, orgId);
+    const src = await loadSources(orgId);
 
     // First pass without AI so the graph exists even when no model is configured.
     let build = buildOntology({
@@ -278,30 +312,40 @@ export const rebuildTalentBrain = createServerFn({ method: "POST" })
     }
 
     // Persist nodes.
-    const nowIso = new Date().toISOString();
-    if (build.nodes.length) {
-      const rows = build.nodes.map((n) => ({
-        org_id: orgId,
-        slug: n.slug,
-        name: n.name,
-        category: n.category,
-        aliases: n.aliases,
-        supply: n.supply,
-        demand: n.demand,
-        validated: n.validated,
-        evidence_count: n.evidence,
-        status: n.status,
-        first_seen_at: n.firstSeenAt,
-        last_seen_at: n.lastSeenAt,
-        updated_at: nowIso,
-      }));
-      for (let i = 0; i < rows.length; i += 200) {
-        const { error } = await (supabase.from("skill_nodes") as any).upsert(
-          rows.slice(i, i + 200),
-          { onConflict: "org_id,slug" },
-        );
-        if (error) throw new Error(error.message);
-      }
+    const now = new Date();
+    for (const n of build.nodes) {
+      await db
+        .insert(skillNodes)
+        .values({
+          orgId,
+          slug: n.slug,
+          name: n.name,
+          category: n.category,
+          aliases: n.aliases,
+          supply: n.supply,
+          demand: n.demand,
+          validated: n.validated,
+          evidenceCount: n.evidence,
+          status: n.status,
+          firstSeenAt: new Date(n.firstSeenAt),
+          lastSeenAt: new Date(n.lastSeenAt),
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: [skillNodes.orgId, skillNodes.slug],
+          set: {
+            name: n.name,
+            category: n.category,
+            aliases: n.aliases,
+            supply: n.supply,
+            demand: n.demand,
+            validated: n.validated,
+            evidenceCount: n.evidence,
+            status: n.status,
+            lastSeenAt: new Date(n.lastSeenAt),
+            updatedAt: now,
+          },
+        });
     }
 
     // Retire nodes that lost all live evidence — this is how the graph shrinks.
@@ -310,40 +354,34 @@ export const rebuildTalentBrain = createServerFn({ method: "POST" })
       .filter((p: { slug: string }) => !liveSlugs.has(p.slug))
       .map((p: { slug: string }) => p.slug);
     if (gone.length) {
-      await (supabase.from("skill_nodes") as any)
-        .delete()
-        .eq("org_id", orgId)
-        .in("slug", gone.slice(0, 500));
-      await (supabase.from("skill_edges") as any)
-        .delete()
-        .eq("org_id", orgId)
-        .in("from_slug", gone.slice(0, 500));
+      await db
+        .delete(skillNodes)
+        .where(and(eq(skillNodes.orgId, orgId), inArray(skillNodes.slug, gone.slice(0, 500))));
+      await db
+        .delete(skillEdges)
+        .where(and(eq(skillEdges.orgId, orgId), inArray(skillEdges.fromSlug, gone.slice(0, 500))));
     }
 
     // Replace edges for this organisation.
-    await (supabase.from("skill_edges") as any).delete().eq("org_id", orgId);
+    await db.delete(skillEdges).where(eq(skillEdges.orgId, orgId));
     if (build.edges.length) {
-      const edgeRows = build.edges.map((e) => ({
-        org_id: orgId,
-        from_slug: e.from,
-        to_slug: e.to,
-        kind: "cooccurs",
-        weight: e.weight,
-        evidence_count: e.count,
-        updated_at: nowIso,
-      }));
-      for (let i = 0; i < edgeRows.length; i += 200) {
-        const { error } = await (supabase.from("skill_edges") as any).insert(
-          edgeRows.slice(i, i + 200),
-        );
-        if (error) throw new Error(error.message);
-      }
+      await db.insert(skillEdges).values(
+        build.edges.map((e) => ({
+          orgId,
+          fromSlug: e.from,
+          toSlug: e.to,
+          kind: "cooccurs",
+          weight: String(e.weight),
+          evidenceCount: e.count,
+          updatedAt: now,
+        })),
+      );
     }
 
-    await (supabase.from("ontology_snapshots") as any).insert({
-      org_id: orgId,
-      node_count: build.stats.nodeCount,
-      edge_count: build.stats.edgeCount,
+    await db.insert(ontologySnapshots).values({
+      orgId,
+      nodeCount: build.stats.nodeCount,
+      edgeCount: build.stats.edgeCount,
       added: build.diff.added.slice(0, 200),
       grown: build.diff.grown.slice(0, 200),
       dormant: build.diff.dormant.slice(0, 200),
@@ -352,10 +390,11 @@ export const rebuildTalentBrain = createServerFn({ method: "POST" })
       model: engine,
     });
 
-    const { data: snaps } = await (supabase.from("ontology_snapshots") as any)
-      .select("*")
-      .eq("org_id", orgId)
-      .order("created_at", { ascending: false })
+    const snaps = await db
+      .select()
+      .from(ontologySnapshots)
+      .where(eq(ontologySnapshots.orgId, orgId))
+      .orderBy(desc(ontologySnapshots.createdAt))
       .limit(12);
 
     return {
@@ -363,8 +402,8 @@ export const rebuildTalentBrain = createServerFn({ method: "POST" })
       diff: { ...build.diff, retired: [...new Set([...build.diff.retired, ...gone])] },
       scope: "org",
       orgName: access.orgName,
-      builtAt: nowIso,
-      history: history(snaps ?? []),
+      builtAt: now.toISOString(),
+      history: history(snaps),
       narrative,
       engine,
     };

@@ -2,7 +2,22 @@
  * Background scoring: every application that arrived on its own (apply link,
  * careers mailbox, LinkedIn) is scored against its requisition's JD without
  * anyone pressing anything, so HR opens the pipeline and already sees ranks.
+ *
+ * AI-driven stage transitions are journaled in stage_events with actor "ai"
+ * so the pipeline history stays complete and auditable.
  */
+import { and, desc, eq, inArray } from "drizzle-orm";
+
+import { db } from "../server/db";
+import {
+  applications,
+  candidates,
+  jobDescriptions,
+  matchScores,
+  requisitions,
+  socialProfiles,
+  stageEvents,
+} from "@db/schema";
 import { DEFAULT_WEIGHTS, harvestProfileLinks, scoreCandidate } from "./matching.server";
 
 export type AutoScoreOutcome = {
@@ -13,33 +28,42 @@ export type AutoScoreOutcome = {
   detail: string;
 };
 
+const AUTO_STAGE_ACTOR = "ai";
+const AUTO_STAGES = ["applied", "sourced"] as const;
+
 export async function scoreUnscored(opts: {
   orgId: string;
   requisitionId?: string | null;
   limit?: number;
 }): Promise<{ scored: number; errors: number; outcomes: AutoScoreOutcome[] }> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const limit = Math.min(opts.limit ?? 25, 50);
 
-  let q = supabaseAdmin
-    .from("applications")
-    .select("id, stage, requisition_id, candidate_id")
-    .eq("org_id", opts.orgId)
-    .order("applied_at", { ascending: false })
+  const where = opts.requisitionId
+    ? and(eq(applications.orgId, opts.orgId), eq(applications.requisitionId, opts.requisitionId))
+    : eq(applications.orgId, opts.orgId);
+  const rows = await db
+    .select({
+      id: applications.id,
+      stage: applications.stage,
+      requisitionId: applications.requisitionId,
+      candidateId: applications.candidateId,
+    })
+    .from(applications)
+    .where(where)
+    .orderBy(desc(applications.appliedAt))
     .limit(200);
-  if (opts.requisitionId) q = q.eq("requisition_id", opts.requisitionId);
-  const { data: apps } = await q;
-  const rows = apps ?? [];
   if (!rows.length) return { scored: 0, errors: 0, outcomes: [] };
 
-  const { data: scored } = await supabaseAdmin
-    .from("match_scores")
-    .select("application_id")
-    .in(
-      "application_id",
-      rows.map((r) => r.id),
+  const scored = await db
+    .select({ applicationId: matchScores.applicationId })
+    .from(matchScores)
+    .where(
+      inArray(
+        matchScores.applicationId,
+        rows.map((r) => r.id),
+      ),
     );
-  const already = new Set((scored ?? []).map((s) => s.application_id));
+  const already = new Set(scored.map((s) => s.applicationId));
   const pending = rows.filter((r) => !already.has(r.id)).slice(0, limit);
   if (!pending.length) return { scored: 0, errors: 0, outcomes: [] };
 
@@ -50,119 +74,153 @@ export async function scoreUnscored(opts: {
     let label = "Candidate";
     let reqTitle = "requisition";
     try {
-      const [{ data: req }, { data: cand }] = await Promise.all([
-        supabaseAdmin.from("requisitions").select("*").eq("id", app.requisition_id).maybeSingle(),
-        supabaseAdmin.from("candidates").select("*").eq("id", app.candidate_id).maybeSingle(),
-      ]);
+      const [req] = await db
+        .select()
+        .from(requisitions)
+        .where(eq(requisitions.id, app.requisitionId))
+        .limit(1);
+      const [cand] = await db
+        .select()
+        .from(candidates)
+        .where(eq(candidates.id, app.candidateId))
+        .limit(1);
       if (!req || !cand) throw new Error("Requisition or candidate missing");
       reqTitle = req.title;
-      label = cand.full_name;
+      label = cand.fullName;
 
-      const { data: jd } = await supabaseAdmin
-        .from("job_descriptions")
-        .select("full_text, must_have, good_to_have, responsibilities, qualifications")
-        .eq("requisition_id", req.id)
-        .order("version", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const [jd] = await db
+        .select({
+          fullText: jobDescriptions.fullText,
+          mustHave: jobDescriptions.mustHave,
+          goodToHave: jobDescriptions.goodToHave,
+          responsibilities: jobDescriptions.responsibilities,
+          qualifications: jobDescriptions.qualifications,
+        })
+        .from(jobDescriptions)
+        .where(eq(jobDescriptions.requisitionId, req.id))
+        .orderBy(desc(jobDescriptions.version))
+        .limit(1);
 
-      const links = harvestProfileLinks(cand.resume_text);
+      const links = harvestProfileLinks(cand.resumeText);
       const result = await scoreCandidate({
         jd: {
           title: req.title,
-          mustHave: jd?.must_have?.length ? jd.must_have : req.must_have_skills,
-          goodToHave: jd?.good_to_have?.length ? jd.good_to_have : req.good_to_have_skills,
+          mustHave: jd?.mustHave?.length ? jd.mustHave : req.mustHaveSkills,
+          goodToHave: jd?.goodToHave?.length ? jd.goodToHave : req.goodToHaveSkills,
           responsibilities: jd?.responsibilities ?? req.responsibilities,
-          education: jd?.qualifications ?? req.education_requirement,
-          experienceMin: req.experience_min,
-          experienceMax: req.experience_max,
-          jdText: jd?.full_text ?? null,
+          education: jd?.qualifications ?? req.educationRequirement,
+          experienceMin: req.experienceMin,
+          experienceMax: req.experienceMax,
+          jdText: jd?.fullText ?? null,
           constraints: {
-            location: req.location,
-            ctcBandMin: req.ctc_band_min,
-            ctcBandMax: req.ctc_band_max,
-            maxNoticePeriodDays: req.max_notice_period_days,
-            workAuthorizationRequired: req.work_authorization_required,
-          } as never,
+            locations: req.location ? [req.location] : null,
+            ctcBandMin: req.ctcBandMin != null ? Number(req.ctcBandMin) : null,
+            ctcBandMax: req.ctcBandMax != null ? Number(req.ctcBandMax) : null,
+            maxNoticePeriodDays: req.maxNoticePeriodDays,
+            workAuthorizationRequired: req.workAuthorizationRequired,
+          },
         },
         candidate: {
-          name: cand.full_name,
+          name: cand.fullName,
           skills: cand.skills,
-          experienceYears: Number(cand.experience_years ?? 0),
+          experienceYears: Number(cand.experienceYears ?? 0),
           education: cand.education,
-          resumeText: cand.resume_text,
-          linkedinUrl: cand.linkedin_url ?? links.linkedinUrl,
-          githubUrl: cand.github_url ?? links.githubUrl,
-          websiteUrl: cand.website_url ?? links.websiteUrl,
-          xUrl: cand.x_url ?? links.xUrl,
-          noticePeriodDays: cand.notice_period_days,
-          currentCtc: cand.current_ctc ? Number(cand.current_ctc) : null,
-          expectedCtc: cand.expected_ctc ? Number(cand.expected_ctc) : null,
+          resumeText: cand.resumeText,
+          linkedinUrl: cand.linkedinUrl ?? links.linkedinUrl,
+          githubUrl: cand.githubUrl ?? links.githubUrl,
+          websiteUrl: cand.websiteUrl ?? links.websiteUrl,
+          xUrl: cand.xUrl ?? links.xUrl,
+          noticePeriodDays: cand.noticePeriodDays,
+          currentCtc: cand.currentCtc ? Number(cand.currentCtc) : null,
+          expectedCtc: cand.expectedCtc ? Number(cand.expectedCtc) : null,
           location: cand.location,
-          preferredLocations: cand.preferred_locations,
-          willingToRelocate: cand.willing_to_relocate,
-          workAuthorization: cand.work_authorization,
-        } as never,
+          preferredLocations: cand.preferredLocations,
+          willingToRelocate: cand.willingToRelocate,
+          workAuthorization: cand.workAuthorization,
+        },
         weights: {
-          skills: req.weight_skills ?? DEFAULT_WEIGHTS.skills,
-          experience: req.weight_experience ?? DEFAULT_WEIGHTS.experience,
-          career: req.weight_career ?? DEFAULT_WEIGHTS.career,
-          impact: req.weight_impact ?? DEFAULT_WEIGHTS.impact,
-          education: req.weight_education ?? DEFAULT_WEIGHTS.education,
-          social: req.weight_social ?? DEFAULT_WEIGHTS.social,
+          skills: req.weightSkills ?? DEFAULT_WEIGHTS.skills,
+          experience: req.weightExperience ?? DEFAULT_WEIGHTS.experience,
+          career: req.weightCareer ?? DEFAULT_WEIGHTS.career,
+          impact: req.weightImpact ?? DEFAULT_WEIGHTS.impact,
+          education: req.weightEducation ?? DEFAULT_WEIGHTS.education,
+          social: req.weightSocial ?? DEFAULT_WEIGHTS.social,
         },
         includeSocial: true,
+        orgId: opts.orgId,
       });
 
-      const { error } = await supabaseAdmin.from("match_scores").insert({
-        application_id: app.id,
-        org_id: opts.orgId,
-        skills_score: result.skills_score,
-        experience_score: result.experience_score,
-        career_score: result.career_score,
-        impact_score: result.impact_score,
-        innovation_score: result.innovation_score,
-        career_metrics: result.career.metrics as never,
-        career_flags: result.career.assessment.flags,
-        logistics_flags: [...(result.logistics?.flags ?? []), ...(result.logistics?.blockers ?? [])],
-        impact_highlights: result.impact.highlights,
-        innovation_signals: result.impact.innovation_signals,
-        education_score: result.education_score,
-        social_score: result.social_score,
-        overall_score: result.overall_score,
-        weights: result.weights as never,
-        matched_skills: result.matched_skills,
-        missing_skills: result.missing_skills,
+      await db.insert(matchScores).values({
+        applicationId: app.id,
+        orgId: opts.orgId,
+        skillsScore: result.skills_score,
+        experienceScore: result.experience_score,
+        careerScore: result.career_score,
+        impactScore: result.impact_score,
+        innovationScore: result.innovation_score,
+        careerMetrics: result.career.metrics,
+        careerFlags: result.career.assessment.flags,
+        logisticsFlags: [...(result.logistics?.flags ?? []), ...(result.logistics?.blockers ?? [])],
+        impactHighlights: result.impact.highlights,
+        innovationSignals: result.impact.innovation_signals,
+        educationScore: result.education_score,
+        socialScore: result.social_score,
+        overallScore: result.overall_score,
+        weights: result.weights,
+        matchedSkills: result.matched_skills,
+        missingSkills: result.missing_skills,
         rationale: result.rationale,
-        risk_flags: result.risk_flags,
+        riskFlags: result.risk_flags,
         recommendation: result.recommendation,
         model: result.model,
       });
-      if (error) throw new Error(error.message);
 
+      const now = new Date();
       for (const s of result.social.signals) {
-        await supabaseAdmin.from("social_profiles").upsert(
-          {
-            candidate_id: app.candidate_id,
-            org_id: opts.orgId,
+        await db
+          .insert(socialProfiles)
+          .values({
+            candidateId: app.candidateId,
+            orgId: opts.orgId,
             provider: s.provider,
-            profile_url: s.profile_url,
+            profileUrl: s.profile_url,
             handle: s.handle,
             score: s.score,
-            signals: s.signals as never,
+            signals: s.signals,
             rationale: s.rationale,
             status: s.status,
-            fetched_at: new Date().toISOString(),
-          },
-          { onConflict: "candidate_id,provider" },
-        );
+            fetchedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: [socialProfiles.candidateId, socialProfiles.provider],
+            set: {
+              orgId: opts.orgId,
+              profileUrl: s.profile_url,
+              handle: s.handle,
+              score: s.score,
+              signals: s.signals,
+              rationale: s.rationale,
+              status: s.status,
+              fetchedAt: now,
+            },
+          });
       }
 
-      if (app.stage === "applied" || app.stage === "sourced") {
-        await supabaseAdmin
-          .from("applications")
-          .update({ stage: result.overall_score >= 75 ? "shortlisted" : "ai_screened" })
-          .eq("id", app.id);
+      if ((AUTO_STAGES as readonly string[]).includes(app.stage)) {
+        const nextStage = result.overall_score >= 75 ? "shortlisted" : "ai_screened";
+        await db
+          .update(applications)
+          .set({ stage: nextStage, lastActivityAt: now })
+          .where(eq(applications.id, app.id));
+        // Journal the AI transition so the pipeline history stays complete.
+        await db.insert(stageEvents).values({
+          applicationId: app.id,
+          orgId: opts.orgId,
+          fromStage: app.stage,
+          toStage: nextStage,
+          actor: AUTO_STAGE_ACTOR,
+          reason: `Auto-${nextStage === "shortlisted" ? "shortlisted" : "screened"} by matching score ${result.overall_score}/100 (${result.model})`,
+        });
       }
 
       ok += 1;

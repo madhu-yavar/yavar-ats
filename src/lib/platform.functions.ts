@@ -1,6 +1,34 @@
+import { and, eq, ilike, inArray, sql } from "drizzle-orm";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import { db } from "../server/db";
+import { deletePrefix } from "../server/storage";
+import {
+  aiProviderCredentials,
+  aiSettings,
+  applications,
+  candidateAssessments,
+  candidateVerifications,
+  candidates,
+  captureEvents,
+  copilotMessages,
+  evaluations,
+  inboxMessages,
+  integrationCredentials,
+  interviews,
+  matchScores,
+  offers,
+  orgMembers,
+  organizations,
+  platformAdmins,
+  requisitions,
+  socialProfiles,
+  stageEvents,
+  userRoles,
+  users,
+} from "@db/schema";
+import { requirePlatformAdmin } from "./auth.middleware";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 /**
@@ -8,11 +36,6 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
  * `platform_admins` allowlist. The very first admin is claimed once, while the allowlist
  * is still empty, so the product owner can bootstrap without touching SQL.
  */
-
-async function admin() {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin;
-}
 
 export type PlatformOrg = {
   id: string;
@@ -45,118 +68,134 @@ export type PlatformState = {
   email: string | null;
 };
 
-function emailOf(claims: Record<string, unknown> | null | undefined) {
-  const email = (claims?.["email"] as string | undefined) ?? null;
-  return email ? email.toLowerCase() : null;
-}
-
-async function superEmailOrThrow(context: { userId: string; claims?: Record<string, unknown> | null }) {
-  const email = emailOf(context.claims);
-  if (!email) throw new Error("Your account has no email address.");
-  const db = await admin();
-  const { data } = await db.from("platform_admins").select("id, email").ilike("email", email).maybeSingle();
-  if (!data) throw new Error("Super-user access only.");
-  return email;
-}
-
 /** Is the signed-in user a platform super user, and can super access still be claimed? */
 export const platformState = createServerFn({ method: "GET" })
+  // A status probe must ANSWER, not throw: gating it behind requirePlatformAdmin
+  // turned "not a super user" into a thrown error that every normal user's
+  // session retried and re-fetched forever on the org gate.
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<PlatformState> => {
-    const email = emailOf(context.claims);
-    const db = await admin();
-    const { count } = await db.from("platform_admins").select("id", { count: "exact", head: true });
-    let isSuperUser = false;
-    if (email) {
-      const { data } = await db.from("platform_admins").select("id").ilike("email", email).maybeSingle();
-      isSuperUser = Boolean(data);
-    }
-    return { isSuperUser, claimable: (count ?? 0) === 0, email };
+    const email = (context.claims?.email as string | undefined)?.toLowerCase() ?? null;
+    if (!email) return { isSuperUser: false, claimable: false, email: null };
+    const [countRow] = await db.select({ n: sql<number>`count(*)::int` }).from(platformAdmins);
+    const [existing] = await db
+      .select({ id: platformAdmins.id })
+      .from(platformAdmins)
+      .where(ilike(platformAdmins.email, email))
+      .limit(1);
+    return {
+      isSuperUser: Boolean(existing),
+      claimable: (countRow?.n ?? 0) === 0,
+      email,
+    };
   });
 
 /** One-time bootstrap: the first signed-in user to claim it becomes the product owner. */
 export const claimSuperUser = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requirePlatformAdmin])
   .handler(async ({ context }) => {
-    const email = emailOf(context.claims);
-    if (!email) throw new Error("Your account has no email address.");
-    const db = await admin();
-    const { count } = await db.from("platform_admins").select("id", { count: "exact", head: true });
-    if ((count ?? 0) > 0) throw new Error("Super-user access has already been claimed.");
-    const { error } = await db
-      .from("platform_admins")
-      .insert({ email, user_id: context.userId, note: "Bootstrapped product owner", created_by: context.userId });
-    if (error) throw new Error(error.message);
+    const [countRow] = await db.select({ n: sql<number>`count(*)::int` }).from(platformAdmins);
+    if ((countRow?.n ?? 0) > 0) throw new Error("Super-user access has already been claimed.");
+    await db.insert(platformAdmins).values({
+      email: context.email,
+      userId: context.userId,
+      note: "Bootstrapped product owner",
+      createdBy: context.userId,
+    });
     return { ok: true };
   });
 
 export const listPlatformAdmins = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    await superEmailOrThrow(context);
-    const db = await admin();
-    const { data, error } = await db
-      .from("platform_admins")
-      .select("id, email, note, created_at")
-      .order("created_at");
-    if (error) throw new Error(error.message);
-    return (data ?? []).map((a) => ({ id: a.id, email: a.email, note: a.note, createdAt: a.created_at }));
+  .middleware([requirePlatformAdmin])
+  .handler(async () => {
+    const rows = await db
+      .select({
+        id: platformAdmins.id,
+        email: platformAdmins.email,
+        note: platformAdmins.note,
+        createdAt: platformAdmins.createdAt,
+      })
+      .from(platformAdmins)
+      .orderBy(platformAdmins.createdAt);
+    return rows.map((a) => ({
+      id: a.id,
+      email: a.email,
+      note: a.note,
+      createdAt: a.createdAt.toISOString(),
+    }));
   });
 
 export const addPlatformAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requirePlatformAdmin])
   .inputValidator((data: unknown) =>
     z.object({ email: z.string().email(), note: z.string().max(160).default("") }).parse(data),
   )
   .handler(async ({ data, context }) => {
-    await superEmailOrThrow(context);
-    const db = await admin();
-    const { error } = await db
-      .from("platform_admins")
-      .insert({ email: data.email.toLowerCase(), note: data.note.trim() || null, created_by: context.userId });
-    if (error) throw new Error(/duplicate|unique/i.test(error.message) ? "That email is already a super user." : error.message);
+    try {
+      await db.insert(platformAdmins).values({
+        email: data.email.toLowerCase(),
+        note: data.note.trim() || null,
+        createdBy: context.userId,
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      throw new Error(
+        /duplicate|unique/i.test(message) ? "That email is already a super user." : message,
+      );
+    }
     return { ok: true };
   });
 
 export const removePlatformAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requirePlatformAdmin])
   .inputValidator((data: unknown) => z.object({ id: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
-    const email = await superEmailOrThrow(context);
-    const db = await admin();
-    const { data: row } = await db.from("platform_admins").select("id, email").eq("id", data.id).maybeSingle();
+    const [row] = await db
+      .select({ id: platformAdmins.id, email: platformAdmins.email })
+      .from(platformAdmins)
+      .where(eq(platformAdmins.id, data.id))
+      .limit(1);
     if (!row) throw new Error("Super user not found.");
-    if (row.email.toLowerCase() === email) throw new Error("You cannot remove your own super-user access.");
-    const { error } = await db.from("platform_admins").delete().eq("id", data.id);
-    if (error) throw new Error(error.message);
+    if (row.email.toLowerCase() === context.email) {
+      throw new Error("You cannot remove your own super-user access.");
+    }
+    await db.delete(platformAdmins).where(eq(platformAdmins.id, data.id));
     return { ok: true };
   });
 
 /** Every registered organisation with its live usage statistics. */
 export const listAllOrganizations = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<PlatformOrg[]> => {
-    await superEmailOrThrow(context);
-    const db = await admin();
-
-    const [orgs, members, reqs, cands, apps, ivs, offers] = await Promise.all([
-      db.from("organizations").select("*").order("created_at", { ascending: false }),
-      db.from("org_members").select("org_id, status"),
-      db.from("requisitions").select("org_id, status"),
-      db.from("candidates").select("org_id"),
-      db.from("applications").select("org_id, stage, last_activity_at"),
-      db.from("interviews").select("org_id"),
-      db.from("offers").select("org_id, status"),
+  .middleware([requirePlatformAdmin])
+  .handler(async (): Promise<PlatformOrg[]> => {
+    const [orgs, members, reqs, cands, apps, ivs, ofrs] = await Promise.all([
+      db
+        .select()
+        .from(organizations)
+        .orderBy(sql`${organizations.createdAt} desc`),
+      db.select({ orgId: orgMembers.orgId }).from(orgMembers),
+      db.select({ orgId: requisitions.orgId, status: requisitions.status }).from(requisitions),
+      db.select({ orgId: candidates.orgId }).from(candidates),
+      db
+        .select({
+          orgId: applications.orgId,
+          stage: applications.stage,
+          lastActivityAt: applications.lastActivityAt,
+        })
+        .from(applications),
+      db.select({ orgId: interviews.orgId }).from(interviews),
+      db.select({ orgId: offers.orgId, status: offers.status }).from(offers),
     ]);
-    if (orgs.error) throw new Error(orgs.error.message);
 
-    const count = <T extends { org_id: string | null }>(rows: T[] | null, id: string, pred?: (r: T) => boolean) =>
-      (rows ?? []).filter((r) => r.org_id === id && (!pred || pred(r))).length;
+    const count = <T extends { orgId: string | null }>(
+      rows: T[],
+      id: string,
+      pred?: (r: T) => boolean,
+    ) => rows.filter((r) => r.orgId === id && (!pred || pred(r))).length;
 
-    return (orgs.data ?? []).map((o) => {
-      const orgApps = (apps.data ?? []).filter((a) => a.org_id === o.id);
+    return orgs.map((o) => {
+      const orgApps = apps.filter((a) => a.orgId === o.id);
       const last = orgApps
-        .map((a) => a.last_activity_at)
+        .map((a) => a.lastActivityAt)
         .filter(Boolean)
         .sort()
         .pop();
@@ -165,31 +204,30 @@ export const listAllOrganizations = createServerFn({ method: "GET" })
         name: o.name,
         slug: o.slug,
         industry: o.industry,
-        hqCity: o.hq_city,
-        hqCountry: o.hq_country,
+        hqCity: o.hqCity,
+        hqCountry: o.hqCountry,
         currency: o.currency,
-        status: (o as { status?: string }).status ?? "active",
-        createdAt: o.created_at,
-        archivedAt: (o as { archived_at?: string | null }).archived_at ?? null,
-        approvedAt: (o as { approved_at?: string | null }).approved_at ?? null,
-        rejectionReason: (o as { rejection_reason?: string | null }).rejection_reason ?? null,
-
-        members: count(members.data, o.id),
-        requisitions: count(reqs.data, o.id),
-        openRequisitions: count(reqs.data, o.id, (r) => r.status === "approved"),
-        candidates: count(cands.data, o.id),
+        status: o.status ?? "active",
+        createdAt: o.createdAt.toISOString(),
+        archivedAt: o.archivedAt ? o.archivedAt.toISOString() : null,
+        approvedAt: o.approvedAt ? o.approvedAt.toISOString() : null,
+        rejectionReason: o.rejectionReason,
+        members: count(members, o.id),
+        requisitions: count(reqs, o.id),
+        openRequisitions: count(reqs, o.id, (r) => r.status === "approved"),
+        candidates: count(cands, o.id),
         applications: orgApps.length,
-        interviews: count(ivs.data, o.id),
-        offers: count(offers.data, o.id),
+        interviews: count(ivs, o.id),
+        offers: count(ofrs, o.id),
         hires: orgApps.filter((a) => a.stage === "joined" || a.stage === "hired").length,
-        lastActivityAt: (last as string | undefined) ?? null,
+        lastActivityAt: last ? last.toISOString() : null,
       };
     });
   });
 
 /** Archive or restore a tenant. Archiving locks members out but keeps every record. */
 export const setOrganizationStatus = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requirePlatformAdmin])
   .inputValidator((data: unknown) =>
     z
       .object({
@@ -199,82 +237,67 @@ export const setOrganizationStatus = createServerFn({ method: "POST" })
       })
       .parse(data),
   )
-  .handler(async ({ data, context }) => {
-    await superEmailOrThrow(context);
-    const db = await admin();
-    const { error } = await db
-      .from("organizations")
-      .update({
+  .handler(async ({ data }) => {
+    await db
+      .update(organizations)
+      .set({
         status: data.status,
-        archived_at: data.status === "archived" ? new Date().toISOString() : null,
-        archived_reason: data.status === "archived" ? data.reason.trim() || null : null,
+        archivedAt: data.status === "archived" ? new Date() : null,
+        archivedReason: data.status === "archived" ? data.reason.trim() || null : null,
       })
-      .eq("id", data.orgId);
-    if (error) throw new Error(error.message);
+      .where(eq(organizations.id, data.orgId));
     return { ok: true };
   });
 
 /**
- * Permanently delete a tenant and every record inside it. Irreversible — the console
- * requires the exact organisation name to be typed before calling this.
+ * Permanently delete a tenant and every record inside it, including the CV
+ * vault folder. Irreversible — the console requires the exact organisation
+ * name to be typed before calling this.
  */
 export const deleteOrganizationAsSuperUser = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requirePlatformAdmin])
   .inputValidator((data: unknown) =>
     z.object({ orgId: z.string().uuid(), confirmName: z.string().min(1) }).parse(data),
   )
-  .handler(async ({ data, context }) => {
-    await superEmailOrThrow(context);
-    const db = await admin();
-
-    const { data: org } = await db.from("organizations").select("id, name").eq("id", data.orgId).maybeSingle();
+  .handler(async ({ data }) => {
+    const [org] = await db
+      .select({ id: organizations.id, name: organizations.name })
+      .from(organizations)
+      .where(eq(organizations.id, data.orgId))
+      .limit(1);
     if (!org) throw new Error("Organisation not found.");
-    if (org.name.trim().toLowerCase() !== data.confirmName.trim().toLowerCase())
+    if (org.name.trim().toLowerCase() !== data.confirmName.trim().toLowerCase()) {
       throw new Error("The typed organisation name does not match.");
-
-    // Children first: leaf tables, then their parents, so no foreign key is orphaned.
-    const ordered = [
-      "ai_interviews",
-      "evaluations",
-      "match_scores",
-      "offers",
-      "stage_events",
-      "interviews",
-      "applications",
-      "candidate_assessments",
-      "candidate_verifications",
-      "social_profiles",
-      "candidates",
-      "job_descriptions",
-      "requisitions",
-      "departments",
-      "master_items",
-      "integration_credentials",
-      "source_integrations",
-      "ai_provider_credentials",
-      "ai_settings",
-      "copilot_messages",
-      "user_roles",
-      "org_members",
-    ] as const;
+    }
 
     // Capture the sign-in identities before the membership rows disappear, otherwise the
     // accounts survive the tenant and can still authenticate into an empty shell.
-    const { data: memberRows } = await db
-      .from("org_members")
-      .select("user_id, email")
-      .eq("org_id", data.orgId);
+    const memberRows = await db
+      .select({ userId: orgMembers.userId })
+      .from(orgMembers)
+      .where(eq(orgMembers.orgId, data.orgId));
     const memberUserIds = Array.from(
-      new Set((memberRows ?? []).map((m) => m.user_id).filter((v): v is string => Boolean(v))),
+      new Set(memberRows.map((m) => m.userId).filter((v): v is string => Boolean(v))),
     );
 
-    for (const table of ordered) {
-      const { error } = await db.from(table).delete().eq("org_id", data.orgId);
-      if (error) throw new Error(`${table}: ${error.message}`);
-    }
+    await db.transaction(async (tx) => {
+      // Most tenant rows die with the org row through ON DELETE CASCADE. These
+      // are cleared explicitly so nothing can be left behind by a missed FK.
+      await tx.delete(captureEvents).where(eq(captureEvents.orgId, data.orgId));
+      await tx.delete(inboxMessages).where(eq(inboxMessages.orgId, data.orgId));
+      await tx.delete(copilotMessages).where(eq(copilotMessages.orgId, data.orgId));
+      await tx.delete(integrationCredentials).where(eq(integrationCredentials.orgId, data.orgId));
+      await tx.delete(aiProviderCredentials).where(eq(aiProviderCredentials.orgId, data.orgId));
+      await tx.delete(aiSettings).where(eq(aiSettings.orgId, data.orgId));
+      await tx.delete(userRoles).where(eq(userRoles.orgId, data.orgId));
+      await tx.delete(orgMembers).where(eq(orgMembers.orgId, data.orgId));
+      await tx.delete(organizations).where(eq(organizations.id, data.orgId));
+    });
 
-    const { error } = await db.from("organizations").delete().eq("id", data.orgId);
-    if (error) throw new Error(error.message);
+    // Candidate CV files live outside the database — remove the org's vault folder.
+    await deletePrefix(`${data.orgId}/`).catch((e) =>
+      console.error("vault cleanup failed for deleted org", data.orgId, e),
+    );
 
     const removedAccounts = await purgeOrphanAccounts(memberUserIds);
     return { ok: true, removedAccounts };
@@ -286,39 +309,40 @@ export const deleteOrganizationAsSuperUser = createServerFn({ method: "POST" })
  */
 async function purgeOrphanAccounts(userIds: string[]) {
   if (userIds.length === 0) return 0;
-  const db = await admin();
 
-  const { data: stillMembers } = await db
-    .from("org_members")
-    .select("user_id")
-    .in("user_id", userIds);
-  const keep = new Set((stillMembers ?? []).map((m) => m.user_id).filter(Boolean) as string[]);
+  const stillMembers = await db
+    .select({ userId: orgMembers.userId })
+    .from(orgMembers)
+    .where(inArray(orgMembers.userId, userIds));
+  const keep = new Set(stillMembers.map((m) => m.userId).filter(Boolean) as string[]);
 
   let removed = 0;
   for (const userId of userIds) {
     if (keep.has(userId)) continue;
-    const { data: authUser } = await db.auth.admin.getUserById(userId);
-    const email = authUser?.user?.email?.toLowerCase() ?? null;
+    const [authUser] = await db
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    const email = authUser?.email.toLowerCase() ?? null;
     if (email) {
-      const { data: isSuper } = await db
-        .from("platform_admins")
-        .select("id")
-        .ilike("email", email)
-        .maybeSingle();
+      const [isSuper] = await db
+        .select({ id: platformAdmins.id })
+        .from(platformAdmins)
+        .where(ilike(platformAdmins.email, email))
+        .limit(1);
       if (isSuper) continue; // never delete a product owner's own login
     }
-    await db.from("user_roles").delete().eq("user_id", userId);
-    const { error } = await db.auth.admin.deleteUser(userId);
-    if (!error) removed += 1;
+    await db.delete(userRoles).where(eq(userRoles.userId, userId));
+    await db.delete(users).where(eq(users.id, userId));
+    removed += 1;
   }
   return removed;
 }
 
-
-
 /** Super users can correct any tenant's profile fields. */
 export const updateOrganizationAsSuperUser = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requirePlatformAdmin])
   .inputValidator((data: unknown) =>
     z
       .object({
@@ -331,75 +355,78 @@ export const updateOrganizationAsSuperUser = createServerFn({ method: "POST" })
       })
       .parse(data),
   )
-  .handler(async ({ data, context }) => {
-    await superEmailOrThrow(context);
-    const db = await admin();
-    const { error } = await db
-      .from("organizations")
-      .update({
+  .handler(async ({ data }) => {
+    await db
+      .update(organizations)
+      .set({
         name: data.name.trim(),
         industry: data.industry.trim() || null,
-        hq_city: data.hqCity.trim() || null,
-        hq_country: data.hqCountry.trim() || null,
+        hqCity: data.hqCity.trim() || null,
+        hqCountry: data.hqCountry.trim() || null,
         currency: data.currency.trim() || "INR",
       })
-      .eq("id", data.orgId);
-    if (error) throw new Error(error.message);
+      .where(eq(organizations.id, data.orgId));
     return { ok: true };
   });
 
 /** Roster of one tenant, so a super user can fix or remove a user in any organisation. */
 export const listOrgUsersAsSuperUser = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requirePlatformAdmin])
   .inputValidator((data: unknown) => z.object({ orgId: z.string().uuid() }).parse(data))
-  .handler(async ({ data, context }) => {
-    await superEmailOrThrow(context);
-    const db = await admin();
-    const { data: rows, error } = await db
-      .from("org_members")
-      .select("id, email, full_name, title, status, is_owner, invited_role, joined_at")
-      .eq("org_id", data.orgId)
-      .order("created_at");
-    if (error) throw new Error(error.message);
-    return (rows ?? []).map((m) => ({
+  .handler(async ({ data }) => {
+    const rows = await db
+      .select({
+        id: orgMembers.id,
+        email: orgMembers.email,
+        fullName: orgMembers.fullName,
+        title: orgMembers.title,
+        status: orgMembers.status,
+        isOwner: orgMembers.isOwner,
+        invitedRole: orgMembers.invitedRole,
+        joinedAt: orgMembers.joinedAt,
+      })
+      .from(orgMembers)
+      .where(eq(orgMembers.orgId, data.orgId))
+      .orderBy(orgMembers.createdAt);
+    return rows.map((m) => ({
       id: m.id,
       email: m.email,
-      fullName: m.full_name,
+      fullName: m.fullName,
       title: m.title,
       status: m.status,
-      isOwner: m.is_owner,
-      joinedAt: m.joined_at,
+      isOwner: m.isOwner,
+      invitedRole: (m.invitedRole ?? null) as string | null,
+      joinedAt: m.joinedAt ? m.joinedAt.toISOString() : null,
     }));
   });
 
 /** Hard-delete a membership from any organisation (super user override, owners included). */
 export const deleteOrgUserAsSuperUser = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requirePlatformAdmin])
   .inputValidator((data: unknown) => z.object({ memberId: z.string().uuid() }).parse(data))
-  .handler(async ({ data, context }) => {
-    await superEmailOrThrow(context);
-    const db = await admin();
-    const { data: member } = await db
-      .from("org_members")
-      .select("id, org_id, user_id")
-      .eq("id", data.memberId)
-      .maybeSingle();
+  .handler(async ({ data }) => {
+    const [member] = await db
+      .select({ id: orgMembers.id, orgId: orgMembers.orgId, userId: orgMembers.userId })
+      .from(orgMembers)
+      .where(eq(orgMembers.id, data.memberId))
+      .limit(1);
     if (!member) throw new Error("Member not found.");
-    if (member.user_id)
-      await db.from("user_roles").delete().eq("user_id", member.user_id).eq("org_id", member.org_id);
-    const { error } = await db.from("org_members").delete().eq("id", member.id);
-    if (error) throw new Error(error.message);
-    const removedAccounts = member.user_id ? await purgeOrphanAccounts([member.user_id]) : 0;
+    if (member.userId) {
+      await db
+        .delete(userRoles)
+        .where(and(eq(userRoles.userId, member.userId), eq(userRoles.orgId, member.orgId)));
+    }
+    await db.delete(orgMembers).where(eq(orgMembers.id, member.id));
+    const removedAccounts = member.userId ? await purgeOrphanAccounts([member.userId]) : 0;
     return { ok: true, removedAccounts };
   });
-
 
 /**
  * Approve or reject a freshly registered tenant. Nothing inside a pending organisation
  * works until a super admin approves it, and only then can it invite internal users.
  */
 export const reviewOrganization = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requirePlatformAdmin])
   .inputValidator((data: unknown) =>
     z
       .object({
@@ -410,35 +437,36 @@ export const reviewOrganization = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
-    await superEmailOrThrow(context);
-    const db = await admin();
-    const now = new Date().toISOString();
+    const now = new Date();
     const patch =
       data.decision === "approve"
         ? {
             status: "active",
-            approved_at: now,
-            approved_by: context.userId,
-            rejected_at: null,
-            rejection_reason: null,
-            onboarding_step: "done",
-            onboarded_at: now,
+            approvedAt: now,
+            approvedBy: context.userId,
+            rejectedAt: null,
+            rejectionReason: null,
+            onboardingStep: "done",
+            onboardedAt: now,
           }
         : {
             status: "rejected",
-            rejected_at: now,
-            rejection_reason: data.reason.trim() || "Registration rejected by the platform team.",
-            approved_at: null,
+            rejectedAt: now,
+            rejectionReason: data.reason.trim() || "Registration rejected by the platform team.",
+            approvedAt: null,
           };
     // The acknowledgement goes out BEFORE access changes, so an owner is never activated
     // (or locked out) ahead of being told why. A mail failure must not block the decision.
-    const { data: org } = await db.from("organizations").select("name").eq("id", data.orgId).maybeSingle();
-    const { data: owner } = await db
-      .from("org_members")
-      .select("email, full_name")
-      .eq("org_id", data.orgId)
-      .eq("is_owner", true)
-      .maybeSingle();
+    const [org] = await db
+      .select({ name: organizations.name })
+      .from(organizations)
+      .where(eq(organizations.id, data.orgId))
+      .limit(1);
+    const [owner] = await db
+      .select({ email: orgMembers.email, fullName: orgMembers.fullName })
+      .from(orgMembers)
+      .where(and(eq(orgMembers.orgId, data.orgId), eq(orgMembers.isOwner, true)))
+      .limit(1);
 
     let emailed = false;
     let emailError: string | null = null;
@@ -451,22 +479,21 @@ export const reviewOrganization = createServerFn({ method: "POST" })
           {
             templateData: {
               orgName: org.name,
-              ownerName: owner.full_name ?? undefined,
-              ...(data.decision === "reject" ? { reason: patch.rejection_reason ?? undefined } : {}),
+              ownerName: owner.fullName ?? undefined,
+              ...(data.decision === "reject" ? { reason: patch.rejectionReason ?? undefined } : {}),
             },
-            idempotencyKey: `org-${data.decision}-${data.orgId}-${now}`,
+            idempotencyKey: `org-${data.decision}-${data.orgId}-${now.toISOString()}`,
           },
         );
         emailed = Boolean((res as { sent?: boolean } | undefined)?.sent ?? true);
       } catch (mailError) {
-        emailError = mailError instanceof Error ? mailError.message : "Acknowledgement email failed";
+        emailError =
+          mailError instanceof Error ? mailError.message : "Acknowledgement email failed";
         console.error("Organisation decision email failed", mailError);
       }
     }
 
-    const { error } = await db.from("organizations").update(patch).eq("id", data.orgId);
-    if (error) throw new Error(error.message);
+    await db.update(organizations).set(patch).where(eq(organizations.id, data.orgId));
 
-    return { ok: true, emailed, emailError, notifiedAt: emailed ? now : null };
+    return { ok: true, emailed, emailError, notifiedAt: emailed ? now.toISOString() : null };
   });
-

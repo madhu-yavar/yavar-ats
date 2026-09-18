@@ -1,8 +1,12 @@
+import { eq } from "drizzle-orm";
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
-const Provider = z.enum(["lovable", "openai", "anthropic", "gemini"]);
+import { db } from "../server/db";
+import { aiSettings } from "@db/schema";
+import { requireOrg } from "./auth.middleware";
+
+const Provider = z.enum(["openai", "anthropic", "google"]);
 
 const SaveInput = z.object({
   provider: Provider,
@@ -13,62 +17,62 @@ const SaveInput = z.object({
 
 /** Current model setting plus which bring-your-own keys are stored. */
 export const getAiSettings = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .handler(async ({ context }) => {
     const { DEFAULT_MODEL, hasProviderKey } = await import("./ai-gateway.server");
-    const { data } = await context.supabase
-      .from("ai_settings")
-      .select("provider, model, last_test_status, last_test_message, last_tested_at")
-      .limit(1)
-      .maybeSingle();
+    const [data] = await db
+      .select({
+        provider: aiSettings.provider,
+        model: aiSettings.model,
+        lastTestStatus: aiSettings.lastTestStatus,
+        lastTestMessage: aiSettings.lastTestMessage,
+        lastTestedAt: aiSettings.lastTestedAt,
+      })
+      .from(aiSettings)
+      .where(eq(aiSettings.orgId, context.orgId))
+      .limit(1);
 
     return {
-      provider: (data?.provider ?? "lovable") as z.infer<typeof Provider>,
-      model: data?.model ?? DEFAULT_MODEL.lovable,
-      last_test_status: data?.last_test_status ?? "untested",
-      last_test_message: data?.last_test_message ?? null,
-      last_tested_at: data?.last_tested_at ?? null,
+      provider: (data?.provider ?? "openai") as z.infer<typeof Provider>,
+      model: data?.model ?? DEFAULT_MODEL.openai,
+      last_test_status: data?.lastTestStatus ?? "untested",
+      last_test_message: data?.lastTestMessage ?? null,
+      last_tested_at: data?.lastTestedAt ? data.lastTestedAt.toISOString() : null,
       keys: {
-        openai: await hasProviderKey("openai"),
-        anthropic: await hasProviderKey("anthropic"),
-        gemini: await hasProviderKey("gemini"),
+        openai: await hasProviderKey(context.orgId, "openai"),
+        anthropic: await hasProviderKey(context.orgId, "anthropic"),
+        google: await hasProviderKey(context.orgId, "google"),
       },
     };
   });
 
 export const saveAiSettings = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => SaveInput.parse(data))
   .handler(async ({ data, context }) => {
     const { writeProviderKey } = await import("./ai-gateway.server");
-    if (data.provider !== "lovable" && data.apiKey.trim()) {
-      await writeProviderKey(data.provider, data.apiKey);
+    if (data.apiKey.trim()) await writeProviderKey(context.orgId, data.provider, data.apiKey);
+
+    const [existing] = await db
+      .select({ id: aiSettings.id })
+      .from(aiSettings)
+      .where(eq(aiSettings.orgId, context.orgId))
+      .limit(1);
+    const payload = { provider: data.provider, model: data.model.trim(), updatedAt: new Date() };
+    if (existing) {
+      await db.update(aiSettings).set(payload).where(eq(aiSettings.id, existing.id));
+    } else {
+      await db.insert(aiSettings).values({ ...payload, orgId: context.orgId, singleton: true });
     }
-
-    const { data: existing } = await context.supabase
-      .from("ai_settings")
-      .select("id")
-      .limit(1)
-      .maybeSingle();
-    const payload = {
-      provider: data.provider,
-      model: data.model.trim(),
-      updated_at: new Date().toISOString(),
-    };
-
-    const { error } = existing
-      ? await context.supabase.from("ai_settings").update(payload).eq("id", existing.id)
-      : await context.supabase.from("ai_settings").insert({ ...payload, singleton: true });
-    if (error) throw new Error(error.message);
     return { ok: true };
   });
 
 export const removeAiKey = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => z.object({ provider: Provider }).parse(data))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const { clearProviderKey } = await import("./ai-gateway.server");
-    if (data.provider !== "lovable") await clearProviderKey(data.provider);
+    await clearProviderKey(context.orgId, data.provider);
     return { ok: true };
   });
 
@@ -83,23 +87,17 @@ const TestInput = z
 
 /** Fire a tiny real completion at the chosen (or saved) provider/model and record the outcome. */
 export const testAiModel = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => TestInput.parse(data))
-  .handler(async ({ data, context }) => {
-    const { aiJson, resolveAiConfig, DEFAULT_MODEL, readProviderKey } =
-      await import("./ai-gateway.server");
-
-    let cfg = await resolveAiConfig();
-    // When the page passes a provider, test exactly that — never silently fall
-    // back to the built-in gateway (which is what caused "needs AI credits"
-    // while the user's own key was selected).
-    if (data?.provider) {
-      const provider = data.provider;
+  .handler(async ({ context, data }) => {
+    const { aiJson, resolveAiConfig, readProviderKey, DEFAULT_MODEL } = await import(
+      "./ai-gateway.server"
+    );
+    let cfg = await resolveAiConfig(context.orgId);
+    if (data && (data.provider || data.model || data.apiKey !== undefined)) {
+      const provider = data.provider ?? cfg.provider;
       const model = data.model?.trim() || DEFAULT_MODEL[provider];
-      const apiKey =
-        provider === "lovable"
-          ? (process.env["LOVABLE_API_KEY"] ?? null)
-          : data.apiKey?.trim() || (await readProviderKey(provider));
+      const apiKey = data.apiKey?.trim() || (await readProviderKey(context.orgId, provider));
       cfg = { provider, model, apiKey };
     }
     const started = Date.now();
@@ -117,21 +115,25 @@ export const testAiModel = createServerFn({ method: "POST" })
       : { status: "failed", message: res.message };
 
     const stamp = {
-      last_test_status: outcome.status,
-      last_test_message: outcome.message,
-      last_tested_at: new Date().toISOString(),
+      lastTestStatus: outcome.status,
+      lastTestMessage: outcome.message,
+      lastTestedAt: new Date(),
     };
-    const { data: existing } = await context.supabase
-      .from("ai_settings")
-      .select("id")
-      .limit(1)
-      .maybeSingle();
+    const [existing] = await db
+      .select({ id: aiSettings.id })
+      .from(aiSettings)
+      .where(eq(aiSettings.orgId, context.orgId))
+      .limit(1);
     if (existing) {
-      await context.supabase.from("ai_settings").update(stamp).eq("id", existing.id);
+      await db.update(aiSettings).set(stamp).where(eq(aiSettings.id, existing.id));
     } else {
-      await context.supabase
-        .from("ai_settings")
-        .insert({ singleton: true, provider: cfg.provider, model: cfg.model, ...stamp });
+      await db.insert(aiSettings).values({
+        orgId: context.orgId,
+        singleton: true,
+        provider: cfg.provider,
+        model: cfg.model,
+        ...stamp,
+      });
     }
     return outcome;
   });

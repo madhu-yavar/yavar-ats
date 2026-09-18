@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -231,6 +232,14 @@ function Team() {
 
   return (
     <>
+      <div className="panel mb-4 flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
+        <span className="text-muted-foreground">
+          Finish setting up your organisation — profile, currency and careers inbox.
+        </span>
+        <Button asChild size="sm" variant="outline">
+          <Link to="/organisation">Open organisation</Link>
+        </Button>
+      </div>
       <PageHeader
         eyebrow="Administration"
         title="Users, roles & access control"

@@ -3,8 +3,13 @@
  * automatic careers-inbox import: parse a CV, upsert the talent-pool record by
  * email, and raise the application against a requisition.
  */
-import { aiJson } from "./ai-gateway.server";
+import { and, eq, isNull } from "drizzle-orm";
 import { createHash } from "crypto";
+
+import { db } from "../server/db";
+import { contentTypeFor, putObject, resumeObjectPath, safeFileName } from "../server/storage";
+import { applications, candidates } from "@db/schema";
+import { aiJson } from "./ai-gateway.server";
 
 export type ParsedCv = {
   full_name: string | null;
@@ -29,7 +34,10 @@ export type ParsedCv = {
     | null;
 };
 
-export async function parseCv(resumeText: string): Promise<ParsedCv | null> {
+export async function parseCv(
+  resumeText: string,
+  orgId?: string | null | undefined,
+): Promise<ParsedCv | null> {
   const parsed = await aiJson<ParsedCv>({
     system:
       "Extract structured candidate data from a resume. Return ONLY JSON with keys: full_name, email, phone, " +
@@ -37,6 +45,7 @@ export async function parseCv(resumeText: string): Promise<ParsedCv | null> {
       "current_employer, employment_history (array of {company, title, start, end, level_hint}, newest first). " +
       "Use null when a field is genuinely absent. Never invent values.",
     prompt: resumeText.slice(0, 20000),
+    orgId,
   });
   return parsed.ok ? parsed.data : null;
 }
@@ -78,58 +87,17 @@ export async function storeResumeFile(input: {
     };
   }
   try {
-    const safeName = input.filename.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "resume.pdf";
-    const path = `${input.orgId}/${input.candidateId}/${safeName}`;
-    const contentType = /\.pdf$/i.test(safeName)
-      ? "application/pdf"
-      : /\.docx$/i.test(safeName)
-        ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        : /\.doc$/i.test(safeName)
-          ? "application/msword"
-          : "text/plain";
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const failures: string[] = [];
+    const path = resumeObjectPath(input.orgId, input.candidateId, input.filename);
+    await putObject(
+      path,
+      Uint8Array.from(input.bytes),
+      contentTypeFor(safeFileName(input.filename)),
+    );
 
-    // 1. The generated admin client is the most reliable path on the server runtime.
-    const { error: clientError } = await supabaseAdmin.storage
-      .from("resumes")
-      .upload(path, Uint8Array.from(input.bytes), { contentType, upsert: true });
-    let uploaded = !clientError;
-    if (clientError) failures.push(`client: ${clientError.message}`);
-
-    // 2. Fall back to a plain authenticated upload against the storage API.
-    if (!uploaded) {
-      const baseUrl = process.env["SUPABASE_URL"];
-      const serviceKey = process.env["SUPABASE_SERVICE_ROLE_KEY"];
-      if (!baseUrl || !serviceKey) {
-        failures.push("direct: vault credentials unavailable");
-      } else {
-        const headers: Record<string, string> = {
-          apikey: serviceKey,
-          "content-type": contentType,
-          "x-upsert": "true",
-        };
-        if (!serviceKey.startsWith("sb_secret_")) headers["authorization"] = `Bearer ${serviceKey}`;
-        const response = await fetch(
-          `${baseUrl}/storage/v1/object/resumes/${path.split("/").map(encodeURIComponent).join("/")}`,
-          {
-            method: "POST",
-            headers,
-            body: new Blob([Uint8Array.from(input.bytes)], { type: contentType }),
-          },
-        );
-        if (response.ok) uploaded = true;
-        else failures.push(`direct [${response.status}]: ${(await response.text()).slice(0, 300)}`);
-      }
-    }
-
-    if (!uploaded) throw new Error(`vault upload failed — ${failures.join("; ")}`);
-
-    const { error: updateError } = await supabaseAdmin
-      .from("candidates")
-      .update({ resume_file_path: path } as never)
-      .eq("id", input.candidateId);
-    if (updateError) throw new Error(`CV saved but candidate link failed: ${updateError.message}`);
+    await db
+      .update(candidates)
+      .set({ resumeFilePath: path })
+      .where(eq(candidates.id, input.candidateId));
     return { path, error: null };
   } catch (e) {
     const error = e instanceof Error ? e.message : "unknown vault error";
@@ -159,8 +127,7 @@ export async function ingestCandidate(input: {
   /** LinkedIn evidence retained before its original CV becomes available. */
   profileOnly?: boolean;
 }): Promise<IngestResult> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const p = input.parsed ?? (await parseCv(input.resumeText));
+  const p = input.parsed ?? (await parseCv(input.resumeText, input.orgId));
 
   const normalizedName = (value: string | null | undefined) =>
     (value ?? "")
@@ -203,106 +170,109 @@ export async function ingestCandidate(input: {
   }
 
   const row = {
-    full_name: readName,
+    fullName: readName,
     email,
-
     phone: (input.phone ?? p?.phone) || null,
     location: p?.location || null,
-    experience_years: Number(p?.experience_years ?? 0) || 0,
+    experienceYears: String(Number(p?.experience_years ?? 0) || 0),
     education: p?.education || null,
     skills: p?.skills ?? [],
-    linkedin_url:
+    linkedinUrl:
       p?.linkedin_url ||
       (/linkedin\.com\/(?:talent\/|in\/)/i.test(input.profileUrl ?? "") ? input.profileUrl : null),
-    github_url: p?.github_url || null,
-    website_url: p?.website_url || null,
-    current_employer: p?.current_employer || p?.employment_history?.[0]?.company || null,
-    employment_history: p?.employment_history ?? [],
+    githubUrl: p?.github_url || null,
+    websiteUrl: p?.website_url || null,
+    currentEmployer: p?.current_employer || p?.employment_history?.[0]?.company || null,
+    employmentHistory: p?.employment_history ?? [],
     source: input.source,
-    resume_text: input.resumeText,
-    org_id: input.orgId,
-    last_synced_at: new Date().toISOString(),
+    resumeText: input.resumeText,
+    orgId: input.orgId,
+    lastSyncedAt: new Date(),
   };
 
-  const profileUrl = row.linkedin_url;
-  let existing: { id: string; skills: string[] | null } | null = null;
-  if (profileUrl) {
-    let profileQuery = supabaseAdmin
-      .from("candidates")
-      .select("id, skills")
-      .eq("linkedin_url", profileUrl);
-    profileQuery = input.orgId
-      ? profileQuery.eq("org_id", input.orgId)
-      : profileQuery.is("org_id", null);
-    const { data } = await profileQuery.maybeSingle();
-    existing = data;
-  }
-  if (!existing) {
-    let emailQuery = supabaseAdmin.from("candidates").select("id, skills").eq("email", email);
-    emailQuery = input.orgId ? emailQuery.eq("org_id", input.orgId) : emailQuery.is("org_id", null);
-    const { data } = await emailQuery.maybeSingle();
-    existing = data;
-  }
+  // Dedupe strictly inside the target organisation (or the unassigned pool when
+  // no org is known), matching how the record will later be read.
+  const orgScope = input.orgId ? eq(candidates.orgId, input.orgId) : isNull(candidates.orgId);
 
-  let candidateId: string;
-  if (existing) {
-    const skills = new Set(
-      [...(existing.skills ?? []), ...row.skills].map((s) => s.trim()).filter(Boolean),
-    );
-    const updateRow = input.profileOnly
-      ? Object.fromEntries(
-          Object.entries(row).filter(
-            ([key, value]) =>
-              key !== "email" &&
-              value !== null &&
-              value !== "" &&
-              (!Array.isArray(value) || value.length > 0) &&
-              (key !== "experience_years" || value !== 0),
-          ),
-        )
-      : row;
-    const { error } = await supabaseAdmin
-      .from("candidates")
-      .update({ ...updateRow, skills: [...skills] } as never)
-      .eq("id", existing.id);
-    if (error) throw new Error(error.message);
-    candidateId = existing.id;
-  } else {
-    const { data: created, error } = await supabaseAdmin
-      .from("candidates")
-      .insert(row as never)
-      .select("id")
-      .single();
-    if (error || !created) throw new Error(error?.message ?? "Could not save the candidate.");
-    candidateId = created.id;
-  }
+  const result = await db.transaction(
+    async (tx): Promise<{ candidateId: string; alreadyApplied: boolean; merged: boolean }> => {
+      let existing: { id: string; skills: string[] | null } | undefined;
+      if (row.linkedinUrl) {
+        [existing] = await tx
+          .select({ id: candidates.id, skills: candidates.skills })
+          .from(candidates)
+          .where(and(orgScope, eq(candidates.linkedinUrl, row.linkedinUrl)))
+          .limit(1);
+      }
+      if (!existing) {
+        [existing] = await tx
+          .select({ id: candidates.id, skills: candidates.skills })
+          .from(candidates)
+          .where(and(orgScope, eq(candidates.email, email)))
+          .limit(1);
+      }
 
-  let alreadyApplied = false;
-  if (input.requisitionId) {
-    const { data: app } = await supabaseAdmin
-      .from("applications")
-      .select("id")
-      .eq("candidate_id", candidateId)
-      .eq("requisition_id", input.requisitionId)
-      .maybeSingle();
-    alreadyApplied = Boolean(app);
-    if (!app) {
-      const { error } = await supabaseAdmin.from("applications").insert({
-        candidate_id: candidateId,
-        requisition_id: input.requisitionId,
-        source: input.source,
-        org_id: input.orgId,
-      } as never);
-      if (error) throw new Error(error.message);
-    }
-  }
+      let candidateId: string;
+      if (existing) {
+        const skills = new Set(
+          [...(existing.skills ?? []), ...row.skills].map((s) => s.trim()).filter(Boolean),
+        );
+        const updateRow = input.profileOnly
+          ? Object.fromEntries(
+              Object.entries(row).filter(
+                ([key, value]) =>
+                  key !== "email" &&
+                  value !== null &&
+                  value !== "" &&
+                  (!Array.isArray(value) || value.length > 0) &&
+                  (key !== "experienceYears" || value !== "0"),
+              ),
+            )
+          : row;
+        await tx
+          .update(candidates)
+          .set({ ...updateRow, skills: [...skills] })
+          .where(eq(candidates.id, existing.id));
+        candidateId = existing.id;
+      } else {
+        const [created] = await tx.insert(candidates).values(row).returning({ id: candidates.id });
+        if (!created) throw new Error("Could not save the candidate.");
+        candidateId = created.id;
+      }
+
+      let alreadyApplied = false;
+      if (input.requisitionId) {
+        const [app] = await tx
+          .select({ id: applications.id })
+          .from(applications)
+          .where(
+            and(
+              eq(applications.candidateId, candidateId),
+              eq(applications.requisitionId, input.requisitionId),
+            ),
+          )
+          .limit(1);
+        alreadyApplied = Boolean(app);
+        if (!app) {
+          await tx.insert(applications).values({
+            candidateId,
+            requisitionId: input.requisitionId,
+            source: input.source,
+            orgId: input.orgId,
+          });
+        }
+      }
+
+      return { candidateId, alreadyApplied, merged: Boolean(existing) };
+    },
+  );
 
   let resumeStored = false;
   let resumeError: string | null = null;
   if (input.resumeFile?.bytes?.length) {
     const stored = await storeResumeFile({
       orgId: input.orgId,
-      candidateId,
+      candidateId: result.candidateId,
       filename: input.resumeFile.filename,
       bytes: input.resumeFile.bytes,
     });
@@ -311,17 +281,17 @@ export async function ingestCandidate(input: {
   }
 
   return {
-    candidateId,
-    name: row.full_name,
+    candidateId: result.candidateId,
+    name: row.fullName,
     email,
-    alreadyApplied,
-    merged: Boolean(existing),
+    alreadyApplied: result.alreadyApplied,
+    merged: result.merged,
     emailMissing,
     resumeStored,
     resumeError,
     skills: row.skills,
-    linkedinUrl: row.linkedin_url ?? null,
-    githubUrl: row.github_url,
-    websiteUrl: row.website_url,
+    linkedinUrl: row.linkedinUrl ?? null,
+    githubUrl: row.githubUrl,
+    websiteUrl: row.websiteUrl,
   };
 }

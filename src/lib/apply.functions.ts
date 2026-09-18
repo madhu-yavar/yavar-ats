@@ -8,11 +8,17 @@
  *
  * These functions are intentionally unauthenticated (public applicants), so
  * every handler is narrow: read-only job summary for approved requisitions,
- * and a write path that only ever creates/updates a candidate + application.
+ * and a write path that only ever creates a candidate + application scoped to
+ * the requisition's organisation. An existing candidate record is never
+ * modified from this unauthenticated path — a repeat application simply
+ * attaches to the requisition.
  */
+import { and, eq } from "drizzle-orm";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import { db } from "../server/db";
+import { applications, candidates, organizations, requisitions } from "@db/schema";
 import { aiJson } from "./ai-gateway.server";
 
 const IdInput = z.object({ requisitionId: z.string().uuid() });
@@ -35,23 +41,32 @@ export type PublicJob = {
 export const publicJob = createServerFn({ method: "GET" })
   .inputValidator((data: unknown) => IdInput.parse(data))
   .handler(async ({ data }): Promise<PublicJob | null> => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: r } = await supabaseAdmin
-      .from("requisitions")
-      .select(
-        "id, title, location, openings, experience_min, experience_max, must_have_skills, good_to_have_skills, responsibilities, status, org_id",
-      )
-      .eq("id", data.requisitionId)
-      .maybeSingle();
+    const [r] = await db
+      .select({
+        id: requisitions.id,
+        title: requisitions.title,
+        location: requisitions.location,
+        openings: requisitions.openings,
+        experienceMin: requisitions.experienceMin,
+        experienceMax: requisitions.experienceMax,
+        mustHaveSkills: requisitions.mustHaveSkills,
+        goodToHaveSkills: requisitions.goodToHaveSkills,
+        responsibilities: requisitions.responsibilities,
+        status: requisitions.status,
+        orgId: requisitions.orgId,
+      })
+      .from(requisitions)
+      .where(eq(requisitions.id, data.requisitionId))
+      .limit(1);
     if (!r) return null;
 
     let company: string | null = null;
-    if (r.org_id) {
-      const { data: org } = await supabaseAdmin
-        .from("organizations")
-        .select("name")
-        .eq("id", r.org_id)
-        .maybeSingle();
+    if (r.orgId) {
+      const [org] = await db
+        .select({ name: organizations.name })
+        .from(organizations)
+        .where(eq(organizations.id, r.orgId))
+        .limit(1);
       company = org?.name ?? null;
     }
 
@@ -60,10 +75,10 @@ export const publicJob = createServerFn({ method: "GET" })
       title: r.title,
       location: r.location,
       openings: r.openings,
-      experienceMin: r.experience_min,
-      experienceMax: r.experience_max,
-      mustHave: r.must_have_skills ?? [],
-      goodToHave: r.good_to_have_skills ?? [],
+      experienceMin: r.experienceMin,
+      experienceMax: r.experienceMax,
+      mustHave: r.mustHaveSkills ?? [],
+      goodToHave: r.goodToHaveSkills ?? [],
       responsibilities: r.responsibilities,
       company,
       open: r.status === "approved",
@@ -81,21 +96,26 @@ const SubmitInput = z.object({
 });
 
 /**
- * Parse an applicant's CV and file it against the requisition. Re-applying with
- * the same email enriches the existing talent-pool record instead of creating a
- * second one.
+ * Parse an applicant's CV and file it against the requisition. Scoping is
+ * strictly per-organisation: the talent-pool match and the application both
+ * live inside the requisition's org, and an existing record is never rewritten
+ * by this unauthenticated endpoint.
  */
 export const submitApplication = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => SubmitInput.parse(data))
-  .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  .handler(async ({ data }) => submitApplicationImpl(data));
 
-    const { data: r } = await supabaseAdmin
-      .from("requisitions")
-      .select("id, status, org_id")
-      .eq("id", data.requisitionId)
-      .maybeSingle();
-    if (!r) throw new Error("This job link is no longer valid.");
+/** Handler body, exported for integration tests of the C2 overwrite-protection fix. */
+export async function submitApplicationImpl(
+  data: z.infer<typeof SubmitInput>,
+): Promise<{ ok: true; alreadyApplied: boolean; merged: boolean; name: string }> {
+  {
+    const [r] = await db
+      .select({ id: requisitions.id, status: requisitions.status, orgId: requisitions.orgId })
+      .from(requisitions)
+      .where(eq(requisitions.id, data.requisitionId))
+      .limit(1);
+    if (!r || !r.orgId) throw new Error("This job link is no longer valid.");
     if (r.status !== "approved") throw new Error("This role is no longer accepting applications.");
 
     const parsed = await aiJson<{
@@ -115,6 +135,7 @@ export const submitApplication = createServerFn({ method: "POST" })
         "location, experience_years (number), education, skills (string array), linkedin_url, github_url, website_url. " +
         "Use null when a field is genuinely absent. Never invent values.",
       prompt: data.resumeText.slice(0, 20000),
+      orgId: r.orgId,
     });
 
     const p = parsed.ok ? parsed.data : null;
@@ -122,77 +143,63 @@ export const submitApplication = createServerFn({ method: "POST" })
     if (!email)
       throw new Error("We could not read an email address — please type yours in the form.");
 
-    const row = {
-      full_name:
-        (data.fullName ?? p?.full_name ?? "").trim() || data.fileName.replace(/\.[^.]+$/, ""),
-      email,
-      phone: (data.phone ?? p?.phone) || null,
-      location: p?.location || null,
-      experience_years: Number(p?.experience_years ?? 0) || 0,
-      education: p?.education || null,
-      skills: p?.skills ?? [],
-      linkedin_url: p?.linkedin_url || null,
-      github_url: p?.github_url || null,
-      website_url: p?.website_url || null,
-      source: data.source,
-      resume_text: data.resumeText,
-      org_id: r.org_id,
-      last_synced_at: new Date().toISOString(),
-    };
+    const fullName =
+      (data.fullName ?? p?.full_name ?? "").trim() || data.fileName.replace(/\.[^.]+$/, "");
 
-    // Scope the lookup to this requisition's organisation: the same person may
-    // exist in another company's talent pool, and that record must never be
-    // rewritten or pulled across tenants.
-    let existingQuery = supabaseAdmin
-      .from("candidates")
-      .select("id, skills, resume_text")
-      .eq("email", email);
-    existingQuery = r.org_id
-      ? existingQuery.eq("org_id", r.org_id)
-      : existingQuery.is("org_id", null);
-    const { data: existingRows, error: existingError } = await existingQuery
-      .order("created_at", { ascending: true })
+    const [existing] = await db
+      .select({ id: candidates.id })
+      .from(candidates)
+      .where(and(eq(candidates.email, email), eq(candidates.orgId, r.orgId)))
       .limit(1);
-    if (existingError) throw new Error(existingError.message);
-    const existing = existingRows?.[0] ?? null;
 
     let candidateId: string;
     if (existing) {
-      const skills = new Set(
-        [...(existing.skills ?? []), ...row.skills].map((s) => s.trim()).filter(Boolean),
-      );
-      const { error } = await supabaseAdmin
-        .from("candidates")
-        .update({ ...row, skills: [...skills] } as never)
-        .eq("id", existing.id);
-      if (error) throw new Error(error.message);
+      // Public applicants never overwrite an existing talent-pool record.
       candidateId = existing.id;
     } else {
-      const { data: created, error } = await supabaseAdmin
-        .from("candidates")
-        .insert(row as never)
-        .select("id")
-        .single();
-      if (error || !created) throw new Error(error?.message ?? "Could not save your application.");
+      const [created] = await db
+        .insert(candidates)
+        .values({
+          fullName,
+          email,
+          phone: (data.phone ?? p?.phone) || null,
+          location: p?.location || null,
+          experienceYears: String(Number(p?.experience_years ?? 0) || 0),
+          education: p?.education || null,
+          skills: p?.skills ?? [],
+          linkedinUrl: p?.linkedin_url || null,
+          githubUrl: p?.github_url || null,
+          websiteUrl: p?.website_url || null,
+          source: data.source,
+          resumeText: data.resumeText,
+          orgId: r.orgId,
+          lastSyncedAt: new Date(),
+        })
+        .returning({ id: candidates.id });
+      if (!created) throw new Error("Could not save your application.");
       candidateId = created.id;
     }
 
-    const { data: app } = await supabaseAdmin
-      .from("applications")
-      .select("id")
-      .eq("candidate_id", candidateId)
-      .eq("requisition_id", r.id)
-      .maybeSingle();
+    const [app] = await db
+      .select({ id: applications.id })
+      .from(applications)
+      .where(and(eq(applications.candidateId, candidateId), eq(applications.requisitionId, r.id)))
+      .limit(1);
 
     if (!app) {
-      const { error } = await supabaseAdmin.from("applications").insert({
-        candidate_id: candidateId,
-        requisition_id: r.id,
+      await db.insert(applications).values({
+        candidateId,
+        requisitionId: r.id,
         source: data.source,
-        org_id: r.org_id,
-      } as never);
-      if (error) throw new Error(error.message);
+        orgId: r.orgId,
+      });
     }
 
-    return { ok: true as const, alreadyApplied: Boolean(app), name: row.full_name };
-  });
+    return {
+      ok: true as const,
+      alreadyApplied: Boolean(app),
+      merged: Boolean(existing),
+      name: fullName,
+    };
+  }
+}

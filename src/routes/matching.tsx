@@ -1,12 +1,14 @@
+import { Link } from "@tanstack/react-router";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+
+import { useNavCtx } from "@/hooks/useNavCtx";
 import { ChevronDown, Github, Linkedin, Loader2, PenLine, Target, UserPlus } from "lucide-react";
 import { z } from "zod";
 
-import { supabase } from "@/integrations/supabase/client";
 import {
   applicationsQuery,
   candidatesQuery,
@@ -16,18 +18,39 @@ import {
   requisitionsQuery,
   socialProfilesQuery,
 } from "@/lib/data";
-import { matchJdToCv, matchPipeline, type MatchResult } from "@/lib/matching.functions";
+import {
+  listEnabledJobBoards,
+  matchJdToCv,
+  matchPipeline,
+  persistMatchResult,
+  saveRecruiterOverride,
+  type MatchResult,
+} from "@/lib/matching.functions";
+import { addApplicationsToRequisition } from "@/lib/requisitions.functions";
 import { importCandidates } from "@/lib/integrations.functions";
 import { balanceWeights } from "@/lib/cv-extract";
 import { rankPool } from "@/lib/shortlist";
 
-import { EmptyState, PageHeader, ScoreBar, ScoreChip, SkillPills, educationLabel } from "@/components/ats";
+import {
+  EmptyState,
+  PageHeader,
+  ScoreBar,
+  ScoreChip,
+  SkillPills,
+  educationLabel,
+} from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -44,7 +67,8 @@ export const Route = createFileRoute("/matching")({
       { property: "og:title", content: "JD ↔ CV Matching Engine with Social Profiling" },
       {
         property: "og:description",
-        content: "Auditable match scores with evidence, risk flags and recruiter override on every candidate.",
+        content:
+          "Auditable match scores with evidence, risk flags and recruiter override on every candidate.",
       },
     ],
   }),
@@ -72,9 +96,49 @@ const WEIGHT_LABELS: Record<keyof Weights, string> = {
 /** Social signals are re-used for this many days instead of being re-fetched. */
 const SOCIAL_TTL_DAYS = 14;
 
+/** Map a live MatchResult onto the match_scores columns the server fn writes. */
+function scoreInput(result: MatchResult) {
+  return {
+    skillsScore: result.skills_score,
+    experienceScore: result.experience_score,
+    careerScore: result.career_score,
+    impactScore: result.impact_score,
+    innovationScore: result.innovation_score,
+    educationScore: result.education_score,
+    socialScore: result.social_score,
+    overallScore: result.overall_score,
+    weights: result.weights,
+    matchedSkills: result.matched_skills,
+    missingSkills: result.missing_skills,
+    rationale: result.rationale,
+    riskFlags: result.risk_flags,
+    recommendation: result.recommendation,
+    model: result.model,
+    careerMetrics: result.career.metrics,
+    careerFlags: result.career.assessment.flags,
+    logisticsFlags: [...(result.logistics?.flags ?? []), ...(result.logistics?.blockers ?? [])],
+    impactHighlights: result.impact.highlights,
+    innovationSignals: result.impact.innovation_signals,
+  };
+}
+
+/** Fresh social signals from a result, in the shape the upsert expects. */
+function socialInput(result: MatchResult) {
+  return result.social.signals.map((s) => ({
+    provider: s.provider,
+    profileUrl: s.profile_url,
+    handle: s.handle,
+    score: s.score,
+    signals: s.signals,
+    rationale: s.rationale,
+    status: s.status,
+  }));
+}
+
 function Matching() {
   const { req } = Route.useSearch();
   const navigate = Route.useNavigate();
+  const { leadership } = useNavCtx();
   const qc = useQueryClient();
 
   const reqs = useQuery(requisitionsQuery);
@@ -87,15 +151,7 @@ function Matching() {
   const runImport = useServerFn(importCandidates);
   const boards = useQuery({
     queryKey: ["source_integrations", "enabled"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("source_integrations")
-        .select("provider, label, enabled")
-        .eq("enabled", true)
-        .in("provider", ["naukri", "indeed"]);
-      if (error) throw new Error(error.message);
-      return data ?? [];
-    },
+    queryFn: async () => (await listEnabledJobBoards()) ?? [],
   });
 
   const requisitions = reqs.data ?? [];
@@ -120,7 +176,9 @@ function Matching() {
   const [minFit, setMinFit] = useState("60");
 
   function toggleSelected(applicationId: string, on: boolean) {
-    setSelected((prev) => (on ? [...new Set([...prev, applicationId])] : prev.filter((id) => id !== applicationId)));
+    setSelected((prev) =>
+      on ? [...new Set([...prev, applicationId])] : prev.filter((id) => id !== applicationId),
+    );
   }
 
   const effWeights: Weights = weights ?? {
@@ -131,7 +189,10 @@ function Matching() {
     education: requisition?.weight_education ?? 10,
     social: requisition?.weight_social ?? 15,
   };
-  const weightTotal = (Object.keys(effWeights) as (keyof Weights)[]).reduce((s, k) => s + effWeights[k], 0);
+  const weightTotal = (Object.keys(effWeights) as (keyof Weights)[]).reduce(
+    (s, k) => s + effWeights[k],
+    0,
+  );
 
   /** Set one weight and spread the remaining points across the others, keeping the total at 100. */
   function setWeight(key: keyof Weights, raw: number) {
@@ -147,14 +208,16 @@ function Matching() {
     } else {
       let assigned = 0;
       others.forEach((k, i) => {
-        const v = i === others.length - 1 ? remaining - assigned : Math.round((effWeights[k] / otherTotal) * remaining);
+        const v =
+          i === others.length - 1
+            ? remaining - assigned
+            : Math.round((effWeights[k] / otherTotal) * remaining);
         next[k] = Math.max(0, v);
         assigned += next[k];
       });
     }
     setWeights(next);
   }
-
 
   const scoreMap = latestScores(scores.data ?? []);
   const pipeline = useMemo(() => {
@@ -191,7 +254,11 @@ function Matching() {
       .filter((row) => row.fit >= floor)
       .filter((row) =>
         q
-          ? [row.candidate.full_name, row.candidate.location ?? "", (row.candidate.skills ?? []).join(" ")]
+          ? [
+              row.candidate.full_name,
+              row.candidate.location ?? "",
+              (row.candidate.skills ?? []).join(" "),
+            ]
               .join(" ")
               .toLowerCase()
               .includes(q)
@@ -204,16 +271,13 @@ function Matching() {
     if (!requisition || candidateIds.length === 0) return;
     setAddingFromPool(true);
     try {
-      const { error } = await supabase.from("applications").insert(
-        candidateIds.map((candidateId) => ({
-          requisition_id: requisition.id,
-          candidate_id: candidateId,
-          source: "talent_pool",
-        })),
-      );
-      if (error) throw new Error(error.message);
+      await addApplicationsToRequisition({
+        data: { requisitionId: requisition.id, candidateIds, source: "talent_pool" },
+      });
       await qc.invalidateQueries({ queryKey: ["applications"] });
-      toast.success(`${candidateIds.length} candidate${candidateIds.length === 1 ? "" : "s"} added to the pipeline`);
+      toast.success(
+        `${candidateIds.length} candidate${candidateIds.length === 1 ? "" : "s"} added to the pipeline`,
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not add candidates");
     } finally {
@@ -235,7 +299,9 @@ function Matching() {
           jd: {
             title: requisition.title,
             mustHave: jd?.must_have?.length ? jd.must_have : requisition.must_have_skills,
-            goodToHave: jd?.good_to_have?.length ? jd.good_to_have : requisition.good_to_have_skills,
+            goodToHave: jd?.good_to_have?.length
+              ? jd.good_to_have
+              : requisition.good_to_have_skills,
             responsibilities: jd?.responsibilities ?? requisition.responsibilities,
             education: requisition.education_requirement,
             experienceMin: requisition.experience_min,
@@ -275,51 +341,14 @@ function Matching() {
       setResults((prev) => ({ ...prev, [applicationId]: result }));
       setExpanded(applicationId);
 
-      const { error } = await supabase.from("match_scores").insert({
-        application_id: applicationId,
-        skills_score: result.skills_score,
-        experience_score: result.experience_score,
-        career_score: result.career_score,
-        impact_score: result.impact_score,
-        innovation_score: result.innovation_score,
-        career_metrics: result.career.metrics as never,
-        career_flags: result.career.assessment.flags,
-        logistics_flags: [...(result.logistics?.flags ?? []), ...(result.logistics?.blockers ?? [])],
-        impact_highlights: result.impact.highlights,
-        innovation_signals: result.impact.innovation_signals,
-        education_score: result.education_score,
-        social_score: result.social_score,
-        overall_score: result.overall_score,
-        weights: result.weights as never,
-        matched_skills: result.matched_skills,
-        missing_skills: result.missing_skills,
-        rationale: result.rationale,
-        risk_flags: result.risk_flags,
-        recommendation: result.recommendation,
-        model: result.model,
+      await persistMatchResult({
+        data: {
+          applicationId,
+          autoShortlist: result.overall_score >= 75 && row.app.stage === "applied",
+          socialSignals: socialInput(result),
+          score: scoreInput(result),
+        },
       });
-      if (error) throw new Error(error.message);
-
-      for (const s of result.social.signals) {
-        await supabase.from("social_profiles").upsert(
-          {
-            candidate_id: row.candidate.id,
-            provider: s.provider,
-            profile_url: s.profile_url,
-            handle: s.handle,
-            score: s.score,
-            signals: s.signals as never,
-            rationale: s.rationale,
-            status: s.status,
-            fetched_at: new Date().toISOString(),
-          },
-          { onConflict: "candidate_id,provider" },
-        );
-      }
-
-      if (result.overall_score >= 75 && row.app.stage === "applied") {
-        await supabase.from("applications").update({ stage: "shortlisted" }).eq("id", applicationId);
-      }
 
       qc.invalidateQueries({ queryKey: ["match_scores"] });
       qc.invalidateQueries({ queryKey: ["social_profiles"] });
@@ -337,7 +366,11 @@ function Matching() {
     setImporting(true);
     try {
       const res = await runImport({
-        data: { provider: board as "naukri" | "indeed" | "linkedin", requisitionId: requisition.id, limit: 10 },
+        data: {
+          provider: board as "naukri" | "indeed" | "linkedin",
+          requisitionId: requisition.id,
+          limit: 10,
+        },
       });
       toast.success(`${res.imported} of ${res.found} candidates imported from ${board}.`);
       qc.invalidateQueries({ queryKey: ["candidates"] });
@@ -370,54 +403,15 @@ function Matching() {
       }));
   }
 
-  async function persistResult(applicationId: string, candidateId: string, stage: string, result: MatchResult) {
-    const { error } = await supabase.from("match_scores").insert({
-      application_id: applicationId,
-        skills_score: result.skills_score,
-      experience_score: result.experience_score,
-      career_score: result.career_score,
-      impact_score: result.impact_score,
-      innovation_score: result.innovation_score,
-      career_metrics: result.career.metrics as never,
-      career_flags: result.career.assessment.flags,
-      logistics_flags: [...(result.logistics?.flags ?? []), ...(result.logistics?.blockers ?? [])],
-      impact_highlights: result.impact.highlights,
-      innovation_signals: result.impact.innovation_signals,
-      education_score: result.education_score,
-      social_score: result.social_score,
-      overall_score: result.overall_score,
-      weights: result.weights as never,
-      matched_skills: result.matched_skills,
-      missing_skills: result.missing_skills,
-      rationale: result.rationale,
-      risk_flags: result.risk_flags,
-      recommendation: result.recommendation,
-      model: result.model,
+  async function persistResult(applicationId: string, stage: string, result: MatchResult) {
+    await persistMatchResult({
+      data: {
+        applicationId,
+        autoShortlist: result.overall_score >= 75 && stage === "applied",
+        socialSignals: result.social.cached ? undefined : socialInput(result),
+        score: scoreInput(result),
+      },
     });
-    if (error) throw new Error(error.message);
-
-    if (!result.social.cached) {
-      for (const s of result.social.signals) {
-        await supabase.from("social_profiles").upsert(
-          {
-            candidate_id: candidateId,
-            provider: s.provider,
-            profile_url: s.profile_url,
-            handle: s.handle,
-            score: s.score,
-            signals: s.signals as never,
-            rationale: s.rationale,
-            status: s.status,
-            fetched_at: new Date().toISOString(),
-          },
-          { onConflict: "candidate_id,provider" },
-        );
-      }
-    }
-
-    if (result.overall_score >= 75 && stage === "applied") {
-      await supabase.from("applications").update({ stage: "shortlisted" }).eq("id", applicationId);
-    }
   }
 
   /** One JD vs many CVs: bounded concurrency, cached social signals, per-row error isolation. */
@@ -428,8 +422,9 @@ function Matching() {
       return;
     }
     const explicit = applicationIds?.length ? new Set(applicationIds) : null;
-    const targets = pipeline.filter((r) =>
-      r.candidate && (explicit ? explicit.has(r.app.id) : rescoreAll || (!r.live && !r.stored)),
+    const targets = pipeline.filter(
+      (r) =>
+        r.candidate && (explicit ? explicit.has(r.app.id) : rescoreAll || (!r.live && !r.stored)),
     );
     if (!targets.length) {
       toast.info(
@@ -440,7 +435,6 @@ function Matching() {
       return;
     }
 
-
     setBulk({ done: 0, total: targets.length });
     try {
       const rows = await runPipeline({
@@ -448,7 +442,9 @@ function Matching() {
           jd: {
             title: requisition.title,
             mustHave: jd?.must_have?.length ? jd.must_have : requisition.must_have_skills,
-            goodToHave: jd?.good_to_have?.length ? jd.good_to_have : requisition.good_to_have_skills,
+            goodToHave: jd?.good_to_have?.length
+              ? jd.good_to_have
+              : requisition.good_to_have_skills,
             responsibilities: jd?.responsibilities ?? requisition.responsibilities,
             education: requisition.education_requirement,
             experienceMin: requisition.experience_min,
@@ -499,7 +495,7 @@ function Matching() {
         }
         setResults((prev) => ({ ...prev, [row.applicationId]: row.result }));
         try {
-          await persistResult(row.applicationId, target.candidate.id, target.app.stage, row.result);
+          await persistResult(row.applicationId, target.app.stage, row.result);
         } catch {
           failures += 1;
         }
@@ -509,8 +505,12 @@ function Matching() {
       qc.invalidateQueries({ queryKey: ["match_scores"] });
       qc.invalidateQueries({ queryKey: ["social_profiles"] });
       qc.invalidateQueries({ queryKey: ["applications"] });
-      if (failures) toast.warning(`Scored ${rows.length - failures} of ${rows.length} — ${failures} failed.`);
-      else toast.success(`Scored ${rows.length} candidate${rows.length === 1 ? "" : "s"} against this JD.`);
+      if (failures)
+        toast.warning(`Scored ${rows.length - failures} of ${rows.length} — ${failures} failed.`);
+      else
+        toast.success(
+          `Scored ${rows.length} candidate${rows.length === 1 ? "" : "s"} against this JD.`,
+        );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Pipeline run failed");
     } finally {
@@ -518,16 +518,15 @@ function Matching() {
     }
   }
 
-
   async function saveOverride(applicationId: string, verdict: "select" | "reject" | "hold") {
     const stored = scoreMap.get(applicationId);
     if (!stored) return;
-    const { error } = await supabase
-      .from("match_scores")
-      .update({ recruiter_override: verdict, override_reason: overrideReason || null })
-      .eq("id", stored.id);
-    if (error) {
-      toast.error(error.message);
+    try {
+      await saveRecruiterOverride({
+        data: { id: stored.id, verdict, reason: overrideReason || null },
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not record the override");
       return;
     }
     setOverrideReason("");
@@ -543,6 +542,14 @@ function Matching() {
         description="Every score is a weighted roll-up of semantic skill mapping, a deterministic experience band, education fit and live social profiling — with the evidence behind each number."
         actions={
           <div className="flex flex-wrap items-center gap-3">
+            {leadership ? (
+              <Link
+                to="/brain"
+                className="rounded-md border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary hover:text-primary"
+              >
+                Talent Brain — skill gaps
+              </Link>
+            ) : null}
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <Switch checked={rescoreAll} onCheckedChange={setRescoreAll} />
               Re-score already scored
@@ -564,7 +571,10 @@ function Matching() {
                 Score selected ({selected.length})
               </Button>
             )}
-            <Button onClick={() => scoreAll()} disabled={Boolean(running) || Boolean(bulk) || pipeline.length === 0}>
+            <Button
+              onClick={() => scoreAll()}
+              disabled={Boolean(running) || Boolean(bulk) || pipeline.length === 0}
+            >
               {bulk ? <Loader2 className="size-4 animate-spin" /> : <Target className="size-4" />}
               {bulk ? `Scoring ${bulk.done}/${bulk.total}` : "Score whole pipeline"}
             </Button>
@@ -591,19 +601,25 @@ function Matching() {
             {requisition ? (
               <div className="mt-4 space-y-3 text-sm">
                 <div className="num text-xs text-muted-foreground">
-                  {requisition.experience_min}–{requisition.experience_max} yrs · {requisition.location}
+                  {requisition.experience_min}–{requisition.experience_max} yrs ·{" "}
+                  {requisition.location}
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Must-have baseline</Label>
                   <div className="mt-1.5">
                     <SkillPills
-                      skills={(jd?.must_have?.length ? jd.must_have : requisition.must_have_skills).slice(0, 10)}
+                      skills={(jd?.must_have?.length
+                        ? jd.must_have
+                        : requisition.must_have_skills
+                      ).slice(0, 10)}
                       tone="match"
                     />
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {jd ? `Scoring against JD v${jd.version} (${jd.status})` : "No JD drafted — scoring against requisition inputs"}
+                  {jd
+                    ? `Scoring against JD v${jd.version} (${jd.status})`
+                    : "No JD drafted — scoring against requisition inputs"}
                 </p>
               </div>
             ) : null}
@@ -612,13 +628,15 @@ function Matching() {
           <section className="panel p-5">
             <h2 className="font-semibold">Probable CVs from the pool</h2>
             <p className="text-xs text-muted-foreground">
-              Ranked against this JD. Only people clearing the fit floor are listed — add the right ones, then run the
-              full AI and social score.
+              Ranked against this JD. Only people clearing the fit floor are listed — add the right
+              ones, then run the full AI and social score.
             </p>
             {!requisition ? (
               <p className="mt-3 text-xs text-muted-foreground">Select a requisition first.</p>
             ) : poolRanked.length === 0 ? (
-              <p className="mt-3 text-xs text-muted-foreground">Everyone in the talent pool is already attached.</p>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Everyone in the talent pool is already attached.
+              </p>
             ) : (
               <div className="mt-3 space-y-3">
                 <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
@@ -647,10 +665,16 @@ function Matching() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => addFromTalentPool(suggestedPool.slice(0, 10).map((row) => row.candidate.id))}
+                    onClick={() =>
+                      addFromTalentPool(suggestedPool.slice(0, 10).map((row) => row.candidate.id))
+                    }
                     disabled={addingFromPool || suggestedPool.length === 0}
                   >
-                    {addingFromPool ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}
+                    {addingFromPool ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <UserPlus className="size-4" />
+                    )}
                     Add top {Math.min(10, suggestedPool.length)}
                   </Button>
                 </div>
@@ -664,10 +688,12 @@ function Matching() {
                       <li key={row.candidate.id} className="flex items-center gap-2 p-2.5">
                         <ScoreChip score={row.fit} size="sm" />
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-xs font-medium">{row.candidate.full_name}</div>
+                          <div className="truncate text-xs font-medium">
+                            {row.candidate.full_name}
+                          </div>
                           <div className="num truncate text-xs text-muted-foreground">
-                            {row.mustHits.length}/{Math.max(1, requisition.must_have_skills.length)} must-haves ·{" "}
-                            {row.candidate.experience_years} yrs
+                            {row.mustHits.length}/{Math.max(1, requisition.must_have_skills.length)}{" "}
+                            must-haves · {row.candidate.experience_years} yrs
                             {row.candidate.location ? ` · ${row.candidate.location}` : ""}
                           </div>
                         </div>
@@ -684,41 +710,44 @@ function Matching() {
                     ))}
                   </ul>
                 )}
-                <p className="text-xs text-muted-foreground">Fit is a live skill and experience pre-rank, not the final AI score.</p>
+                <p className="text-xs text-muted-foreground">
+                  Fit is a live skill and experience pre-rank, not the final AI score.
+                </p>
               </div>
             )}
-
 
             <div className="mt-4 border-t border-border pt-4">
               <p className="text-xs font-medium">External job boards</p>
               {(boards.data ?? []).length === 0 ? (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Optional: connect a licensed LinkedIn, Naukri or Indeed recruiter API to import external applicants.
+                  Optional: connect a licensed LinkedIn, Naukri or Indeed recruiter API to import
+                  external applicants.
                 </p>
               ) : (
                 <div className="mt-2 space-y-2">
-                <Select value={board} onValueChange={setBoard}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose board" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(boards.data ?? []).map((b) => (
-                      <SelectItem key={b.provider} value={b.provider}>
-                        {b.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={importApplicants}
-                  disabled={!board || importing}
-                >
-                  {importing ? <Loader2 className="size-4 animate-spin" /> : null} Import 10 matching CVs
-                </Button>
-              </div>
+                  <Select value={board} onValueChange={setBoard}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose board" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(boards.data ?? []).map((b) => (
+                        <SelectItem key={b.provider} value={b.provider}>
+                          {b.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={importApplicants}
+                    disabled={!board || importing}
+                  >
+                    {importing ? <Loader2 className="size-4 animate-spin" /> : null} Import 10
+                    matching CVs
+                  </Button>
+                </div>
               )}
             </div>
           </section>
@@ -732,34 +761,35 @@ function Matching() {
               {(Object.keys(WEIGHT_LABELS) as (keyof Weights)[]).map((key) => {
                 const label = WEIGHT_LABELS[key];
                 return (
-
-                <div key={key}>
-                  <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
-                    <span>{label}</span>
-                    <input
-                      type="number"
+                  <div key={key}>
+                    <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
+                      <span>{label}</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={effWeights[key]}
+                        onChange={(e) => setWeight(key, Number(e.target.value))}
+                        className="num h-8 w-16 rounded-md border border-border bg-background px-2 text-right text-sm"
+                      />
+                    </div>
+                    <Slider
+                      value={[effWeights[key]]}
                       min={0}
                       max={100}
-                      value={effWeights[key]}
-                      onChange={(e) => setWeight(key, Number(e.target.value))}
-                      className="num h-8 w-16 rounded-md border border-border bg-background px-2 text-right text-sm"
+                      step={1}
+                      onValueChange={([v]) => setWeight(key, v ?? 0)}
                     />
                   </div>
-                  <Slider
-                    value={[effWeights[key]]}
-                    min={0}
-                    max={100}
-                    step={1}
-                    onValueChange={([v]) => setWeight(key, v ?? 0)}
-                  />
-                </div>
                 );
               })}
 
               <div className="flex items-center justify-between gap-3">
                 <p
                   className={
-                    weightTotal === 100 ? "num text-xs text-muted-foreground" : "num text-xs text-destructive"
+                    weightTotal === 100
+                      ? "num text-xs text-muted-foreground"
+                      : "num text-xs text-destructive"
                   }
                 >
                   Total {weightTotal} / 100
@@ -767,7 +797,11 @@ function Matching() {
                 </p>
                 <div className="flex gap-2">
                   {weightTotal !== 100 && (
-                    <Button size="sm" variant="outline" onClick={() => setWeights(balanceWeights(effWeights))}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setWeights(balanceWeights(effWeights))}
+                    >
                       Balance to 100
                     </Button>
                   )}
@@ -777,11 +811,12 @@ function Matching() {
                 </div>
               </div>
 
-
               <div className="flex items-center justify-between border-t border-border pt-4">
                 <div>
                   <div className="text-sm">Live social profiling</div>
-                  <p className="text-xs text-muted-foreground">Fetches GitHub, LinkedIn & writing signals</p>
+                  <p className="text-xs text-muted-foreground">
+                    Fetches GitHub, LinkedIn & writing signals
+                  </p>
                 </div>
                 <Switch checked={includeSocial} onCheckedChange={setIncludeSocial} />
               </div>
@@ -800,7 +835,9 @@ function Matching() {
               const result = live;
               const overall = result?.overall_score ?? stored?.overall_score;
               const isOpen = expanded === app.id;
-              const social = (socials.data ?? []).filter((s) => s.candidate_id === app.candidate_id);
+              const social = (socials.data ?? []).filter(
+                (s) => s.candidate_id === app.candidate_id,
+              );
               return (
                 <article key={app.id} className="panel overflow-hidden">
                   <div className="flex flex-wrap items-center gap-4 p-5">
@@ -817,19 +854,29 @@ function Matching() {
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <h3 className="truncate font-semibold">{candidate?.full_name ?? "Unknown candidate"}</h3>
+                      <h3 className="truncate font-semibold">
+                        {candidate?.full_name ?? "Unknown candidate"}
+                      </h3>
                       <p className="num line-clamp-2 text-xs text-muted-foreground">
-                        {candidate?.experience_years} yrs · {educationLabel(candidate?.education) || "education not captured"}
+                        {candidate?.experience_years} yrs ·{" "}
+                        {educationLabel(candidate?.education) || "education not captured"}
                       </p>
 
                       <div className="mt-2 flex items-center gap-3 text-muted-foreground">
                         {candidate?.linkedin_url ? <Linkedin className="size-4" /> : null}
                         {candidate?.github_url ? <Github className="size-4" /> : null}
-                        {candidate?.website_url || candidate?.x_url ? <PenLine className="size-4" /> : null}
+                        {candidate?.website_url || candidate?.x_url ? (
+                          <PenLine className="size-4" />
+                        ) : null}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={() => score(app.id)} disabled={running === app.id}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => score(app.id)}
+                        disabled={running === app.id}
+                      >
                         {running === app.id ? <Loader2 className="size-4 animate-spin" /> : null}
                         {overall === undefined ? "Run match" : "Re-score"}
                       </Button>
@@ -846,7 +893,11 @@ function Matching() {
 
                   {(result || stored) && (
                     <div className="grid gap-3 border-t border-border bg-surface-2 p-5 sm:grid-cols-3 lg:grid-cols-6">
-                      <ScoreBar label="Skills" score={result?.skills_score ?? stored!.skills_score} weight={effWeights.skills} />
+                      <ScoreBar
+                        label="Skills"
+                        score={result?.skills_score ?? stored!.skills_score}
+                        weight={effWeights.skills}
+                      />
                       <ScoreBar
                         label="Experience"
                         score={result?.experience_score ?? stored!.experience_score}
@@ -878,7 +929,6 @@ function Matching() {
                     </div>
                   )}
 
-
                   {isOpen && (result || stored) && (
                     <div className="space-y-6 border-t border-border p-5">
                       <div className="grid gap-4 sm:grid-cols-2">
@@ -894,12 +944,17 @@ function Matching() {
                         <div>
                           <Label className="text-xs text-muted-foreground">Gaps</Label>
                           <div className="mt-1.5">
-                            <SkillPills skills={result?.missing_skills ?? stored!.missing_skills} tone="miss" />
+                            <SkillPills
+                              skills={result?.missing_skills ?? stored!.missing_skills}
+                              tone="miss"
+                            />
                           </div>
                         </div>
                         {result?.transferable_skills?.length ? (
                           <div className="sm:col-span-2">
-                            <Label className="text-xs text-muted-foreground">Transferable / adjacent</Label>
+                            <Label className="text-xs text-muted-foreground">
+                              Transferable / adjacent
+                            </Label>
                             <div className="mt-1.5">
                               <SkillPills skills={result.transferable_skills} />
                             </div>
@@ -909,7 +964,9 @@ function Matching() {
 
                       {result?.contributions ? (
                         <div>
-                          <Label className="text-xs text-muted-foreground">Weighted contribution</Label>
+                          <Label className="text-xs text-muted-foreground">
+                            Weighted contribution
+                          </Label>
                           <table className="num mt-2 w-full text-sm">
                             <thead className="text-xs text-muted-foreground">
                               <tr>
@@ -924,7 +981,9 @@ function Matching() {
                                 <tr key={c.label} className="border-t border-border">
                                   <td className="py-1.5 text-left">{c.label}</td>
                                   <td className="py-1.5 text-right">{c.raw}</td>
-                                  <td className="py-1.5 text-right text-muted-foreground">{c.weight}%</td>
+                                  <td className="py-1.5 text-right text-muted-foreground">
+                                    {c.weight}%
+                                  </td>
                                   <td className="py-1.5 text-right font-semibold">{c.weighted}</td>
                                 </tr>
                               ))}
@@ -932,7 +991,9 @@ function Matching() {
                                 <td className="py-1.5 font-medium">Overall</td>
                                 <td />
                                 <td />
-                                <td className="py-1.5 text-right font-semibold">{result.overall_score}</td>
+                                <td className="py-1.5 text-right font-semibold">
+                                  {result.overall_score}
+                                </td>
                               </tr>
                             </tbody>
                           </table>
@@ -942,7 +1003,9 @@ function Matching() {
                       {result?.career ? (
                         <div className="grid gap-4 sm:grid-cols-2">
                           <div>
-                            <Label className="text-xs text-muted-foreground">Career history (measured, not guessed)</Label>
+                            <Label className="text-xs text-muted-foreground">
+                              Career history (measured, not guessed)
+                            </Label>
                             <dl className="num mt-2 space-y-1 text-sm">
                               {(
                                 [
@@ -954,12 +1017,18 @@ function Matching() {
                                       ? "—"
                                       : `${result.career.metrics.current_tenure_years} yrs`,
                                   ],
-                                  ["Jobs in last 5 yrs", String(result.career.metrics.jobs_last_5y)],
+                                  [
+                                    "Jobs in last 5 yrs",
+                                    String(result.career.metrics.jobs_last_5y),
+                                  ],
                                   ["Longest gap", `${result.career.metrics.longest_gap_months} mo`],
                                   ["Progression", result.career.metrics.progression],
                                 ] as const
                               ).map(([k, v]) => (
-                                <div key={k} className="flex justify-between border-b border-border pb-1">
+                                <div
+                                  key={k}
+                                  className="flex justify-between border-b border-border pb-1"
+                                >
                                   <dt className="text-muted-foreground">{k}</dt>
                                   <dd>{v}</dd>
                                 </div>
@@ -979,20 +1048,26 @@ function Matching() {
                                 Impact {result.impact_score} · Innovation {result.innovation_score}
                               </Label>
                               <ul className="mt-1.5 space-y-1 text-sm">
-                                {[...result.impact.highlights, ...result.impact.innovation_signals].map((h) => (
+                                {[
+                                  ...result.impact.highlights,
+                                  ...result.impact.innovation_signals,
+                                ].map((h) => (
                                   <li key={h} className="text-muted-foreground">
                                     • {h}
                                   </li>
                                 ))}
                               </ul>
                               {result.impact.rationale ? (
-                                <p className="mt-1.5 text-xs text-muted-foreground">{result.impact.rationale}</p>
+                                <p className="mt-1.5 text-xs text-muted-foreground">
+                                  {result.impact.rationale}
+                                </p>
                               ) : null}
                             </div>
                             {result.logistics ? (
                               <div>
                                 <Label className="text-xs text-muted-foreground">
-                                  Logistics — joining risk: {result.logistics.join_risk} (never affects the score)
+                                  Logistics — joining risk: {result.logistics.join_risk} (never
+                                  affects the score)
                                 </Label>
                                 <ul className="mt-1.5 space-y-1 text-sm">
                                   {result.logistics.blockers.map((b) => (
@@ -1005,8 +1080,11 @@ function Matching() {
                                       ! {f}
                                     </li>
                                   ))}
-                                  {!result.logistics.blockers.length && !result.logistics.flags.length ? (
-                                    <li className="text-muted-foreground">No compensation, notice or location issues.</li>
+                                  {!result.logistics.blockers.length &&
+                                  !result.logistics.flags.length ? (
+                                    <li className="text-muted-foreground">
+                                      No compensation, notice or location issues.
+                                    </li>
                                   ) : null}
                                 </ul>
                                 {result.logistics.missing.length ? (
@@ -1042,7 +1120,9 @@ function Matching() {
                                     .map(([k, v]) => (
                                       <div key={k} className="flex justify-between gap-2">
                                         <dt className="truncate">{k.replace(/_/g, " ")}</dt>
-                                        <dd>{typeof v === "object" ? JSON.stringify(v) : String(v)}</dd>
+                                        <dd>
+                                          {typeof v === "object" ? JSON.stringify(v) : String(v)}
+                                        </dd>
                                       </div>
                                     ))}
                                 </dl>
@@ -1053,14 +1133,18 @@ function Matching() {
                             social.map((s) => (
                               <div key={s.id} className="rounded-lg border border-border p-3">
                                 <div className="flex items-center justify-between">
-                                  <span className="text-sm font-medium capitalize">{s.provider}</span>
+                                  <span className="text-sm font-medium capitalize">
+                                    {s.provider}
+                                  </span>
                                   <span className="num text-sm font-semibold">{s.score}</span>
                                 </div>
                                 <p className="mt-1 text-xs text-muted-foreground">{s.rationale}</p>
                               </div>
                             ))}
                           {!result && social.length === 0 ? (
-                            <p className="text-xs text-muted-foreground">No social signals captured yet.</p>
+                            <p className="text-xs text-muted-foreground">
+                              No social signals captured yet.
+                            </p>
                           ) : null}
                         </div>
                       </div>
@@ -1084,7 +1168,9 @@ function Matching() {
                       <div className="rounded-lg border border-border p-4">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
-                            <Label className="text-xs text-muted-foreground">AI recommendation</Label>
+                            <Label className="text-xs text-muted-foreground">
+                              AI recommendation
+                            </Label>
                             <p className="text-sm font-semibold capitalize">
                               {result?.recommendation ?? stored?.recommendation ?? "—"}
                             </p>
@@ -1097,7 +1183,12 @@ function Matching() {
                           </div>
                           <div className="flex gap-2">
                             {(["select", "hold", "reject"] as const).map((v) => (
-                              <Button key={v} size="sm" variant="outline" onClick={() => saveOverride(app.id, v)}>
+                              <Button
+                                key={v}
+                                size="sm"
+                                variant="outline"
+                                onClick={() => saveOverride(app.id, v)}
+                              >
                                 Override: {v}
                               </Button>
                             ))}

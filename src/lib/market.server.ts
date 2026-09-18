@@ -113,6 +113,8 @@ async function readSource(url: string) {
 }
 
 export async function benchmarkMarket(input: {
+  /** Org context for AI credential resolution. */
+  orgId: string;
   role: string;
   location: string;
   currency: string;
@@ -136,6 +138,7 @@ export async function benchmarkMarket(input: {
     .join("\n\n---\n\n");
 
   const result = await aiJson<MarketBenchmark>({
+    orgId: input.orgId,
     system:
       "You are a compensation market-research analyst. From the supplied live web extracts, derive annual total " +
       "compensation bands for the role in the given location and currency, broken down by career level. " +

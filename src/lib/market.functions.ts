@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireOrg } from "./auth.middleware";
 import { benchmarkMarket, type MarketBenchmark } from "./market.server";
 
 export type { MarketBenchmark, MarketLevel, MarketSource } from "./market.server";
@@ -18,6 +18,7 @@ const BenchmarkInput = z.object({
 
 /** Live market pay research for one role, broken down by career level. */
 export const benchmarkCompensation = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => BenchmarkInput.parse(data))
-  .handler(async ({ data }): Promise<MarketBenchmark> => benchmarkMarket(data));
+  .handler(async ({ data, context }): Promise<MarketBenchmark> =>
+    benchmarkMarket({ ...data, orgId: context.orgId }));

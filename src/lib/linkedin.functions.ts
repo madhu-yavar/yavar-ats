@@ -1,7 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { db } from "../server/db";
+import { orgLinkedinConnections, requisitions } from "@db/schema";
+import { requireOrg } from "./auth.middleware";
 import type { LinkedinCapability } from "./linkedin.server";
 import {
   LinkedinAuthError,
@@ -25,27 +28,9 @@ export type LinkedinStatus = {
   expiresSoon: boolean;
 };
 
-async function admin() {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin;
-}
-
-async function myOrgId(userId: string): Promise<string | null> {
-  const db = await admin();
-  const { data } = await db
-    .from("org_members")
-    .select("org_id")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .order("created_at")
-    .limit(1)
-    .maybeSingle();
-  return data?.org_id ?? null;
-}
-
 /** Per-organisation LinkedIn connection status. */
 export const linkedinStatus = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .handler(async ({ context }): Promise<LinkedinStatus> => {
     const base: LinkedinStatus = {
       configured: linkedinEnvConfigured(),
@@ -55,39 +40,42 @@ export const linkedinStatus = createServerFn({ method: "GET" })
       connectedAt: null,
       expiresSoon: false,
     };
-    const orgId = await myOrgId(context.userId);
-    if (!orgId || !base.configured) return base;
+    if (!base.configured) return base;
 
-    const db = await admin();
-    const { data } = await db
-      .from("org_linkedin_connections")
-      .select("member_name, member_email, connected_at, expires_at")
-      .eq("org_id", orgId)
-      .maybeSingle();
-    if (!data) return base;
+    const [row] = await db
+      .select({
+        memberName: orgLinkedinConnections.memberName,
+        memberEmail: orgLinkedinConnections.memberEmail,
+        connectedAt: orgLinkedinConnections.connectedAt,
+        expiresAt: orgLinkedinConnections.expiresAt,
+      })
+      .from(orgLinkedinConnections)
+      .where(eq(orgLinkedinConnections.orgId, context.orgId))
+      .limit(1);
+    if (!row) return base;
 
-    const expiresAt = data.expires_at ? new Date(data.expires_at).getTime() : null;
+    const expiresAt = row.expiresAt ? row.expiresAt.getTime() : null;
     return {
       ...base,
       connected: true,
-      member: data.member_name ?? null,
-      memberEmail: data.member_email ?? null,
-      connectedAt: data.connected_at ?? null,
+      member: row.memberName ?? null,
+      memberEmail: row.memberEmail ?? null,
+      connectedAt: row.connectedAt ? row.connectedAt.toISOString() : null,
       expiresSoon: expiresAt !== null && expiresAt - Date.now() < 7 * 24 * 60 * 60 * 1000,
     };
   });
 
 /** Start the one-time sign-in: returns the LinkedIn URL to open. */
 export const startLinkedInConnect = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => z.object({ origin: z.string().url() }).parse(data))
   .handler(async ({ data, context }) => {
     if (!linkedinEnvConfigured())
-      throw new Error("LinkedIn is not set up on this platform yet — ask your ATSIQ administrator.");
-    const orgId = await myOrgId(context.userId);
-    if (!orgId) throw new Error("You are not part of an organisation yet.");
+      throw new Error(
+        "LinkedIn is not set up on this platform yet — ask your ATSIQ administrator.",
+      );
     const state = signState({
-      orgId,
+      orgId: context.orgId,
       userId: context.userId,
       origin: data.origin,
       ts: Date.now(),
@@ -97,12 +85,9 @@ export const startLinkedInConnect = createServerFn({ method: "POST" })
 
 /** Forget this organisation's LinkedIn account. */
 export const disconnectLinkedIn = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .handler(async ({ context }) => {
-    const orgId = await myOrgId(context.userId);
-    if (!orgId) throw new Error("You are not part of an organisation yet.");
-    const db = await admin();
-    await db.from("org_linkedin_connections").delete().eq("org_id", orgId);
+    await db.delete(orgLinkedinConnections).where(eq(orgLinkedinConnections.orgId, context.orgId));
     return { ok: true as const };
   });
 
@@ -111,30 +96,34 @@ export const disconnectLinkedIn = createServerFn({ method: "POST" })
  * refresh token and the access token is close to expiry.
  */
 async function orgToken(orgId: string): Promise<{ accessToken: string; memberSub: string }> {
-  const db = await admin();
-  const { data } = await db
-    .from("org_linkedin_connections")
-    .select("member_sub, access_token, refresh_token, expires_at")
-    .eq("org_id", orgId)
-    .maybeSingle();
-  if (!data) throw new Error("This organisation has not connected LinkedIn yet.");
+  const [row] = await db
+    .select({
+      memberSub: orgLinkedinConnections.memberSub,
+      accessToken: orgLinkedinConnections.accessToken,
+      refreshToken: orgLinkedinConnections.refreshToken,
+      expiresAt: orgLinkedinConnections.expiresAt,
+    })
+    .from(orgLinkedinConnections)
+    .where(eq(orgLinkedinConnections.orgId, orgId))
+    .limit(1);
+  if (!row) throw new Error("This organisation has not connected LinkedIn yet.");
 
-  const expiresAt = data.expires_at ? new Date(data.expires_at).getTime() : 0;
+  const expiresAt = row.expiresAt ? row.expiresAt.getTime() : 0;
   if (expiresAt && expiresAt - Date.now() < 5 * 60 * 1000) {
-    if (!data.refresh_token) throw new LinkedinAuthError();
-    const next = await refreshAccessToken(data.refresh_token);
+    if (!row.refreshToken) throw new LinkedinAuthError();
+    const next = await refreshAccessToken(row.refreshToken);
     await db
-      .from("org_linkedin_connections")
-      .update({
-        access_token: next.access_token,
-        refresh_token: next.refresh_token ?? data.refresh_token,
-        expires_at: new Date(Date.now() + next.expires_in * 1000).toISOString(),
-        updated_at: new Date().toISOString(),
+      .update(orgLinkedinConnections)
+      .set({
+        accessToken: next.access_token,
+        refreshToken: next.refresh_token ?? row.refreshToken,
+        expiresAt: new Date(Date.now() + next.expires_in * 1000),
+        updatedAt: new Date(),
       })
-      .eq("org_id", orgId);
-    return { accessToken: next.access_token, memberSub: data.member_sub };
+      .where(eq(orgLinkedinConnections.orgId, orgId));
+    return { accessToken: next.access_token, memberSub: row.memberSub };
   }
-  return { accessToken: data.access_token, memberSub: data.member_sub };
+  return { accessToken: row.accessToken, memberSub: row.memberSub };
 }
 
 const PublishInput = z.object({
@@ -144,20 +133,17 @@ const PublishInput = z.object({
 
 /** Publish the designed post text to the organisation's own LinkedIn account. */
 export const publishToLinkedIn = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => PublishInput.parse(data))
   .handler(async ({ data, context }) => {
-    const orgId = await myOrgId(context.userId);
-    if (!orgId) throw new Error("You are not part of an organisation yet.");
-
-    const { data: requisition } = await context.supabase
-      .from("requisitions")
-      .select("id")
-      .eq("id", data.requisitionId)
-      .maybeSingle();
+    const [requisition] = await db
+      .select({ id: requisitions.id })
+      .from(requisitions)
+      .where(and(eq(requisitions.id, data.requisitionId), eq(requisitions.orgId, context.orgId)))
+      .limit(1);
     if (!requisition) throw new Error("Requisition not found.");
 
-    const { accessToken, memberSub } = await orgToken(orgId);
+    const { accessToken, memberSub } = await orgToken(context.orgId);
     // Confirms the token still works and keeps the stored identity honest.
     await fetchMember(accessToken);
     const postUrn = await postAsMember(accessToken, memberSub, data.text.trim());
@@ -166,17 +152,14 @@ export const publishToLinkedIn = createServerFn({ method: "POST" })
 
 /** Ask LinkedIn what this organisation's connection is actually allowed to do. */
 export const linkedinCapabilities = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .handler(async ({ context }): Promise<LinkedinCapability[]> => {
-    const orgId = await myOrgId(context.userId);
-    if (!orgId) return [];
-    const db = await admin();
-    const { data } = await db
-      .from("org_linkedin_connections")
-      .select("scope")
-      .eq("org_id", orgId)
-      .maybeSingle();
-    if (!data) return [];
-    const { accessToken } = await orgToken(orgId);
-    return probeCapabilities(accessToken, data.scope ?? null);
+    const [row] = await db
+      .select({ scope: orgLinkedinConnections.scope })
+      .from(orgLinkedinConnections)
+      .where(eq(orgLinkedinConnections.orgId, context.orgId))
+      .limit(1);
+    if (!row) return [];
+    const { accessToken } = await orgToken(context.orgId);
+    return probeCapabilities(accessToken, row.scope ?? null);
   });

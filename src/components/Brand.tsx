@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 
-import logoAsset from "@/assets/yavar-logo.png.asset.json";
+import logoUrl from "@/assets/yavar-logo.png";
 
 /**
  * The Yavar wordmark. The source artwork is dark, so on dark surfaces pass
@@ -15,13 +15,12 @@ export function BrandLogo({
 }) {
   return (
     <img
-      src={logoAsset.url}
+      src={logoUrl}
       alt="Yavar"
       className={`${className} w-auto ${tone === "onDark" ? "brightness-0 invert" : ""}`}
     />
   );
 }
-
 
 const LINKEDIN = "https://www.linkedin.com/company/yavar-techworks/";
 
@@ -38,10 +37,20 @@ export function BrandFooter() {
           <Link to="/cookies" className="hover:text-foreground hover:underline">
             Cookies Policy
           </Link>
-          <a href="https://yavar.ai" target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">
+          <a
+            href="https://yavar.ai"
+            target="_blank"
+            rel="noreferrer"
+            className="hover:text-foreground hover:underline"
+          >
             yavar.ai
           </a>
-          <a href={LINKEDIN} target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">
+          <a
+            href={LINKEDIN}
+            target="_blank"
+            rel="noreferrer"
+            className="hover:text-foreground hover:underline"
+          >
             LinkedIn
           </a>
         </nav>

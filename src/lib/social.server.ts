@@ -62,7 +62,8 @@ export async function fetchGithubSignal(
     ]);
 
     if (userRes.status === 404) return fail("GitHub profile not found.", "unavailable");
-    if (userRes.status === 403) return fail("GitHub rate limit reached — add a GitHub token to raise it.", "unavailable");
+    if (userRes.status === 403)
+      return fail("GitHub rate limit reached — add a GitHub token to raise it.", "unavailable");
     if (!userRes.ok) return fail(`GitHub returned ${userRes.status}.`);
 
     const user = (await userRes.json()) as any;
@@ -81,7 +82,9 @@ export async function fetchGithubSignal(
       : null;
 
     const wanted = jdSkills.map((s) => s.toLowerCase());
-    const langOverlap = languages.filter((l) => wanted.some((w) => w.includes(l.toLowerCase()) || l.toLowerCase().includes(w)));
+    const langOverlap = languages.filter((l) =>
+      wanted.some((w) => w.includes(l.toLowerCase()) || l.toLowerCase().includes(w)),
+    );
 
     // Deterministic, explainable sub-scores (each out of its cap).
     const volume = Math.min(25, owned.length * 2.5);
@@ -121,7 +124,13 @@ export async function fetchGithubSignal(
           ? `Languages overlap the JD on ${langOverlap.join(", ")}.`
           : "No language overlap with the JD must-haves."),
       status: "ok",
-      raw: { login: user.login, name: user.name, bio: user.bio, company: user.company, blog: user.blog },
+      raw: {
+        login: user.login,
+        name: user.name,
+        bio: user.bio,
+        company: user.company,
+        blog: user.blog,
+      },
     };
   } catch (e) {
     return fail(`GitHub fetch failed: ${(e as Error).message}`);
@@ -140,6 +149,7 @@ export async function fetchLinkedinSignal(opts: {
   jdSkills: string[];
   resumeText: string | null;
   profileText?: string | null;
+  orgId?: string | null | undefined;
 }): Promise<SocialSignal | null> {
   const handle = linkedinHandle(opts.url);
   if (!opts.url) return null;
@@ -162,6 +172,7 @@ export async function fetchLinkedinSignal(opts: {
       profile_text: opts.profileText ?? null,
       resume_text: opts.resumeText?.slice(0, 6000) ?? null,
     }),
+    orgId: opts.orgId,
   });
 
   if (!result.ok) {
@@ -197,6 +208,7 @@ export async function fetchWritingSignal(opts: {
   urls: string[];
   jobTitle: string;
   jdSkills: string[];
+  orgId?: string | null | undefined;
 }): Promise<SocialSignal | null> {
   const urls = opts.urls.filter(Boolean);
   if (!urls.length) return null;
@@ -235,7 +247,12 @@ export async function fetchWritingSignal(opts: {
     system:
       "You score a candidate's public writing/portfolio for domain relevance, depth and communication quality against a role. " +
       "Return ONLY JSON with keys: score (0-100), themes (string array), rationale.",
-    prompt: JSON.stringify({ target_role: opts.jobTitle, jd_must_have_skills: opts.jdSkills, pages }),
+    prompt: JSON.stringify({
+      target_role: opts.jobTitle,
+      jd_must_have_skills: opts.jdSkills,
+      pages,
+    }),
+    orgId: opts.orgId,
   });
 
   if (!result.ok) {
@@ -274,7 +291,10 @@ export function blendSocial(signals: SocialSignal[]): { score: number; basis: st
   return {
     score,
     basis: usable
-      .map((s) => `${s.provider} ${s.score} (${Math.round((weightFor(s.provider) / totalWeight) * 100)}% of social)`)
+      .map(
+        (s) =>
+          `${s.provider} ${s.score} (${Math.round((weightFor(s.provider) / totalWeight) * 100)}% of social)`,
+      )
       .join(", "),
   };
 }

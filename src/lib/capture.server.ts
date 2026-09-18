@@ -6,6 +6,16 @@
  * description, or an attached CV) and posts it here with the organisation's
  * capture token. Nothing on our side pretends to be the recruiter.
  */
+import { eq } from "drizzle-orm";
+
+import { db } from "../server/db";
+import {
+  captureEvents,
+  candidateVerifications,
+  organizations,
+  requisitions,
+  socialProfiles,
+} from "@db/schema";
 import { aiJson } from "./ai-gateway.server";
 import { ingestCandidate } from "./intake.server";
 
@@ -34,11 +44,6 @@ export type CaptureResult = {
   title?: string | null;
 };
 
-async function admin() {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin;
-}
-
 function base64ToBytes(b64: string): Uint8Array {
   const clean = b64.includes(",") ? b64.slice(b64.indexOf(",") + 1) : b64;
   const bin = atob(clean.replace(/\s+/g, ""));
@@ -58,7 +63,7 @@ type ParsedJd = {
   experience_max: number | null;
 };
 
-async function parseJd(text: string): Promise<ParsedJd | null> {
+async function parseJd(text: string, orgId?: string | null | undefined): Promise<ParsedJd | null> {
   const parsed = await aiJson<ParsedJd>({
     system:
       "Extract a structured job requisition from a job description. Return ONLY JSON with keys: title, location, " +
@@ -69,6 +74,7 @@ async function parseJd(text: string): Promise<ParsedJd | null> {
       "(for example never 'LinkedIn', 'LinkedIn Talent Solutions', 'Recruiter', 'Naukri', 'Indeed', 'Careers'), " +
       "and never a browser tab or page heading. Include seniority when the description states it.",
     prompt: text.slice(0, 20000),
+    orgId,
   });
   return parsed.ok ? parsed.data : null;
 }
@@ -106,12 +112,8 @@ function titleFromText(text: string): string | null {
 }
 
 async function nextCaptureCode(orgId: string): Promise<string> {
-  const db = await admin();
-  const { count } = await db
-    .from("requisitions")
-    .select("id", { count: "exact", head: true })
-    .eq("org_id", orgId);
-  return `CAP-${String((count ?? 0) + 1).padStart(4, "0")}-${Math.random()
+  const count = await db.$count(requisitions, eq(requisitions.orgId, orgId));
+  return `CAP-${String(count + 1).padStart(4, "0")}-${Math.random()
     .toString(36)
     .slice(2, 6)
     .toUpperCase()}`;
@@ -122,33 +124,31 @@ export async function orgForCaptureToken(
   token: string,
 ): Promise<{ id: string; name: string; status: string } | null> {
   if (!token || token.length < 20) return null;
-  const db = await admin();
-  const { data } = await db
-    .from("organizations")
-    .select("id, name, status")
-    .eq("capture_token", token)
-    .maybeSingle();
-  if (!data) return null;
-  if (data.status && data.status !== "active") return null;
-  return { id: data.id, name: data.name, status: data.status };
+  const [org] = await db
+    .select({ id: organizations.id, name: organizations.name, status: organizations.status })
+    .from(organizations)
+    .where(eq(organizations.captureToken, token))
+    .limit(1);
+  if (!org) return null;
+  if (org.status && org.status !== "active") return null;
+  return org;
 }
 
 export async function capture(input: CaptureInput): Promise<CaptureResult> {
   const org = await orgForCaptureToken(input.token);
   if (!org) return { status: "error", detail: "This capture key is not valid any more." };
 
-  const db = await admin();
   const log = async (result: CaptureResult) => {
-    await db.from("capture_events").insert({
-      org_id: org.id,
+    await db.insert(captureEvents).values({
+      orgId: org.id,
       kind: input.kind,
-      source_url: input.sourceUrl ?? null,
+      sourceUrl: input.sourceUrl ?? null,
       title: result.title ?? input.title ?? null,
       status: result.status,
       detail: result.detail,
-      candidate_id: result.candidateId ?? null,
-      requisition_id: result.requisitionId ?? null,
-    } as never);
+      candidateId: result.candidateId ?? null,
+      requisitionId: result.requisitionId ?? null,
+    });
     return result;
   };
 
@@ -216,6 +216,7 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
       try {
         const { verifyClaims } = await import("./verification.server");
         const verified = await verifyClaims({
+          orgId: org.id,
           name: ingested.name,
           resumeText: text,
           skills: ingested.skills,
@@ -224,17 +225,17 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
           websiteUrl: ingested.websiteUrl,
           linkedinProfileText: pageText || null,
         });
-        await db.from("candidate_verifications").insert({
-          candidate_id: ingested.candidateId,
-          authenticity_score: verified.authenticity_score,
-          claims: verified.claims as never,
-          red_flags: verified.red_flags,
-          evidence: verified.evidence as never,
+        await db.insert(candidateVerifications).values({
+          candidateId: ingested.candidateId,
+          authenticityScore: verified.authenticity_score,
+          claims: verified.claims,
+          redFlags: verified.red_flags,
+          evidence: verified.evidence,
           summary: verified.summary,
           model: verified.model,
           status: "ok",
-          org_id: org.id,
-        } as never);
+          orgId: org.id,
+        });
         verificationNote = `verification ${verified.authenticity_score}/100`;
       } catch (e) {
         console.error("capture verification failed", e);
@@ -247,18 +248,23 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
         let roleTitle = "Candidate profile";
         let jdSkills: string[] = [];
         if (input.requisitionId) {
-          const { data: requisition } = await db
-            .from("requisitions")
-            .select("title, must_have_skills, good_to_have_skills")
-            .eq("id", input.requisitionId)
-            .maybeSingle();
+          const [requisition] = await db
+            .select({
+              title: requisitions.title,
+              mustHaveSkills: requisitions.mustHaveSkills,
+              goodToHaveSkills: requisitions.goodToHaveSkills,
+            })
+            .from(requisitions)
+            .where(eq(requisitions.id, input.requisitionId))
+            .limit(1);
           roleTitle = requisition?.title ?? roleTitle;
           jdSkills = [
-            ...(requisition?.must_have_skills ?? []),
-            ...(requisition?.good_to_have_skills ?? []),
+            ...(requisition?.mustHaveSkills ?? []),
+            ...(requisition?.goodToHaveSkills ?? []),
           ];
         }
         const linkedin = await fetchLinkedinSignal({
+          orgId: org.id,
           url: ingested.linkedinUrl,
           jobTitle: roleTitle,
           jdSkills,
@@ -266,23 +272,36 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
           profileText: pageText || null,
         });
         if (linkedin) {
-          const { error: socialError } = await db.from("social_profiles").upsert(
-            {
-              candidate_id: ingested.candidateId,
-              org_id: org.id,
+          const now = new Date();
+          await db
+            .insert(socialProfiles)
+            .values({
+              candidateId: ingested.candidateId,
+              orgId: org.id,
               provider: linkedin.provider,
-              profile_url: linkedin.profile_url,
+              profileUrl: linkedin.profile_url,
               handle: linkedin.handle,
               score: linkedin.score,
-              signals: linkedin.signals as never,
+              signals: linkedin.signals,
               rationale: linkedin.rationale,
               status: linkedin.status,
-              fetched_at: new Date().toISOString(),
-              last_synced_at: new Date().toISOString(),
-            } as never,
-            { onConflict: "candidate_id,provider" },
-          );
-          if (socialError) throw new Error(socialError.message);
+              fetchedAt: now,
+              lastSyncedAt: now,
+            })
+            .onConflictDoUpdate({
+              target: [socialProfiles.candidateId, socialProfiles.provider],
+              set: {
+                orgId: org.id,
+                profileUrl: linkedin.profile_url,
+                handle: linkedin.handle,
+                score: linkedin.score,
+                signals: linkedin.signals,
+                rationale: linkedin.rationale,
+                status: linkedin.status,
+                fetchedAt: now,
+                lastSyncedAt: now,
+              },
+            });
           socialNote = `LinkedIn analysis ${linkedin.score}/100`;
         }
       } catch (e) {
@@ -319,7 +338,7 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
     }
   }
 
-  const p = await parseJd(text);
+  const p = await parseJd(text, org.id);
   // Prefer the title the model read out of the description; the page title the
   // companion sends is usually the job board's own name.
   const title =
@@ -328,24 +347,23 @@ export async function capture(input: CaptureInput): Promise<CaptureResult> {
     titleFromText(text) ??
     "Captured role — needs a title";
   try {
-    const { data: created, error } = await db
-      .from("requisitions")
-      .insert({
-        org_id: org.id,
+    const [created] = await db
+      .insert(requisitions)
+      .values({
+        orgId: org.id,
         code: await nextCaptureCode(org.id),
         title,
         status: "draft",
         location: p?.location ?? null,
-        must_have_skills: p?.must_have_skills ?? [],
-        good_to_have_skills: p?.good_to_have_skills ?? [],
+        mustHaveSkills: p?.must_have_skills ?? [],
+        goodToHaveSkills: p?.good_to_have_skills ?? [],
         responsibilities: p?.responsibilities ?? text.slice(0, 8000),
-        education_requirement: p?.education_requirement ?? null,
-        experience_min: Number(p?.experience_min ?? 0) || 0,
-        experience_max: Number(p?.experience_max ?? 0) || 0,
-      } as never)
-      .select("id")
-      .single();
-    if (error || !created) throw new Error(error?.message ?? "The role could not be saved.");
+        educationRequirement: p?.education_requirement ?? null,
+        experienceMin: Number(p?.experience_min ?? 0) || 0,
+        experienceMax: Number(p?.experience_max ?? 0) || 0,
+      })
+      .returning({ id: requisitions.id });
+    if (!created) throw new Error("The role could not be saved.");
     return log({
       status: "imported",
       detail: `"${title}" saved as a draft role for review.`,

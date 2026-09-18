@@ -18,7 +18,6 @@ import { Route as HelpRouteImport } from './routes/help'
 import { Route as IjpRouteImport } from './routes/ijp'
 import { Route as InboxRouteImport } from './routes/inbox'
 import { Route as IntegrationsRouteImport } from './routes/integrations'
-import { Route as InterviewsRouteImport } from './routes/interviews'
 import { Route as MastersRouteImport } from './routes/masters'
 import { Route as MatchingRouteImport } from './routes/matching'
 import { Route as OffersRouteImport } from './routes/offers'
@@ -28,10 +27,12 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as ScreeningRouteImport } from './routes/screening'
 import { Route as TeamRouteImport } from './routes/team'
+import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as ApplyIdRouteImport } from './routes/apply.$id'
 import { Route as AssessTokenRouteImport } from './routes/assess.$token'
 import { Route as CandidatesIndexRouteImport } from './routes/candidates.index'
 import { Route as CandidatesIdRouteImport } from './routes/candidates.$id'
+import { Route as InterviewsIndexRouteImport } from './routes/interviews.index'
 import { Route as InterviewsMineRouteImport } from './routes/interviews.mine'
 import { Route as RequisitionsIndexRouteImport } from './routes/requisitions.index'
 import { Route as RequisitionsIdRouteImport } from './routes/requisitions.$id'
@@ -43,6 +44,9 @@ import { Route as ApiPublicLinkedinCallbackRouteImport } from './routes/api/publ
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
 import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
 import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
+import { Route as ApiPublicIntegrationsGoogleCallbackRouteImport } from './routes/api/public/integrations/google/callback'
+import { Route as ApiPublicIntegrationsMicrosoftCallbackRouteImport } from './routes/api/public/integrations/microsoft/callback'
+import { Route as ApiPublicIntegrationsZoomCallbackRouteImport } from './routes/api/public/integrations/zoom/callback'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -87,11 +91,6 @@ const InboxRoute = InboxRouteImport.update({
 const IntegrationsRoute = IntegrationsRouteImport.update({
   id: '/integrations',
   path: '/integrations',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InterviewsRoute = InterviewsRouteImport.update({
-  id: '/interviews',
-  path: '/interviews',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MastersRoute = MastersRouteImport.update({
@@ -139,6 +138,11 @@ const TeamRoute = TeamRouteImport.update({
   path: '/team',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TemplatesRoute = TemplatesRouteImport.update({
+  id: '/templates',
+  path: '/templates',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApplyIdRoute = ApplyIdRouteImport.update({
   id: '/apply/$id',
   path: '/apply/$id',
@@ -159,10 +163,15 @@ const CandidatesIdRoute = CandidatesIdRouteImport.update({
   path: '/candidates/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InterviewsIndexRoute = InterviewsIndexRouteImport.update({
+  id: '/interviews/',
+  path: '/interviews/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const InterviewsMineRoute = InterviewsMineRouteImport.update({
-  id: '/mine',
-  path: '/mine',
-  getParentRoute: () => InterviewsRoute,
+  id: '/interviews/mine',
+  path: '/interviews/mine',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const RequisitionsIndexRoute = RequisitionsIndexRouteImport.update({
   id: '/requisitions/',
@@ -216,6 +225,24 @@ const LovableEmailTransactionalPreviewRoute =
     path: '/lovable/email/transactional/preview',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicIntegrationsGoogleCallbackRoute =
+  ApiPublicIntegrationsGoogleCallbackRouteImport.update({
+    id: '/api/public/integrations/google/callback',
+    path: '/api/public/integrations/google/callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicIntegrationsMicrosoftCallbackRoute =
+  ApiPublicIntegrationsMicrosoftCallbackRouteImport.update({
+    id: '/api/public/integrations/microsoft/callback',
+    path: '/api/public/integrations/microsoft/callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicIntegrationsZoomCallbackRoute =
+  ApiPublicIntegrationsZoomCallbackRouteImport.update({
+    id: '/api/public/integrations/zoom/callback',
+    path: '/api/public/integrations/zoom/callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -227,7 +254,6 @@ export interface FileRoutesByFullPath {
   '/ijp': typeof IjpRoute
   '/inbox': typeof InboxRoute
   '/integrations': typeof IntegrationsRoute
-  '/interviews': typeof InterviewsRouteWithChildren
   '/masters': typeof MastersRoute
   '/matching': typeof MatchingRoute
   '/offers': typeof OffersRoute
@@ -237,12 +263,14 @@ export interface FileRoutesByFullPath {
   '/reports': typeof ReportsRoute
   '/screening': typeof ScreeningRoute
   '/team': typeof TeamRoute
+  '/templates': typeof TemplatesRoute
   '/apply/$id': typeof ApplyIdRoute
   '/assess/$token': typeof AssessTokenRoute
   '/candidates/$id': typeof CandidatesIdRoute
   '/interviews/mine': typeof InterviewsMineRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates/': typeof CandidatesIndexRoute
+  '/interviews/': typeof InterviewsIndexRoute
   '/requisitions/': typeof RequisitionsIndexRoute
   '/api/public/capture': typeof ApiPublicCaptureRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
@@ -252,6 +280,9 @@ export interface FileRoutesByFullPath {
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
+  '/api/public/integrations/google/callback': typeof ApiPublicIntegrationsGoogleCallbackRoute
+  '/api/public/integrations/microsoft/callback': typeof ApiPublicIntegrationsMicrosoftCallbackRoute
+  '/api/public/integrations/zoom/callback': typeof ApiPublicIntegrationsZoomCallbackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -263,7 +294,6 @@ export interface FileRoutesByTo {
   '/ijp': typeof IjpRoute
   '/inbox': typeof InboxRoute
   '/integrations': typeof IntegrationsRoute
-  '/interviews': typeof InterviewsRouteWithChildren
   '/masters': typeof MastersRoute
   '/matching': typeof MatchingRoute
   '/offers': typeof OffersRoute
@@ -273,12 +303,14 @@ export interface FileRoutesByTo {
   '/reports': typeof ReportsRoute
   '/screening': typeof ScreeningRoute
   '/team': typeof TeamRoute
+  '/templates': typeof TemplatesRoute
   '/apply/$id': typeof ApplyIdRoute
   '/assess/$token': typeof AssessTokenRoute
   '/candidates/$id': typeof CandidatesIdRoute
   '/interviews/mine': typeof InterviewsMineRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates': typeof CandidatesIndexRoute
+  '/interviews': typeof InterviewsIndexRoute
   '/requisitions': typeof RequisitionsIndexRoute
   '/api/public/capture': typeof ApiPublicCaptureRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
@@ -288,6 +320,9 @@ export interface FileRoutesByTo {
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
+  '/api/public/integrations/google/callback': typeof ApiPublicIntegrationsGoogleCallbackRoute
+  '/api/public/integrations/microsoft/callback': typeof ApiPublicIntegrationsMicrosoftCallbackRoute
+  '/api/public/integrations/zoom/callback': typeof ApiPublicIntegrationsZoomCallbackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -300,7 +335,6 @@ export interface FileRoutesById {
   '/ijp': typeof IjpRoute
   '/inbox': typeof InboxRoute
   '/integrations': typeof IntegrationsRoute
-  '/interviews': typeof InterviewsRouteWithChildren
   '/masters': typeof MastersRoute
   '/matching': typeof MatchingRoute
   '/offers': typeof OffersRoute
@@ -310,12 +344,14 @@ export interface FileRoutesById {
   '/reports': typeof ReportsRoute
   '/screening': typeof ScreeningRoute
   '/team': typeof TeamRoute
+  '/templates': typeof TemplatesRoute
   '/apply/$id': typeof ApplyIdRoute
   '/assess/$token': typeof AssessTokenRoute
   '/candidates/$id': typeof CandidatesIdRoute
   '/interviews/mine': typeof InterviewsMineRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
   '/candidates/': typeof CandidatesIndexRoute
+  '/interviews/': typeof InterviewsIndexRoute
   '/requisitions/': typeof RequisitionsIndexRoute
   '/api/public/capture': typeof ApiPublicCaptureRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
@@ -325,6 +361,9 @@ export interface FileRoutesById {
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
+  '/api/public/integrations/google/callback': typeof ApiPublicIntegrationsGoogleCallbackRoute
+  '/api/public/integrations/microsoft/callback': typeof ApiPublicIntegrationsMicrosoftCallbackRoute
+  '/api/public/integrations/zoom/callback': typeof ApiPublicIntegrationsZoomCallbackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -338,7 +377,6 @@ export interface FileRouteTypes {
     | '/ijp'
     | '/inbox'
     | '/integrations'
-    | '/interviews'
     | '/masters'
     | '/matching'
     | '/offers'
@@ -348,12 +386,14 @@ export interface FileRouteTypes {
     | '/reports'
     | '/screening'
     | '/team'
+    | '/templates'
     | '/apply/$id'
     | '/assess/$token'
     | '/candidates/$id'
     | '/interviews/mine'
     | '/requisitions/$id'
     | '/candidates/'
+    | '/interviews/'
     | '/requisitions/'
     | '/api/public/capture'
     | '/api/public/inbound-email'
@@ -363,6 +403,9 @@ export interface FileRouteTypes {
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/transactional/preview'
+    | '/api/public/integrations/google/callback'
+    | '/api/public/integrations/microsoft/callback'
+    | '/api/public/integrations/zoom/callback'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -374,7 +417,6 @@ export interface FileRouteTypes {
     | '/ijp'
     | '/inbox'
     | '/integrations'
-    | '/interviews'
     | '/masters'
     | '/matching'
     | '/offers'
@@ -384,12 +426,14 @@ export interface FileRouteTypes {
     | '/reports'
     | '/screening'
     | '/team'
+    | '/templates'
     | '/apply/$id'
     | '/assess/$token'
     | '/candidates/$id'
     | '/interviews/mine'
     | '/requisitions/$id'
     | '/candidates'
+    | '/interviews'
     | '/requisitions'
     | '/api/public/capture'
     | '/api/public/inbound-email'
@@ -399,6 +443,9 @@ export interface FileRouteTypes {
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/transactional/preview'
+    | '/api/public/integrations/google/callback'
+    | '/api/public/integrations/microsoft/callback'
+    | '/api/public/integrations/zoom/callback'
   id:
     | '__root__'
     | '/'
@@ -410,7 +457,6 @@ export interface FileRouteTypes {
     | '/ijp'
     | '/inbox'
     | '/integrations'
-    | '/interviews'
     | '/masters'
     | '/matching'
     | '/offers'
@@ -420,12 +466,14 @@ export interface FileRouteTypes {
     | '/reports'
     | '/screening'
     | '/team'
+    | '/templates'
     | '/apply/$id'
     | '/assess/$token'
     | '/candidates/$id'
     | '/interviews/mine'
     | '/requisitions/$id'
     | '/candidates/'
+    | '/interviews/'
     | '/requisitions/'
     | '/api/public/capture'
     | '/api/public/inbound-email'
@@ -435,6 +483,9 @@ export interface FileRouteTypes {
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/transactional/preview'
+    | '/api/public/integrations/google/callback'
+    | '/api/public/integrations/microsoft/callback'
+    | '/api/public/integrations/zoom/callback'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -447,7 +498,6 @@ export interface RootRouteChildren {
   IjpRoute: typeof IjpRoute
   InboxRoute: typeof InboxRoute
   IntegrationsRoute: typeof IntegrationsRoute
-  InterviewsRoute: typeof InterviewsRouteWithChildren
   MastersRoute: typeof MastersRoute
   MatchingRoute: typeof MatchingRoute
   OffersRoute: typeof OffersRoute
@@ -457,11 +507,14 @@ export interface RootRouteChildren {
   ReportsRoute: typeof ReportsRoute
   ScreeningRoute: typeof ScreeningRoute
   TeamRoute: typeof TeamRoute
+  TemplatesRoute: typeof TemplatesRoute
   ApplyIdRoute: typeof ApplyIdRoute
   AssessTokenRoute: typeof AssessTokenRoute
   CandidatesIdRoute: typeof CandidatesIdRoute
+  InterviewsMineRoute: typeof InterviewsMineRoute
   RequisitionsIdRoute: typeof RequisitionsIdRoute
   CandidatesIndexRoute: typeof CandidatesIndexRoute
+  InterviewsIndexRoute: typeof InterviewsIndexRoute
   RequisitionsIndexRoute: typeof RequisitionsIndexRoute
   ApiPublicCaptureRoute: typeof ApiPublicCaptureRoute
   ApiPublicInboundEmailRoute: typeof ApiPublicInboundEmailRoute
@@ -471,6 +524,9 @@ export interface RootRouteChildren {
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
   LovableEmailAuthWebhookRoute: typeof LovableEmailAuthWebhookRoute
   LovableEmailTransactionalPreviewRoute: typeof LovableEmailTransactionalPreviewRoute
+  ApiPublicIntegrationsGoogleCallbackRoute: typeof ApiPublicIntegrationsGoogleCallbackRoute
+  ApiPublicIntegrationsMicrosoftCallbackRoute: typeof ApiPublicIntegrationsMicrosoftCallbackRoute
+  ApiPublicIntegrationsZoomCallbackRoute: typeof ApiPublicIntegrationsZoomCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -538,13 +594,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IntegrationsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/interviews': {
-      id: '/interviews'
-      path: '/interviews'
-      fullPath: '/interviews'
-      preLoaderRoute: typeof InterviewsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/masters': {
       id: '/masters'
       path: '/masters'
@@ -608,6 +657,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TeamRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/templates': {
+      id: '/templates'
+      path: '/templates'
+      fullPath: '/templates'
+      preLoaderRoute: typeof TemplatesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/apply/$id': {
       id: '/apply/$id'
       path: '/apply/$id'
@@ -636,12 +692,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CandidatesIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/interviews/': {
+      id: '/interviews/'
+      path: '/interviews'
+      fullPath: '/interviews/'
+      preLoaderRoute: typeof InterviewsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/interviews/mine': {
       id: '/interviews/mine'
-      path: '/mine'
+      path: '/interviews/mine'
       fullPath: '/interviews/mine'
       preLoaderRoute: typeof InterviewsMineRouteImport
-      parentRoute: typeof InterviewsRoute
+      parentRoute: typeof rootRouteImport
     }
     '/requisitions/': {
       id: '/requisitions/'
@@ -713,20 +776,29 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LovableEmailTransactionalPreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/integrations/google/callback': {
+      id: '/api/public/integrations/google/callback'
+      path: '/api/public/integrations/google/callback'
+      fullPath: '/api/public/integrations/google/callback'
+      preLoaderRoute: typeof ApiPublicIntegrationsGoogleCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/integrations/microsoft/callback': {
+      id: '/api/public/integrations/microsoft/callback'
+      path: '/api/public/integrations/microsoft/callback'
+      fullPath: '/api/public/integrations/microsoft/callback'
+      preLoaderRoute: typeof ApiPublicIntegrationsMicrosoftCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/integrations/zoom/callback': {
+      id: '/api/public/integrations/zoom/callback'
+      path: '/api/public/integrations/zoom/callback'
+      fullPath: '/api/public/integrations/zoom/callback'
+      preLoaderRoute: typeof ApiPublicIntegrationsZoomCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
-
-interface InterviewsRouteChildren {
-  InterviewsMineRoute: typeof InterviewsMineRoute
-}
-
-const InterviewsRouteChildren: InterviewsRouteChildren = {
-  InterviewsMineRoute: InterviewsMineRoute,
-}
-
-const InterviewsRouteWithChildren = InterviewsRoute._addFileChildren(
-  InterviewsRouteChildren,
-)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -738,7 +810,6 @@ const rootRouteChildren: RootRouteChildren = {
   IjpRoute: IjpRoute,
   InboxRoute: InboxRoute,
   IntegrationsRoute: IntegrationsRoute,
-  InterviewsRoute: InterviewsRouteWithChildren,
   MastersRoute: MastersRoute,
   MatchingRoute: MatchingRoute,
   OffersRoute: OffersRoute,
@@ -748,11 +819,14 @@ const rootRouteChildren: RootRouteChildren = {
   ReportsRoute: ReportsRoute,
   ScreeningRoute: ScreeningRoute,
   TeamRoute: TeamRoute,
+  TemplatesRoute: TemplatesRoute,
   ApplyIdRoute: ApplyIdRoute,
   AssessTokenRoute: AssessTokenRoute,
   CandidatesIdRoute: CandidatesIdRoute,
+  InterviewsMineRoute: InterviewsMineRoute,
   RequisitionsIdRoute: RequisitionsIdRoute,
   CandidatesIndexRoute: CandidatesIndexRoute,
+  InterviewsIndexRoute: InterviewsIndexRoute,
   RequisitionsIndexRoute: RequisitionsIndexRoute,
   ApiPublicCaptureRoute: ApiPublicCaptureRoute,
   ApiPublicInboundEmailRoute: ApiPublicInboundEmailRoute,
@@ -762,6 +836,12 @@ const rootRouteChildren: RootRouteChildren = {
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,
   LovableEmailAuthWebhookRoute: LovableEmailAuthWebhookRoute,
   LovableEmailTransactionalPreviewRoute: LovableEmailTransactionalPreviewRoute,
+  ApiPublicIntegrationsGoogleCallbackRoute:
+    ApiPublicIntegrationsGoogleCallbackRoute,
+  ApiPublicIntegrationsMicrosoftCallbackRoute:
+    ApiPublicIntegrationsMicrosoftCallbackRoute,
+  ApiPublicIntegrationsZoomCallbackRoute:
+    ApiPublicIntegrationsZoomCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

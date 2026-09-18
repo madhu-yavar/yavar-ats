@@ -2,33 +2,51 @@
  * Authenticated CV delivery from the private resume vault. The bytes travel
  * through ATSIQ so browser privacy tools never need to open the vault host.
  */
+import { and, eq } from "drizzle-orm";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+
+import { db } from "../server/db";
+import { candidates } from "@db/schema";
+import { requireOrg } from "./auth.middleware";
+import { getObject, isStorageConfigured } from "../server/storage";
 
 export const getResumeDownloadUrl = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => z.object({ candidateId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
-    const { data: candidate } = await context.supabase
-      .from("candidates")
-      .select("id, full_name, resume_file_path")
-      .eq("id", data.candidateId)
-      .maybeSingle();
-    if (!candidate?.resume_file_path) {
+    const [candidate] = await db
+      .select({
+        id: candidates.id,
+        fullName: candidates.fullName,
+        resumeFilePath: candidates.resumeFilePath,
+      })
+      .from(candidates)
+      .where(and(eq(candidates.id, data.candidateId), eq(candidates.orgId, context.orgId)))
+      .limit(1);
+    if (!candidate?.resumeFilePath) {
       return { ok: false as const, error: "No original CV file is stored for this candidate." };
     }
-    const { data: file, error } = await context.supabase.storage
-      .from("resumes")
-      .download(candidate.resume_file_path);
-    if (error || !file) {
+    // Defence in depth: the vault path must live inside this org's folder.
+    if (!candidate.resumeFilePath.startsWith(`${context.orgId}/`)) {
       return { ok: false as const, error: "That CV file could not be opened." };
     }
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    if (bytes.byteLength > 20 * 1024 * 1024) {
+    if (!isStorageConfigured()) {
+      return { ok: false as const, error: "The CV vault is not configured on this deployment." };
+    }
+    let file: { bytes: Uint8Array; contentType: string } | null;
+    try {
+      file = await getObject(candidate.resumeFilePath);
+    } catch {
+      return { ok: false as const, error: "That CV file could not be opened." };
+    }
+    if (!file) {
+      return { ok: false as const, error: "That CV file could not be opened." };
+    }
+    if (file.bytes.byteLength > 20 * 1024 * 1024) {
       return { ok: false as const, error: "That CV is too large to download through ATSIQ." };
     }
-    const storedName = candidate.resume_file_path.split("/").pop() ?? "resume.pdf";
+    const storedName = candidate.resumeFilePath.split("/").pop() ?? "resume.pdf";
     let filename = storedName;
     try {
       filename = decodeURIComponent(storedName);
@@ -37,8 +55,8 @@ export const getResumeDownloadUrl = createServerFn({ method: "GET" })
     }
     return {
       ok: true as const,
-      base64: Buffer.from(bytes).toString("base64"),
-      contentType: file.type || "application/octet-stream",
-      filename: filename || `${candidate.full_name || "candidate"}-CV.pdf`,
+      base64: Buffer.from(file.bytes).toString("base64"),
+      contentType: file.contentType || "application/octet-stream",
+      filename: filename || `${candidate.fullName || "candidate"}-CV.pdf`,
     };
   });

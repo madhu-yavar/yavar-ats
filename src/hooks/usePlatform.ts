@@ -10,8 +10,10 @@ export function usePlatform() {
     queryKey: ["platform_state"],
     queryFn: () => fetchState({}),
     staleTime: 60_000,
-    retry: 3,
-    retryDelay: (attempt) => Math.min(400 * 2 ** attempt, 2000),
+    // "Super-user access only." is the expected answer for every non-super-user —
+    // it is a settled no, not a transient failure. Retrying it re-fires the
+    // throwing RPC forever and keeps OrgGate on "Loading your organisation…".
+    retry: false,
   });
   return {
     isSuperUser: Boolean(q.data?.isSuperUser),

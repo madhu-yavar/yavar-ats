@@ -1,0 +1,1 @@
+ALTER TABLE "requisitions" ADD COLUMN "job_card_overrides" jsonb DEFAULT '{}'::jsonb NOT NULL;
