@@ -66,7 +66,8 @@ export const collectApplicants = createServerFn({ method: "POST" })
       if (!conn) {
         summary.linkedinNote = "LinkedIn is not connected for your organisation yet.";
       } else {
-        const caps = await probeCapabilities(conn.accessToken, conn.scope ?? null);
+        const { decryptSecret } = await import("../server/crypto");
+        const caps = await probeCapabilities(decryptSecret(conn.accessToken), conn.scope ?? null);
         const apps = caps.find((c) => c.id === "applications");
         summary.linkedinNote = apps?.ready
           ? null
@@ -112,6 +113,7 @@ export const collectApplicants = createServerFn({ method: "POST" })
         const run = await syncCareersInbox({
           requisitionId: data.requisitionId ?? null,
           max: data.max ?? 25,
+          orgId,
         });
         summary.scanned += run.scanned;
         summary.imported += run.imported;

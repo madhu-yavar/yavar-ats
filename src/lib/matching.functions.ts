@@ -401,17 +401,15 @@ export const runAiScreening = createServerFn({ method: "POST" })
     const result = await aiJson<{
       jd_match_score: number;
       skillset_score: number;
-      culture_role_score: number;
-      culture_org_score: number;
       summary: string;
       transcript: { question: string; expected_signal: string }[];
     }>({
       orgId: context.orgId,
       system:
         "You design and evaluate an AI first-round screening interview. Produce 6 role-specific questions with the " +
-        "signal each one probes, and score the candidate on jd_match_score, skillset_score, culture_role_score and " +
-        "culture_org_score (0-100 each) based on the evidence supplied. Return ONLY JSON with keys: jd_match_score, " +
-        "skillset_score, culture_role_score, culture_org_score, summary, transcript (array of {question, expected_signal}).",
+        "signal each one probes, and score the candidate on jd_match_score and skillset_score (0-100 each) based " +
+        "on the evidence supplied. Never score 'culture fit' or personality proxies. Return ONLY JSON with keys: " +
+        "jd_match_score, skillset_score, summary, transcript (array of {question, expected_signal}).",
       prompt: JSON.stringify(data),
     });
     if (!result.ok) throw new Error(result.message);

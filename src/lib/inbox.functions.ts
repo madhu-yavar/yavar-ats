@@ -36,11 +36,18 @@ const SyncInput = z.object({
 export const importCareersInbox = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => SyncInput.parse(data ?? {}))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    // The careers mailbox receives every tenant's applicants. A manual import
+    // must therefore be scoped to the caller's org and limited to HR leadership.
+    const { assertRole, activeOrgOf } = await import("./auth.middleware");
+    const org = await activeOrgOf(context.userId);
+    if (!org) throw new Error("You are not part of an organisation yet.");
+    await assertRole(context.userId, org.orgId, ["hr_head", "president_cbo"]);
     const { syncCareersInbox } = await import("./inbox.server");
     return syncCareersInbox({
       requisitionId: data.requisitionId ?? null,
       max: data.max ?? 20,
+      orgId: org.orgId,
       ...(data.query ? { query: data.query } : {}),
     });
   });

@@ -199,8 +199,12 @@ export function ScreeningPanel(props: {
 
   async function openRecording(runId: string) {
     try {
-      const { url } = await audioUrl({ data: { runId } });
-      window.open(url, "_blank", "noopener");
+      const { dataUrl } = await audioUrl({ data: { runId } });
+      // data: URLs cannot be opened as top-level targets — pipe through a blob.
+      const blob = await (await fetch(dataUrl)).blob();
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, "_blank", "noopener");
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not open the recording.");
     }

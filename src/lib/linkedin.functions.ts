@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { db } from "../server/db";
 import { orgLinkedinConnections, requisitions } from "@db/schema";
-import { requireOrg } from "./auth.middleware";
+import { requireOrg, requireRole } from "./auth.middleware";
 import type { LinkedinCapability } from "./linkedin.server";
 import {
   LinkedinAuthError,
@@ -85,7 +85,7 @@ export const startLinkedInConnect = createServerFn({ method: "POST" })
 
 /** Forget this organisation's LinkedIn account. */
 export const disconnectLinkedIn = createServerFn({ method: "POST" })
-  .middleware([requireOrg])
+  .middleware([requireRole("hr_head")])
   .handler(async ({ context }) => {
     await db.delete(orgLinkedinConnections).where(eq(orgLinkedinConnections.orgId, context.orgId));
     return { ok: true as const };
@@ -96,6 +96,7 @@ export const disconnectLinkedIn = createServerFn({ method: "POST" })
  * refresh token and the access token is close to expiry.
  */
 async function orgToken(orgId: string): Promise<{ accessToken: string; memberSub: string }> {
+  const { decryptSecret, encryptSecret } = await import("../server/crypto");
   const [row] = await db
     .select({
       memberSub: orgLinkedinConnections.memberSub,
@@ -111,19 +112,19 @@ async function orgToken(orgId: string): Promise<{ accessToken: string; memberSub
   const expiresAt = row.expiresAt ? row.expiresAt.getTime() : 0;
   if (expiresAt && expiresAt - Date.now() < 5 * 60 * 1000) {
     if (!row.refreshToken) throw new LinkedinAuthError();
-    const next = await refreshAccessToken(row.refreshToken);
+    const next = await refreshAccessToken(decryptSecret(row.refreshToken));
     await db
       .update(orgLinkedinConnections)
       .set({
-        accessToken: next.access_token,
-        refreshToken: next.refresh_token ?? row.refreshToken,
+        accessToken: encryptSecret(next.access_token),
+        refreshToken: next.refresh_token ? encryptSecret(next.refresh_token) : row.refreshToken,
         expiresAt: new Date(Date.now() + next.expires_in * 1000),
         updatedAt: new Date(),
       })
       .where(eq(orgLinkedinConnections.orgId, orgId));
     return { accessToken: next.access_token, memberSub: row.memberSub };
   }
-  return { accessToken: row.accessToken, memberSub: row.memberSub };
+  return { accessToken: decryptSecret(row.accessToken), memberSub: row.memberSub };
 }
 
 const PublishInput = z.object({
@@ -133,7 +134,7 @@ const PublishInput = z.object({
 
 /** Publish the designed post text to the organisation's own LinkedIn account. */
 export const publishToLinkedIn = createServerFn({ method: "POST" })
-  .middleware([requireOrg])
+  .middleware([requireRole("hr_head")])
   .inputValidator((data: unknown) => PublishInput.parse(data))
   .handler(async ({ data, context }) => {
     const [requisition] = await db

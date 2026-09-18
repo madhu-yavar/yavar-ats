@@ -1,4 +1,4 @@
-import { aiJson } from "./ai-gateway.server";
+import { aiJson, INJECTION_RULES, untrusted } from "./ai-gateway.server";
 import {
   careerScore,
   computeCareerMetrics,
@@ -165,7 +165,8 @@ export async function scoreCandidate(opts: {
     impact_rationale: string;
   }>({
     system:
-      "You are a rigorous technical recruiter mapping a CV against a job description. " +
+      INJECTION_RULES +
+      "\nYou are a rigorous technical recruiter mapping a CV against a job description. " +
       "Judge semantic equivalence (e.g. 'EKS' evidences 'Kubernetes'), require evidence from the resume text, " +
       "and never credit a must-have skill that is only listed but never demonstrated — flag that instead. " +
       "skills_score weights must-have coverage far above good-to-have. " +
@@ -187,10 +188,13 @@ export async function scoreCandidate(opts: {
       "transferable_skills, risk_flags (short strings), rationale (3-4 sentences, cite evidence), " +
       "employment_history, skill_recency_years, impact_score, innovation_score, impact_highlights, " +
       "innovation_signals, impact_rationale (2-3 sentences).",
-    prompt: JSON.stringify({
-      job_description: jd,
-      candidate: { ...candidate, cachedSocial: undefined },
-    }),
+    prompt: untrusted(
+      "job_description_and_candidate",
+      JSON.stringify({
+        job_description: jd,
+        candidate: { ...candidate, cachedSocial: undefined },
+      }),
+    ),
     orgId: opts.orgId,
   });
   if (!ai.ok) throw new Error(ai.message);

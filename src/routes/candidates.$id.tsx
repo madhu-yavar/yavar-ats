@@ -121,8 +121,6 @@ function CandidateDetail() {
           applicationId,
           jdMatchScore: out.jd_match_score,
           skillsetScore: out.skillset_score,
-          cultureRoleScore: out.culture_role_score,
-          cultureOrgScore: out.culture_org_score,
           transcript: out.transcript,
           summary: out.summary,
         },
@@ -317,8 +315,6 @@ function CandidateDetail() {
                           <div className="num grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                             <Metric label="JD match" value={ai.jd_match_score} />
                             <Metric label="Skillset" value={ai.skillset_score} />
-                            <Metric label="Culture — role" value={ai.culture_role_score} />
-                            <Metric label="Culture — org" value={ai.culture_org_score} />
                           </div>
                           <p className="mt-3 text-sm">{ai.summary}</p>
                           <ol className="mt-3 space-y-2 text-xs text-muted-foreground">

@@ -1,11 +1,22 @@
+import { and, desc, eq } from "drizzle-orm";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { db } from "../server/db";
+import {
+  applications,
+  candidates,
+  jobDescriptions,
+  matchScores,
+  requisitions,
+  screeningKits,
+  screeningRuns,
+} from "@db/schema";
+import { getObject, putObject } from "../server/storage";
+import { requireOrg } from "./auth.middleware";
 import {
   buildScreeningKit,
   gradeScreening,
-  storeScreeningAudio,
   transcribeScreeningAudio,
   type ScreeningQuestion,
 } from "./screening.server";
@@ -20,63 +31,66 @@ const QuestionSchema = z.object({
   weight: z.number(),
 });
 
-/** Pull JD, requisition, candidate and the latest match for one pairing. */
-async function loadPairing(
-  supabase: Parameters<typeof loadPairingImpl>[0],
-  candidateId: string,
-  requisitionId: string | null,
-) {
-  return loadPairingImpl(supabase, candidateId, requisitionId);
-}
-
-type Sb = { from: (t: string) => any };
-
-async function loadPairingImpl(supabase: Sb, candidateId: string, requisitionId: string | null) {
-  const { data: candidate, error: cErr } = await supabase
-    .from("candidates")
-    .select(
-      "id, org_id, full_name, skills, resume_text, experience_years, current_employer, employment_history, education, current_ctc, expected_ctc, notice_period_days, location",
-    )
-    .eq("id", candidateId)
-    .maybeSingle();
-  if (cErr) throw new Error(cErr.message);
+/**
+ * Pull JD, requisition, candidate and the latest match for one pairing.
+ * Every lookup carries the caller's org predicate — the candidate, the
+ * requisition and the application must all belong to the caller's org.
+ */
+async function loadPairing(orgId: string, candidateId: string, requisitionId: string | null) {
+  const [candidate] = await db
+    .select()
+    .from(candidates)
+    .where(and(eq(candidates.id, candidateId), eq(candidates.orgId, orgId)))
+    .limit(1);
   if (!candidate) throw new Error("Candidate not found");
 
-  let requisition: any = null;
+  let requisition: typeof requisitions.$inferSelect | null = null;
   if (requisitionId) {
-    const { data } = await supabase
-      .from("requisitions")
-      .select(
-        "id, title, must_have_skills, good_to_have_skills, responsibilities, education_requirement, experience_min, experience_max, budget_ctc, location",
-      )
-      .eq("id", requisitionId)
-      .maybeSingle();
-    requisition = data ?? null;
+    const [row] = await db
+      .select()
+      .from(requisitions)
+      .where(and(eq(requisitions.id, requisitionId), eq(requisitions.orgId, orgId)))
+      .limit(1);
+    requisition = row ?? null;
   }
 
-  let application: any = null;
+  let application: { id: string } | null = null;
   if (requisitionId) {
-    const { data } = await supabase
-      .from("applications")
-      .select("id")
-      .eq("candidate_id", candidateId)
-      .eq("requisition_id", requisitionId)
-      .order("applied_at", { ascending: true })
+    const [row] = await db
+      .select({ id: applications.id })
+      .from(applications)
+      .where(
+        and(
+          eq(applications.candidateId, candidateId),
+          eq(applications.requisitionId, requisitionId),
+          eq(applications.orgId, orgId),
+        ),
+      )
+      .orderBy(applications.appliedAt)
       .limit(1);
-    application = data?.[0] ?? null;
+    application = row ?? null;
   }
 
   let jdText = "";
   if (requisitionId) {
-    const { data: jd } = await supabase
-      .from("job_descriptions")
-      .select("full_text, purpose, responsibilities, qualifications")
-      .eq("requisition_id", requisitionId)
-      .order("version", { ascending: false })
+    const [row] = await db
+      .select({
+        fullText: jobDescriptions.fullText,
+        purpose: jobDescriptions.purpose,
+        responsibilities: jobDescriptions.responsibilities,
+        qualifications: jobDescriptions.qualifications,
+      })
+      .from(jobDescriptions)
+      .where(
+        and(
+          eq(jobDescriptions.requisitionId, requisitionId),
+          eq(jobDescriptions.orgId, orgId),
+        ),
+      )
+      .orderBy(desc(jobDescriptions.version))
       .limit(1);
-    const row = jd?.[0];
     jdText =
-      row?.full_text ??
+      row?.fullText ??
       [row?.purpose, row?.responsibilities, row?.qualifications].filter(Boolean).join("\n\n") ??
       "";
   }
@@ -84,25 +98,35 @@ async function loadPairingImpl(supabase: Sb, candidateId: string, requisitionId:
     jdText = [
       `Role: ${requisition.title}`,
       requisition.responsibilities ?? "",
-      `Must-have: ${(requisition.must_have_skills ?? []).join(", ")}`,
-      `Good to have: ${(requisition.good_to_have_skills ?? []).join(", ")}`,
-      requisition.education_requirement
-        ? `Qualification: ${requisition.education_requirement}`
+      `Must-have: ${(requisition.mustHaveSkills ?? []).join(", ")}`,
+      `Good to have: ${(requisition.goodToHaveSkills ?? []).join(", ")}`,
+      requisition.educationRequirement
+        ? `Qualification: ${requisition.educationRequirement}`
         : "",
     ]
       .filter(Boolean)
       .join("\n");
   }
 
-  let match: any = null;
+  let match: {
+    overallScore: number | null;
+    rationale: string | null;
+    missingSkills: string[];
+    riskFlags: string[];
+  } | null = null;
   if (application) {
-    const { data } = await supabase
-      .from("match_scores")
-      .select("overall_score, rationale, missing_skills, risk_flags")
-      .eq("application_id", application.id)
-      .order("computed_at", { ascending: false })
+    const [row] = await db
+      .select({
+        overallScore: matchScores.overallScore,
+        rationale: matchScores.rationale,
+        missingSkills: matchScores.missingSkills,
+        riskFlags: matchScores.riskFlags,
+      })
+      .from(matchScores)
+      .where(eq(matchScores.applicationId, application.id))
+      .orderBy(desc(matchScores.computedAt))
       .limit(1);
-    match = data?.[0] ?? null;
+    match = row ?? null;
   }
 
   return { candidate, requisition, application, jdText, match };
@@ -111,7 +135,7 @@ async function loadPairingImpl(supabase: Sb, candidateId: string, requisitionId:
 /* --------------------------------------------------------------- build kit */
 
 export const createScreeningKit = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) =>
     z
       .object({
@@ -122,7 +146,7 @@ export const createScreeningKit = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { candidate, requisition, application, jdText, match } = await loadPairing(
-      context.supabase as never,
+      context.orgId,
       data.candidateId,
       data.requisitionId ?? null,
     );
@@ -132,44 +156,42 @@ export const createScreeningKit = createServerFn({ method: "POST" })
     const kit = await buildScreeningKit({
       role: requisition.title,
       jdText,
-      mustHave: requisition.must_have_skills ?? [],
-      goodToHave: requisition.good_to_have_skills ?? [],
-      experienceMin: requisition.experience_min ?? 0,
-      experienceMax: requisition.experience_max ?? 0,
-      budgetCtc: requisition.budget_ctc ?? null,
+      mustHave: requisition.mustHaveSkills ?? [],
+      goodToHave: requisition.goodToHaveSkills ?? [],
+      experienceMin: requisition.experienceMin ?? 0,
+      experienceMax: requisition.experienceMax ?? 0,
+      budgetCtc: requisition.budgetCtc != null ? Number(requisition.budgetCtc) : null,
       currency: "INR",
-      candidateName: candidate.full_name,
-      resumeText: candidate.resume_text,
+      candidateName: candidate.fullName,
+      resumeText: candidate.resumeText,
       candidateSkills: candidate.skills ?? [],
-      experienceYears: Number(candidate.experience_years) || 0,
-      currentEmployer: candidate.current_employer,
-      employmentHistory: candidate.employment_history,
+      experienceYears: Number(candidate.experienceYears) || 0,
+      currentEmployer: candidate.currentEmployer,
+      employmentHistory: candidate.employmentHistory,
       education: candidate.education,
-      currentCtc: candidate.current_ctc,
-      expectedCtc: candidate.expected_ctc,
-      noticePeriodDays: candidate.notice_period_days,
+      currentCtc: candidate.currentCtc != null ? Number(candidate.currentCtc) : null,
+      expectedCtc: candidate.expectedCtc != null ? Number(candidate.expectedCtc) : null,
+      noticePeriodDays: candidate.noticePeriodDays,
       location: candidate.location,
       matchRationale: match?.rationale ?? null,
-      missingSkills: match?.missing_skills ?? [],
-      riskFlags: match?.risk_flags ?? [],
+      missingSkills: match?.missingSkills ?? [],
+      riskFlags: match?.riskFlags ?? [],
     });
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: row, error } = await supabaseAdmin
-      .from("screening_kits")
-      .insert({
-        org_id: candidate.org_id,
-        candidate_id: candidate.id,
-        requisition_id: requisition.id,
-        application_id: application?.id ?? null,
+    const [row] = await db
+      .insert(screeningKits)
+      .values({
+        orgId: context.orgId,
+        candidateId: candidate.id,
+        requisitionId: requisition.id,
+        applicationId: application?.id ?? null,
         questions: kit.questions as never,
-        focus_summary: kit.focus_summary,
+        focusSummary: kit.focus_summary,
         engine: kit.engine as never,
-        created_by: context.userId,
+        createdBy: context.userId,
       })
-      .select("id")
-      .single();
-    if (error) throw new Error(error.message);
+      .returning({ id: screeningKits.id });
+    if (!row) throw new Error("Could not save the screening kit");
 
     return { kitId: row.id, ...kit };
   });
@@ -177,7 +199,7 @@ export const createScreeningKit = createServerFn({ method: "POST" })
 /* ------------------------------------------------------------- edit a kit */
 
 export const saveScreeningKit = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) =>
     z
       .object({
@@ -187,21 +209,19 @@ export const saveScreeningKit = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase
-      .from("screening_kits")
-      .update({
-        questions: data.questions as never,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", data.kitId);
-    if (error) throw new Error(error.message);
+    const updated = await db
+      .update(screeningKits)
+      .set({ questions: data.questions as never, updatedAt: new Date() })
+      .where(and(eq(screeningKits.id, data.kitId), eq(screeningKits.orgId, context.orgId)))
+      .returning({ id: screeningKits.id });
+    if (!updated.length) throw new Error("Screening kit not found");
     return { ok: true };
   });
 
 /* ---------------------------------------------------------- grade answers */
 
 export const gradeScreeningAnswers = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) =>
     z
       .object({
@@ -220,21 +240,20 @@ export const gradeScreeningAnswers = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
-    const { data: kit, error: kErr } = await context.supabase
-      .from("screening_kits")
-      .select("id, org_id, candidate_id, requisition_id, application_id, questions")
-      .eq("id", data.kitId)
-      .maybeSingle();
-    if (kErr) throw new Error(kErr.message);
+    const [kit] = await db
+      .select()
+      .from(screeningKits)
+      .where(and(eq(screeningKits.id, data.kitId), eq(screeningKits.orgId, context.orgId)))
+      .limit(1);
     if (!kit) throw new Error("Screening kit not found");
 
     const questions = (Array.isArray(kit.questions) ? kit.questions : []) as ScreeningQuestion[];
     if (!questions.length) throw new Error("This kit has no questions to grade against.");
 
     const { candidate, requisition, jdText, match } = await loadPairing(
-      context.supabase as never,
-      kit.candidate_id,
-      kit.requisition_id,
+      context.orgId,
+      kit.candidateId,
+      kit.requisitionId,
     );
 
     // Audio, when supplied, is stored first and transcribed with the org's provider.
@@ -245,15 +264,15 @@ export const gradeScreeningAnswers = createServerFn({ method: "POST" })
     if (data.audio) {
       const bytes = Uint8Array.from(Buffer.from(data.audio.base64, "base64"));
       if (!bytes.byteLength) throw new Error("The recording was empty.");
-      const stored = await storeScreeningAudio({
-        orgId: kit.org_id,
-        candidateId: kit.candidate_id,
-        filename: data.audio.filename,
-        bytes,
-        contentType: data.audio.contentType,
-      });
-      audioPath = stored.path;
+      if (bytes.byteLength > 25 * 1024 * 1024) {
+        throw new Error("The recording is too large (25 MB maximum).");
+      }
+      const safe = data.audio.filename.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "screening.webm";
+      // The vault key is derived from the verified caller org — never from a fetched row.
+      audioPath = `${context.orgId}/${kit.candidateId}/${Date.now()}-${safe}`;
+      await putObject(audioPath, bytes, data.audio.contentType || "audio/webm");
       const heard = await transcribeScreeningAudio({
+        orgId: context.orgId,
         bytes,
         filename: data.audio.filename,
         contentType: data.audio.contentType,
@@ -271,48 +290,46 @@ export const gradeScreeningAnswers = createServerFn({ method: "POST" })
     const grade = await gradeScreening({
       role: requisition?.title ?? "the role",
       jdText,
-      mustHave: requisition?.must_have_skills ?? [],
-      candidateName: candidate.full_name,
+      mustHave: requisition?.mustHaveSkills ?? [],
+      candidateName: candidate.fullName,
       questions,
       answers: typed,
       transcript,
     });
 
     const matchScore =
-      typeof match?.overall_score === "number" ? Math.round(match.overall_score) : null;
+      typeof match?.overallScore === "number" ? Math.round(match.overallScore) : null;
     const combined =
       matchScore === null
         ? grade.screening_score
         : Math.round(matchScore * 0.6 + grade.screening_score * 0.4);
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: run, error } = await supabaseAdmin
-      .from("screening_runs")
-      .insert({
-        org_id: kit.org_id,
-        kit_id: kit.id,
-        candidate_id: kit.candidate_id,
-        requisition_id: kit.requisition_id,
-        application_id: kit.application_id,
-        input_kind: inputKind,
+    const [run] = await db
+      .insert(screeningRuns)
+      .values({
+        orgId: context.orgId,
+        kitId: kit.id,
+        candidateId: kit.candidateId,
+        requisitionId: kit.requisitionId,
+        applicationId: kit.applicationId,
+        inputKind,
         answers: typed as never,
         transcript,
-        audio_path: audioPath,
-        audio_engine: audioEngine,
-        screening_score: grade.screening_score,
-        match_score: matchScore,
-        combined_score: combined,
+        audioPath,
+        audioEngine,
+        screeningScore: grade.screening_score,
+        matchScore,
+        combinedScore: combined,
         verdicts: grade.verdicts as never,
-        red_flags: grade.red_flags,
+        redFlags: grade.red_flags,
         rationale: grade.rationale,
         recommendation: grade.recommendation,
-        recommendation_reason: grade.recommendation_reason,
+        recommendationReason: grade.recommendation_reason,
         engine: grade.engine as never,
-        created_by: context.userId,
+        createdBy: context.userId,
       })
-      .select("id")
-      .single();
-    if (error) throw new Error(error.message);
+      .returning({ id: screeningRuns.id });
+    if (!run) throw new Error("Could not save the screening run");
 
     return {
       runId: run.id,
@@ -324,24 +341,33 @@ export const gradeScreeningAnswers = createServerFn({ method: "POST" })
     };
   });
 
-/* ------------------------------------------------- recording download link */
+/* ------------------------------------------------- recording delivery */
 
+/**
+ * Authenticated recording delivery. The bytes travel through ATSIQ from the
+ * private vault after the caller's org is verified — no signed storage URLs.
+ */
 export const getScreeningAudioUrl = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((data: unknown) => z.object({ runId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
-    const { data: run, error } = await context.supabase
-      .from("screening_runs")
-      .select("audio_path")
-      .eq("id", data.runId)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!run?.audio_path) throw new Error("No recording was stored for this screening.");
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: signed, error: sErr } = await supabaseAdmin.storage
-      .from("screening-audio")
-      .createSignedUrl(run.audio_path, 120);
-    if (sErr || !signed?.signedUrl)
-      throw new Error(sErr?.message ?? "Could not open the recording.");
-    return { url: signed.signedUrl };
+    const [run] = await db
+      .select({ audioPath: screeningRuns.audioPath })
+      .from(screeningRuns)
+      .where(and(eq(screeningRuns.id, data.runId), eq(screeningRuns.orgId, context.orgId)))
+      .limit(1);
+    if (!run?.audioPath) throw new Error("No recording was stored for this screening.");
+    // Defence in depth: the vault key must live inside this org's folder.
+    if (!run.audioPath.startsWith(`${context.orgId}/`)) {
+      throw new Error("That recording could not be opened.");
+    }
+    const file = await getObject(run.audioPath);
+    if (!file) throw new Error("That recording could not be opened.");
+    if (file.bytes.byteLength > 25 * 1024 * 1024) {
+      throw new Error("That recording is too large to open through ATSIQ.");
+    }
+    const contentType = file.contentType.startsWith("audio/") ? file.contentType : "audio/webm";
+    return {
+      dataUrl: `data:${contentType};base64,${Buffer.from(file.bytes).toString("base64")}`,
+    };
   });

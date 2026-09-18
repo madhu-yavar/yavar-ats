@@ -37,6 +37,7 @@ export const verifyCandidate = createServerFn({ method: "POST" })
     if (!candidate) throw new Error("Candidate not found");
 
     const result = await verifyClaims({
+      orgId: context.orgId,
       name: candidate.fullName,
       resumeText: candidate.resumeText,
       skills: candidate.skills ?? [],
@@ -93,6 +94,7 @@ export const verifyCandidates = createServerFn({ method: "POST" })
     for (const c of rows) {
       try {
         const result = await verifyClaims({
+          orgId: context.orgId,
           name: c.fullName,
           resumeText: c.resumeText,
           skills: c.skills ?? [],

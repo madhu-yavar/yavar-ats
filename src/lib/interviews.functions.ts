@@ -423,8 +423,6 @@ const AiScreenSaveInput = z.object({
   applicationId: z.string().uuid(),
   jdMatchScore: z.number().int(),
   skillsetScore: z.number().int(),
-  cultureRoleScore: z.number().int(),
-  cultureOrgScore: z.number().int(),
   transcript: z.array(z.object({ question: z.string(), expected_signal: z.string() })),
   summary: z.string(),
 });
@@ -450,8 +448,6 @@ export const saveAiInterview = createServerFn({ method: "POST" })
       orgId: context.orgId,
       jdMatchScore: data.jdMatchScore,
       skillsetScore: data.skillsetScore,
-      cultureRoleScore: data.cultureRoleScore,
-      cultureOrgScore: data.cultureOrgScore,
       transcript: data.transcript,
       summary: data.summary,
     });

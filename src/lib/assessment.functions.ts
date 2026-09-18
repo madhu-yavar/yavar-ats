@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../server/db";
@@ -94,11 +94,16 @@ export const getAssessment = createServerFn({ method: "GET" })
         status: candidateAssessments.status,
         questions: candidateAssessments.questions,
         candidateId: candidateAssessments.candidateId,
+        createdAt: candidateAssessments.createdAt,
       })
       .from(candidateAssessments)
       .where(eq(candidateAssessments.token, data.token))
       .limit(1);
     if (!row) throw new Error("This assessment link is not valid");
+    // Links expire 14 days after they are issued.
+    if (Date.now() - row.createdAt.getTime() > 14 * 24 * 60 * 60 * 1000) {
+      throw new Error("This assessment link has expired.");
+    }
 
     const [candidate] = await db
       .select({ fullName: candidates.fullName })
@@ -151,7 +156,9 @@ export const submitAssessment = createServerFn({ method: "POST" })
 
     const result = await scoreAnswers({ orgId: row.orgId, title, questions, answers: data.answers });
 
-    await db
+    // Atomic lock: the status guard lives in the UPDATE itself, so two
+    // concurrent submissions cannot both write (TOCTOU).
+    const locked = await db
       .update(candidateAssessments)
       .set({
         status: "completed",
@@ -164,7 +171,9 @@ export const submitAssessment = createServerFn({ method: "POST" })
         model: result.model,
         completedAt: new Date(),
       })
-      .where(eq(candidateAssessments.id, row.id));
+      .where(and(eq(candidateAssessments.id, row.id), ne(candidateAssessments.status, "completed")))
+      .returning({ id: candidateAssessments.id });
+    if (!locked.length) throw new Error("This assessment has already been submitted");
 
     return { ok: true as const };
   });

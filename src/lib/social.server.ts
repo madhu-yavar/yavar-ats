@@ -1,4 +1,4 @@
-import { aiJson } from "./ai-gateway.server";
+import { aiJson, INJECTION_RULES, untrusted } from "./ai-gateway.server";
 
 export type SocialSignal = {
   provider: "github" | "linkedin" | "writing";
@@ -162,16 +162,20 @@ export async function fetchLinkedinSignal(opts: {
     rationale: string;
   }>({
     system:
-      "You are a talent-intelligence analyst scoring a candidate's professional/LinkedIn narrative against a job description. " +
+      INJECTION_RULES +
+      "\nYou are a talent-intelligence analyst scoring a candidate's professional/LinkedIn narrative against a job description. " +
       "Score 0-100 on career progression, tenure stability, seniority trajectory and headline/role alignment. " +
       "Be conservative when evidence is thin. Return ONLY JSON with keys: score, tenure_stability, progression, headline_alignment, rationale.",
-    prompt: JSON.stringify({
-      target_role: opts.jobTitle,
-      jd_must_have_skills: opts.jdSkills,
-      linkedin_url: opts.url,
-      profile_text: opts.profileText ?? null,
-      resume_text: opts.resumeText?.slice(0, 6000) ?? null,
-    }),
+    prompt: untrusted(
+      "profile_pages",
+      JSON.stringify({
+        target_role: opts.jobTitle,
+        jd_must_have_skills: opts.jdSkills,
+        linkedin_url: opts.url,
+        profile_text: opts.profileText ?? null,
+        resume_text: opts.resumeText?.slice(0, 6000) ?? null,
+      }),
+    ),
     orgId: opts.orgId,
   });
 
@@ -214,11 +218,10 @@ export async function fetchWritingSignal(opts: {
   if (!urls.length) return null;
 
   const pages: { url: string; excerpt: string }[] = [];
+  const { safeFetchText } = await import("../server/safe-fetch");
   for (const url of urls.slice(0, 3)) {
     try {
-      const res = await fetch(url, { headers: { "User-Agent": "lovable-ats" } });
-      if (!res.ok) continue;
-      const html = await res.text();
+      const { text: html } = await safeFetchText(url, { maxBytes: 512_000, timeoutMs: 10_000 });
       const text = html
         .replace(/<script[\s\S]*?<\/script>/gi, " ")
         .replace(/<style[\s\S]*?<\/style>/gi, " ")
@@ -227,7 +230,7 @@ export async function fetchWritingSignal(opts: {
         .trim();
       if (text) pages.push({ url, excerpt: text.slice(0, 4000) });
     } catch {
-      /* unreachable page is simply not scored */
+      /* unreachable or blocked page is simply not scored */
     }
   }
 
@@ -245,13 +248,17 @@ export async function fetchWritingSignal(opts: {
 
   const result = await aiJson<{ score: number; themes: string[]; rationale: string }>({
     system:
-      "You score a candidate's public writing/portfolio for domain relevance, depth and communication quality against a role. " +
+      INJECTION_RULES +
+      "\nYou score a candidate's public writing/portfolio for domain relevance, depth and communication quality against a role. " +
       "Return ONLY JSON with keys: score (0-100), themes (string array), rationale.",
-    prompt: JSON.stringify({
-      target_role: opts.jobTitle,
-      jd_must_have_skills: opts.jdSkills,
-      pages,
-    }),
+    prompt: untrusted(
+      "profile_pages",
+      JSON.stringify({
+        target_role: opts.jobTitle,
+        jd_must_have_skills: opts.jdSkills,
+        pages,
+      }),
+    ),
     orgId: opts.orgId,
   });
 

@@ -36,6 +36,7 @@ import { Route as InterviewsIndexRouteImport } from './routes/interviews.index'
 import { Route as InterviewsMineRouteImport } from './routes/interviews.mine'
 import { Route as RequisitionsIndexRouteImport } from './routes/requisitions.index'
 import { Route as RequisitionsIdRouteImport } from './routes/requisitions.$id'
+import { Route as ApiAuthSessionRouteImport } from './routes/api/auth/session'
 import { Route as ApiPublicCaptureRouteImport } from './routes/api/public/capture'
 import { Route as ApiPublicInboundEmailRouteImport } from './routes/api/public/inbound-email'
 import { Route as ApiPublicInboxSyncRouteImport } from './routes/api/public/inbox-sync'
@@ -183,6 +184,11 @@ const RequisitionsIdRoute = RequisitionsIdRouteImport.update({
   path: '/requisitions/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthSessionRoute = ApiAuthSessionRouteImport.update({
+  id: '/api/auth/session',
+  path: '/api/auth/session',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicCaptureRoute = ApiPublicCaptureRouteImport.update({
   id: '/api/public/capture',
   path: '/api/public/capture',
@@ -272,6 +278,7 @@ export interface FileRoutesByFullPath {
   '/candidates/': typeof CandidatesIndexRoute
   '/interviews/': typeof InterviewsIndexRoute
   '/requisitions/': typeof RequisitionsIndexRoute
+  '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/public/capture': typeof ApiPublicCaptureRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
@@ -312,6 +319,7 @@ export interface FileRoutesByTo {
   '/candidates': typeof CandidatesIndexRoute
   '/interviews': typeof InterviewsIndexRoute
   '/requisitions': typeof RequisitionsIndexRoute
+  '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/public/capture': typeof ApiPublicCaptureRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
@@ -353,6 +361,7 @@ export interface FileRoutesById {
   '/candidates/': typeof CandidatesIndexRoute
   '/interviews/': typeof InterviewsIndexRoute
   '/requisitions/': typeof RequisitionsIndexRoute
+  '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/public/capture': typeof ApiPublicCaptureRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
@@ -395,6 +404,7 @@ export interface FileRouteTypes {
     | '/candidates/'
     | '/interviews/'
     | '/requisitions/'
+    | '/api/auth/session'
     | '/api/public/capture'
     | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
@@ -435,6 +445,7 @@ export interface FileRouteTypes {
     | '/candidates'
     | '/interviews'
     | '/requisitions'
+    | '/api/auth/session'
     | '/api/public/capture'
     | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
@@ -475,6 +486,7 @@ export interface FileRouteTypes {
     | '/candidates/'
     | '/interviews/'
     | '/requisitions/'
+    | '/api/auth/session'
     | '/api/public/capture'
     | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
@@ -516,6 +528,7 @@ export interface RootRouteChildren {
   CandidatesIndexRoute: typeof CandidatesIndexRoute
   InterviewsIndexRoute: typeof InterviewsIndexRoute
   RequisitionsIndexRoute: typeof RequisitionsIndexRoute
+  ApiAuthSessionRoute: typeof ApiAuthSessionRoute
   ApiPublicCaptureRoute: typeof ApiPublicCaptureRoute
   ApiPublicInboundEmailRoute: typeof ApiPublicInboundEmailRoute
   ApiPublicInboxSyncRoute: typeof ApiPublicInboxSyncRoute
@@ -720,6 +733,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RequisitionsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/session': {
+      id: '/api/auth/session'
+      path: '/api/auth/session'
+      fullPath: '/api/auth/session'
+      preLoaderRoute: typeof ApiAuthSessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/capture': {
       id: '/api/public/capture'
       path: '/api/public/capture'
@@ -828,6 +848,7 @@ const rootRouteChildren: RootRouteChildren = {
   CandidatesIndexRoute: CandidatesIndexRoute,
   InterviewsIndexRoute: InterviewsIndexRoute,
   RequisitionsIndexRoute: RequisitionsIndexRoute,
+  ApiAuthSessionRoute: ApiAuthSessionRoute,
   ApiPublicCaptureRoute: ApiPublicCaptureRoute,
   ApiPublicInboundEmailRoute: ApiPublicInboundEmailRoute,
   ApiPublicInboxSyncRoute: ApiPublicInboxSyncRoute,

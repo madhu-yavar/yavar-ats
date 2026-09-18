@@ -631,8 +631,18 @@ function SignInCard() {
     setBusy(true);
     try {
       if (mode === "signin") {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error, data } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        // Exchange the short-lived JWT for an httpOnly session cookie —
+        // server functions then authenticate from the cookie, not localStorage.
+        try {
+          await fetch("/api/auth/session", {
+            method: "POST",
+            headers: { authorization: `Bearer ${data.session?.access_token ?? ""}` },
+          });
+        } catch {
+          /* cookie is an upgrade — the bearer path still works if it fails */
+        }
       } else {
         const problem = workEmailProblem(email);
         if (problem) throw new Error(problem);

@@ -11,6 +11,39 @@ import { db } from "../server/db";
 import { env } from "../server/env";
 import { integrationCredentials } from "@db/schema";
 
+/**
+ * Integration base URLs are org-member-supplied and the server attaches stored
+ * credentials to requests against them — so the host must be https and must be
+ * an approved job-board partner domain, or the endpoint becomes an
+ * authenticate-and-reflect SSRF.
+ */
+const DEFAULT_INTEGRATION_HOSTS = [
+  "api.naukri.com",
+  "www.naukri.com",
+  "api.indeed.com",
+  "providers.indeed.com",
+];
+export function assertIntegrationBaseUrl(rawBaseUrl: string): string {
+  let url: URL;
+  try {
+    url = new URL(rawBaseUrl);
+  } catch {
+    throw new Error("The API base URL is not a valid URL.");
+  }
+  if (url.protocol !== "https:") throw new Error("The API base URL must use https.");
+  const extra = (env.INTEGRATION_ALLOWED_HOSTS ?? "")
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+  const allowed = new Set([...DEFAULT_INTEGRATION_HOSTS, ...extra]);
+  const host = url.hostname.toLowerCase();
+  if (!allowed.has(host) && ![...allowed].some((a) => host.endsWith(`.${a}`))) {
+    throw new Error("That API base URL is not an approved partner endpoint.");
+  }
+  if (url.username || url.password) throw new Error("Credentials in URLs are not allowed.");
+  return url.toString().replace(/\/$/, "");
+}
+
 export type ProviderId =
   "linkedin" | "naukri" | "indeed" | "github" | "careers" | "zoom" | "google_meet" | "teams";
 
@@ -22,20 +55,25 @@ export type TestOutcome = {
 export type IntegrationConfig = Record<string, string | number | boolean | null>;
 
 export async function readSecrets(integrationId: string): Promise<Record<string, string>> {
+  const { decryptSecret } = await import("../server/crypto");
   const [row] = await db
     .select({ secrets: integrationCredentials.secrets })
     .from(integrationCredentials)
     .where(eq(integrationCredentials.integrationId, integrationId))
     .limit(1);
-  return (row?.secrets as Record<string, string> | undefined) ?? {};
+  const stored = (row?.secrets as Record<string, string> | undefined) ?? {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(stored)) out[k] = decryptSecret(v);
+  return out;
 }
 
 export async function writeSecrets(integrationId: string, patch: Record<string, string>) {
+  const { encryptSecret } = await import("../server/crypto");
   const current = await readSecrets(integrationId);
   const merged = { ...current };
   for (const [k, v] of Object.entries(patch)) {
     // An empty string means "leave the stored value alone".
-    if (v.trim().length > 0) merged[k] = v.trim();
+    if (v.trim().length > 0) merged[k] = encryptSecret(v.trim());
   }
   await db
     .insert(integrationCredentials)
@@ -97,7 +135,8 @@ async function testTokenEndpoint(
     };
 
   try {
-    const res = await fetch(`${baseUrl.replace(/\/$/, "")}/oauth/token`, {
+    const base = assertIntegrationBaseUrl(baseUrl);
+    const res = await fetch(`${base}/oauth/token`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -106,12 +145,12 @@ async function testTokenEndpoint(
         client_secret: secrets["client_secret"] ?? "",
       }),
     });
-    const text = await res.text();
+    // Reflect the status only — upstream bodies could echo internal details.
     return res.ok
       ? { status: "ok", message: `${provider} token endpoint accepted the credentials.` }
-      : { status: "failed", message: `${provider} returned ${res.status}: ${text.slice(0, 200)}` };
+      : { status: "failed", message: `${provider} returned ${res.status}.` };
   } catch (e) {
-    return { status: "failed", message: `${provider} unreachable: ${(e as Error).message}` };
+    return { status: "failed", message: `${provider} test failed: ${(e as Error).message}` };
   }
 }
 
@@ -191,7 +230,8 @@ export async function importFromProvider(opts: {
     );
 
   const token = opts.secrets["access_token"] ?? opts.secrets["api_key"] ?? "";
-  const res = await fetch(`${baseUrl.replace(/\/$/, "")}/v1/candidates/search`, {
+  const base = assertIntegrationBaseUrl(baseUrl);
+  const res = await fetch(`${base}/v1/candidates/search`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -207,8 +247,7 @@ export async function importFromProvider(opts: {
   });
 
   const text = await res.text();
-  if (!res.ok)
-    throw new Error(`${opts.provider} search failed [${res.status}]: ${text.slice(0, 300)}`);
+  if (!res.ok) throw new Error(`${opts.provider} search failed [${res.status}].`);
 
   let payload: { candidates?: unknown[] } = {};
   try {

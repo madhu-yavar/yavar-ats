@@ -124,10 +124,17 @@ export async function orgForCaptureToken(
   token: string,
 ): Promise<{ id: string; name: string; status: string } | null> {
   if (!token || token.length < 20) return null;
+  const { createHash } = await import("node:crypto");
+  const hash = createHash("sha256").update(token).digest("hex");
+  const { or } = await import("drizzle-orm");
   const [org] = await db
     .select({ id: organizations.id, name: organizations.name, status: organizations.status })
     .from(organizations)
-    .where(eq(organizations.captureToken, token))
+    // Hash match covers encrypted tokens; the plaintext equality is the
+    // pre-migration fallback and disappears once every org rotates its key.
+    .where(
+      or(eq(organizations.captureTokenHash, hash), eq(organizations.captureToken, token)),
+    )
     .limit(1);
   if (!org) return null;
   if (org.status && org.status !== "active") return null;
@@ -137,6 +144,14 @@ export async function orgForCaptureToken(
 export async function capture(input: CaptureInput): Promise<CaptureResult> {
   const org = await orgForCaptureToken(input.token);
   if (!org) return { status: "error", detail: "This capture key is not valid any more." };
+  if (input.requisitionId) {
+    const { assertRequisitionInOrg } = await import("../server/guards");
+    try {
+      await assertRequisitionInOrg(input.requisitionId, org.id);
+    } catch {
+      return { status: "error", detail: "That role is not in your organisation." };
+    }
+  }
 
   const log = async (result: CaptureResult) => {
     await db.insert(captureEvents).values({

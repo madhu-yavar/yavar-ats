@@ -2,8 +2,10 @@
  * Server environment — validated once at import, so a misconfigured deployment
  * fails fast at boot instead of deep inside a request path.
  *
- * Supabase-era variables (SUPABASE_URL, SUPABASE_*_KEY, LOVABLE_*) are
- * deliberately not read anywhere in the plain-Postgres build.
+ * NOTE: authentication still verifies JWTs against SUPABASE_URL /
+ * SUPABASE_PUBLISHABLE_KEY (GoTrue-compatible), so those remain REQUIRED even
+ * though all data lives in the plain-Postgres DATABASE_URL. They are read in
+ * src/integrations/supabase/auth-middleware.ts, not here.
  */
 import { z } from "zod";
 
@@ -51,6 +53,9 @@ const schema = z.object({
   // Scheduled jobs (in-process cron; bearer for the two /api/public job routes)
   CRON_SECRET: z.string().optional(),
 
+  // Extra approved job-board API hosts for integration base URLs (comma-separated)
+  INTEGRATION_ALLOWED_HOSTS: z.string().optional(),
+
   // SMTP / transactional email
   SMTP_URL: z.string().optional(),
   EMAIL_FROM: z.string().optional(),
@@ -67,6 +72,27 @@ const parsed = schema.safeParse(process.env);
 if (!parsed.success) {
   const missing = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`);
   throw new Error(`Invalid server environment:\n${missing.join("\n")}`);
+}
+
+// A configured OAuth provider without a state-signing secret would silently
+// fall back to forgeable state — refuse to boot in that state instead.
+{
+  const e = parsed.data;
+  const hasStateSecret = Boolean(e.OAUTH_STATE_SECRET ?? e.LINKEDIN_STATE_SECRET);
+  const problems: string[] = [];
+  if (e.LINKEDIN_CLIENT_ID && e.LINKEDIN_CLIENT_SECRET && !hasStateSecret) {
+    problems.push("LINKEDIN_CLIENT_ID is set but neither LINKEDIN_STATE_SECRET nor OAUTH_STATE_SECRET is (min 32 chars).");
+  }
+  const meetingProvider =
+    (e.MICROSOFT_OAUTH_CLIENT_ID && "MICROSOFT_OAUTH_CLIENT_ID") ??
+    (e.GOOGLE_CALENDAR_OAUTH_CLIENT_ID && "GOOGLE_CALENDAR_OAUTH_CLIENT_ID") ??
+    (e.ZOOM_OAUTH_CLIENT_ID && "ZOOM_OAUTH_CLIENT_ID");
+  if (meetingProvider && !e.OAUTH_STATE_SECRET) {
+    problems.push(`${meetingProvider} is set but OAUTH_STATE_SECRET is not (min 32 chars).`);
+  }
+  if (problems.length) {
+    throw new Error(`Invalid server environment:\n${problems.join("\n")}`);
+  }
 }
 
 export const env = parsed.data;

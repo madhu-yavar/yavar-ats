@@ -10,7 +10,7 @@
  * `unverified`, never as fake. Only a direct conflict between the CV and the
  * evidence is `contradicted`.
  */
-import { aiJson } from "./ai-gateway.server";
+import { aiJson, INJECTION_RULES, untrusted } from "./ai-gateway.server";
 import { harvestProfileLinks } from "./matching.server";
 
 export type ClaimVerdict = "verified" | "partially_verified" | "unverified" | "contradicted";
@@ -96,15 +96,11 @@ async function githubEvidence(url: string | null) {
 
 /** Fetch and flatten portfolio / blog / talk pages so claims can be cross-checked. */
 async function pageEvidence(urls: string[]) {
+  const { safeFetchText } = await import("../server/safe-fetch");
   const pages: { url: string; excerpt: string }[] = [];
   for (const url of urls.filter(Boolean).slice(0, 4)) {
     try {
-      const res = await fetch(url, { headers: { "User-Agent": "lovable-ats" } });
-      if (!res.ok) {
-        pages.push({ url, excerpt: `UNREACHABLE (HTTP ${res.status})` });
-        continue;
-      }
-      const html = await res.text();
+      const { text: html } = await safeFetchText(url, { maxBytes: 512_000, timeoutMs: 10_000 });
       const text = html
         .replace(/<script[\s\S]*?<\/script>/gi, " ")
         .replace(/<style[\s\S]*?<\/style>/gi, " ")
@@ -113,7 +109,8 @@ async function pageEvidence(urls: string[]) {
         .trim();
       pages.push({ url, excerpt: text.slice(0, 5000) || "EMPTY PAGE" });
     } catch (e) {
-      pages.push({ url, excerpt: `UNREACHABLE (${(e as Error).message})` });
+      // Blocked SSRF attempts read as ordinary unreachability — no detail.
+      pages.push({ url, excerpt: "UNREACHABLE" });
     }
   }
   return pages;
@@ -150,7 +147,8 @@ export async function verifyClaims(opts: {
     summary: string;
   }>({
     system:
-      "You are a hiring-integrity analyst. Extract the concrete claims from a candidate's CV " +
+      INJECTION_RULES +
+      "\nYou are a hiring-integrity analyst. Extract the concrete claims from a candidate's CV " +
       "(projects, technologies, employers, publications/talks, certifications, education, dates) and " +
       "cross-check each one ONLY against the supplied public evidence: GitHub repositories (names, " +
       "descriptions, topics, languages, created/pushed dates), fetched portfolio/blog/X pages, and any " +
@@ -166,16 +164,19 @@ export async function verifyClaims(opts: {
       "public trace only mildly. red_flags are short recruiter-facing strings. " +
       "Return ONLY JSON with keys: authenticity_score (0-100), claims (array of {claim, type, verdict, " +
       "evidence, source}), red_flags (string array), summary (3-4 sentences).",
-    prompt: JSON.stringify({
-      candidate: {
-        name: opts.name,
-        skills_claimed: opts.skills,
-        resume_text: (opts.resumeText ?? "").slice(0, 14000),
-        linkedin_profile_text: opts.linkedinProfileText ?? null,
-        links,
-      },
-      evidence: { github, pages },
-    }),
+    prompt: untrusted(
+      "candidate_and_evidence",
+      JSON.stringify({
+        candidate: {
+          name: opts.name,
+          skills_claimed: opts.skills,
+          resume_text: (opts.resumeText ?? "").slice(0, 14000),
+          linkedin_profile_text: opts.linkedinProfileText ?? null,
+          links,
+        },
+        evidence: { github, pages },
+      }),
+    ),
   });
 
   if (!ai.ok) throw new Error(ai.message);

@@ -155,6 +155,8 @@ export const createCandidate = createServerFn({ method: "POST" })
     if (!row) throw new Error("Could not save the candidate");
 
     if (data.requisitionId) {
+      const { assertRequisitionInOrg } = await import("../server/guards");
+      await assertRequisitionInOrg(data.requisitionId, context.orgId);
       try {
         await db.insert(applications).values({
           requisitionId: data.requisitionId,

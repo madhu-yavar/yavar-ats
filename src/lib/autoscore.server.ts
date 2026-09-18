@@ -77,7 +77,7 @@ export async function scoreUnscored(opts: {
       const [req] = await db
         .select()
         .from(requisitions)
-        .where(eq(requisitions.id, app.requisitionId))
+        .where(and(eq(requisitions.id, app.requisitionId), eq(requisitions.orgId, opts.orgId)))
         .limit(1);
       const [cand] = await db
         .select()
@@ -207,7 +207,12 @@ export async function scoreUnscored(opts: {
       }
 
       if ((AUTO_STAGES as readonly string[]).includes(app.stage)) {
-        const nextStage = result.overall_score >= 75 ? "shortlisted" : "ai_screened";
+        // A candidate whose CV tripped the injection detector never advances
+        // automatically — the score is recorded, a human decides the stage.
+        const nextStage =
+          cand.suspectedPromptInjection || result.overall_score < 75
+            ? "ai_screened"
+            : "shortlisted";
         await db
           .update(applications)
           .set({ stage: nextStage, lastActivityAt: now })
@@ -219,7 +224,7 @@ export async function scoreUnscored(opts: {
           fromStage: app.stage,
           toStage: nextStage,
           actor: AUTO_STAGE_ACTOR,
-          reason: `Auto-${nextStage === "shortlisted" ? "shortlisted" : "screened"} by matching score ${result.overall_score}/100 (${result.model})`,
+          reason: `Auto-${nextStage === "shortlisted" ? "shortlisted" : "screened"} by matching score ${result.overall_score}/100 (${result.model})${cand.suspectedPromptInjection ? " — prompt-injection flag held at ai_screened" : ""}`,
         });
       }
 

@@ -33,6 +33,7 @@ export const Route = createFileRoute("/api/public/linkedin/callback")({
           return back(state.origin, { linkedin: "error", detail: "No sign-in code returned." });
 
         try {
+          const { encryptSecret } = await import("../../../../server/crypto");
           const token = await exchangeCode(code);
           const member = await fetchMember(token.access_token);
           const { db } = await import("../../../../server/db");
@@ -45,8 +46,8 @@ export const Route = createFileRoute("/api/public/linkedin/callback")({
               memberSub: member.sub,
               memberName: member.name,
               memberEmail: member.email,
-              accessToken: token.access_token,
-              refreshToken: token.refresh_token,
+              accessToken: encryptSecret(token.access_token),
+              refreshToken: token.refresh_token ? encryptSecret(token.refresh_token) : null,
               expiresAt: new Date(Date.now() + token.expires_in * 1000),
               scope: token.scope,
               connectedBy: state.userId,
@@ -59,8 +60,8 @@ export const Route = createFileRoute("/api/public/linkedin/callback")({
                 memberSub: member.sub,
                 memberName: member.name,
                 memberEmail: member.email,
-                accessToken: token.access_token,
-                refreshToken: token.refresh_token,
+                accessToken: encryptSecret(token.access_token),
+                refreshToken: token.refresh_token ? encryptSecret(token.refresh_token) : null,
                 expiresAt: new Date(Date.now() + token.expires_in * 1000),
                 scope: token.scope,
                 connectedBy: state.userId,

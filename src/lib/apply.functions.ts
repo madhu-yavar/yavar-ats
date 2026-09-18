@@ -56,7 +56,7 @@ export const publicJob = createServerFn({ method: "GET" })
         orgId: requisitions.orgId,
       })
       .from(requisitions)
-      .where(eq(requisitions.id, data.requisitionId))
+      .where(and(eq(requisitions.id, data.requisitionId), eq(requisitions.status, "approved")))
       .limit(1);
     if (!r) return null;
 

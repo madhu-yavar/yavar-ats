@@ -223,7 +223,13 @@ function ApplyPage() {
                     {busy ? "Sending…" : "Submit application"}
                   </Button>
                   <span className="text-xs text-muted-foreground">
-                    By applying you agree to us storing your CV for this hiring process.
+                    By applying you agree to us storing your CV for this hiring process. Your CV may
+                    be screened with the help of AI; a human reviewer makes every decision, and you
+                    can ask about or contest an AI-assisted evaluation — see our{" "}
+                    <a href="/privacy" className="underline">
+                      privacy policy
+                    </a>
+                    .
                   </span>
                 </div>
               </section>

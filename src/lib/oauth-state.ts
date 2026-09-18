@@ -18,7 +18,15 @@ export type OAuthState = {
 };
 
 function stateKey(): string {
-  return env.OAUTH_STATE_SECRET ?? env.LINKEDIN_STATE_SECRET ?? "";
+  const key = env.OAUTH_STATE_SECRET ?? env.LINKEDIN_STATE_SECRET;
+  // Fail closed: an empty HMAC key would make connect-state forgeable, letting
+  // an attacker bind their provider tokens into any org.
+  if (!key || key.length < 32) {
+    throw new Error(
+      "OAuth connect is not configured: set OAUTH_STATE_SECRET (min 32 chars) in the server environment.",
+    );
+  }
+  return key;
 }
 
 function b64url(input: string): string {
@@ -38,7 +46,13 @@ export function verifyOAuthState(
 ): OAuthState | null {
   if (!state || !state.includes(".")) return null;
   const [body, mac] = state.split(".") as [string, string];
-  const expected = createHmac("sha256", stateKey()).update(body).digest("hex");
+  let expected: string;
+  try {
+    expected = createHmac("sha256", stateKey()).update(body).digest("hex");
+  } catch {
+    // Unconfigured/weak secret — fail closed, accept nothing.
+    return null;
+  }
   if (mac.length !== expected.length) return null;
   if (!timingSafeEqual(Buffer.from(mac), Buffer.from(expected))) return null;
   try {

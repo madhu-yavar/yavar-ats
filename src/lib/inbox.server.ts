@@ -135,12 +135,16 @@ export function looksLikeCv(filename: string): boolean {
 /** Server-side CV text extraction (worker-safe: no pdf.js worker, no mammoth). */
 export async function attachmentText(filename: string, bytes: Uint8Array): Promise<string> {
   const name = filename.toLowerCase();
+  const MAX_INPUT_BYTES = 15_000_000;
+  if (bytes.byteLength > MAX_INPUT_BYTES) return "";
 
   if (name.endsWith(".pdf")) {
     const { extractText, getDocumentProxy } = await import("unpdf");
     // pdf.js transfers (detaches) the buffer it is given — hand it a copy so the
     // caller keeps usable bytes for the resume vault and size reporting.
     const doc = await getDocumentProxy(new Uint8Array(bytes));
+    // Page cap: a multi-thousand-page PDF must not eat the worker.
+    if (doc.numPages > 30) return "";
     const { text } = await extractText(doc, { mergePages: true });
     return String(text).replace(/\s+/g, " ").trim();
   }
@@ -150,6 +154,9 @@ export async function attachmentText(filename: string, bytes: Uint8Array): Promi
     const files = unzipSync(bytes);
     const xml = files["word/document.xml"];
     if (!xml) return "";
+    // Cap the decompressed XML we are willing to decode — a docx bomb inflates
+    // word/document.xml far beyond anything a real CV contains.
+    if (xml.byteLength > 20_000_000) return "";
     return strFromU8(xml)
       .replace(/<\/w:p>/g, "\n")
       .replace(/<[^>]+>/g, " ")
@@ -198,6 +205,12 @@ export async function syncCareersInbox(opts?: {
   query?: string;
   max?: number;
   requisitionId?: string | null;
+  /**
+   * When set, only this organisation's approved requisitions are matched and
+   * its outcomes are reported; mail belonging to other organisations is
+   * counted but redacted. Only the platform cron may omit this.
+   */
+  orgId?: string | null;
 }): Promise<{
   scanned: number;
   imported: number;
@@ -208,11 +221,16 @@ export async function syncCareersInbox(opts?: {
 }> {
   if (!inboxConfigured()) throw new Error("The careers inbox is not connected yet.");
   const { ingestCandidate, parseCv } = await import("./intake.server");
+  const { and } = await import("drizzle-orm");
 
   const reqs = await db
     .select({ id: requisitions.id, title: requisitions.title, orgId: requisitions.orgId })
     .from(requisitions)
-    .where(eq(requisitions.status, "approved"));
+    .where(
+      opts?.orgId
+        ? and(eq(requisitions.status, "approved"), eq(requisitions.orgId, opts.orgId))
+        : eq(requisitions.status, "approved"),
+    );
 
   const ids = await searchInbox(opts?.query ?? DEFAULT_INBOX_QUERY, opts?.max ?? 20);
   const outcomes: SyncOutcome[] = [];
@@ -224,8 +242,9 @@ export async function syncCareersInbox(opts?: {
       const cvs = msg.attachments.filter((a) => looksLikeCv(a.filename));
       if (!cvs.length) {
         outcomes.push({
-          message: msg.subject,
-          from: msg.from,
+          // Scoped callers must not see other organisations' mail metadata.
+          message: opts?.orgId ? "(careers mailbox)" : msg.subject,
+          from: opts?.orgId ? "" : msg.from,
           file: null,
           status: "skipped",
           detail: "No CV attached",
@@ -238,6 +257,21 @@ export async function syncCareersInbox(opts?: {
       const target = opts?.requisitionId
         ? (reqs.find((r) => r.id === opts.requisitionId) ?? null)
         : matchRequisition(`${msg.subject}\n${msg.body}`, reqs);
+
+      // Scoped run, and this mail is not for the caller's organisation:
+      // count it, never ingest it, never report its contents.
+      if (opts?.orgId && !target) {
+        outcomes.push({
+          message: "(careers mailbox)",
+          from: "",
+          file: null,
+          status: "skipped",
+          detail: "Not addressed to one of your open roles",
+          requisition: null,
+        });
+        await markProcessed(id);
+        continue;
+      }
 
       for (const att of cvs) {
         const bytes = await readAttachment(id, att.attachmentId);

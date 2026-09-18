@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { db } from "../server/db";
 import { applications, candidates, departments, jobDescriptions, requisitions } from "@db/schema";
-import { requireOrg } from "./auth.middleware";
+import { assertRole, requireOrg, type AppRole } from "./auth.middleware";
 
 const ReqStatus = z.enum([
   "draft",
@@ -22,9 +22,31 @@ const ReqStatus = z.enum([
   "closed",
 ]);
 
+/**
+ * The requisition approval chain (DH → HR → CBO) is enforced HERE, not in the
+ * UI: each target status names the legal source statuses and the role that may
+ * make the hop. Org owners pass every role check (assertRole semantics).
+ */
+const REQ_TRANSITIONS: Partial<Record<(typeof ReqStatus.options)[number], { from: string[]; role?: AppRole | AppRole[] }>> = {
+  draft: { from: ["draft", "rejected", "on_hold"] },
+  pending_dh: { from: ["draft", "rejected", "on_hold"] },
+  pending_hr: { from: ["pending_dh"], role: "department_head" },
+  pending_cbo: { from: ["pending_hr"], role: "hr_head" },
+  approved: { from: ["pending_cbo"], role: "president_cbo" },
+  rejected: {
+    from: ["pending_dh", "pending_hr", "pending_cbo"],
+    role: ["department_head", "hr_head", "president_cbo"],
+  },
+  on_hold: {
+    from: ["draft", "pending_dh", "pending_hr", "pending_cbo", "approved"],
+    role: ["hr_head", "president_cbo"],
+  },
+  closed: { from: ["approved", "on_hold"], role: ["hr_head", "president_cbo"] },
+};
+
 /* ------------------------------------------------------------- requisitions */
 
-/** Approve/advance a requisition: status bump plus the appended approval trail. */
+/** Approve/advance a requisition: role-checked status bump, trail rebuilt server-side. */
 export const advanceRequisition = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((data: unknown) =>
@@ -32,14 +54,44 @@ export const advanceRequisition = createServerFn({ method: "POST" })
       .object({
         id: z.string().uuid(),
         status: ReqStatus,
-        approvalTrail: z.array(z.unknown()),
+        comment: z.string().max(2000).nullish(),
       })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
+    const [current] = await db
+      .select({ status: requisitions.status, approvalTrail: requisitions.approvalTrail })
+      .from(requisitions)
+      .where(and(eq(requisitions.id, data.id), eq(requisitions.orgId, context.orgId)))
+      .limit(1);
+    if (!current) throw new Error("Requisition not found.");
+
+    const rule = REQ_TRANSITIONS[data.status];
+    if (!rule || !rule.from.includes(current.status)) {
+      throw new Error(`A requisition cannot move from ${current.status} to ${data.status}.`);
+    }
+    if (rule.role) {
+      await assertRole(context.userId, context.orgId, rule.role);
+    }
+
+    // The approval trail is evidence — it is rebuilt server-side and never
+    // accepted from the client.
+    const prior = Array.isArray(current.approvalTrail) ? current.approvalTrail : [];
+    const trail = [
+      ...prior,
+      {
+        from: current.status,
+        to: data.status,
+        actor: context.memberEmail,
+        decision: data.status,
+        comment: data.comment ?? null,
+        at: new Date().toISOString(),
+      },
+    ];
+
     await db
       .update(requisitions)
-      .set({ status: data.status, approvalTrail: data.approvalTrail })
+      .set({ status: data.status, approvalTrail: trail as never })
       .where(and(eq(requisitions.id, data.id), eq(requisitions.orgId, context.orgId)));
     return { ok: true as const };
   });
@@ -205,13 +257,26 @@ export const saveJobDescription = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
-/** Approve a JD version, optionally with the recruiter's edited full text. */
+/** Approve a JD version — a department-head-and-above decision. */
 export const approveJobDescription = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((data: unknown) =>
     z.object({ id: z.string().uuid(), fullText: z.string().nullish() }).parse(data),
   )
   .handler(async ({ data, context }) => {
+    await assertRole(
+      context.userId,
+      context.orgId,
+      ["department_head", "hr_head", "president_cbo"],
+      "Only a department head, HR head or the CBO can approve a job description.",
+    );
+    const [jd] = await db
+      .select({ status: jobDescriptions.status })
+      .from(jobDescriptions)
+      .where(and(eq(jobDescriptions.id, data.id), eq(jobDescriptions.orgId, context.orgId)))
+      .limit(1);
+    if (!jd) throw new Error("Job description not found.");
+    if (jd.status === "approved") throw new Error("This version is already approved.");
     await db
       .update(jobDescriptions)
       .set({ status: "approved", fullText: data.fullText ?? null })

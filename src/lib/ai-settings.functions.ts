@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { db } from "../server/db";
 import { aiSettings } from "@db/schema";
-import { requireOrg } from "./auth.middleware";
+import { requireOrg, requireRole } from "./auth.middleware";
 
 const Provider = z.enum(["openai", "anthropic", "google"]);
 
@@ -47,7 +47,7 @@ export const getAiSettings = createServerFn({ method: "POST" })
   });
 
 export const saveAiSettings = createServerFn({ method: "POST" })
-  .middleware([requireOrg])
+  .middleware([requireRole("hr_head")])
   .inputValidator((data: unknown) => SaveInput.parse(data))
   .handler(async ({ data, context }) => {
     const { writeProviderKey } = await import("./ai-gateway.server");
@@ -64,15 +64,19 @@ export const saveAiSettings = createServerFn({ method: "POST" })
     } else {
       await db.insert(aiSettings).values({ ...payload, orgId: context.orgId, singleton: true });
     }
+    const { writeAudit } = await import("../server/audit");
+    await writeAudit({ actor: context.memberEmail, actorUserId: context.userId, orgId: context.orgId, action: "ai.settings.save", entityType: "ai_settings", detail: { provider: data.provider, model: data.model, keyChanged: Boolean(data.apiKey.trim()) } });
     return { ok: true };
   });
 
 export const removeAiKey = createServerFn({ method: "POST" })
-  .middleware([requireOrg])
+  .middleware([requireRole("hr_head")])
   .inputValidator((data: unknown) => z.object({ provider: Provider }).parse(data))
   .handler(async ({ data, context }) => {
     const { clearProviderKey } = await import("./ai-gateway.server");
     await clearProviderKey(context.orgId, data.provider);
+    const { writeAudit } = await import("../server/audit");
+    await writeAudit({ actor: context.memberEmail, actorUserId: context.userId, orgId: context.orgId, action: "ai.key.remove", entityType: "ai_provider_credentials", detail: { provider: data.provider } });
     return { ok: true };
   });
 

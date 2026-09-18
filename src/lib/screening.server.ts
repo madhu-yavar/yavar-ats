@@ -12,7 +12,7 @@
  *     screening score and a recommendation with its rationale.
  */
 
-import { aiJson, resolveAiConfig } from "./ai-gateway.server";
+import { aiJson, INJECTION_RULES, untrusted, resolveAiConfig } from "./ai-gateway.server";
 
 export const FOCUS_AREAS = [
   "must_have_skill",
@@ -108,7 +108,8 @@ export async function buildScreeningKit(input: {
 }): Promise<ScreeningKit> {
   const result = await aiJson<{ questions: ScreeningQuestion[]; focus_summary: string }>({
     system:
-      "You prepare a recruiter's first screening call. Compare the job description with this specific CV and write " +
+      INJECTION_RULES +
+      "\nYou prepare a recruiter's first screening call. Compare the job description with this specific CV and write " +
       "8 to 10 questions that resolve what the paper alone cannot: unevidenced must-have skills, shallow or " +
       "inflated experience, employment gaps and short tenures, ownership versus participation, salary/notice/" +
       "location fit, and mindset for this team. Never ask something the CV already answers plainly, and never ask " +
@@ -120,33 +121,36 @@ export async function buildScreeningKit(input: {
       "weight (1-5, higher for must-haves). " +
       "Return ONLY JSON: {questions:[{focus, question, reason, expected_answer, weak_answer, weight}], " +
       "focus_summary: one or two sentences on what this call must establish}.",
-    prompt: JSON.stringify({
-      role: input.role,
-      jd: input.jdText.slice(0, 6000),
-      must_have_skills: input.mustHave.slice(0, 25),
-      good_to_have_skills: input.goodToHave.slice(0, 25),
-      experience_range: [input.experienceMin, input.experienceMax],
-      budget_ctc: input.budgetCtc,
-      currency: input.currency,
-      candidate: {
-        name: input.candidateName,
-        experience_years: input.experienceYears,
-        skills: input.candidateSkills.slice(0, 40),
-        current_employer: input.currentEmployer,
-        employment_history: input.employmentHistory,
-        education: input.education,
-        current_ctc: input.currentCtc,
-        expected_ctc: input.expectedCtc,
-        notice_period_days: input.noticePeriodDays,
-        location: input.location,
-        resume: (input.resumeText ?? "").slice(0, 8000),
-      },
-      existing_match: {
-        rationale: input.matchRationale,
-        missing_skills: input.missingSkills.slice(0, 20),
-        risk_flags: input.riskFlags.slice(0, 20),
-      },
-    }),
+    prompt: untrusted(
+      "role_and_candidate",
+      JSON.stringify({
+        role: input.role,
+        jd: input.jdText.slice(0, 6000),
+        must_have_skills: input.mustHave.slice(0, 25),
+        good_to_have_skills: input.goodToHave.slice(0, 25),
+        experience_range: [input.experienceMin, input.experienceMax],
+        budget_ctc: input.budgetCtc,
+        currency: input.currency,
+        candidate: {
+          name: input.candidateName,
+          experience_years: input.experienceYears,
+          skills: input.candidateSkills.slice(0, 40),
+          current_employer: input.currentEmployer,
+          employment_history: input.employmentHistory,
+          education: input.education,
+          current_ctc: input.currentCtc,
+          expected_ctc: input.expectedCtc,
+          notice_period_days: input.noticePeriodDays,
+          location: input.location,
+          resume: (input.resumeText ?? "").slice(0, 8000),
+        },
+        existing_match: {
+          rationale: input.matchRationale,
+          missing_skills: input.missingSkills.slice(0, 20),
+          risk_flags: input.riskFlags.slice(0, 20),
+        },
+      }),
+    ),
   });
   if (!result.ok) throw new Error(result.message);
 
@@ -193,7 +197,8 @@ export async function gradeScreening(input: {
     recommendation_reason: string;
   }>({
     system:
-      "You grade a recruiter's screening call. For each prepared question, judge the candidate's actual answer " +
+      INJECTION_RULES +
+      "\nYou grade a recruiter's screening call. For each prepared question, judge the candidate's actual answer " +
       "against the expected answer: verdict is 'strong', 'partial', 'weak' or 'not_answered' (use not_answered " +
       "only when the answer or transcript contains nothing on it — never guess). Give a 0-100 score per question, " +
       "quote the exact line of the answer you relied on in `evidence` (empty string when nothing was said), and " +
@@ -204,22 +209,25 @@ export async function gradeScreening(input: {
       "a hiring manager can act on. Judge only what was said; never invent answers. " +
       "Return ONLY JSON: {screening_score, verdicts:[{question_id, verdict, score, evidence, rationale}], " +
       "rationale, red_flags:[string], recommendation, recommendation_reason}.",
-    prompt: JSON.stringify({
-      role: input.role,
-      jd: input.jdText.slice(0, 4000),
-      must_have_skills: input.mustHave.slice(0, 25),
-      candidate: input.candidateName,
-      questions: input.questions.map((q) => ({
-        question_id: q.id,
-        question: q.question,
-        expected_answer: q.expected_answer,
-        weak_answer: q.weak_answer,
-        weight: q.weight,
-        focus: q.focus,
-      })),
-      answers: input.answers.filter((a) => a.answer.trim().length > 0),
-      transcript: (input.transcript ?? "").slice(0, 20000),
-    }),
+    prompt: untrusted(
+      "screening_transcript",
+      JSON.stringify({
+        role: input.role,
+        jd: input.jdText.slice(0, 4000),
+        must_have_skills: input.mustHave.slice(0, 25),
+        candidate: input.candidateName,
+        questions: input.questions.map((q) => ({
+          question_id: q.id,
+          question: q.question,
+          expected_answer: q.expected_answer,
+          weak_answer: q.weak_answer,
+          weight: q.weight,
+          focus: q.focus,
+        })),
+        answers: input.answers.filter((a) => a.answer.trim().length > 0),
+        transcript: (input.transcript ?? "").slice(0, 20000),
+      }),
+    ),
   });
   if (!result.ok) throw new Error(result.message);
 
@@ -279,34 +287,27 @@ const OPENAI_TRANSCRIBE = "https://api.openai.com/v1/audio/transcriptions";
  * has no transcription endpoint — that is reported, not silently re-routed.
  */
 export async function transcribeScreeningAudio(input: {
+  orgId?: string | null;
   bytes: Uint8Array;
   filename: string;
   contentType: string;
 }): Promise<{ transcript: string; engine: string }> {
-  const cfg = await resolveAiConfig();
+  const cfg = await resolveAiConfig(input.orgId);
   if (cfg.provider === "anthropic") {
     throw new Error(
       "Claude cannot transcribe audio. Type the answers in, or switch the AI provider on Integrations.",
     );
   }
   if (!cfg.apiKey) {
-    throw new Error(
-      cfg.provider === "lovable"
-        ? "AI is not configured (missing key)."
-        : `No ${cfg.provider} API key saved. Add one on the Integrations page.`,
-    );
+    throw new Error(`No ${cfg.provider} API key saved. Add one on the Integrations page.`);
   }
-
-  const gemini = cfg.provider === "gemini";
-  const endpoint = cfg.provider === "openai" ? OPENAI_TRANSCRIBE : LOVABLE_TRANSCRIBE;
-  const model = gemini
-    ? "gemini-2.5-flash"
-    : cfg.provider === "openai"
-      ? "gpt-4o-mini-transcribe"
-      : "google/gemini-3.5-transcribe";
 
   // Google's own API has no OpenAI-style transcription route, so a BYO Gemini
   // key transcribes through its chat endpoint with inline audio instead.
+  const gemini = cfg.provider === "google";
+  const endpoint = OPENAI_TRANSCRIBE;
+  const model = gemini ? "gemini-2.5-flash" : "gpt-4o-mini-transcribe";
+
   if (gemini) {
     const base64 = Buffer.from(input.bytes).toString("base64");
     const res = await fetch(
@@ -372,31 +373,4 @@ export async function transcribeScreeningAudio(input: {
   const transcript = (json.text ?? "").trim();
   if (!transcript) throw new Error("The recording produced no transcript.");
   return { transcript, engine: `${cfg.provider} · ${model}` };
-}
-
-/** Store a screening recording in the private vault. */
-export async function storeScreeningAudio(input: {
-  orgId: string | null;
-  candidateId: string;
-  filename: string;
-  bytes: Uint8Array;
-  contentType: string;
-}): Promise<{ path: string | null; error: string | null }> {
-  if (!input.orgId) return { path: null, error: "no organisation on the candidate" };
-  if (!input.bytes.byteLength) return { path: null, error: "the recording was empty" };
-  const safe = input.filename.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "screening.webm";
-  const path = `${input.orgId}/${input.candidateId}/${Date.now()}-${safe}`;
-  try {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin.storage
-      .from("screening-audio")
-      .upload(path, Uint8Array.from(input.bytes), {
-        contentType: input.contentType,
-        upsert: true,
-      });
-    if (error) return { path: null, error: error.message };
-    return { path, error: null };
-  } catch (e) {
-    return { path: null, error: (e as Error).message };
-  }
 }

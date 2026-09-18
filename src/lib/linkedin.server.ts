@@ -13,6 +13,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 
 import { env } from "../server/env";
+import { assertAllowedOrigin } from "./oauth-state";
 
 const AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
 const TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
@@ -46,7 +47,14 @@ export function redirectUri(): string {
 type StatePayload = { orgId: string; userId: string; origin: string; ts: number };
 
 function stateKey(): string {
-  return env.LINKEDIN_STATE_SECRET ?? "";
+  // Fail closed: an empty HMAC key would make LinkedIn connect-state forgeable.
+  const key = env.LINKEDIN_STATE_SECRET ?? env.OAUTH_STATE_SECRET;
+  if (!key || key.length < 32) {
+    throw new Error(
+      "LinkedIn connect is not configured: set LINKEDIN_STATE_SECRET (min 32 chars) in the server environment.",
+    );
+  }
+  return key;
 }
 
 function b64url(input: string): string {
@@ -62,13 +70,24 @@ export function signState(payload: StatePayload): string {
 export function verifyState(state: string | null): StatePayload | null {
   if (!state || !state.includes(".")) return null;
   const [body, mac] = state.split(".") as [string, string];
-  const expected = createHmac("sha256", stateKey()).update(body).digest("hex");
+  let expected: string;
+  try {
+    expected = createHmac("sha256", stateKey()).update(body).digest("hex");
+  } catch {
+    // Unconfigured/weak secret — fail closed, accept nothing.
+    return null;
+  }
   if (mac.length !== expected.length) return null;
   if (!timingSafeEqual(Buffer.from(mac), Buffer.from(expected))) return null;
   try {
     const parsed = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as StatePayload;
     // 30-minute window: long enough for a slow sign-in, short enough to be safe.
     if (!parsed.orgId || Date.now() - parsed.ts > 30 * 60 * 1000) return null;
+    // The origin captured at flow start becomes the post-auth redirect target —
+    // it must be one of ours, or the callback is an open redirect.
+    if (parsed.origin) {
+      new URL("/integrations", assertAllowedOrigin(parsed.origin));
+    }
     return parsed;
   } catch {
     return null;

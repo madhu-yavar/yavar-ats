@@ -26,19 +26,41 @@ const Payload = z.object({
   requisitionId: z.string().uuid().nullish(),
 });
 
-const cors = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-headers": "content-type",
-  "access-control-allow-methods": "POST, OPTIONS",
-};
+/**
+ * CORS is an allowlist, not `*`: only the product origin and the shipped
+ * extension origins may call the token-authenticated capture API from a
+ * browser. The extension id is pinned at build/deploy time via env.
+ */
+function allowedOrigins(): string[] {
+  const origins = [process.env["PUBLIC_SITE_URL"] ?? "https://atsiq.yavar.ai"];
+  for (const id of (process.env["CAPTURE_EXTENSION_IDS"] ?? "").split(",")) {
+    const clean = id.trim();
+    if (clean) origins.push(`chrome-extension://${clean}`);
+  }
+  return origins.map((o) => o.replace(/\/$/, ""));
+}
+
+function corsFor(request: Request): Record<string, string> {
+  const origin = request.headers.get("origin") ?? "";
+  const headers: Record<string, string> = {
+    "access-control-allow-headers": "content-type",
+    "access-control-allow-methods": "POST, OPTIONS",
+    vary: "origin",
+  };
+  if (origin && allowedOrigins().includes(origin.replace(/\/$/, ""))) {
+    headers["access-control-allow-origin"] = origin;
+  }
+  return headers;
+}
 
 async function handle(request: Request) {
+  const cors = corsFor(request);
   let body: z.infer<typeof Payload>;
   try {
     body = Payload.parse(await request.json());
   } catch (e) {
     return Response.json(
-      { status: "error", detail: e instanceof Error ? e.message : "Invalid capture payload." },
+      { status: "error", detail: e instanceof Error ? e.message.slice(0, 200) : "Invalid capture payload." },
       { status: 400, headers: cors },
     );
   }
@@ -64,7 +86,7 @@ async function handle(request: Request) {
   } catch (e) {
     console.error("capture failed", e);
     return Response.json(
-      { status: "error", detail: e instanceof Error ? e.message : "Capture failed." },
+      { status: "error", detail: "Capture failed." },
       { status: 500, headers: cors },
     );
   }
@@ -74,7 +96,7 @@ export const Route = createFileRoute("/api/public/capture")({
   server: {
     handlers: {
       POST: ({ request }) => handle(request),
-      OPTIONS: () => new Response(null, { status: 204, headers: cors }),
+      OPTIONS: ({ request }) => new Response(null, { status: 204, headers: corsFor(request) }),
     },
   },
 });

@@ -5,6 +5,7 @@
  */
 import { and, eq, isNull } from "drizzle-orm";
 import { createHash } from "crypto";
+import { z } from "zod";
 
 import { db } from "../server/db";
 import { contentTypeFor, putObject, resumeObjectPath, safeFileName } from "../server/storage";
@@ -23,6 +24,8 @@ export type ParsedCv = {
   github_url: string | null;
   website_url: string | null;
   current_employer: string | null;
+  /** Model judged the CV text contains injection-style instructions. */
+  suspected_prompt_injection?: boolean | null;
   employment_history:
     | {
         company: string | null;
@@ -38,14 +41,66 @@ export async function parseCv(
   resumeText: string,
   orgId?: string | null | undefined,
 ): Promise<ParsedCv | null> {
+  const { aiJson, INJECTION_RULES, untrusted } = await import("./ai-gateway.server");
+  const loose = <T extends z.ZodTypeAny>(inner: T) => inner.nullish().catch(null);
+  const ParsedCvSchema = z
+    .object({
+      full_name: loose(z.string()),
+      email: loose(z.string()),
+      phone: loose(z.string()),
+      location: loose(z.string()),
+      experience_years: loose(z.number()),
+      education: loose(z.string()),
+      skills: loose(z.array(z.string())),
+      linkedin_url: loose(z.string()),
+      github_url: loose(z.string()),
+      website_url: loose(z.string()),
+      current_employer: loose(z.string()),
+      suspected_prompt_injection: loose(z.boolean()),
+      employment_history: loose(
+        z.array(
+          z.object({
+            company: loose(z.string()),
+            title: loose(z.string()),
+            start: loose(z.string()),
+            end: loose(z.string()),
+            level_hint: loose(z.string()),
+          }),
+        ),
+      ),
+    })
+    .transform((v): ParsedCv => ({
+      full_name: v.full_name ?? null,
+      email: v.email ?? null,
+      phone: v.phone ?? null,
+      location: v.location ?? null,
+      experience_years: v.experience_years ?? null,
+      education: v.education ?? null,
+      skills: v.skills ?? null,
+      linkedin_url: v.linkedin_url ?? null,
+      github_url: v.github_url ?? null,
+      website_url: v.website_url ?? null,
+      current_employer: v.current_employer ?? null,
+      suspected_prompt_injection: v.suspected_prompt_injection ?? null,
+      employment_history:
+        v.employment_history?.map((h) => ({
+          company: h.company ?? null,
+          title: h.title ?? null,
+          start: h.start ?? null,
+          end: h.end ?? null,
+          level_hint: h.level_hint ?? null,
+        })) ?? null,
+    }));
   const parsed = await aiJson<ParsedCv>({
     system:
-      "Extract structured candidate data from a resume. Return ONLY JSON with keys: full_name, email, phone, " +
+      INJECTION_RULES +
+      "\nExtract structured candidate data from a resume. Return ONLY JSON with keys: full_name, email, phone, " +
       "location, experience_years (number), education, skills (string array), linkedin_url, github_url, website_url, " +
       "current_employer, employment_history (array of {company, title, start, end, level_hint}, newest first). " +
-      "Use null when a field is genuinely absent. Never invent values.",
-    prompt: resumeText.slice(0, 20000),
+      "Use null when a field is genuinely absent. Never invent values. URLs must be real URLs read from the resume — never fabricate one.",
+    prompt: untrusted("resume", resumeText.slice(0, 20000)),
     orgId,
+    schema: ParsedCvSchema,
   });
   return parsed.ok ? parsed.data : null;
 }
@@ -129,6 +184,14 @@ export async function ingestCandidate(input: {
 }): Promise<IngestResult> {
   const p = input.parsed ?? (await parseCv(input.resumeText, input.orgId));
 
+  // A client-supplied requisitionId is only honoured when it belongs to the
+  // caller's org — otherwise applications could be pinned to a foreign
+  // requisition and its JD/budget metadata would leak through scoring.
+  if (input.requisitionId && input.orgId) {
+    const { assertRequisitionInOrg } = await import("../server/guards");
+    await assertRequisitionInOrg(input.requisitionId, input.orgId);
+  }
+
   const normalizedName = (value: string | null | undefined) =>
     (value ?? "")
       .toLowerCase()
@@ -187,6 +250,7 @@ export async function ingestCandidate(input: {
     source: input.source,
     resumeText: input.resumeText,
     orgId: input.orgId,
+    suspectedPromptInjection: Boolean(p?.suspected_prompt_injection),
     lastSyncedAt: new Date(),
   };
 

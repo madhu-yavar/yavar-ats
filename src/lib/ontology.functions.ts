@@ -77,7 +77,7 @@ async function requireBrainAccess(userId: string, email: string | null) {
   const roles = await db
     .select({ role: userRoles.role })
     .from(userRoles)
-    .where(eq(userRoles.userId, userId));
+    .where(and(eq(userRoles.userId, userId), eq(userRoles.orgId, member.orgId as string)));
   const allowed = roles.some((r) => ["president_cbo", "hr_head"].includes(r.role));
   if (!allowed) {
     throw new Error("The Talent Brain is available to the CHRO, HR Head and the account owner.");

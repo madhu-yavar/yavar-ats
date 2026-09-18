@@ -56,7 +56,11 @@ export function AccountMenu() {
 
   async function signOut() {
     setSigningOut(true);
-    await supabase.auth.signOut();
+    try {
+      await fetch("/api/auth/session", { method: "DELETE" }).catch(() => undefined);
+    } finally {
+      await supabase.auth.signOut();
+    }
   }
 
   return (

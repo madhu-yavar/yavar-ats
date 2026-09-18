@@ -31,6 +31,7 @@ function endpointBase(): string {
 }
 
 async function loadSetup(orgId: string): Promise<CaptureSetup> {
+  const { decryptSecret } = await import("../server/crypto");
   const [org] = await db
     .select({ captureToken: organizations.captureToken })
     .from(organizations)
@@ -51,7 +52,7 @@ async function loadSetup(orgId: string): Promise<CaptureSetup> {
     .orderBy(desc(captureEvents.createdAt))
     .limit(20);
   return {
-    token: org?.captureToken ?? null,
+    token: org?.captureToken ? decryptSecret(org.captureToken) : null,
     endpoint: `${endpointBase()}/api/public/capture`,
     events: events.map((e) => ({
       id: e.id,
@@ -77,9 +78,16 @@ export const rotateCaptureToken = createServerFn({ method: "POST" })
     const token = Array.from(bytes)
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
+    const { encryptSecret } = await import("../server/crypto");
+    const { createHash } = await import("node:crypto");
     await db
       .update(organizations)
-      .set({ captureToken: token })
+      .set({
+        captureToken: encryptSecret(token),
+        captureTokenHash: createHash("sha256").update(token).digest("hex"),
+      })
       .where(eq(organizations.id, context.orgId));
+    const { writeAudit } = await import("../server/audit");
+    await writeAudit({ actor: context.memberEmail, actorUserId: context.userId, orgId: context.orgId, action: "capture.token.rotate", entityType: "organization", entityId: context.orgId });
     return loadSetup(context.orgId);
   });

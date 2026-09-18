@@ -118,26 +118,61 @@ export const listJobDescriptions = createServerFn({ method: "POST" })
 export const listCandidates = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .handler(async ({ context }) => {
-    // Own pool, plus any pool an active consortium agreement shares with us.
-    const rows = await db
+    // Own pool, plus pools shared with us under an active consortium agreement.
+    // The share's scope is ENFORCED here: a redacted share exposes only the
+    // professional summary — never resume text, phone, email or CTC.
+    const shares = await db
+      .select({ ownerOrg: orgPoolShares.ownerOrg, scope: orgPoolShares.scope })
+      .from(orgPoolShares)
+      .where(and(eq(orgPoolShares.partnerOrg, context.orgId), eq(orgPoolShares.status, "active")));
+
+    const isRedacted = (scope: string | null) => Boolean(scope && /redact/i.test(scope));
+    const fullOwners = shares.filter((s) => !isRedacted(s.scope)).map((s) => s.ownerOrg);
+    const redactedOwners = shares.filter((s) => isRedacted(s.scope)).map((s) => s.ownerOrg);
+
+    const ownRows = await db
       .select()
       .from(candidates)
-      .where(
-        or(
-          eq(candidates.orgId, context.orgId),
-          inArray(
-            candidates.orgId,
-            db
-              .select({ id: orgPoolShares.ownerOrg })
-              .from(orgPoolShares)
-              .where(
-                and(eq(orgPoolShares.partnerOrg, context.orgId), eq(orgPoolShares.status, "active")),
-              ),
-          ),
-        ),
-      )
+      .where(eq(candidates.orgId, context.orgId))
       .orderBy(desc(candidates.createdAt));
-    return snakeRows(rows);
+
+    const fullShared = fullOwners.length
+      ? await db
+          .select()
+          .from(candidates)
+          .where(inArray(candidates.orgId, fullOwners))
+          .orderBy(desc(candidates.createdAt))
+      : [];
+
+    const redactedShared = redactedOwners.length
+      ? await db
+          .select({
+            id: candidates.id,
+            orgId: candidates.orgId,
+            fullName: candidates.fullName,
+            email: sql<string | null>`null`,
+            phone: sql<string | null>`null`,
+            location: candidates.location,
+            source: candidates.source,
+            experienceYears: candidates.experienceYears,
+            currentCtc: sql<string | null>`null`,
+            expectedCtc: sql<string | null>`null`,
+            noticePeriodDays: candidates.noticePeriodDays,
+            education: candidates.education,
+            skills: candidates.skills,
+            resumeText: sql<string | null>`null`,
+            linkedinUrl: candidates.linkedinUrl,
+            githubUrl: candidates.githubUrl,
+            websiteUrl: candidates.websiteUrl,
+            xUrl: candidates.xUrl,
+            createdAt: candidates.createdAt,
+          })
+          .from(candidates)
+          .where(inArray(candidates.orgId, redactedOwners))
+          .orderBy(desc(candidates.createdAt))
+      : [];
+
+    return snakeRows([...ownRows, ...fullShared, ...redactedShared] as never);
   });
 
 export const getCandidate = createServerFn({ method: "POST" })

@@ -25,6 +25,9 @@ declare global {
 
 export function reportLovableError(error: unknown, context: Record<string, unknown> = {}) {
   if (typeof window === "undefined") return;
+  // Editor-preview telemetry only — never ship error text (which can embed
+  // candidate PII) to third parties from a production deployment.
+  if (!import.meta.env.DEV) return;
   window.__lovableEvents?.captureException?.(
     error,
     {

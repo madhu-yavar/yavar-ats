@@ -157,6 +157,11 @@ export const referCandidate = createServerFn({ method: "POST" })
       .limit(1);
     if (!peer) throw new Error("That colleague is not an active member of your organisation.");
 
+    if (data.requisitionId) {
+      const { assertRequisitionInOrg } = await import("../server/guards");
+      await assertRequisitionInOrg(data.requisitionId, me.orgId);
+    }
+
     await db.insert(candidateReferrals).values({
       orgId: me.orgId,
       candidateId: data.candidateId,
@@ -302,6 +307,10 @@ export const createTalentRequest = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const me = await membership(context.userId);
+    if (data.requisitionId) {
+      const { assertRequisitionInOrg } = await import("../server/guards");
+      await assertRequisitionInOrg(data.requisitionId, me.orgId);
+    }
     await db.insert(talentRequests).values({
       orgId: me.orgId,
       requesterId: context.userId,

@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { db } from "../server/db";
+import { emailVerified } from "../server/claims";
 import { departments, masterItems, orgMembers, organizations, userRoles } from "@db/schema";
 import { registrableDomain, workEmailProblem } from "@/lib/work-email";
 
@@ -93,7 +94,8 @@ async function notifyInvitedMember(args: {
       },
     });
   } catch (e) {
-    console.error("invitation email failed", args.email, e);
+    const { redactEmail } = await import("../server/audit");
+    console.error("invitation email failed", redactEmail(args.email), e);
   }
 }
 
@@ -249,7 +251,8 @@ export const createOrganization = createServerFn({ method: "POST" })
 
     // Only a verified corporate mailbox can register a tenant: the address must be
     // confirmed by the auth service and must not be a personal or disposable domain.
-    if (!context.claims?.["email_confirmed_at"] && context.claims?.["email_verified"] === false)
+    // Fail closed when neither marker is present — absence is not verification.
+    if (!emailVerified(context.claims as Record<string, unknown> | undefined))
       throw new Error("Confirm your work email address before registering an organisation.");
     const problem = workEmailProblem(email);
     if (problem) throw new Error(problem);
@@ -626,6 +629,8 @@ export const setMemberRole = createServerFn({ method: "POST" })
     if (data.grant) {
       try {
         await db.insert(userRoles).values({ userId: member.userId, role: data.role, orgId });
+        const { writeAudit } = await import("../server/audit");
+        await writeAudit({ actor: context.userId, actorUserId: context.userId, orgId, action: "member.role.grant", entityType: "org_member", entityId: member.id, detail: { role: data.role, memberUserId: member.userId } });
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         if (!/duplicate|unique/i.test(message)) throw new Error(message);
@@ -642,6 +647,8 @@ export const setMemberRole = createServerFn({ method: "POST" })
             eq(userRoles.orgId, orgId),
           ),
         );
+      const { writeAudit } = await import("../server/audit");
+      await writeAudit({ actor: context.userId, actorUserId: context.userId, orgId, action: "member.role.revoke", entityType: "org_member", entityId: member.id, detail: { role: data.role, memberUserId: member.userId } });
     }
     return { ok: true };
   });
@@ -715,8 +722,14 @@ export const updateMember = createServerFn({ method: "POST" })
       fullName: data.fullName.trim() || null,
       title: data.title.trim() || null,
     };
-    // Changing the email only makes sense while the invitation is unclaimed.
-    if (data.email && !member.userId) patch.email = data.email.toLowerCase();
+    // Changing the email only makes sense while the invitation is unclaimed —
+    // and the new address must pass the same company-domain gate as the
+    // original invite, or an insider could redirect a pending role outward.
+    if (data.email && !member.userId) {
+      const problem = workEmailProblem(data.email.toLowerCase());
+      if (problem) throw new Error(problem);
+      patch.email = data.email.toLowerCase();
+    }
 
     await db.update(orgMembers).set(patch).where(eq(orgMembers.id, member.id));
     return { ok: true };

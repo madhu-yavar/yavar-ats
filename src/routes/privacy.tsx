@@ -56,6 +56,7 @@ const SECTIONS: LegalSection[] = [
     body: [
       "Scoring, verification, summarisation and copilot answers are produced with large-language-model providers. Your organisation chooses the provider and may supply its own API key. Only the data required for the task, such as the job description and the relevant CV or public profile text, is sent for processing.",
       "AI output is decision support. Hiring decisions remain with your recruiters and interviewers, and every score can be overridden with a recorded reason.",
+      "Candidates: when a company using ATSIQ processes your application with AI assistance, you may ask (a) whether AI was involved in evaluating your application, (b) the substance of the information used, and (c) correction of any inaccurate data. Automated shortlisting does not happen for applications flagged as containing manipulated content; such applications are held for human review. To exercise these rights, contact the hiring organisation you applied to, or reach us at privacy@yavar.ai.",
     ],
   },
   {

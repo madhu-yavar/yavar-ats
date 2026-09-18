@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { db } from "../server/db";
 import { applications, candidates, offers, organizations, requisitions } from "@db/schema";
-import { requireOrg, requireRole } from "./auth.middleware";
+import { assertRole, requireOrg, requireRole, type AppRole } from "./auth.middleware";
 import { resolveAiConfig, aiJson } from "./ai-gateway.server";
 import { resolveTemplate, stripUnreplacedPlaceholders } from "./templates.server";
 
@@ -23,6 +23,21 @@ const OfferStatus = z.enum([
   "declined",
   "revoked",
 ]);
+
+/**
+ * Offer approval chain (HR → CBO → release), enforced server-side: each target
+ * status names the legal source statuses and the role that may make the hop.
+ */
+const OFFER_TRANSITIONS: Partial<Record<(typeof OfferStatus.options)[number], { from: string[]; role?: AppRole | AppRole[] }>> = {
+  draft: { from: ["draft", "declined", "revoked"] },
+  pending_hr: { from: ["draft"] },
+  pending_cbo: { from: ["pending_hr"], role: "hr_head" },
+  approved: { from: ["pending_cbo"], role: "president_cbo" },
+  released: { from: ["approved"], role: "hr_head" },
+  accepted: { from: ["released"] },
+  declined: { from: ["released"] },
+  revoked: { from: ["released", "accepted"], role: ["hr_head", "president_cbo"] },
+};
 
 /**
  * Raise an offer: verify the application belongs to the caller's org, file the
@@ -84,27 +99,53 @@ export const advanceOffer = createServerFn({ method: "POST" })
       .object({
         id: z.string().uuid(),
         status: OfferStatus,
-        approvalTrail: z.array(z.unknown()),
         applicationStage: z.enum(["offer_released", "offer_accepted"]).optional(),
       })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
     const [current] = await db
-      .select({ status: offers.status, letter: offers.letter })
+      .select({ status: offers.status, letter: offers.letter, approvalTrail: offers.approvalTrail })
       .from(offers)
       .where(and(eq(offers.id, data.id), eq(offers.orgId, context.orgId)))
       .limit(1);
     if (!current) throw new Error("Offer not found");
-    if (current.status === "pending_hr" && !current.letter) {
+
+    const rule = OFFER_TRANSITIONS[data.status];
+    if (!rule || !rule.from.includes(current.status)) {
+      throw new Error(`An offer cannot move from ${current.status} to ${data.status}.`);
+    }
+    if (rule.role) {
+      await assertRole(context.userId, context.orgId, rule.role);
+    }
+    if (data.status === "pending_hr" && !current.letter) {
       throw new Error(
         "Generate and review the offer letter before sending this offer for approval.",
       );
     }
+    if (data.applicationStage === "offer_released" && data.status !== "released") {
+      throw new Error("The application stage can only move to offer_released on release.");
+    }
+    if (data.applicationStage === "offer_accepted" && data.status !== "accepted") {
+      throw new Error("The application stage can only move to offer_accepted on acceptance.");
+    }
+
+    // The approval trail is evidence — rebuilt server-side, never client-supplied.
+    const prior = Array.isArray(current.approvalTrail) ? current.approvalTrail : [];
+    const trail = [
+      ...prior,
+      {
+        from: current.status,
+        to: data.status,
+        actor: context.memberEmail,
+        decision: data.status,
+        at: new Date().toISOString(),
+      },
+    ];
 
     await db
       .update(offers)
-      .set({ status: data.status, approvalTrail: data.approvalTrail })
+      .set({ status: data.status, approvalTrail: trail as never })
       .where(and(eq(offers.id, data.id), eq(offers.orgId, context.orgId)));
 
     if (data.applicationStage) {
