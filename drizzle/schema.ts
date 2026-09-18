@@ -183,10 +183,13 @@ export const organizations = pgTable(
     rejectionReason: text("rejection_reason"),
     /** Shared bearer token for the browser-companion capture endpoint. */
     captureToken: text("capture_token"),
+    /** SHA-256 of the capture token — lookup key so the token itself can be encrypted. */
+    captureTokenHash: text("capture_token_hash"),
   },
   (t) => [
     uniqueIndex("organizations_slug_key").on(t.slug),
     uniqueIndex("organizations_capture_token_key").on(t.captureToken),
+    uniqueIndex("organizations_capture_token_hash_key").on(t.captureTokenHash),
     uniqueIndex("organizations_inbox_slug_key")
       .on(sql`lower(${t.inboxSlug})`)
       .where(sql`${t.inboxSlug} is not null`),
@@ -464,6 +467,8 @@ export const candidates = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'::text[]`),
+    /** The CV parser flagged injection-style instructions in the resume text. */
+    suspectedPromptInjection: boolean("suspected_prompt_injection").notNull().default(false),
     referralSource: text("referral_source"),
     employmentHistory: jsonb("employment_history")
       .notNull()
@@ -607,8 +612,6 @@ export const aiInterviews = pgTable("ai_interviews", {
   orgId: uuid("org_id").references(() => organizations.id, { onDelete: "cascade" }),
   jdMatchScore: integer("jd_match_score").notNull().default(0),
   skillsetScore: integer("skillset_score").notNull().default(0),
-  cultureRoleScore: integer("culture_role_score").notNull().default(0),
-  cultureOrgScore: integer("culture_org_score").notNull().default(0),
   transcript: jsonb("transcript")
     .notNull()
     .default(sql`'[]'::jsonb`),
@@ -897,24 +900,6 @@ export const orgLinkedinConnections = pgTable("org_linkedin_connections", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const linkedinOauthStates = pgTable(
-  "linkedin_oauth_states",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orgId: uuid("org_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
-    userId: uuid("user_id").notNull(),
-    redirectUri: text("redirect_uri").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    expiresAt: timestamp("expires_at", { withTimezone: true })
-      .notNull()
-      .default(sql`now() + interval '10 minutes'`),
-    consumedAt: timestamp("consumed_at", { withTimezone: true }),
-  },
-  (t) => [index("linkedin_oauth_states_expires_at_idx").on(t.expiresAt)],
-);
-
 /* ----------------------------------------------------- talent ontology (0032) */
 
 export const skillNodes = pgTable(
@@ -1150,5 +1135,93 @@ export const contentTemplates = pgTable(
     uniqueIndex("content_templates_org_kind_default_key")
       .on(t.orgId, t.kind)
       .where(sql`${t.isDefault}`),
+  ],
+);
+
+/**
+ * Phone-screening kits: AI-built question sets for one candidate/role pairing.
+ * Questions and engine metadata are AI-generated JSON; `orgId` scopes every
+ * read/write (enforced again in screening.functions.ts — no RLS exists).
+ */
+export const screeningKits = pgTable(
+  "screening_kits",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").references(() => organizations.id, { onDelete: "cascade" }),
+    candidateId: uuid("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    requisitionId: uuid("requisition_id").references(() => requisitions.id, {
+      onDelete: "set null",
+    }),
+    applicationId: uuid("application_id").references(() => applications.id, {
+      onDelete: "set null",
+    }),
+    questions: jsonb("questions")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    focusSummary: text("focus_summary"),
+    engine: jsonb("engine")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdBy: uuid("created_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("screening_kits_candidate_idx").on(t.candidateId, t.createdAt),
+    index("screening_kits_org_idx").on(t.orgId),
+  ],
+);
+
+/** One graded screening attempt against a kit (typed answers, notes or audio). */
+export const screeningRuns = pgTable(
+  "screening_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").references(() => organizations.id, { onDelete: "cascade" }),
+    kitId: uuid("kit_id")
+      .notNull()
+      .references(() => screeningKits.id, { onDelete: "cascade" }),
+    candidateId: uuid("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    requisitionId: uuid("requisition_id").references(() => requisitions.id, {
+      onDelete: "set null",
+    }),
+    applicationId: uuid("application_id").references(() => applications.id, {
+      onDelete: "set null",
+    }),
+    inputKind: text("input_kind").notNull().default("typed"),
+    answers: jsonb("answers")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    transcript: text("transcript"),
+    /** Vault object key under `${orgId}/${candidateId}/`. */
+    audioPath: text("audio_path"),
+    audioEngine: text("audio_engine"),
+    screeningScore: integer("screening_score").notNull().default(0),
+    matchScore: integer("match_score"),
+    combinedScore: integer("combined_score"),
+    verdicts: jsonb("verdicts")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    redFlags: text("red_flags")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    rationale: text("rationale"),
+    recommendation: text("recommendation"),
+    recommendationReason: text("recommendation_reason"),
+    engine: jsonb("engine")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdBy: uuid("created_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("screening_runs_kit_idx").on(t.kitId, t.createdAt),
+    index("screening_runs_candidate_idx").on(t.candidateId, t.createdAt),
+    index("screening_runs_org_created_idx").on(t.orgId, t.createdAt),
   ],
 );
