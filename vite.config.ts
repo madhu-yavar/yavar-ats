@@ -25,7 +25,9 @@ export default defineConfig({
       // module-graph references, and without it `vite build` errors exactly like
       // dev did. Mocks are never invoked client-side (only .server() bodies run).
       behavior: { dev: "mock", build: "mock" },
-      client: { files: ["**/server/db.ts", "**/server/storage.ts"] },
+      client: {
+        files: ["**/server/db.ts", "**/server/storage.ts", "**/*.server.ts"],
+      },
     },
   },
 });
