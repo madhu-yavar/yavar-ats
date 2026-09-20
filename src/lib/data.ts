@@ -48,12 +48,7 @@ export type MatchScore = Tables<"match_scores">;
 export type SocialProfile = Tables<"social_profiles">;
 export type Evaluation = Tables<"evaluations">;
 export type Interview = Tables<"interviews">;
-// The generated database type can lag behind additive migrations. Keep the
-// persisted offer-letter fields explicit until the next schema regeneration.
-export type Offer = Tables<"offers"> & {
-  letter?: unknown | null;
-  letter_template_id?: string | null;
-};
+export type Offer = Tables<"offers">;
 export type AiInterview = Tables<"ai_interviews">;
 export type MasterItem = Tables<"master_items">;
 export type MasterKind =
