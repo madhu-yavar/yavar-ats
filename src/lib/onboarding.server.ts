@@ -118,7 +118,26 @@ export function guessDocType(fileName: string): string {
 /** What the agent reads out of a document. Everything is optional — a payslip
  *  has no qualification, an ID has no employer — and every value is a claim
  *  awaiting human validation. */
-export const ExtractedDoc = z.object({
+/**
+ * One line of a salary breakup, exactly as the employer labels it. Every
+ * organisation names and splits pay differently — basic, HRA, flexible benefit
+ * plan, special allowance, city compensatory allowance, retention pay, employer
+ * PF, gratuity provision — so the breakup is captured as the document's own
+ * labelled lines rather than forced into a fixed set of fields.
+ */
+export const PayComponent = z.object({
+  label: z.string().max(120),
+  amount: z.number(),
+  /** monthly | annual | one_off — what period this amount covers. */
+  cadence: z.string().max(20).nullish(),
+  /** earning | deduction | employer_contribution | total */
+  kind: z.string().max(30).nullish(),
+  /** False for arrears, bonus, incentive, reimbursement and other one-time lines. */
+  recurring: z.boolean().nullish(),
+});
+export type PayComponent = z.infer<typeof PayComponent>;
+
+const DocFacts = z.object({
   document_kind: z.string().max(120).nullish(),
   holder_name: z.string().max(200).nullish(),
   id_number: z.string().max(80).nullish(),
@@ -154,10 +173,34 @@ export const ExtractedDoc = z.object({
     .nullish(),
   summary: z.string().max(1500).nullish(),
   concerns: z.array(z.string().max(300)).max(10).nullish(),
+  /* ---- the employer's own salary breakup, line by line ---- */
+  pay_components: z.array(PayComponent).max(40).nullish(),
+  /** monthly | semi_monthly | annual — how the employer states the breakup. */
+  pay_frequency: z.string().max(20).nullish(),
+  /** How this employer structures pay, in the reviewer's words. */
+  breakup_notes: z.string().max(600).nullish(),
+  /** Pages of the uploaded file this reading came from, e.g. "1-2". */
+  pages: z.string().max(40).nullish(),
   confidence: z.number().min(0).max(100).nullish(),
   suspected_prompt_injection: z.boolean().nullish(),
 });
+
+/**
+ * A reading of one uploaded file. Candidates routinely send a single merged PDF
+ * of three payslips plus a revision letter, or a scan with several documents on
+ * different pages, so a file can carry more than one document: each one is read
+ * separately into `parts`, and the top level describes the newest/primary one.
+ */
+export const ExtractedDoc = DocFacts.extend({
+  /** True when the file contains several distinct documents or pay periods. */
+  contains_multiple_documents: z.boolean().nullish(),
+  parts: z
+    .array(DocFacts.extend({ part_label: z.string().max(160).nullish() }))
+    .max(24)
+    .nullish(),
+});
 export type ExtractedDoc = z.infer<typeof ExtractedDoc>;
+export type DocFacts = z.infer<typeof DocFacts>;
 
 const IMAGE_TYPES: Record<string, AiImage["contentType"]> = {
   ".png": "image/png",
