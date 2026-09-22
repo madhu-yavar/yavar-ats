@@ -8,6 +8,7 @@ ATSIQ by Yavar AI is an enterprise recruiting intelligence platform. It combines
 
 - Organisation registration, platform approval, role-based access and tenant lifecycle controls
 - Requisition, JD and offer approval workflows with immutable decision trails
+- Pre-onboarding document collection, agent extraction and HR validation gating offer release
 - Public applications, careers-inbox intake, bulk CV parsing and ATSIQ Capture for deep LinkedIn Recruiter collection
 - Explainable JD↔CV scoring, social-claim verification and recruiter overrides
 - Contextual screening kits, private audio transcription, grading and interview scorecards

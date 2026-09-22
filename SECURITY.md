@@ -52,3 +52,15 @@ webhook, OAuth callback and scheduler endpoints validate callers, validate paylo
 `VERIFICATION_REPORT.md` records the latest automated and browser checks. A fresh application security
 scan and production dependency scan are required before each publication. Provider integrations that need
 customer credentials are reported as environment-dependent rather than represented as tested.
+
+## Pre-onboarding documents
+
+Candidate proof documents (photo ID, experience letters, payslips, education
+certificates) are stored in private object storage under an organisation-scoped
+path, and every read re-checks that prefix against the caller's organisation.
+Extraction runs on the organisation's own AI credentials, with untrusted
+document text isolated in the prompt and the model's reading validated against a
+schema; any instruction-like content is reported to the reviewer rather than
+acted upon. Upload, validation and rejection decisions are written to the audit
+log with the acting user, and offer release is refused server-side until every
+mandatory document type has been validated.
