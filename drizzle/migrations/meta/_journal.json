@@ -246,6 +246,13 @@
       "when": 1790099145400,
       "tag": "0034_local_auth_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1790099224433,
+      "tag": "0035_local_auth_role_grants",
+      "breakpoints": true
     }
   ]
 }
