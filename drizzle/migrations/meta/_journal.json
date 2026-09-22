@@ -246,13 +246,6 @@
       "when": 1790103655100,
       "tag": "0034_tighten_org_and_membership_policies",
       "breakpoints": true
-    },
-    {
-      "idx": 35,
-      "version": "7",
-      "when": 1790105837837,
-      "tag": "0035_plain_ezekiel_stane",
-      "breakpoints": true
     }
   ]
 }
