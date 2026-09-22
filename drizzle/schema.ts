@@ -1241,3 +1241,42 @@ export const hrIncentiveSchemes = pgTable("hr_incentive_schemes", {
   updatedBy: uuid("updated_by"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * In-house compensation knowledge. Every figure a recruiter accepts or edits
+ * on the market benchmark panel lands here, so future research is anchored on
+ * what this organisation actually pays rather than on the open web alone.
+ */
+export const compKnowledge = pgTable(
+  "comp_knowledge",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    requisitionId: uuid("requisition_id").references(() => requisitions.id, {
+      onDelete: "set null",
+    }),
+    /** slug(title) — the grouping key for "what do we pay for this role". */
+    roleKey: text("role_key").notNull(),
+    title: text("title").notNull(),
+    location: text("location"),
+    /** Career ladder key, or "requisition" for a whole-req budget decision. */
+    levelKey: text("level_key").notNull(),
+    currency: text("currency").notNull().default("INR"),
+    low: numeric("low"),
+    median: numeric("median").notNull(),
+    high: numeric("high"),
+    experienceMin: integer("experience_min"),
+    experienceMax: integer("experience_max"),
+    /** "user_override" when typed by hand, "market_applied" when accepted as-is. */
+    source: text("source").notNull().default("user_override"),
+    note: text("note"),
+    createdBy: uuid("created_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("comp_knowledge_org_role_idx").on(t.orgId, t.roleKey, t.createdAt),
+    index("comp_knowledge_org_created_idx").on(t.orgId, t.createdAt),
+  ],
+);
