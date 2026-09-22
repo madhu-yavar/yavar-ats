@@ -141,11 +141,18 @@ export const MANUAL_SECTIONS: ManualSection[] = [
   },
   {
     id: "offers",
-    title: "10. Offers and joining",
-    summary: "Candidates reaching the offer stage flow through approval, release and joining.",
+    title: "10. Offers, pre-onboarding checks and joining",
+    summary:
+      "Candidates reaching the offer stage flow through approval, document validation, release and joining.",
     steps: [
       "When a candidate clears the final interview level, move them to the offer stage; they then appear on Offers (/offers).",
       "Raise the offer with CTC and joining date; it routes through HR and CBO approval.",
+      "Open Letter to generate the offer letter from a template — an offer cannot go for approval without it.",
+      "Open Documents on the offer to run pre-onboarding: government photo ID, experience or relieving letters, recent payslips and the highest education certificate are mandatory; salary revision letter, bank proof, address proof and background form are optional.",
+      "Upload documents yourself, or ask the candidate to mail them to your careers address — mail from a candidate who already has an offer in flight is filed against that offer automatically and sorted by document type.",
+      "Every filed document is read by the extraction agent using your organisation's own AI key. Name, ID number, employer, dates, payslip figures and last drawn CTC are pulled out and shown beside the original page, so you validate the reading against the document rather than trusting the agent.",
+      "Press Validate to accept a document, or Reject with a mandatory note when it does not match. Read again re-runs the extraction; Remove deletes the file and its reading. Every decision is written to the audit log with the actor.",
+      "Release stays locked until all four mandatory document types are validated; the Release button explains what is still outstanding.",
       "Release the approved offer, then record accepted, declined, revoked, joined, no-show or deferred outcomes.",
       "Every stage change captures actor, reason and note, so the audit trail is complete.",
     ],
