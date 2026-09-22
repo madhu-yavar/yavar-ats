@@ -16,7 +16,14 @@ import { z } from "zod";
 
 import { db } from "../server/db";
 import { applications, candidates, offers, onboardingDocuments } from "@db/schema";
-import { aiJson, INJECTION_RULES, resolveAiConfig, untrusted, type AiImage } from "./ai-gateway.server";
+import {
+  aiJson,
+  INJECTION_RULES,
+  resolveAiConfig,
+  untrusted,
+  type AiDoc,
+  type AiImage,
+} from "./ai-gateway.server";
 import { contentTypeFor, getObject, putObject, safeFileName } from "../server/storage";
 
 /* ------------------------------------------------------- document catalogue */
@@ -118,7 +125,26 @@ export function guessDocType(fileName: string): string {
 /** What the agent reads out of a document. Everything is optional — a payslip
  *  has no qualification, an ID has no employer — and every value is a claim
  *  awaiting human validation. */
-export const ExtractedDoc = z.object({
+/**
+ * One line of a salary breakup, exactly as the employer labels it. Every
+ * organisation names and splits pay differently — basic, HRA, flexible benefit
+ * plan, special allowance, city compensatory allowance, retention pay, employer
+ * PF, gratuity provision — so the breakup is captured as the document's own
+ * labelled lines rather than forced into a fixed set of fields.
+ */
+export const PayComponent = z.object({
+  label: z.string().max(120),
+  amount: z.number(),
+  /** monthly | annual | one_off — what period this amount covers. */
+  cadence: z.string().max(20).nullish(),
+  /** earning | deduction | employer_contribution | total */
+  kind: z.string().max(30).nullish(),
+  /** False for arrears, bonus, incentive, reimbursement and other one-time lines. */
+  recurring: z.boolean().nullish(),
+});
+export type PayComponent = z.infer<typeof PayComponent>;
+
+const DocFacts = z.object({
   document_kind: z.string().max(120).nullish(),
   holder_name: z.string().max(200).nullish(),
   id_number: z.string().max(80).nullish(),
@@ -154,10 +180,34 @@ export const ExtractedDoc = z.object({
     .nullish(),
   summary: z.string().max(1500).nullish(),
   concerns: z.array(z.string().max(300)).max(10).nullish(),
+  /* ---- the employer's own salary breakup, line by line ---- */
+  pay_components: z.array(PayComponent).max(40).nullish(),
+  /** monthly | semi_monthly | annual — how the employer states the breakup. */
+  pay_frequency: z.string().max(20).nullish(),
+  /** How this employer structures pay, in the reviewer's words. */
+  breakup_notes: z.string().max(600).nullish(),
+  /** Pages of the uploaded file this reading came from, e.g. "1-2". */
+  pages: z.string().max(40).nullish(),
   confidence: z.number().min(0).max(100).nullish(),
   suspected_prompt_injection: z.boolean().nullish(),
 });
+
+/**
+ * A reading of one uploaded file. Candidates routinely send a single merged PDF
+ * of three payslips plus a revision letter, or a scan with several documents on
+ * different pages, so a file can carry more than one document: each one is read
+ * separately into `parts`, and the top level describes the newest/primary one.
+ */
+export const ExtractedDoc = DocFacts.extend({
+  /** True when the file contains several distinct documents or pay periods. */
+  contains_multiple_documents: z.boolean().nullish(),
+  parts: z
+    .array(DocFacts.extend({ part_label: z.string().max(160).nullish() }))
+    .max(24)
+    .nullish(),
+});
 export type ExtractedDoc = z.infer<typeof ExtractedDoc>;
+export type DocFacts = z.infer<typeof DocFacts>;
 
 const IMAGE_TYPES: Record<string, AiImage["contentType"]> = {
   ".png": "image/png",
@@ -170,6 +220,61 @@ function imageTypeOf(fileName: string): AiImage["contentType"] | null {
   const dot = fileName.lastIndexOf(".");
   if (dot === -1) return null;
   return IMAGE_TYPES[fileName.slice(dot).toLowerCase()] ?? null;
+}
+
+/**
+ * Page-by-page text of a PDF, with page markers kept. Page boundaries are what
+ * let the agent tell three merged payslips apart, so they are never flattened
+ * away here as they are for CV text.
+ */
+async function pdfPageText(bytes: Uint8Array): Promise<string> {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  // pdf.js detaches the buffer it is handed — give it a copy.
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(bytes), useSystemFonts: false }).promise;
+  const limit = Math.min(doc.numPages, 60);
+  const out: string[] = [];
+  for (let i = 1; i <= limit; i++) {
+    const content = await (await doc.getPage(i)).getTextContent();
+    const page = content.items
+      .map((it) => ("str" in it ? it.str : ""))
+      .join(" ")
+      .replace(/[ \t]+/g, " ")
+      .trim();
+    out.push(`--- page ${i} of ${doc.numPages} ---\n${page}`);
+  }
+  if (doc.numPages > limit) out.push(`--- ${doc.numPages - limit} further page(s) not read ---`);
+  return out.join("\n\n").trim();
+}
+
+/**
+ * A candidate may mail one ZIP with every proof inside, and the archive may hold
+ * folders and nested archives. Flatten an upload into the individual documents
+ * it actually contains, so each one is stored, typed and validated on its own.
+ */
+export async function expandUpload(
+  fileName: string,
+  bytes: Uint8Array,
+  depth = 0,
+): Promise<{ fileName: string; bytes: Uint8Array }[]> {
+  if (!/\.(zip)$/i.test(fileName) || depth > 2) return [{ fileName, bytes }];
+  try {
+    const { unzipSync } = await import("fflate");
+    const files = unzipSync(bytes);
+    const out: { fileName: string; bytes: Uint8Array }[] = [];
+    for (const [entry, data] of Object.entries(files)) {
+      const base = entry.split("/").pop() ?? entry;
+      // Skip directories, macOS resource forks and empty members.
+      if (!base || base.startsWith(".") || entry.includes("__MACOSX") || !data.byteLength) continue;
+      if (data.byteLength > 25_000_000) continue;
+      out.push(...(await expandUpload(base, data, depth + 1)));
+      if (out.length >= 40) break;
+    }
+    return out.length ? out : [{ fileName, bytes }];
+  } catch {
+    // A password-protected or damaged archive stays one stored file, so HR can
+    // see it arrived and ask for a usable copy.
+    return [{ fileName, bytes }];
+  }
 }
 
 /**
@@ -228,6 +333,31 @@ export async function extractDocument(input: {
     "them from a monthly figure; the reviewing system annualises and cross-checks itself. On a " +
     "revision letter, annual_ctc is the NEW cost to company after revision, and any previous or " +
     "pre-revision figure goes into fields as a labelled value.\n\n" +
+    // Formats are not standardised: every employer names and splits pay
+    // differently, so the breakup is captured as the document's own lines.
+    "SALARY BREAKUP — no two employers structure pay the same way, so do not force this document into " +
+    "a template. Copy the breakup exactly as printed into pay_components, one entry per line of the " +
+    "table: label as printed (Basic, HRA, Flexible Benefit Plan, Special Allowance, City " +
+    "Compensatory Allowance, Retention Pay, Shift Allowance, Employer PF, Gratuity, Professional " +
+    "Tax, TDS, ESI, loan recovery — whatever this employer uses), amount as a plain number, cadence " +
+    "(monthly, annual or one_off), kind (earning, deduction, employer_contribution or total) and " +
+    "recurring (false for arrears, back-pay, bonus, incentive, leave encashment, reimbursement, " +
+    "joining or retention payouts). Never rename, merge or re-bucket a component, never drop a line " +
+    "you cannot classify — set kind null and keep the label. Set pay_frequency to the period the " +
+    "breakup is stated in, and use breakup_notes to explain in one or two sentences how this " +
+    "employer structures pay (for example a flexible benefit pot the employee allocates, or a " +
+    "variable paid quarterly). monthly_fixed_gross must equal the sum of the recurring monthly " +
+    "earnings you listed, and monthly_one_off the sum of the non-recurring ones.\n\n" +
+    // Merged and multi-page uploads: one file is not one document.
+    "MERGED AND MULTI-PAGE FILES — the file may hold several documents: three monthly payslips in " +
+    "one PDF, a payslip followed by a revision letter, an ID scanned on page 1 with a certificate " +
+    "on page 2, or the same document repeated. Read the WHOLE file. When it carries more than one " +
+    "document or more than one pay period, set contains_multiple_documents true and return one entry " +
+    "in parts for EACH document or pay period, each with its own dates, figures and pay_components, " +
+    "a part_label naming it (\"Payslip Mar 2026\", \"Revision letter effective Apr 2026\") and pages " +
+    "giving the page range it occupies. Put the most recent or most significant document at the top " +
+    "level as well, so a reader that ignores parts still gets the current position. Never average, " +
+    "merge or total figures across different documents or months.\n\n" +
     "RELEVANCE — record in concerns anything that weakens this document as proof: the holder name " +
     "differs from the name elsewhere on the document, the employer differs between pages, the " +
     "period is older than it should be, the figures are inconsistent (components do not add up to " +
@@ -238,14 +368,29 @@ export async function extractDocument(input: {
 
   let text: string | null = null;
   const images: AiImage[] = [];
+  const docs: AiDoc[] = [];
   const imageType = imageTypeOf(input.fileName);
+  const isPdf = /\.pdf$/i.test(input.fileName);
   try {
     if (imageType) {
       images.push({ base64: Buffer.from(input.bytes).toString("base64"), contentType: imageType });
+    } else if (isPdf) {
+      const read = await pdfPageText(input.bytes);
+      text = read.trim() ? read.slice(0, 120_000) : null;
+      // A scan, a photographed slip printed to PDF, or a breakup table that is
+      // an image: hand the whole PDF to the model so it reads the pages itself.
+      if ((!text || text.replace(/--- page[^\n]*\n/g, "").trim().length < 400) &&
+          input.bytes.byteLength < 18_000_000) {
+        docs.push({
+          base64: Buffer.from(input.bytes).toString("base64"),
+          contentType: "application/pdf",
+          fileName: safeFileName(input.fileName),
+        });
+      }
     } else {
       const { attachmentText } = await import("./inbox.server");
       const read = await attachmentText(input.fileName, input.bytes);
-      text = read.trim() ? read.slice(0, 50_000) : null;
+      text = read.trim() ? read.slice(0, 120_000) : null;
     }
   } catch (e) {
     return {
@@ -257,13 +402,15 @@ export async function extractDocument(input: {
     };
   }
 
-  if (!text && !images.length) {
+  if (!text && !images.length && !docs.length) {
     return {
       status: "failed",
       extracted: null,
       text: null,
       model: null,
-      note: "No readable text in the file — it may be a scan. Validate it by eye, or ask for a clearer copy.",
+      note: /\.(doc|xls|ppt|heic|heif)$/i.test(input.fileName)
+        ? "This file format cannot be read automatically. Ask for a PDF, DOCX, JPG or PNG copy, or validate it by eye."
+        : "No readable text in the file — it may be a scan. Validate it by eye, or ask for a clearer copy.",
     };
   }
 
@@ -274,6 +421,7 @@ export async function extractDocument(input: {
     schema: ExtractedDoc,
     system,
     ...(images.length ? { images } : {}),
+    ...(docs.length ? { docs } : {}),
     prompt: `File name: ${safeFileName(input.fileName)}\n\n${untrusted("pre_onboarding_document", text ?? "(photographed document — read the attached image)")}`,
   });
   if (!result.ok) {

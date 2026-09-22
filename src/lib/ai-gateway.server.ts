@@ -236,6 +236,14 @@ function parseJsonish<T>(text: string): T | null {
 export type AiImage = { base64: string; contentType: "image/png" | "image/jpeg" | "image/webp" };
 
 /**
+ * A whole PDF handed to the model as a document. Needed when a file carries no
+ * extractable text (a scanned or photographed payslip) or when page layout is
+ * the meaning — a salary breakup table read as flattened text loses which
+ * amount belongs to which component.
+ */
+export type AiDoc = { base64: string; contentType: "application/pdf"; fileName: string };
+
+/**
  * Ask the configured model for a JSON object.
  * Always streams so long analyses are not severed by the platform.
  * Optional `images` enable vision requests (template import, screenshot QA).
@@ -255,6 +263,7 @@ export async function aiJson<T>(opts: {
   system: string;
   prompt: string;
   images?: AiImage[];
+  docs?: AiDoc[];
   orgId?: string | null | undefined;
   config?: AiConfig;
   schema?: SchemaLike<T>;
@@ -287,6 +296,7 @@ async function aiJsonOnce<T>(opts: {
   system: string;
   prompt: string;
   images?: AiImage[];
+  docs?: AiDoc[];
   /** Org context for credential resolution — pass whenever the caller has one. */
   orgId?: string | null | undefined;
   /** Force a provider/model instead of the saved setting (used by "Test model"). */
@@ -302,7 +312,8 @@ async function aiJsonOnce<T>(opts: {
     };
   }
 
-  const images = (opts.images ?? []).slice(0, 4);
+  const images = (opts.images ?? []).slice(0, 8);
+  const docs = (opts.docs ?? []).slice(0, 2);
 
   if (cfg.provider === "google") {
     let res: Response;
@@ -311,6 +322,7 @@ async function aiJsonOnce<T>(opts: {
         json: true,
         search: false,
         images,
+        docs,
       });
     } catch (e) {
       return { ok: false, status: 502, message: `AI request failed: ${(e as Error).message}` };
@@ -351,10 +363,16 @@ async function aiJsonOnce<T>(opts: {
           source: { type: "base64", media_type: image.contentType, data: image.base64 },
         });
       }
+      for (const doc of docs) {
+        content.push({
+          type: "document",
+          source: { type: "base64", media_type: doc.contentType, data: doc.base64 },
+        });
+      }
       const body = {
         model: cfg.model,
         stream: true,
-        max_tokens: 4096,
+        max_tokens: 8192,
         system: `${opts.system}\nRespond with a single raw JSON object and nothing else.`,
         messages: [{ role: "user", content }],
       };
@@ -365,6 +383,12 @@ async function aiJsonOnce<T>(opts: {
         userContent.push({
           type: "image_url",
           image_url: { url: `data:${image.contentType};base64,${image.base64}` },
+        });
+      }
+      for (const doc of docs) {
+        userContent.push({
+          type: "file",
+          file: { filename: doc.fileName, file_data: `data:${doc.contentType};base64,${doc.base64}` },
         });
       }
       const body = {
@@ -417,17 +441,20 @@ async function callGoogleStream(
   cfg: AiConfig,
   system: string,
   prompt: string,
-  opts: { json: boolean; search: boolean; images?: AiImage[] },
+  opts: { json: boolean; search: boolean; images?: AiImage[]; docs?: AiDoc[] },
 ) {
   const parts: unknown[] = [{ text: prompt }];
   for (const image of opts.images ?? []) {
     parts.push({ inlineData: { mimeType: image.contentType, data: image.base64 } });
   }
+  for (const doc of opts.docs ?? []) {
+    parts.push({ inlineData: { mimeType: doc.contentType, data: doc.base64 } });
+  }
   const body = {
     systemInstruction: { parts: [{ text: system }] },
     contents: [{ role: "user", parts }],
     generationConfig: {
-      maxOutputTokens: opts.search ? 8192 : 4096,
+      maxOutputTokens: 8192,
       // Thinking tokens count against maxOutputTokens on 2.5 models and would
       // truncate the JSON answer before it closes.
       thinkingConfig: { thinkingBudget: 0 },
