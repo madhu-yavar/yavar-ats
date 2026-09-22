@@ -21,8 +21,8 @@ function createSql(): postgres.Sql {
       // Never leave an auth or page request spinning behind a stale socket.
       // Postgres.js discards the failed connection and the next request opens
       // a fresh one; callers can then return a useful 503 promptly.
-      query_timeout: 12,
       max_lifetime: 60 * 30,
+      connection: { statement_timeout: 12_000 },
     });
   }
   return globalForDb.__atsiqPg;
