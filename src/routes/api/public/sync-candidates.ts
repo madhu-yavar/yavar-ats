@@ -54,6 +54,7 @@ async function run(request: Request) {
   const staleCandidates = await db
     .select({
       id: candidates.id,
+      orgId: candidates.orgId,
       fullName: candidates.fullName,
       skills: candidates.skills,
       resumeText: candidates.resumeText,
@@ -75,8 +76,11 @@ async function run(request: Request) {
   let failed = 0;
   for (const c of queue) {
     try {
+      // Each candidate is re-verified with their own organisation's AI key;
+      // candidates with no organisation are skipped rather than billed elsewhere.
+      if (!c.orgId) continue;
       const result = await verifyClaims({
-        orgId: null,
+        orgId: c.orgId,
         name: c.fullName,
         resumeText: c.resumeText,
         skills: c.skills ?? [],
