@@ -41,33 +41,26 @@ import {
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient();
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<MeUser | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
-      setSession(s);
-      setReady(true);
-      // The bearer token is attached per server-function call, so anything fetched
-      // during the sign-in transition must be refetched with the new identity.
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
-        qc.clear();
-        if (s) void qc.invalidateQueries();
-      }
-    });
-    // Never leave the app stuck on the splash if session restore stalls.
-    const bail = setTimeout(() => setReady(true), 4000);
-    supabase.auth
-      .getSession()
-      .then(({ data }) => setSession(data.session))
-      .catch(() => undefined)
+    let live = true;
+    // Never leave the app stuck on the splash if the session check stalls.
+    const bail = setTimeout(() => live && setReady(true), 4000);
+    fetchMe()
+      .then((me) => {
+        if (!live) return;
+        setUser(me);
+      })
       .finally(() => {
+        if (!live) return;
         clearTimeout(bail);
         setReady(true);
       });
     return () => {
+      live = false;
       clearTimeout(bail);
-      sub.subscription.unsubscribe();
     };
   }, [qc]);
 
@@ -79,7 +72,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!session) return <Landing />;
+  if (!user) return <Landing />;
   return <>{children}</>;
 }
 
