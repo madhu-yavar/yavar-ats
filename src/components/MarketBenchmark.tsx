@@ -205,8 +205,8 @@ export function MarketBenchmarkPanel(props: Props) {
               {engineLabel[data.engine.provider] ?? data.engine.provider} · {data.engine.model}
             </span>
             <span className="rounded-full border px-2 py-0.5">
-              {data.research.queries.length} live searches · {data.research.read} of{" "}
-              {data.sources.length} pages read
+              {data.research.grounded ? "Live web search on" : "Live web search off"} ·{" "}
+              {data.research.read} of {data.sources.length} publisher pages read
             </span>
           </div>
 

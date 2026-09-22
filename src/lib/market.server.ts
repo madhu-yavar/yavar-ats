@@ -2,10 +2,10 @@
  * Market compensation agent — deep live research.
  *
  * Three stages, every run:
- *  1. DISCOVER — a live web search (multiple engines, several query shapes) for
- *     this exact role, location and year, keeping only results that land on a
- *     vetted compensation/job-market domain, plus a set of deterministic deep
- *     links into those same sites.
+ *  1. DISCOVER — deterministic deep links into a vetted list of compensation
+ *     publishers for this exact role/location, plus several live search query
+ *     shapes handed to the model's own grounded web search so the answer keeps
+ *     up with pages we cannot fetch server-side.
  *  2. READ — every candidate page is fetched through `safeFetch` (SSRF-safe),
  *     stripped to text and reduced to the sentences that actually carry pay
  *     figures, so the model sees evidence rather than page furniture.
