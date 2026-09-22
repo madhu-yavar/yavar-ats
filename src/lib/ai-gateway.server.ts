@@ -59,10 +59,13 @@ export type AiJsonResult<T> =
 
 /** Read the saved provider/model plus its stored key (service-role only). */
 export async function resolveAiConfig(orgId?: string | null): Promise<AiConfig> {
+  // Strict bring-your-own-key: the only accepted credential is the key the
+  // organisation itself saved. No platform/deployment key is ever consulted, so
+  // one tenant can never spend another tenant's — or the vendor's — AI budget.
   const fallback: AiConfig = {
     provider: "openai",
     model: DEFAULT_MODEL.openai,
-    apiKey: process.env["OPENAI_API_KEY"] ?? null,
+    apiKey: null,
   };
   try {
     const baseQuery = db
@@ -79,12 +82,6 @@ export async function resolveAiConfig(orgId?: string | null): Promise<AiConfig> 
       : "openai";
     const model = data.model?.trim() || DEFAULT_MODEL[provider];
 
-    const envKey =
-      provider === "openai"
-        ? process.env["OPENAI_API_KEY"]
-        : provider === "anthropic"
-          ? process.env["ANTHROPIC_API_KEY"]
-          : (process.env["GEMINI_API_KEY"] ?? process.env["GOOGLE_API_KEY"] ?? null);
     let storedKey: string | null = null;
     if (orgId) {
       const { decryptSecret } = await import("../server/crypto");
@@ -97,7 +94,7 @@ export async function resolveAiConfig(orgId?: string | null): Promise<AiConfig> 
         .limit(1);
       storedKey = cred?.apiKey ? decryptSecret(cred.apiKey) : null;
     }
-    return { provider, model, apiKey: storedKey ?? envKey ?? null };
+    return { provider, model, apiKey: storedKey };
   } catch {
     return fallback;
   }
@@ -136,25 +133,20 @@ export async function hasProviderKey(orgId: string | null | undefined, provider:
   return Boolean(row);
 }
 
-/** Stored (or env) key for a bring-your-own provider — lets a form test a
- * selection before it is saved without falling back to another tenant's key. */
+/** The organisation's own stored key for a provider — lets a form test a
+ * selection before it is saved. Never falls back to a platform or another
+ * tenant's key: no key saved means no AI call. */
 export async function readProviderKey(orgId: string, provider: AiProvider): Promise<string | null> {
-  if (orgId) {
-    const { decryptSecret } = await import("../server/crypto");
-    const [cred] = await db
-      .select({ apiKey: aiProviderCredentials.apiKey })
-      .from(aiProviderCredentials)
-      .where(
-        and(eq(aiProviderCredentials.orgId, orgId), eq(aiProviderCredentials.provider, provider)),
-      )
-      .limit(1);
-    if (cred?.apiKey) return decryptSecret(cred.apiKey);
-  }
-  return provider === "openai"
-    ? (process.env["OPENAI_API_KEY"] ?? null)
-    : provider === "anthropic"
-      ? (process.env["ANTHROPIC_API_KEY"] ?? null)
-      : (process.env["GEMINI_API_KEY"] ?? process.env["GOOGLE_API_KEY"] ?? null);
+  if (!orgId) return null;
+  const { decryptSecret } = await import("../server/crypto");
+  const [cred] = await db
+    .select({ apiKey: aiProviderCredentials.apiKey })
+    .from(aiProviderCredentials)
+    .where(
+      and(eq(aiProviderCredentials.orgId, orgId), eq(aiProviderCredentials.provider, provider)),
+    )
+    .limit(1);
+  return cred?.apiKey ? decryptSecret(cred.apiKey) : null;
 }
 
 /* ------------------------------------------------------------- streaming */

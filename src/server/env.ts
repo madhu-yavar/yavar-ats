@@ -19,9 +19,8 @@ const schema = z.object({
   // Public origin (capture endpoint links, OAuth redirects, emails)
   PUBLIC_SITE_URL: z.string().url().default("https://atsiq.yavar.ai"),
 
-  // AI providers — at least one is required for AI features; the app boots without them
-  OPENAI_API_KEY: z.string().optional(),
-  ANTHROPIC_API_KEY: z.string().optional(),
+  // AI providers: strictly bring-your-own-key per organisation. Keys are stored
+  // encrypted in ai_provider_credentials — no deployment-level AI key exists.
 
   // Social scoring
   GITHUB_TOKEN: z.string().optional(),

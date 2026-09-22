@@ -154,6 +154,7 @@ export const createScreeningKit = createServerFn({ method: "POST" })
     if (!jdText.trim()) throw new Error("This role has no job description text yet.");
 
     const kit = await buildScreeningKit({
+      orgId: context.orgId,
       role: requisition.title,
       jdText,
       mustHave: requisition.mustHaveSkills ?? [],
@@ -288,6 +289,7 @@ export const gradeScreeningAnswers = createServerFn({ method: "POST" })
     if (typed.length && !data.audio && !data.notes) inputKind = "typed";
 
     const grade = await gradeScreening({
+      orgId: context.orgId,
       role: requisition?.title ?? "the role",
       jdText,
       mustHave: requisition?.mustHaveSkills ?? [],
