@@ -1154,6 +1154,20 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
 
 if (typeof chrome !== "undefined" && chrome.runtime?.onMessage)
   chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
+    if (msg?.type === "deepRead") {
+      (async () => {
+        try {
+          const deep = await run(msg.tabId, deepHarvestProfile, [
+            msg.candidateName || null,
+            msg.publicProfileUrl || null,
+          ]);
+          respond({ ok: true, deep });
+        } catch (error) {
+          respond({ ok: false, error: error?.message || "deep read failed" });
+        }
+      })();
+      return true;
+    }
     if (msg?.type === "status") {
       getRun().then((r) => respond({ run: r }));
       return true;
