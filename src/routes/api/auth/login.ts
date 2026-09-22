@@ -66,7 +66,11 @@ export const Route = createFileRoute("/api/auth/login")({
             headers: { "content-type": "application/json", "set-cookie": sessionCookie(token, request) },
           });
         } catch (err) {
-          return Response.json({ error: (err as Error).message || "Sign-in failed." }, { status: 500 });
+          console.error("Password sign-in failed", err);
+          return Response.json(
+            { error: "Sign-in is temporarily unavailable. Please try again in a moment." },
+            { status: 503 },
+          );
         }
       },
     },
