@@ -6,30 +6,31 @@
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
-/** three / 3d-force-graph read `window.THREE` at module scope. They are only ever
- *  loaded client-side (lazy import in src/routes/brain.tsx), but Rollup used to
- *  merge them into the same vendor chunk as the unenv polyfills that SSR imports,
- *  which crashed every server-rendered page with "window is not defined".
- *  Keeping them in a dedicated chunk means the server never evaluates them. */
-const BROWSER_ONLY_3D =
-  /node_modules\/(three|three-spritetext|three-render-objects|3d-force-graph|react-force-graph-3d|force-graph|kapsule|accessor-fn)\//;
+import { fileURLToPath } from "node:url";
+
+/** three / three-spritetext / react-force-graph-3d read `window.THREE` while they
+ *  are being evaluated. They are only ever rendered in the browser (lazy import in
+ *  src/routes/brain.tsx), but the server bundler still pulled them in and merged
+ *  them with modules the server imports, which crashed every server-rendered page
+ *  with "window is not defined". Resolve them to an inert stub on the server only. */
+const BROWSER_ONLY_3D = new Set(["three", "three-spritetext", "react-force-graph-3d"]);
+const BROWSER_3D_STUB = fileURLToPath(new URL("./src/stubs/browser-3d-stub.ts", import.meta.url));
 
 export default defineConfig({
   // Self-hosted deploys (Docker/GKE) need a Node server, not the Lovable
   // Cloudflare default. Produces .output/server/index.mjs via `vite build`.
   nitro: { preset: "node-server" },
   vite: {
-    environments: {
-      ssr: {
-        resolve: {
-          alias: {
-            three: BROWSER_3D_STUB,
-            "three-spritetext": BROWSER_3D_STUB,
-            "react-force-graph-3d": BROWSER_3D_STUB,
-          },
+    plugins: [
+      {
+        name: "atsiq-stub-browser-3d-on-server",
+        enforce: "pre" as const,
+        resolveId(source: string, _importer: string | undefined, options: { ssr?: boolean }) {
+          if (options?.ssr && BROWSER_ONLY_3D.has(source)) return BROWSER_3D_STUB;
+          return null;
         },
       },
-    },
+    ],
   },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
