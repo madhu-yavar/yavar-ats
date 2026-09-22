@@ -19,3 +19,5 @@
 - [x] Super-admin organisation switcher on the RoI page
 - [x] Executive band on the dashboard answering the question up front
 - [ ] Publish and review with live data once offers start flowing
+
+- Replace landing film with real-page/data narrative; verify RoI cards are data-driven; fix interview scheduling database errors.
