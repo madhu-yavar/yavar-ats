@@ -64,6 +64,8 @@ export type CapabilityGoal = {
   outcome: string;
   horizon: string;
   readiness: number;
+  /** How much of the programme the wider talent pool could cover if hired. */
+  poolReadiness: number;
   status: "ready" | "partial" | "gap";
   covered: string[];
   missing: string[];
@@ -440,7 +442,7 @@ export function buildRoi(input: RoiInput): RoiReport {
     for (const h of input.hires) {
       const matched = h.skills
         .map((s) => resolve(s))
-        .filter((n): n is OntologyNode => Boolean(n) && needSlugs.has(n.slug))
+        .filter((n): n is OntologyNode => Boolean(n) && needSlugs.has(n!.slug))
         .map((n) => n.name);
       if (matched.length) {
         const set = contributorIds.get(h.candidateId) ?? new Set<string>();
@@ -483,7 +485,8 @@ export function buildRoi(input: RoiInput): RoiReport {
       title: bp.title,
       outcome: bp.outcome,
       horizon: bp.horizon,
-      readiness: boosted,
+      readiness,
+      poolReadiness,
       status,
       covered,
       missing,
