@@ -123,6 +123,26 @@ export const advanceOffer = createServerFn({ method: "POST" })
         "Generate and review the offer letter before sending this offer for approval.",
       );
     }
+    // Release gate: pre-onboarding documents must be collected and validated
+    // before the letter goes out. The checklist is evaluated server-side.
+    if (data.status === "released") {
+      const [target] = await db
+        .select({ applicationId: offers.applicationId })
+        .from(offers)
+        .where(and(eq(offers.id, data.id), eq(offers.orgId, context.orgId)))
+        .limit(1);
+      if (target) {
+        const { readinessFor, docTypeLabel } = await import("./onboarding.server");
+        const readiness = await readinessFor(context.orgId, target.applicationId);
+        if (!readiness.ready) {
+          throw new Error(
+            `Pre-onboarding is incomplete — validate these documents first: ${readiness.missing
+              .map((m) => docTypeLabel(m))
+              .join(", ")}.`,
+          );
+        }
+      }
+    }
     if (data.applicationStage === "offer_released" && data.status !== "released") {
       throw new Error("The application stage can only move to offer_released on release.");
     }
