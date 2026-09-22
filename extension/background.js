@@ -1088,6 +1088,15 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
       if (!page) throw new Error("[profile] applicant details could not be read");
       const candidateName = page.candidateName || item.label;
       if (!candidateName) throw new Error("the applicant name could not be confirmed");
+      // Deep read: every tab, every collapsed block and the profile's own inner
+      // detail pages, done before the CV step so a missing file never costs the
+      // written record.
+      await setRun({ note: `Reading every tab and section for ${candidateName}…` });
+      const deep = await run(workTabId, deepHarvestProfile, [
+        candidateName,
+        page.publicProfileUrl || null,
+      ]).catch(() => null);
+      if (deep?.text && deep.text.length > (page.text?.length ?? 0)) page.text = deep.text;
       if (!page.resume) {
         try {
           page.resume = await downloadResumeFromButton(workTabId, candidateName);
