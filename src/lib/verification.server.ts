@@ -177,6 +177,7 @@ export async function verifyClaims(opts: {
         evidence: { github, pages },
       }),
     ),
+    orgId: opts.orgId,
   });
 
   if (!ai.ok) throw new Error(ai.message);

@@ -143,10 +143,13 @@ function orderNumbers(low: number, median: number, high: number) {
 export async function researchSalaryBenchmark(
   input: BenchmarkResearchInput,
   config?: AiConfig,
+  /** Owning organisation — its own AI key pays for this research call. */
+  orgId?: string | null,
 ): Promise<BenchmarkResult> {
   const ai = await aiResearchJson<unknown>({
     system: SYSTEM,
     prompt: buildPrompt(input),
+    ...(orgId ? { orgId } : {}),
     ...(config ? { config } : {}),
   });
   if (!ai.ok) throw new Error(ai.message);

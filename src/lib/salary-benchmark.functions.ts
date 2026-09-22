@@ -88,10 +88,11 @@ export const runSalaryBenchmark = createServerFn({ method: "POST" })
       .where(eq(organizations.id, context.orgId))
       .limit(1);
 
-    const result = await researchSalaryBenchmark({
-      ...input,
-      currency: org?.currency ?? "INR",
-    });
+    const result = await researchSalaryBenchmark(
+      { ...input, currency: org?.currency ?? "INR" },
+      undefined,
+      context.orgId,
+    );
 
     const [row] = await db
       .insert(salaryBenchmarks)

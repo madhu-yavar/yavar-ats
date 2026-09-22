@@ -83,6 +83,8 @@ const text = (v: unknown, max = 600) => String(v ?? "").slice(0, max);
 /* ------------------------------------------------------------------ kit */
 
 export async function buildScreeningKit(input: {
+  /** Owning organisation — its own AI key pays for this call. */
+  orgId: string;
   role: string;
   jdText: string;
   mustHave: string[];
@@ -151,6 +153,7 @@ export async function buildScreeningKit(input: {
         },
       }),
     ),
+    orgId: input.orgId,
   });
   if (!result.ok) throw new Error(result.message);
 
@@ -178,6 +181,8 @@ export async function buildScreeningKit(input: {
 /* ---------------------------------------------------------------- grade */
 
 export async function gradeScreening(input: {
+  /** Owning organisation — its own AI key pays for this call. */
+  orgId: string;
   role: string;
   jdText: string;
   mustHave: string[];
@@ -228,6 +233,7 @@ export async function gradeScreening(input: {
         transcript: (input.transcript ?? "").slice(0, 20000),
       }),
     ),
+    orgId: input.orgId,
   });
   if (!result.ok) throw new Error(result.message);
 
