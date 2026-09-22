@@ -45,3 +45,24 @@ export async function verifyPassword(password: string, stored: string): Promise<
     return false;
   }
 }
+
+/**
+ * Legacy hashes created before the scrypt scheme are bcrypt (`$2a$…`).
+ * They still verify so existing accounts keep their passwords; callers should
+ * re-hash with hashPassword() on a successful sign-in.
+ */
+export function isLegacyHash(stored: string): boolean {
+  return /^\$2[aby]\$/.test(stored);
+}
+
+export async function verifyAnyPassword(password: string, stored: string): Promise<boolean> {
+  if (isLegacyHash(stored)) {
+    const bcrypt = await import("bcryptjs");
+    try {
+      return await bcrypt.compare(password, stored);
+    } catch {
+      return false;
+    }
+  }
+  return verifyPassword(password, stored);
+}
