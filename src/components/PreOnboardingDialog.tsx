@@ -13,6 +13,7 @@ import { toast } from "sonner";
 
 import {
   deleteOnboardingDoc,
+  getCompensationReading,
   getOnboardingDocFile,
   listOnboardingDocs,
   reextractOnboardingDoc,
@@ -21,6 +22,7 @@ import {
   type OnboardingDocWire,
 } from "@/lib/onboarding.functions";
 import { DOC_TYPES } from "@/lib/onboarding.catalogue";
+import { inr } from "@/components/ats";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -213,6 +215,110 @@ function FileViewer({ docId }: { docId: string }) {
   );
 }
 
+/**
+ * The reconciled pay reading: one dated conclusion, the basis it rests on, the
+ * document timeline behind it and every disagreement left open. The reviewer
+ * approves a conclusion, never a bare number.
+ */
+function PayReading({ applicationId }: { applicationId: string }) {
+  const q = useQuery({
+    queryKey: ["onboarding_pay", applicationId],
+    queryFn: () => getCompensationReading({ data: { applicationId } }),
+  });
+  const r = q.data;
+  if (!r) return null;
+  const amount = (n: number | null) =>
+    n === null ? "not established" : r.currency === "INR" ? inr(n) : `${r.currency} ${n.toLocaleString()}`;
+
+  return (
+    <section className="space-y-3 rounded-lg border border-border p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <div className="text-xs text-muted-foreground">Last drawn salary (annual)</div>
+          <div className="num text-2xl font-semibold">{amount(r.lastDrawnAnnual)}</div>
+        </div>
+        {r.offeredAnnual !== null ? (
+          <div className="text-right">
+            <div className="text-xs text-muted-foreground">Offered · change</div>
+            <div className="num text-sm font-medium">
+              {amount(r.offeredAnnual)}
+              {r.hikePct !== null ? (
+                <span className={r.hikePct < 0 ? "ml-2 text-red-600" : "ml-2 text-emerald-700"}>
+                  {r.hikePct > 0 ? "+" : ""}
+                  {r.hikePct}%
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+        <span
+          className={`rounded-full border px-2 py-0.5 text-[11px] ${
+            r.confident
+              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+              : "border-amber-300 bg-amber-50 text-amber-700"
+          }`}
+        >
+          {r.confident ? "Fully evidenced" : "Needs a human call"}
+        </span>
+      </div>
+
+      <p className="text-sm text-muted-foreground">{r.basis}</p>
+      <p className="text-xs text-muted-foreground">
+        {r.validatedEvidence} of {r.totalEvidence} pay-evidence document(s) validated.
+      </p>
+
+      {r.conflicts.length ? (
+        <ul className="space-y-1 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+          {r.conflicts.map((c) => (
+            <li key={c}>· {c}</li>
+          ))}
+        </ul>
+      ) : null}
+      {r.gaps.length ? (
+        <ul className="space-y-1 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+          {r.gaps.map((g) => (
+            <li key={g}>· {g}</li>
+          ))}
+        </ul>
+      ) : null}
+
+      {r.timeline.length ? (
+        <details className="text-sm">
+          <summary className="cursor-pointer text-muted-foreground">
+            Evidence timeline ({r.timeline.length})
+          </summary>
+          <ol className="mt-2 space-y-2 border-l border-border pl-4">
+            {r.timeline.map((t) => (
+              <li key={`${t.docId}-${t.onIso}-${t.docType}`} className="text-sm">
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <span className="num text-xs text-muted-foreground">
+                    {t.onIso ? t.onIso.slice(0, 7) : "date unclear"}
+                  </span>
+                  <span className="font-medium">{t.docTypeLabel}</span>
+                  {t.employer ? (
+                    <span className="text-xs text-muted-foreground">{t.employer}</span>
+                  ) : null}
+                  <span
+                    className={`rounded-full border px-1.5 text-[10px] ${STATUS_TONE[t.status] ?? ""}`}
+                  >
+                    {STATUS_LABEL[t.status] ?? t.status}
+                  </span>
+                </div>
+                <div className="text-muted-foreground">{t.reads}</div>
+                {t.annualised ? (
+                  <div className="num text-xs text-muted-foreground">
+                    annualised {amount(t.annualised)}
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ol>
+        </details>
+      ) : null}
+    </section>
+  );
+}
+
 export function PreOnboardingDialog({
   applicationId,
   candidateName,
@@ -240,7 +346,10 @@ export function PreOnboardingDialog({
     setNote(selected?.review_note ?? "");
   }, [selected?.id, selected?.review_note]);
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ["onboarding_docs", applicationId] });
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["onboarding_docs", applicationId] });
+    qc.invalidateQueries({ queryKey: ["onboarding_pay", applicationId] });
+  };
 
   const upload = useMutation({
     mutationFn: async (file: File) => {
@@ -321,6 +430,8 @@ export function PreOnboardingDialog({
             </span>
           </div>
         ) : null}
+
+        <PayReading applicationId={applicationId} />
 
         <div className="grid gap-5 lg:grid-cols-[19rem_1fr]">
           <div className="space-y-4">
