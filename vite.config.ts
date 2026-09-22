@@ -19,13 +19,13 @@ export default defineConfig({
   // Cloudflare default. Produces .output/server/index.mjs via `vite build`.
   nitro: { preset: "node-server" },
   vite: {
-    build: {
-      rollupOptions: {
-        output: {
-          // Rolldown grouping (Vite 8): keep the browser-only 3D stack isolated
-          // so it never shares a chunk with modules the server imports.
-          advancedChunks: {
-            groups: [{ name: "browser-3d", test: BROWSER_ONLY_3D, priority: 100 }],
+    environments: {
+      ssr: {
+        resolve: {
+          alias: {
+            three: BROWSER_3D_STUB,
+            "three-spritetext": BROWSER_3D_STUB,
+            "react-force-graph-3d": BROWSER_3D_STUB,
           },
         },
       },
