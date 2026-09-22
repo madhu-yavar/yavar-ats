@@ -22,9 +22,10 @@ export default defineConfig({
     build: {
       rollupOptions: {
         output: {
-          manualChunks(id: string) {
-            if (BROWSER_ONLY_3D.test(id)) return "browser-3d";
-            return undefined;
+          // Rolldown grouping (Vite 8): keep the browser-only 3D stack isolated
+          // so it never shares a chunk with modules the server imports.
+          advancedChunks: {
+            groups: [{ name: "browser-3d", test: BROWSER_ONLY_3D, priority: 100 }],
           },
         },
       },
