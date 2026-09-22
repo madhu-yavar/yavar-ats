@@ -176,7 +176,7 @@ export const myOrg = createServerFn({ method: "GET" })
 export const claimInvite = createServerFn({ method: "POST" })
   .middleware([requireIdentity])
   .handler(async ({ context }) => {
-    const email = (context.claims?.email as string | undefined)?.toLowerCase();
+    const email = (context.claims?.["email"] as string | undefined)?.toLowerCase();
     if (!email) throw new Error("Your account has no email address.");
 
     const [invite] = await db
@@ -247,7 +247,7 @@ export const createOrganization = createServerFn({ method: "POST" })
   .middleware([requireIdentity])
   .inputValidator((data: unknown) => CreateInput.parse(data))
   .handler(async ({ data, context }) => {
-    const email = (context.claims?.email as string | undefined) ?? `${context.userId}@user`;
+    const email = (context.claims?.["email"] as string | undefined) ?? `${context.userId}@user`;
 
     // Only a verified corporate mailbox can register a tenant: the address must be
     // confirmed by the auth service and must not be a personal or disposable domain.

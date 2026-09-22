@@ -76,7 +76,7 @@ export const platformState = createServerFn({ method: "GET" })
   // session retried and re-fetched forever on the org gate.
   .middleware([requireIdentity])
   .handler(async ({ context }): Promise<PlatformState> => {
-    const email = (context.claims?.email as string | undefined)?.toLowerCase() ?? null;
+    const email = (context.claims?.["email"] as string | undefined)?.toLowerCase() ?? null;
     if (!email) return { isSuperUser: false, claimable: false, email: null };
     const [countRow] = await db.select({ n: sql<number>`count(*)::int` }).from(platformAdmins);
     const [existing] = await db
