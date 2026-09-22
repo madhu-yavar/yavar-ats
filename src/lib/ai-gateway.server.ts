@@ -9,9 +9,8 @@
  *   openai    — the org's own OpenAI API key
  *   anthropic — the org's own Anthropic (Claude) API key
  *
- * Keys live in ai_provider_credentials (org-scoped) or the deployment env.
- * Without a verified orgId, only env keys are consulted — one tenant's stored
- * key is never used for another tenant's request.
+ * Keys live only in ai_provider_credentials and are scoped to one organisation.
+ * There is deliberately no platform or deployment-key fallback.
  */
 
 import { and, eq } from "drizzle-orm";
@@ -104,12 +103,13 @@ export async function resolveAiConfig(orgId?: string | null): Promise<AiConfig> 
 export async function writeProviderKey(orgId: string, provider: AiProvider, apiKey: string) {
   if (!apiKey.trim()) return;
   const { encryptSecret } = await import("../server/crypto");
+  const encrypted = encryptSecret(apiKey.trim());
   await db
     .insert(aiProviderCredentials)
-    .values({ orgId, provider, apiKey: encryptSecret(apiKey.trim()), updatedAt: new Date() })
+    .values({ orgId, provider, apiKey: encrypted, updatedAt: new Date() })
     .onConflictDoUpdate({
       target: [aiProviderCredentials.orgId, aiProviderCredentials.provider],
-      set: { apiKey: apiKey.trim(), updatedAt: new Date() },
+      set: { apiKey: encrypted, updatedAt: new Date() },
     });
 }
 
@@ -391,7 +391,8 @@ async function aiJsonOnce<T>(opts: {
     } catch {
       /* plain text error */
     }
-    if (res.status === 402) message = `${message} — add AI credits to continue.`;
+    if (res.status === 402)
+      message = `${message} — check this organisation's provider billing and API-key quota.`;
     if (res.status === 429) message = `${message} — rate limited, retry shortly.`;
     return { ok: false, status: res.status, message: `${cfg.provider}: ${message}` };
   }
@@ -496,7 +497,8 @@ function providerError(cfg: AiConfig, status: number, raw: string) {
   } catch {
     /* plain text error */
   }
-  if (status === 402) message = `${message} — add AI credits to continue.`;
+  if (status === 402)
+    message = `${message} — check this organisation's provider billing and API-key quota.`;
   if (status === 429) message = `${message} — rate limited, retry shortly.`;
   return { ok: false as const, status, message: `${cfg.provider}: ${message}` };
 }

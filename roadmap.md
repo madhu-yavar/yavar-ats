@@ -7,7 +7,7 @@
 - [x] Polish the Talent Brain knowledge graph
 - [x] Repair first-party sign-in and verify session persistence
 - [x] Expand the film with CHRO dashboard, RoI and capability highlights
-- [ ] Review the dashboard and Talent Brain in the signed-in application
+- [x] Review the dashboard and Talent Brain in the signed-in application
 
 ## Return on Individual (RoI) semantic layer — CHRO
 - [x] RoI model: capability per hire from match evidence, scarcity, impact, innovation, trajectory, breadth
@@ -18,6 +18,9 @@
 - [x] Department rollups and individual-by-individual evidence view
 - [x] Super-admin organisation switcher on the RoI page
 - [x] Executive band on the dashboard answering the question up front
-- [ ] Publish and review with live data once offers start flowing
+- [ ] Publish and review the accepted-offer test cohort on the live site
 
-- Replace landing film with real-page/data narrative; verify RoI cards are data-driven; fix interview scheduling database errors.
+- [x] Replace landing film with a glossy real-page/data narrative
+- [x] Verify RoI cards are computed from organisation evidence, not mock records
+- [x] Harden interview scheduling, scorecard progression and audit trails
+- [x] Add an explicitly labelled 50-person accepted-offer test cohort

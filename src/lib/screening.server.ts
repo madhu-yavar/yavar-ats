@@ -371,7 +371,8 @@ export async function transcribeScreeningAudio(input: {
     } catch {
       /* plain text */
     }
-    if (res.status === 402) message = `${message} — add AI credits in Lovable to continue.`;
+    if (res.status === 402)
+      message = `${message} — check this organisation's provider billing and API-key quota.`;
     throw new Error(`${cfg.provider}: ${message}`);
   }
   const json = (await res.json()) as { text?: string };
