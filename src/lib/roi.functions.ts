@@ -79,6 +79,23 @@ async function requireRoiAccess(userId: string, email: string | null, wantedOrgI
     return { orgId: org.id, orgName: org.name, currency: org.currency ?? "INR", superUser: true };
   }
 
+  // The product super admin belongs to no tenant: default the lens to the first
+  // organisation on the platform so the page always answers.
+  if (!member?.orgId && superUser) {
+    const [first] = await db
+      .select({ id: organizations.id, name: organizations.name, currency: organizations.currency })
+      .from(organizations)
+      .orderBy(organizations.createdAt)
+      .limit(1);
+    if (!first) throw new Error("No organisation has been registered on the platform yet.");
+    return {
+      orgId: first.id,
+      orgName: first.name,
+      currency: first.currency ?? "INR",
+      superUser: true,
+    };
+  }
+
   if (!member?.orgId) {
     throw new Error("You are not part of an organisation yet.");
   }
