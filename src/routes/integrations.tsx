@@ -1393,20 +1393,6 @@ function AiModelCard() {
         ) : null}
       </div>
 
-      <div className="mt-4 rounded-md border bg-muted/40 p-3 text-xs">
-        <p className="font-semibold">Who pays for AI</p>
-        <p className="mt-1 text-muted-foreground">
-          Saved setting:{" "}
-          <span className="font-medium">
-            your own {s?.provider ?? "openai"} key
-          </span>{" "}
-          · {s?.model ?? "no model saved yet"}. Every AI action — matching, parsing, screening,
-          market benchmarking — is sent straight to {s?.provider ?? "the provider"} with your key
-          and billed by them. If your key is missing or rejected the action fails with that
-          provider&apos;s error instead of falling back. Results across the app show the engine
-          that produced them.
-        </p>
-      </div>
     </article>
   );
 }

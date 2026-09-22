@@ -277,6 +277,7 @@ function Landing() {
     <div className="min-h-screen bg-background">
       <TopBar />
       <Hero />
+      <PlatformFilm />
       <TrustStrip />
       <PainOutcomes />
       <Capabilities />
@@ -367,6 +368,42 @@ function Hero() {
         <div id="signin" className="scroll-mt-24">
           <SignInCard />
         </div>
+      </div>
+    </section>
+  );
+}
+
+/** Short brand film — the platform in motion, in the yavar.ai visual language. */
+function PlatformFilm() {
+  return (
+    <section className="border-b border-border bg-surface-2">
+      <div className="mx-auto max-w-[1200px] px-5 py-14">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+              &bull; The platform in motion
+            </p>
+            <h2 className="mt-3 text-2xl font-semibold">
+              Eighteen seconds, end to end
+            </h2>
+          </div>
+          <p className="max-w-md text-xs leading-relaxed text-muted-foreground">
+            Weighted JD&nbsp;↔&nbsp;CV mapping, a funnel that stays accountable at every stage, and
+            the Talent Brain ontology that watches capability across the organisation.
+          </p>
+        </div>
+        <figure className="mt-8 overflow-hidden rounded-xl border border-border bg-card shadow-[0_24px_60px_-30px_rgba(17,17,19,0.35)]">
+          <video
+            className="block h-auto w-full"
+            src="/atsiq-platform.mp4"
+            poster="/atsiq-platform-poster.jpg"
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+          />
+        </figure>
       </div>
     </section>
   );

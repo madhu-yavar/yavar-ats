@@ -133,27 +133,55 @@ export function OntologyGraph({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-card/95 px-4 py-3">
+    <div className="graph-shell overflow-hidden rounded-2xl border bg-card">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-gradient-to-r from-accent/60 via-card to-card px-5 py-3.5">
         <div>
-          <p className="text-sm font-semibold">Enterprise skill map</p>
+          <p className="text-sm font-semibold tracking-tight">Enterprise skill map</p>
           <p className="text-xs text-muted-foreground">
             {layout.placed.length} priority skills across {layout.clusters.length} capability
             families
           </p>
         </div>
-        <div className="flex items-center gap-2 rounded-md bg-secondary px-2.5 py-1.5 text-xs text-secondary-foreground">
-          {focus ? <Focus className="size-3.5 text-primary" /> : <Network className="size-3.5" />}
+        <div className="flex items-center gap-2 rounded-full border border-border/70 bg-card/80 px-3 py-1.5 text-xs text-muted-foreground shadow-sm">
+          {focus ? (
+            <Focus className="size-3.5 text-primary" />
+          ) : (
+            <Network className="size-3.5 text-primary/70" />
+          )}
           {focus ? "Related skills highlighted" : "Select a bubble to trace relationships"}
         </div>
       </div>
-      <div className="dotted-canvas overflow-auto">
+      <div className="dotted-canvas relative overflow-auto">
+        <div className="graph-bloom pointer-events-none absolute inset-0" />
         <svg
           viewBox={`0 0 ${layout.width} ${layout.height}`}
-          className="h-[560px] min-w-[760px] w-full"
+          className="relative h-[560px] min-w-[760px] w-full"
           role="img"
           aria-label="Organisational skill ontology graph"
         >
+          <defs>
+            <radialGradient id="og-zone" cx="50%" cy="28%" r="78%">
+              <stop offset="0%" stopColor="var(--card)" stopOpacity="0.95" />
+              <stop offset="100%" stopColor="var(--ontology-zone)" stopOpacity="1" />
+            </radialGradient>
+            <filter id="og-soft" x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="4" result="b" />
+              <feMerge>
+                <feMergeNode in="b" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <filter id="og-lift" x="-50%" y="-50%" width="200%" height="200%">
+              <feDropShadow
+                dx="0"
+                dy="1.4"
+                stdDeviation="1.8"
+                floodColor="#0b0b0f"
+                floodOpacity="0.16"
+              />
+            </filter>
+          </defs>
+
           <g>
             {layout.clusters.map((c) => (
               <rect
@@ -162,8 +190,8 @@ export function OntologyGraph({
                 y={c.top}
                 width={c.side}
                 height={c.side + 12}
-                rx="12"
-                fill="var(--ontology-zone)"
+                rx="16"
+                fill="url(#og-zone)"
                 stroke="var(--border)"
                 strokeWidth="1"
               />
@@ -176,8 +204,8 @@ export function OntologyGraph({
                 x={c.x}
                 y={c.y}
                 textAnchor="middle"
-                className="fill-foreground font-semibold"
-                style={{ fontSize: 10, letterSpacing: 0, textTransform: "uppercase" }}
+                className="fill-muted-foreground font-semibold"
+                style={{ fontSize: 9.5, letterSpacing: 0.9, textTransform: "uppercase" }}
               >
                 {`${c.label.length > 16 ? `${c.label.slice(0, 15)}…` : c.label} · ${c.count}`}
               </text>
@@ -189,16 +217,19 @@ export function OntologyGraph({
               const b = byslug.get(l.to);
               if (!a || !b) return null;
               const lit = focus ? connected.has(l.from) && connected.has(l.to) : false;
+              // Gentle arc — reads as a relationship, not a wireframe.
+              const mx = (a.x + b.x) / 2 + (b.y - a.y) * 0.09;
+              const my = (a.y + b.y) / 2 + (a.x - b.x) * 0.09;
               return (
-                <line
+                <path
                   key={`${l.from}-${l.to}`}
-                  x1={a.x}
-                  y1={a.y}
-                  x2={b.x}
-                  y2={b.y}
+                  d={`M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`}
+                  fill="none"
+                  strokeLinecap="round"
                   stroke={lit ? "var(--primary)" : "var(--border)"}
-                  strokeWidth={lit ? 2 : Math.min(1.4, 0.3 + l.weight)}
-                  strokeOpacity={focus ? (lit ? 0.9 : 0.06) : 0.38}
+                  strokeWidth={lit ? 1.9 : Math.min(1.3, 0.3 + l.weight)}
+                  strokeOpacity={focus ? (lit ? 0.85 : 0.05) : 0.32}
+                  style={{ transition: "stroke-opacity 220ms ease, stroke 220ms ease" }}
                 />
               );
             })}
@@ -206,40 +237,50 @@ export function OntologyGraph({
           <g>
             {layout.placed.map((n) => {
               const dim = focus ? !connected.has(n.slug) : false;
+              const isFocus = focus === n.slug;
               // Labels only where they can be read: big bubbles, the focus and its neighbours.
               const label =
                 n.r >= 11 || focus === n.slug || (focus ? connected.has(n.slug) : false);
+              const tone = fill(n);
               return (
                 <g
                   key={n.slug}
                   transform={`translate(${n.x},${n.y})`}
-                  opacity={dim ? 0.25 : 1}
+                  opacity={dim ? 0.22 : 1}
                   onMouseEnter={() => setHover(n.slug)}
                   onMouseLeave={() => setHover(null)}
                   onClick={() => onSelect(n.slug)}
                   className="cursor-pointer"
+                  style={{ transition: "opacity 220ms ease" }}
                 >
                   <title>{`${n.name} — ${n.supply} in pool, ${n.demand} weighted demand`}</title>
                   {selected === n.slug ? (
-                    <circle
-                      r={n.r + 6}
-                      fill="var(--accent)"
-                      stroke="var(--primary)"
-                      strokeWidth="1"
-                    />
+                    <circle className="graph-ring" r={n.r + 7} fill="none" stroke={tone} strokeWidth="1.2" />
                   ) : null}
+                  <circle r={n.r + 5} fill={tone} opacity={isFocus ? 0.2 : 0.11} />
                   <circle
                     r={n.r}
-                    fill={fill(n)}
-                    stroke={selected === n.slug ? "var(--foreground)" : "var(--card)"}
-                    strokeWidth={selected === n.slug ? 2.5 : 1.5}
+                    fill={tone}
+                    stroke="var(--card)"
+                    strokeWidth={selected === n.slug ? 2.4 : 1.6}
+                    filter="url(#og-lift)"
+                    style={{ transition: "r 200ms ease" }}
                   />
+                  <circle r={Math.max(1.6, n.r * 0.32)} fill="var(--card)" opacity={0.55} />
                   {label ? (
                     <text
-                      y={n.r + 11}
+                      y={n.r + 12}
                       textAnchor="middle"
                       className="fill-foreground"
-                      style={{ fontSize: 9.5, pointerEvents: "none" }}
+                      style={{
+                        fontSize: 9.5,
+                        pointerEvents: "none",
+                        paintOrder: "stroke",
+                        stroke: "var(--card)",
+                        strokeWidth: 3,
+                        strokeLinejoin: "round",
+                        fontWeight: isFocus ? 600 : 500,
+                      }}
                     >
                       {n.name.length > 18 ? `${n.name.slice(0, 17)}…` : n.name}
                     </text>
@@ -250,7 +291,7 @@ export function OntologyGraph({
           </g>
         </svg>
       </div>
-      <div className="grid gap-3 border-t px-4 py-3 text-[11px] text-muted-foreground sm:grid-cols-[auto_1fr] sm:items-center">
+      <div className="grid gap-3 border-t bg-surface-2/60 px-5 py-3 text-[11px] text-muted-foreground sm:grid-cols-[auto_1fr] sm:items-center">
         <div className="flex flex-wrap items-center gap-3">
           <Legend colour="var(--ontology-healthy)" label="Healthy" />
           <Legend colour="var(--ontology-tightening)" label="Tightening" />

@@ -22,6 +22,7 @@ import {
   Users,
   BookOpen,
   Brain,
+  Gauge,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -75,6 +76,7 @@ const NAV_GROUPS: NavGroup[] = [
     heading: "Intelligence",
     items: [
       { to: "/reports", label: "Reports", icon: BarChart3, show: (c) => c.approver },
+      { to: "/roi", label: "Return on Individual", icon: Gauge, show: (c) => c.leadership },
       { to: "/brain", label: "Talent Brain", icon: Brain, show: (c) => c.leadership },
     ],
   },
