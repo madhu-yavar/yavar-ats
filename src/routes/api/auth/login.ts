@@ -8,7 +8,7 @@ import { eq } from "drizzle-orm";
 
 import { db } from "../../../server/db";
 import { users } from "@db/schema";
-import { verifyPassword } from "../../../server/password";
+import { hashPassword, isLegacyHash, verifyAnyPassword } from "../../../server/password";
 import { createSession, sessionCookie } from "../../../server/identity";
 
 export const Route = createFileRoute("/api/auth/login")({
@@ -35,7 +35,7 @@ export const Route = createFileRoute("/api/auth/login")({
             .limit(1);
 
           const ok = user?.passwordHash
-            ? await verifyPassword(password, user.passwordHash)
+            ? await verifyAnyPassword(password, user.passwordHash)
             : false;
           if (!user || !ok) {
             return Response.json({ error: "Invalid email or password." }, { status: 401 });
@@ -52,7 +52,14 @@ export const Route = createFileRoute("/api/auth/login")({
             ip,
             userAgent: request.headers.get("user-agent"),
           });
-          await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
+          // Transparent upgrade: legacy bcrypt hashes move to scrypt on sign-in.
+          const upgrade = isLegacyHash(user.passwordHash!)
+            ? { passwordHash: await hashPassword(password) }
+            : {};
+          await db
+            .update(users)
+            .set({ lastLoginAt: new Date(), ...upgrade })
+            .where(eq(users.id, user.id));
 
           return new Response(JSON.stringify({ ok: true, email: user.email }), {
             status: 200,

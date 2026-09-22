@@ -30,6 +30,7 @@ import { Route as TeamRouteImport } from './routes/team'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as ApplyIdRouteImport } from './routes/apply.$id'
 import { Route as AssessTokenRouteImport } from './routes/assess.$token'
+import { Route as AuthResetRouteImport } from './routes/auth.reset'
 import { Route as CandidatesIndexRouteImport } from './routes/candidates.index'
 import { Route as CandidatesIdRouteImport } from './routes/candidates.$id'
 import { Route as InterviewsIndexRouteImport } from './routes/interviews.index'
@@ -40,6 +41,8 @@ import { Route as ApiAuthConfirmRouteImport } from './routes/api/auth/confirm'
 import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
 import { Route as ApiAuthMeRouteImport } from './routes/api/auth/me'
 import { Route as ApiAuthRegisterRouteImport } from './routes/api/auth/register'
+import { Route as ApiAuthRequestResetRouteImport } from './routes/api/auth/request-reset'
+import { Route as ApiAuthResetRouteImport } from './routes/api/auth/reset'
 import { Route as ApiAuthSessionRouteImport } from './routes/api/auth/session'
 import { Route as ApiPublicCaptureRouteImport } from './routes/api/public/capture'
 import { Route as ApiPublicInboundEmailRouteImport } from './routes/api/public/inbound-email'
@@ -158,6 +161,11 @@ const AssessTokenRoute = AssessTokenRouteImport.update({
   path: '/assess/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthResetRoute = AuthResetRouteImport.update({
+  id: '/auth/reset',
+  path: '/auth/reset',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CandidatesIndexRoute = CandidatesIndexRouteImport.update({
   id: '/candidates/',
   path: '/candidates/',
@@ -206,6 +214,16 @@ const ApiAuthMeRoute = ApiAuthMeRouteImport.update({
 const ApiAuthRegisterRoute = ApiAuthRegisterRouteImport.update({
   id: '/api/auth/register',
   path: '/api/auth/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthRequestResetRoute = ApiAuthRequestResetRouteImport.update({
+  id: '/api/auth/request-reset',
+  path: '/api/auth/request-reset',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthResetRoute = ApiAuthResetRouteImport.update({
+  id: '/api/auth/reset',
+  path: '/api/auth/reset',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthSessionRoute = ApiAuthSessionRouteImport.update({
@@ -296,6 +314,7 @@ export interface FileRoutesByFullPath {
   '/templates': typeof TemplatesRoute
   '/apply/$id': typeof ApplyIdRoute
   '/assess/$token': typeof AssessTokenRoute
+  '/auth/reset': typeof AuthResetRoute
   '/candidates/$id': typeof CandidatesIdRoute
   '/interviews/mine': typeof InterviewsMineRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
@@ -306,6 +325,8 @@ export interface FileRoutesByFullPath {
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/me': typeof ApiAuthMeRoute
   '/api/auth/register': typeof ApiAuthRegisterRoute
+  '/api/auth/request-reset': typeof ApiAuthRequestResetRoute
+  '/api/auth/reset': typeof ApiAuthResetRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/public/capture': typeof ApiPublicCaptureRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
@@ -341,6 +362,7 @@ export interface FileRoutesByTo {
   '/templates': typeof TemplatesRoute
   '/apply/$id': typeof ApplyIdRoute
   '/assess/$token': typeof AssessTokenRoute
+  '/auth/reset': typeof AuthResetRoute
   '/candidates/$id': typeof CandidatesIdRoute
   '/interviews/mine': typeof InterviewsMineRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
@@ -351,6 +373,8 @@ export interface FileRoutesByTo {
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/me': typeof ApiAuthMeRoute
   '/api/auth/register': typeof ApiAuthRegisterRoute
+  '/api/auth/request-reset': typeof ApiAuthRequestResetRoute
+  '/api/auth/reset': typeof ApiAuthResetRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/public/capture': typeof ApiPublicCaptureRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
@@ -387,6 +411,7 @@ export interface FileRoutesById {
   '/templates': typeof TemplatesRoute
   '/apply/$id': typeof ApplyIdRoute
   '/assess/$token': typeof AssessTokenRoute
+  '/auth/reset': typeof AuthResetRoute
   '/candidates/$id': typeof CandidatesIdRoute
   '/interviews/mine': typeof InterviewsMineRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
@@ -397,6 +422,8 @@ export interface FileRoutesById {
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/me': typeof ApiAuthMeRoute
   '/api/auth/register': typeof ApiAuthRegisterRoute
+  '/api/auth/request-reset': typeof ApiAuthRequestResetRoute
+  '/api/auth/reset': typeof ApiAuthResetRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/public/capture': typeof ApiPublicCaptureRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
@@ -434,6 +461,7 @@ export interface FileRouteTypes {
     | '/templates'
     | '/apply/$id'
     | '/assess/$token'
+    | '/auth/reset'
     | '/candidates/$id'
     | '/interviews/mine'
     | '/requisitions/$id'
@@ -444,6 +472,8 @@ export interface FileRouteTypes {
     | '/api/auth/login'
     | '/api/auth/me'
     | '/api/auth/register'
+    | '/api/auth/request-reset'
+    | '/api/auth/reset'
     | '/api/auth/session'
     | '/api/public/capture'
     | '/api/public/inbound-email'
@@ -479,6 +509,7 @@ export interface FileRouteTypes {
     | '/templates'
     | '/apply/$id'
     | '/assess/$token'
+    | '/auth/reset'
     | '/candidates/$id'
     | '/interviews/mine'
     | '/requisitions/$id'
@@ -489,6 +520,8 @@ export interface FileRouteTypes {
     | '/api/auth/login'
     | '/api/auth/me'
     | '/api/auth/register'
+    | '/api/auth/request-reset'
+    | '/api/auth/reset'
     | '/api/auth/session'
     | '/api/public/capture'
     | '/api/public/inbound-email'
@@ -524,6 +557,7 @@ export interface FileRouteTypes {
     | '/templates'
     | '/apply/$id'
     | '/assess/$token'
+    | '/auth/reset'
     | '/candidates/$id'
     | '/interviews/mine'
     | '/requisitions/$id'
@@ -534,6 +568,8 @@ export interface FileRouteTypes {
     | '/api/auth/login'
     | '/api/auth/me'
     | '/api/auth/register'
+    | '/api/auth/request-reset'
+    | '/api/auth/reset'
     | '/api/auth/session'
     | '/api/public/capture'
     | '/api/public/inbound-email'
@@ -570,6 +606,7 @@ export interface RootRouteChildren {
   TemplatesRoute: typeof TemplatesRoute
   ApplyIdRoute: typeof ApplyIdRoute
   AssessTokenRoute: typeof AssessTokenRoute
+  AuthResetRoute: typeof AuthResetRoute
   CandidatesIdRoute: typeof CandidatesIdRoute
   InterviewsMineRoute: typeof InterviewsMineRoute
   RequisitionsIdRoute: typeof RequisitionsIdRoute
@@ -580,6 +617,8 @@ export interface RootRouteChildren {
   ApiAuthLoginRoute: typeof ApiAuthLoginRoute
   ApiAuthMeRoute: typeof ApiAuthMeRoute
   ApiAuthRegisterRoute: typeof ApiAuthRegisterRoute
+  ApiAuthRequestResetRoute: typeof ApiAuthRequestResetRoute
+  ApiAuthResetRoute: typeof ApiAuthResetRoute
   ApiAuthSessionRoute: typeof ApiAuthSessionRoute
   ApiPublicCaptureRoute: typeof ApiPublicCaptureRoute
   ApiPublicInboundEmailRoute: typeof ApiPublicInboundEmailRoute
@@ -743,6 +782,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AssessTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/reset': {
+      id: '/auth/reset'
+      path: '/auth/reset'
+      fullPath: '/auth/reset'
+      preLoaderRoute: typeof AuthResetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/candidates/': {
       id: '/candidates/'
       path: '/candidates'
@@ -811,6 +857,20 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/register'
       fullPath: '/api/auth/register'
       preLoaderRoute: typeof ApiAuthRegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/request-reset': {
+      id: '/api/auth/request-reset'
+      path: '/api/auth/request-reset'
+      fullPath: '/api/auth/request-reset'
+      preLoaderRoute: typeof ApiAuthRequestResetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/reset': {
+      id: '/api/auth/reset'
+      path: '/api/auth/reset'
+      fullPath: '/api/auth/reset'
+      preLoaderRoute: typeof ApiAuthResetRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/session': {
@@ -922,6 +982,7 @@ const rootRouteChildren: RootRouteChildren = {
   TemplatesRoute: TemplatesRoute,
   ApplyIdRoute: ApplyIdRoute,
   AssessTokenRoute: AssessTokenRoute,
+  AuthResetRoute: AuthResetRoute,
   CandidatesIdRoute: CandidatesIdRoute,
   InterviewsMineRoute: InterviewsMineRoute,
   RequisitionsIdRoute: RequisitionsIdRoute,
@@ -932,6 +993,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthLoginRoute: ApiAuthLoginRoute,
   ApiAuthMeRoute: ApiAuthMeRoute,
   ApiAuthRegisterRoute: ApiAuthRegisterRoute,
+  ApiAuthRequestResetRoute: ApiAuthRequestResetRoute,
+  ApiAuthResetRoute: ApiAuthResetRoute,
   ApiAuthSessionRoute: ApiAuthSessionRoute,
   ApiPublicCaptureRoute: ApiPublicCaptureRoute,
   ApiPublicInboundEmailRoute: ApiPublicInboundEmailRoute,

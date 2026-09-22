@@ -39,3 +39,25 @@ export async function registerRequest(email: string, password: string): Promise<
 export async function signOutApp(): Promise<void> {
   await fetch("/api/auth/session", { method: "DELETE" }).catch(() => undefined);
 }
+
+export async function requestResetRequest(email: string): Promise<string> {
+  const res = await fetch("/api/auth/request-reset", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  const body = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+  if (!res.ok) throw new Error(body.error || "Could not send the reset email.");
+  return body.message || "If that address has an ATSIQ account, a reset link is on its way.";
+}
+
+export async function applyResetRequest(token: string, password: string): Promise<string> {
+  const res = await fetch("/api/auth/reset", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token, password }),
+  });
+  const body = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+  if (!res.ok) throw new Error(body.error || "Could not update the password.");
+  return body.message || "Password updated — sign in with your new password.";
+}

@@ -5,7 +5,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 const b64u = (b: Buffer) => b.toString("base64url");
 
-export type ActionTokenPurpose = "email-confirm";
+export type ActionTokenPurpose = "email-confirm" | "password-reset";
 
 function signature(payload: string): string {
   const secret = process.env["SESSION_SECRET"];
