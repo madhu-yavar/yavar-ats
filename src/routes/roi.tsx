@@ -127,7 +127,7 @@ function RoiPage() {
             <Figure
               label="Capability returned"
               value={`${data.totals.avgCapability}`}
-              note={`Average across ${data.totals.hires} hires`}
+              note={`${data.totals.joined} joined · ${data.totals.committed} committed`}
             />
             <Figure
               label="Cost committed"
@@ -197,8 +197,8 @@ function RoiPage() {
                     What this organisation can go and do now
                   </h2>
                   <p className="text-xs text-muted-foreground">
-                    {data.totals.goalsReady} programmes fully staffable · {data.totals.goalsPartial}{" "}
-                    startable with one lead hire
+                    {data.totals.goalsReady} fully staffable from the team ·{" "}
+                    {data.totals.goalsPartial} startable with one lead hire
                   </p>
                 </div>
               </div>
@@ -218,7 +218,7 @@ function RoiPage() {
                             : "border-border text-muted-foreground"
                       }
                     >
-                      {g.readiness}% ready
+                      {g.readiness}% staffable
                     </Badge>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">{g.outcome}</p>
@@ -234,6 +234,9 @@ function RoiPage() {
                       style={{ width: `${g.readiness}%` }}
                     />
                   </div>
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    Team {g.readiness}% · with the talent pool {g.poolReadiness}%
+                  </p>
                   <p className="mt-3 text-xs">{g.note}</p>
                   {g.covered.length ? (
                     <p className="mt-2 text-[11px] text-muted-foreground">
@@ -357,6 +360,9 @@ function RoiPage() {
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-sm font-semibold">{h.name}</h3>
+                        <span className="rounded bg-accent px-2 py-0.5 text-[11px] text-muted-foreground">
+                          {h.cohort === "joined" ? "Joined" : "Offer committed"}
+                        </span>
                         <span className={`rounded px-2 py-0.5 text-[11px] ${verdictTone(h.verdict)}`}>
                           {h.verdict === "compounding"
                             ? "Compounding"
@@ -420,8 +426,8 @@ function RoiPage() {
               ))}
               {data.hires.length === 0 ? (
                 <p className="p-8 text-sm text-muted-foreground">
-                  No hires have reached joined or accepted yet, so there is no return to read. Move a
-                  candidate through offer to see this fill in.
+                  Nobody has reached offer yet, so there is no committed value to read. Release an
+                  offer and this fills in automatically.
                 </p>
               ) : null}
             </div>
