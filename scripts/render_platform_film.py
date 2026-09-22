@@ -9,7 +9,7 @@ def font(sz,bold=False,mono=False): return ImageFont.truetype(MONO if mono else 
 def ease(x):
     x=max(0,min(1,x)); return 1-(1-x)**3
 def alpha(t,a,b): return ease((t-a)/(b-a)) if t<b else 1
-def txt(d,xy,s,sz=24,c=INK,b=False,anchor=None): d.text(xy,s,font=font(sz,b),fill=c,anchor=anchor)
+def txt(d,xy,s,sz=24,c=INK,b=False,anchor=None,mono=False): d.text(xy,s,font=font(sz,b,mono),fill=c,anchor=anchor)
 def line(d,xy,fill=LINE,w=1): d.line(xy,fill=fill,width=w)
 def rr(d,box,r=10,fill=(255,255,255),outline=LINE,w=1): d.rounded_rectangle(box,radius=r,fill=fill,outline=outline,width=w)
 def chip(d,x,y,label,c=VIOLET):
