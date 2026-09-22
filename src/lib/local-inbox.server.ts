@@ -382,3 +382,50 @@ export async function processPendingMail(
   }
   return out;
 }
+
+/**
+ * File the proof documents an offer-stage candidate mails to the careers
+ * address. Anything that is not a CV, from a sender who already has an offer in
+ * flight, becomes a pre-onboarding document awaiting HR validation.
+ */
+async function filePreOnboardingAttachments(input: {
+  orgId: string;
+  senderEmail: string;
+  attachments: { filename?: string; content: string }[];
+  inboxMessageId: string;
+}): Promise<string[]> {
+  if (!input.senderEmail) return [];
+  const docs = input.attachments.filter((a) => a.filename && a.content);
+  if (!docs.length) return [];
+
+  const { offerContextForEmail, storeOnboardingDocument, guessDocType, docTypeLabel } = await import(
+    "./onboarding.server"
+  );
+  const ctx = await offerContextForEmail(input.orgId, input.senderEmail);
+  if (!ctx) return [];
+
+  const filed: string[] = [];
+  for (const att of docs) {
+    const fileName = att.filename as string;
+    try {
+      const bytes = base64ToBytes(att.content);
+      if (!bytes.byteLength) continue;
+      const docType = guessDocType(fileName);
+      await storeOnboardingDocument({
+        orgId: input.orgId,
+        applicationId: ctx.applicationId,
+        candidateId: ctx.candidateId,
+        offerId: ctx.offerId,
+        docType,
+        fileName,
+        bytes,
+        source: "careers_inbox",
+        inboxMessageId: input.inboxMessageId,
+      });
+      filed.push(docTypeLabel(docType));
+    } catch {
+      // One unreadable attachment must not fail the whole delivery.
+    }
+  }
+  return filed;
+}
