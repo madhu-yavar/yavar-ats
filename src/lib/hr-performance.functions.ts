@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireIdentity } from "@/server/identity";
+import { restClient } from "@/server/pgrest";
 import {
   buildRecruiterPerformance,
   DEFAULT_SCHEME,
@@ -66,7 +67,7 @@ export const getHrPerformance = createServerFn({ method: "POST" })
     z.object({ days: z.number().int().min(7).max(730).default(90) }).parse(input ?? {}),
   )
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as unknown as Sb;
+    const supabase = restClient() as unknown as Sb;
     const orgId = await requireLeadership(supabase, context.userId);
     const scheme = await loadScheme(supabase, orgId);
 
@@ -155,7 +156,7 @@ export const saveIncentiveScheme = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as unknown as Sb;
+    const supabase = restClient() as unknown as Sb;
     const orgId = await requireLeadership(supabase, context.userId);
     const { error } = await supabase.from("hr_incentive_schemes").upsert(
       {
