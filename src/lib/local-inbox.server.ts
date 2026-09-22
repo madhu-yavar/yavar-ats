@@ -213,7 +213,7 @@ export async function receiveMail(mail: InboundMail): Promise<InboundResult> {
   const filedDocs = await filePreOnboardingAttachments({
     orgId: org.id,
     senderEmail: sender.email,
-    attachments: mail.attachments ?? [],
+    attachments: (mail.attachments ?? []).filter((a) => a.filename !== cv?.filename),
     inboxMessageId: savedId,
   });
 
