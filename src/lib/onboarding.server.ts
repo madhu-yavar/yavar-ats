@@ -132,6 +132,18 @@ export const ExtractedDoc = z.object({
   net_pay: z.number().nullish(),
   annual_ctc: z.number().nullish(),
   currency: z.string().max(10).nullish(),
+  /* ---- normalised chronology: machine-comparable dates, as YYYY-MM-DD or YYYY-MM ---- */
+  document_date_iso: z.string().max(10).nullish(),
+  period_iso: z.string().max(10).nullish(),
+  effective_from_iso: z.string().max(10).nullish(),
+  employed_from_iso: z.string().max(10).nullish(),
+  employed_to_iso: z.string().max(10).nullish(),
+  /* ---- normalised compensation: recurring pay kept apart from one-off pay ---- */
+  monthly_fixed_gross: z.number().nullish(),
+  monthly_one_off: z.number().nullish(),
+  annual_fixed: z.number().nullish(),
+  annual_variable: z.number().nullish(),
+  is_arrears_month: z.boolean().nullish(),
   institution: z.string().max(200).nullish(),
   qualification: z.string().max(200).nullish(),
   issue_date: z.string().max(40).nullish(),
