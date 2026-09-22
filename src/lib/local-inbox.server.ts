@@ -207,10 +207,22 @@ export async function receiveMail(mail: InboundMail): Promise<InboundResult> {
     return { ...result, messageId: savedId };
   };
 
+  // Pre-onboarding: a candidate who already has an offer mails their ID,
+  // experience letters and payslips to the same careers address. Those files are
+  // filed against their offer and read by the extraction agent for HR to validate.
+  const filedDocs = await filePreOnboardingAttachments({
+    orgId: org.id,
+    senderEmail: sender.email,
+    attachments: mail.attachments ?? [],
+    inboxMessageId: savedId,
+  });
+
   if (!cv) {
     return finish({
-      status: "skipped",
-      detail: "No CV attached — nothing to file.",
+      status: filedDocs.length ? "stored" : "skipped",
+      detail: filedDocs.length
+        ? `${filedDocs.length} pre-onboarding document(s) filed for validation: ${filedDocs.join(", ")}.`
+        : "No CV attached — nothing to file.",
       messageId: savedId,
     });
   }
