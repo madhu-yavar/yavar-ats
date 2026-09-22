@@ -12,7 +12,7 @@ import {
   requisitions,
   stageEvents,
 } from "@db/schema";
-import { requireOrg } from "./auth.middleware";
+import { assertRole, requireOrg } from "./auth.middleware";
 import { canMove, REASON_REQUIRED, STAGE_LABEL, type Stage } from "./lifecycle";
 
 /* --------------------------------------------------------------- helpers */
@@ -28,6 +28,15 @@ export function nextStageFor(level: number, verdict: "select" | "hold" | "reject
   if (verdict === "hold") return "on_hold";
   return level >= 3 ? "offer_pending" : (`l${level + 1}` as Stage);
 }
+
+const HR_CONTROLLED_TARGETS = new Set<Stage>([
+  "offer_pending",
+  "offer_released",
+  "offer_accepted",
+  "offer",
+  "hired",
+  "joined",
+]);
 
 /* ---------------------------------------------------- interviewer queue */
 
@@ -196,6 +205,14 @@ export const submitScorecard = createServerFn({ method: "POST" })
     if (REASON_REQUIRED.includes(target) && !data.reason?.trim() && !data.comments?.trim()) {
       throw new Error(`A reason is required to move the candidate to ${STAGE_LABEL[target]}.`);
     }
+    if (HR_CONTROLLED_TARGETS.has(target)) {
+      await assertRole(
+        context.userId,
+        context.orgId,
+        ["hr_head", "president_cbo"],
+        "Only the HR head or an owner can move a candidate into the offer pipeline.",
+      );
+    }
 
     const [evaluation] = await db
       .insert(evaluations)
@@ -314,6 +331,9 @@ export const scheduleInterview = createServerFn({ method: "POST" })
     const actor = actorOf(context);
     const now = new Date();
     const scheduledAt = new Date(data.scheduledAt);
+    if (Number.isNaN(scheduledAt.getTime())) {
+      throw new Error("Choose a valid interview date and time.");
+    }
     const row = {
       applicationId: data.applicationId,
       level: data.level,
@@ -336,10 +356,11 @@ export const scheduleInterview = createServerFn({ method: "POST" })
       .from(applications)
       .where(and(eq(applications.orgId, context.orgId), eq(applications.id, data.applicationId)))
       .limit(1);
+    if (!app) throw new Error("Application not found in your organisation.");
 
     /* Candidate email is the invite address: confirm it before the round exists. */
     let candidateEmail: string | null = null;
-    if (app) {
+    {
       const [cand] = await db
         .select({ id: candidates.id, email: candidates.email })
         .from(candidates)
@@ -377,7 +398,7 @@ export const scheduleInterview = createServerFn({ method: "POST" })
         .where(and(eq(interviews.orgId, context.orgId), eq(interviews.id, data.interviewId)));
       rescheduled = true;
 
-      if (app) {
+      {
         const wasAt = previous?.scheduledAt ? previous.scheduledAt.toISOString() : "unscheduled";
         await db.insert(stageEvents).values({
           applicationId: app.id,
@@ -394,7 +415,7 @@ export const scheduleInterview = createServerFn({ method: "POST" })
     }
 
     const target = `l${data.level}` as Stage;
-    if (app && app.stage !== target && canMove(app.stage as Stage, target)) {
+    if (app.stage !== target && canMove(app.stage as Stage, target)) {
       await db
         .update(applications)
         .set({ stage: target, stageReason: `L${data.level} scheduled`, lastActivityAt: now })
@@ -407,11 +428,22 @@ export const scheduleInterview = createServerFn({ method: "POST" })
         actor,
         reason: `L${data.level} interview scheduled`,
       });
-    } else if (app) {
+    } else {
       await db
         .update(applications)
         .set({ lastActivityAt: now })
         .where(and(eq(applications.orgId, context.orgId), eq(applications.id, app.id)));
+      if (!rescheduled) {
+        await db.insert(stageEvents).values({
+          applicationId: app.id,
+          orgId: context.orgId,
+          fromStage: app.stage,
+          toStage: app.stage,
+          actor,
+          reason: `L${data.level} interview scheduled`,
+          note: scheduledAt.toISOString(),
+        });
+      }
     }
 
     return { ok: true as const, rescheduled, candidateEmail };
@@ -437,7 +469,7 @@ export const saveAiInterview = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => AiScreenSaveInput.parse(data))
   .handler(async ({ data, context }) => {
     const [application] = await db
-      .select({ id: applications.id })
+      .select({ id: applications.id, stage: applications.stage })
       .from(applications)
       .where(and(eq(applications.orgId, context.orgId), eq(applications.id, data.applicationId)))
       .limit(1);
@@ -452,13 +484,24 @@ export const saveAiInterview = createServerFn({ method: "POST" })
       summary: data.summary,
     });
 
-    try {
+    const from = application.stage as Stage;
+    if (from !== "ai_screened") {
+      if (!canMove(from, "ai_screened")) {
+        throw new Error(`${STAGE_LABEL[from]} → ${STAGE_LABEL.ai_screened} is not an allowed transition.`);
+      }
+      const now = new Date();
       await db
         .update(applications)
-        .set({ stage: "ai_screened" })
+        .set({ stage: "ai_screened", lastActivityAt: now, stageReason: "AI screening completed" })
         .where(and(eq(applications.orgId, context.orgId), eq(applications.id, data.applicationId)));
-    } catch {
-      /* stage bump is best-effort, exactly as before */
+      await db.insert(stageEvents).values({
+        applicationId: application.id,
+        orgId: context.orgId,
+        fromStage: from,
+        toStage: "ai_screened",
+        actor: actorOf(context),
+        reason: "AI screening completed",
+      });
     }
     return { ok: true as const };
   });
