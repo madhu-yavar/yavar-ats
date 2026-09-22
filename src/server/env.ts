@@ -68,8 +68,9 @@ const schema = z.object({
   S3_SECRET_ACCESS_KEY: z.string().optional(),
 });
 
-// Managed environments expose the Postgres connection string as DB_URL /
-// SUPABASE_DB_URL; accept those as DATABASE_URL so the server boots there too.
+// Some hosts expose the plain Postgres connection string under a different
+// variable name (DB_URL); accept those aliases so the server boots there too.
+// This is a standard Postgres DSN — Drizzle connects directly, no vendor SDK.
 const parsed = schema.safeParse({
   ...process.env,
   DATABASE_URL:
