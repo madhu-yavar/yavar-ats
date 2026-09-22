@@ -239,6 +239,13 @@
       "when": 1790100478023,
       "tag": "0033_schema_drift_fix",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790103655100,
+      "tag": "0034_tighten_org_and_membership_policies",
+      "breakpoints": true
     }
   ]
 }
