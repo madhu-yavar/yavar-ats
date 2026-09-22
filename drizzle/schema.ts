@@ -152,6 +152,46 @@ export const auditLog = pgTable(
   (t) => [index("audit_log_org_created_idx").on(t.orgId, t.createdAt)],
 );
 
+/**
+ * Single-use email tokens: `confirm` (email verification) and `reset`
+ * (password recovery). Only the sha256 hash of the token is stored.
+ */
+export const authTokens = pgTable(
+  "auth_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    purpose: text("purpose").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("auth_tokens_token_hash_key").on(t.tokenHash),
+    index("auth_tokens_user_purpose_idx").on(t.userId, t.purpose),
+    check("auth_tokens_purpose_chk", sql`${t.purpose} in ('confirm','reset')`),
+  ],
+);
+
+/** Sign-in attempt log; drives per-email and per-IP throttling. */
+export const loginAttempts = pgTable(
+  "login_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: text("email").notNull(),
+    ip: text("ip"),
+    success: boolean("success").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("login_attempts_email_created_idx").on(t.email, t.createdAt),
+    index("login_attempts_ip_created_idx").on(t.ip, t.createdAt),
+  ],
+);
+
 /* ------------------------------------------------------------- tenancy */
 
 export const organizations = pgTable(

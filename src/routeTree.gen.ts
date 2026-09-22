@@ -36,7 +36,14 @@ import { Route as InterviewsIndexRouteImport } from './routes/interviews.index'
 import { Route as InterviewsMineRouteImport } from './routes/interviews.mine'
 import { Route as RequisitionsIndexRouteImport } from './routes/requisitions.index'
 import { Route as RequisitionsIdRouteImport } from './routes/requisitions.$id'
+import { Route as ApiAuthConfirmRouteImport } from './routes/api/auth/confirm'
+import { Route as ApiAuthMeRouteImport } from './routes/api/auth/me'
+import { Route as ApiAuthRequestResetRouteImport } from './routes/api/auth/request-reset'
+import { Route as ApiAuthResetRouteImport } from './routes/api/auth/reset'
 import { Route as ApiAuthSessionRouteImport } from './routes/api/auth/session'
+import { Route as ApiAuthSigninRouteImport } from './routes/api/auth/signin'
+import { Route as ApiAuthSignoutRouteImport } from './routes/api/auth/signout'
+import { Route as ApiAuthSignupRouteImport } from './routes/api/auth/signup'
 import { Route as ApiPublicCaptureRouteImport } from './routes/api/public/capture'
 import { Route as ApiPublicInboundEmailRouteImport } from './routes/api/public/inbound-email'
 import { Route as ApiPublicInboxSyncRouteImport } from './routes/api/public/inbox-sync'
@@ -184,9 +191,44 @@ const RequisitionsIdRoute = RequisitionsIdRouteImport.update({
   path: '/requisitions/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthConfirmRoute = ApiAuthConfirmRouteImport.update({
+  id: '/api/auth/confirm',
+  path: '/api/auth/confirm',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthMeRoute = ApiAuthMeRouteImport.update({
+  id: '/api/auth/me',
+  path: '/api/auth/me',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthRequestResetRoute = ApiAuthRequestResetRouteImport.update({
+  id: '/api/auth/request-reset',
+  path: '/api/auth/request-reset',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthResetRoute = ApiAuthResetRouteImport.update({
+  id: '/api/auth/reset',
+  path: '/api/auth/reset',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthSessionRoute = ApiAuthSessionRouteImport.update({
   id: '/api/auth/session',
   path: '/api/auth/session',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthSigninRoute = ApiAuthSigninRouteImport.update({
+  id: '/api/auth/signin',
+  path: '/api/auth/signin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthSignoutRoute = ApiAuthSignoutRouteImport.update({
+  id: '/api/auth/signout',
+  path: '/api/auth/signout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthSignupRoute = ApiAuthSignupRouteImport.update({
+  id: '/api/auth/signup',
+  path: '/api/auth/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicCaptureRoute = ApiPublicCaptureRouteImport.update({
@@ -278,7 +320,14 @@ export interface FileRoutesByFullPath {
   '/candidates/': typeof CandidatesIndexRoute
   '/interviews/': typeof InterviewsIndexRoute
   '/requisitions/': typeof RequisitionsIndexRoute
+  '/api/auth/confirm': typeof ApiAuthConfirmRoute
+  '/api/auth/me': typeof ApiAuthMeRoute
+  '/api/auth/request-reset': typeof ApiAuthRequestResetRoute
+  '/api/auth/reset': typeof ApiAuthResetRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
+  '/api/auth/signin': typeof ApiAuthSigninRoute
+  '/api/auth/signout': typeof ApiAuthSignoutRoute
+  '/api/auth/signup': typeof ApiAuthSignupRoute
   '/api/public/capture': typeof ApiPublicCaptureRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
@@ -319,7 +368,14 @@ export interface FileRoutesByTo {
   '/candidates': typeof CandidatesIndexRoute
   '/interviews': typeof InterviewsIndexRoute
   '/requisitions': typeof RequisitionsIndexRoute
+  '/api/auth/confirm': typeof ApiAuthConfirmRoute
+  '/api/auth/me': typeof ApiAuthMeRoute
+  '/api/auth/request-reset': typeof ApiAuthRequestResetRoute
+  '/api/auth/reset': typeof ApiAuthResetRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
+  '/api/auth/signin': typeof ApiAuthSigninRoute
+  '/api/auth/signout': typeof ApiAuthSignoutRoute
+  '/api/auth/signup': typeof ApiAuthSignupRoute
   '/api/public/capture': typeof ApiPublicCaptureRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
@@ -361,7 +417,14 @@ export interface FileRoutesById {
   '/candidates/': typeof CandidatesIndexRoute
   '/interviews/': typeof InterviewsIndexRoute
   '/requisitions/': typeof RequisitionsIndexRoute
+  '/api/auth/confirm': typeof ApiAuthConfirmRoute
+  '/api/auth/me': typeof ApiAuthMeRoute
+  '/api/auth/request-reset': typeof ApiAuthRequestResetRoute
+  '/api/auth/reset': typeof ApiAuthResetRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
+  '/api/auth/signin': typeof ApiAuthSigninRoute
+  '/api/auth/signout': typeof ApiAuthSignoutRoute
+  '/api/auth/signup': typeof ApiAuthSignupRoute
   '/api/public/capture': typeof ApiPublicCaptureRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
@@ -404,7 +467,14 @@ export interface FileRouteTypes {
     | '/candidates/'
     | '/interviews/'
     | '/requisitions/'
+    | '/api/auth/confirm'
+    | '/api/auth/me'
+    | '/api/auth/request-reset'
+    | '/api/auth/reset'
     | '/api/auth/session'
+    | '/api/auth/signin'
+    | '/api/auth/signout'
+    | '/api/auth/signup'
     | '/api/public/capture'
     | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
@@ -445,7 +515,14 @@ export interface FileRouteTypes {
     | '/candidates'
     | '/interviews'
     | '/requisitions'
+    | '/api/auth/confirm'
+    | '/api/auth/me'
+    | '/api/auth/request-reset'
+    | '/api/auth/reset'
     | '/api/auth/session'
+    | '/api/auth/signin'
+    | '/api/auth/signout'
+    | '/api/auth/signup'
     | '/api/public/capture'
     | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
@@ -486,7 +563,14 @@ export interface FileRouteTypes {
     | '/candidates/'
     | '/interviews/'
     | '/requisitions/'
+    | '/api/auth/confirm'
+    | '/api/auth/me'
+    | '/api/auth/request-reset'
+    | '/api/auth/reset'
     | '/api/auth/session'
+    | '/api/auth/signin'
+    | '/api/auth/signout'
+    | '/api/auth/signup'
     | '/api/public/capture'
     | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
@@ -528,7 +612,14 @@ export interface RootRouteChildren {
   CandidatesIndexRoute: typeof CandidatesIndexRoute
   InterviewsIndexRoute: typeof InterviewsIndexRoute
   RequisitionsIndexRoute: typeof RequisitionsIndexRoute
+  ApiAuthConfirmRoute: typeof ApiAuthConfirmRoute
+  ApiAuthMeRoute: typeof ApiAuthMeRoute
+  ApiAuthRequestResetRoute: typeof ApiAuthRequestResetRoute
+  ApiAuthResetRoute: typeof ApiAuthResetRoute
   ApiAuthSessionRoute: typeof ApiAuthSessionRoute
+  ApiAuthSigninRoute: typeof ApiAuthSigninRoute
+  ApiAuthSignoutRoute: typeof ApiAuthSignoutRoute
+  ApiAuthSignupRoute: typeof ApiAuthSignupRoute
   ApiPublicCaptureRoute: typeof ApiPublicCaptureRoute
   ApiPublicInboundEmailRoute: typeof ApiPublicInboundEmailRoute
   ApiPublicInboxSyncRoute: typeof ApiPublicInboxSyncRoute
@@ -733,11 +824,60 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RequisitionsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/confirm': {
+      id: '/api/auth/confirm'
+      path: '/api/auth/confirm'
+      fullPath: '/api/auth/confirm'
+      preLoaderRoute: typeof ApiAuthConfirmRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/me': {
+      id: '/api/auth/me'
+      path: '/api/auth/me'
+      fullPath: '/api/auth/me'
+      preLoaderRoute: typeof ApiAuthMeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/request-reset': {
+      id: '/api/auth/request-reset'
+      path: '/api/auth/request-reset'
+      fullPath: '/api/auth/request-reset'
+      preLoaderRoute: typeof ApiAuthRequestResetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/reset': {
+      id: '/api/auth/reset'
+      path: '/api/auth/reset'
+      fullPath: '/api/auth/reset'
+      preLoaderRoute: typeof ApiAuthResetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/session': {
       id: '/api/auth/session'
       path: '/api/auth/session'
       fullPath: '/api/auth/session'
       preLoaderRoute: typeof ApiAuthSessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/signin': {
+      id: '/api/auth/signin'
+      path: '/api/auth/signin'
+      fullPath: '/api/auth/signin'
+      preLoaderRoute: typeof ApiAuthSigninRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/signout': {
+      id: '/api/auth/signout'
+      path: '/api/auth/signout'
+      fullPath: '/api/auth/signout'
+      preLoaderRoute: typeof ApiAuthSignoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/signup': {
+      id: '/api/auth/signup'
+      path: '/api/auth/signup'
+      fullPath: '/api/auth/signup'
+      preLoaderRoute: typeof ApiAuthSignupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/capture': {
@@ -848,7 +988,14 @@ const rootRouteChildren: RootRouteChildren = {
   CandidatesIndexRoute: CandidatesIndexRoute,
   InterviewsIndexRoute: InterviewsIndexRoute,
   RequisitionsIndexRoute: RequisitionsIndexRoute,
+  ApiAuthConfirmRoute: ApiAuthConfirmRoute,
+  ApiAuthMeRoute: ApiAuthMeRoute,
+  ApiAuthRequestResetRoute: ApiAuthRequestResetRoute,
+  ApiAuthResetRoute: ApiAuthResetRoute,
   ApiAuthSessionRoute: ApiAuthSessionRoute,
+  ApiAuthSigninRoute: ApiAuthSigninRoute,
+  ApiAuthSignoutRoute: ApiAuthSignoutRoute,
+  ApiAuthSignupRoute: ApiAuthSignupRoute,
   ApiPublicCaptureRoute: ApiPublicCaptureRoute,
   ApiPublicInboundEmailRoute: ApiPublicInboundEmailRoute,
   ApiPublicInboxSyncRoute: ApiPublicInboxSyncRoute,

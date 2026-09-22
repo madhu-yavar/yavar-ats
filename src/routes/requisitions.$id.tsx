@@ -192,6 +192,7 @@ function RequisitionDetail() {
   const savedOverrides = (r?.job_card_overrides ?? {}) as {
     zones?: JobCardZone[];
     values?: { role?: string; location?: string; skills?: string[]; contact?: string };
+    theme?: Record<string, string | number> | null;
   };
   const templateZones =
     (cardTemplate?.config as { zones?: JobCardZone[] } | null)?.zones ?? [];
@@ -456,6 +457,7 @@ function RequisitionDetail() {
       const overrides = (r?.job_card_overrides ?? {}) as {
         zones?: JobCardZone[];
         values?: { role?: string; location?: string; skills?: string[]; contact?: string };
+        theme?: Record<string, string | number> | null;
       };
       const tcfg = (cardTemplate?.config ?? {}) as { zones?: JobCardZone[] };
       setCardZones(overrides.zones ?? tcfg.zones ?? []);

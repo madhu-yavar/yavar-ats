@@ -106,7 +106,7 @@ function isServerFnPath(path: string): boolean {
   return path === "/_serverFn" || path.startsWith("/_serverFn/");
 }
 
-function applySecurityHeaders(response: Response, request: Request): Response {
+async function applySecurityHeaders(response: Response, request: Request): Promise<Response> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("text/html")) return response;
 

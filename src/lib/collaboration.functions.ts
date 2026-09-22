@@ -278,7 +278,7 @@ export const addCandidateNote = createServerFn({ method: "POST" })
         .select({ userId: orgMembers.userId })
         .from(orgMembers)
         .where(and(eq(orgMembers.orgId, me.orgId), eq(orgMembers.status, "active"), inArray(orgMembers.userId, data.mentions)));
-      mentions = peers.map((p) => p.userId);
+      mentions = peers.map((p) => p.userId).filter((id): id is string => Boolean(id));
     }
 
     await db.insert(candidateNotes).values({

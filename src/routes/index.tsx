@@ -44,6 +44,7 @@ import { getHrPerformance } from "@/lib/hr-performance.functions";
 import { listAllOrganizations } from "@/lib/platform.functions";
 import { Button } from "@/components/ui/button";
 import { useServerFn } from "@tanstack/react-start";
+import { attachApplication } from "@/lib/candidates.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({

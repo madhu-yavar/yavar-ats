@@ -154,6 +154,7 @@ export const submitAssessment = createServerFn({ method: "POST" })
       if (req) title = req.title;
     }
 
+    if (!row.orgId) throw new Error("This screening run is not linked to an organisation.");
     const result = await scoreAnswers({ orgId: row.orgId, title, questions, answers: data.answers });
 
     // Atomic lock: the status guard lives in the UPDATE itself, so two

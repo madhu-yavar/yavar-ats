@@ -16,7 +16,7 @@ import {
   Video,
 } from "lucide-react";
 
-import type { Tables } from "@/integrations/supabase/types";
+import type { Tables } from "@/lib/database.types";
 import {
   disconnectIntegration,
   listSourceIntegrations,
@@ -49,6 +49,7 @@ import { PageHeader } from "@/components/ats";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
