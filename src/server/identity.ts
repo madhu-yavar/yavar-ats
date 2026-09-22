@@ -96,7 +96,10 @@ export async function resolveSession(request: Request): Promise<{ userId: string
     .select({ userId: sessions.userId, email: users.email })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
-    .where(and(eq(sessions.tokenHash, await hashToken(raw)), gt(sessions.expiresAt, new Date())))
+    .where(and(eq(sessions.tokenHash, await hashToken(raw)), gt(sessions.expiresAt, new Date()))); 
+  if (row) { 
+    await db.update(sessions).set({ lastUsedAt: new Date(), expiresAt: new Date(Date.now() + SESSION_TTL_MS) }).where(eq(sessions.tokenHash, await hashToken(raw))); 
+  }
     .limit(1);
   return row ?? null;
 }
