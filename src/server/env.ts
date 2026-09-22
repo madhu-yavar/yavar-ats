@@ -68,7 +68,13 @@ const schema = z.object({
   S3_SECRET_ACCESS_KEY: z.string().optional(),
 });
 
-const parsed = schema.safeParse(process.env);
+// Managed environments expose the Postgres connection string as DB_URL /
+// SUPABASE_DB_URL; accept those as DATABASE_URL so the server boots there too.
+const parsed = schema.safeParse({
+  ...process.env,
+  DATABASE_URL:
+    process.env["DATABASE_URL"] ?? process.env["DB_URL"] ?? process.env["SUPABASE_DB_URL"],
+});
 if (!parsed.success) {
   const missing = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`);
   throw new Error(`Invalid server environment:\n${missing.join("\n")}`);
