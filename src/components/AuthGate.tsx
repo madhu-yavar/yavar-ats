@@ -629,28 +629,17 @@ function SignInCard() {
     setBusy(true);
     try {
       if (mode === "signin") {
-        const { error, data } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        // Exchange the short-lived JWT for an httpOnly session cookie —
-        // server functions then authenticate from the cookie, not localStorage.
-        try {
-          await fetch("/api/auth/session", {
-            method: "POST",
-            headers: { authorization: `Bearer ${data.session?.access_token ?? ""}` },
-          });
-        } catch {
-          /* cookie is an upgrade — the bearer path still works if it fails */
-        }
+        await authSignIn(email, password);
+        // The session cookie is set by the server; reload so every query
+        // refetches under the new identity.
+        window.location.assign("/");
       } else {
         const problem = workEmailProblem(email);
         if (problem) throw new Error(problem);
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { emailRedirectTo: window.location.origin },
-        });
-        if (error) throw error;
-        toast.success("Check your inbox to confirm your work email, then continue the setup.");
+        const res = await authSignUp(email, password);
+        toast.success(
+          res.message ?? "Check your inbox to confirm your work email, then continue the setup.",
+        );
       }
     } catch (err) {
       toast.error((err as Error).message);
@@ -659,11 +648,20 @@ function SignInCard() {
     }
   }
 
-  async function google() {
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
-    });
-    if (result.error) toast.error("Google sign-in failed. Try email instead.");
+  async function forgot() {
+    if (!email.trim()) {
+      toast.error("Enter your work email first.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await authRequestReset(email);
+      toast.success(res.message ?? "If that address has an account, a reset link is on its way.");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
