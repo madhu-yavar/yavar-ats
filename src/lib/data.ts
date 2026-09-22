@@ -37,18 +37,21 @@ import {
 import { addMasterItem as addMasterItemFn } from "./master.functions";
 import { getLatestBenchmark, type BenchmarkRow } from "./salary-benchmark.functions";
 import { listTemplates, type TemplateWire } from "./templates.functions";
-import type { Tables } from "@/integrations/supabase/types";
+import type { Json, Tables } from "@/integrations/supabase/types";
 
 export type Department = Tables<"departments">;
-export type Requisition = Tables<"requisitions">;
-export type JobDescription = Tables<"job_descriptions">;
+export type Requisition = Tables<"requisitions"> & { job_card_overrides: Json | null };
+export type JobDescription = Tables<"job_descriptions"> & { template_name: string | null };
 export type Candidate = Tables<"candidates">;
 export type Application = Tables<"applications">;
 export type MatchScore = Tables<"match_scores">;
 export type SocialProfile = Tables<"social_profiles">;
 export type Evaluation = Tables<"evaluations">;
 export type Interview = Tables<"interviews">;
-export type Offer = Tables<"offers">;
+export type Offer = Tables<"offers"> & {
+  letter: Json | null;
+  letter_template_id: string | null;
+};
 export type AiInterview = Tables<"ai_interviews">;
 export type MasterItem = Tables<"master_items">;
 export type MasterKind =
