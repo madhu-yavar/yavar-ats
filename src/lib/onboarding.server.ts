@@ -367,7 +367,7 @@ export async function offerContextForEmail(
     .from(applications)
     .innerJoin(candidates, eq(candidates.id, applications.candidateId))
     .where(and(eq(applications.orgId, orgId), eq(candidates.email, email.toLowerCase())))
-    .orderBy(desc(applications.createdAt))
+    .orderBy(desc(applications.appliedAt))
     .limit(1);
   if (!row) return null;
   const OFFERING = ["l3", "offer", "offer_pending", "offer_released", "offer_accepted", "hired", "joined"];

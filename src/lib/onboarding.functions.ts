@@ -22,6 +22,7 @@ import {
   readOnboardingFile,
   readinessFor,
   storeOnboardingDocument,
+  type ExtractedDoc,
   type Readiness,
 } from "./onboarding.server";
 
@@ -41,7 +42,7 @@ export type OnboardingDocWire = {
   source: string;
   extraction_status: string;
   extraction_note: string | null;
-  extracted: unknown;
+  extracted: ExtractedDoc | null;
   extracted_text: string | null;
   model: string | null;
   status: string;
@@ -69,7 +70,7 @@ function toWire(row: typeof onboardingDocuments.$inferSelect): OnboardingDocWire
     source: row.source,
     extraction_status: row.extractionStatus,
     extraction_note: row.extractionNote,
-    extracted: row.extracted,
+    extracted: (row.extracted ?? null) as ExtractedDoc | null,
     extracted_text: row.extractedText ? row.extractedText.slice(0, 6000) : null,
     model: row.model,
     status: row.status,
