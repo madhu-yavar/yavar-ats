@@ -133,25 +133,20 @@ export async function hasProviderKey(orgId: string | null | undefined, provider:
   return Boolean(row);
 }
 
-/** Stored (or env) key for a bring-your-own provider — lets a form test a
- * selection before it is saved without falling back to another tenant's key. */
+/** The organisation's own stored key for a provider — lets a form test a
+ * selection before it is saved. Never falls back to a platform or another
+ * tenant's key: no key saved means no AI call. */
 export async function readProviderKey(orgId: string, provider: AiProvider): Promise<string | null> {
-  if (orgId) {
-    const { decryptSecret } = await import("../server/crypto");
-    const [cred] = await db
-      .select({ apiKey: aiProviderCredentials.apiKey })
-      .from(aiProviderCredentials)
-      .where(
-        and(eq(aiProviderCredentials.orgId, orgId), eq(aiProviderCredentials.provider, provider)),
-      )
-      .limit(1);
-    if (cred?.apiKey) return decryptSecret(cred.apiKey);
-  }
-  return provider === "openai"
-    ? (process.env["OPENAI_API_KEY"] ?? null)
-    : provider === "anthropic"
-      ? (process.env["ANTHROPIC_API_KEY"] ?? null)
-      : (process.env["GEMINI_API_KEY"] ?? process.env["GOOGLE_API_KEY"] ?? null);
+  if (!orgId) return null;
+  const { decryptSecret } = await import("../server/crypto");
+  const [cred] = await db
+    .select({ apiKey: aiProviderCredentials.apiKey })
+    .from(aiProviderCredentials)
+    .where(
+      and(eq(aiProviderCredentials.orgId, orgId), eq(aiProviderCredentials.provider, provider)),
+    )
+    .limit(1);
+  return cred?.apiKey ? decryptSecret(cred.apiKey) : null;
 }
 
 /* ------------------------------------------------------------- streaming */
