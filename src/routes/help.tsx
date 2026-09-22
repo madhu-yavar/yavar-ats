@@ -65,9 +65,13 @@ function Help() {
         ))}
       </nav>
 
-      <div className="space-y-3">
+      <p className="text-xs text-muted-foreground" aria-live="polite">
+        {q.trim() ? `${sections.length} matching sections` : `${MANUAL_SECTIONS.length} sections`}
+      </p>
+
+      <div className="grid items-start gap-3 xl:grid-cols-2">
         {sections.map((s) => (
-          <section key={s.id} id={s.id} className="panel space-y-2 p-5">
+          <section key={s.id} id={s.id} className="panel scroll-mt-20 space-y-2 p-5">
             <h2 className="text-sm font-semibold">{s.title}</h2>
             <p className="text-sm text-muted-foreground">{s.summary}</p>
             <ol className="list-decimal space-y-1.5 pl-5 text-sm">

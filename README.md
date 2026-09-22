@@ -1,26 +1,55 @@
-# Profile Matcher Pro
+# ATSIQ
 
-This is the BRD for development. I am very particular about the JD vs CV mapping along with the scoring based on social profiling
+ATSIQ by Yavar AI is an enterprise recruiting intelligence platform. It combines governed hiring workflows with evidence-led JD↔CV matching, prescreening, compensation research, Talent Brain workforce intelligence and Return on Individual analysis.
 
-This project was built with [Lovable](https://lovable.dev).
+**Production:** https://atsiq.yavar.ai
 
-**Live app**: https://yavar-ats.lovable.app
+## Product scope
 
-## Build with Lovable
+- Organisation registration, platform approval, role-based access and tenant lifecycle controls
+- Requisition, JD and offer approval workflows with immutable decision trails
+- Public applications, careers-inbox intake, bulk CV parsing and ATSIQ Capture for deep LinkedIn Recruiter collection
+- Explainable JD↔CV scoring, social-claim verification and recruiter overrides
+- Contextual screening kits, private audio transcription, grading and interview scorecards
+- Google Meet, Microsoft Teams and Zoom meeting integrations
+- Talent pool ownership, referrals, deduplication, internal job postings and reusable organisation knowledge
+- Live compensation research with cited evidence and saved organisation corrections
+- CHRO dashboard, reports, Talent Brain ontology and Return on Individual capability-to-goal planning
+- Product catalogue and organisation oversight for the platform super admin
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/800d7055-f713-4f9e-8cdc-cab0ac31090b).
+## Architecture
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+- TanStack Start, React 19 and Vite
+- PostgreSQL as the system of record, accessed with Drizzle ORM
+- First-party password authentication and database-backed HttpOnly cookie sessions
+- S3-compatible private object storage for CVs and screening recordings
+- Organisation-owned Gemini, OpenAI or Claude credentials encrypted at rest; there is no shared AI-key fallback
+- Tenant authorization enforced in server middleware and repeated in every tenant query with an explicit organisation predicate
 
-## Development
+See `DEPLOYMENT-GCP.md`, `SECURITY.md` and `VERIFICATION_REPORT.md` for operating, security and release evidence.
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+## Local development
+
+Use Bun and a PostgreSQL database.
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
+bun install
+bun run db:migrate
+bun run dev
 ```
+
+Required configuration is documented in `.env.example`. Never commit passwords, encryption keys, OAuth secrets or AI provider keys.
+
+## Quality gates
+
+```sh
+bun run typecheck
+bun test
+bun run test:e2e
+```
+
+The E2E harness under `scripts/local-e2e/` uses a disposable PostgreSQL fixture. Provider-backed AI, email, meeting and job-board operations require an isolated test organisation with its own credentials.
+
+## Roles
+
+Tenant roles are recruiter, hiring manager, department head, HR head and president/CBO. Organisation ownership and the platform super-admin allowlist are separate controls. Role grants are stored separately from user identity records.

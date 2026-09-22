@@ -18,7 +18,7 @@
 - [x] Department rollups and individual-by-individual evidence view
 - [x] Super-admin organisation switcher on the RoI page
 - [x] Executive band on the dashboard answering the question up front
-- [ ] Publish and review the accepted-offer test cohort on the live site
+- [x] Review the accepted-offer test cohort in the authenticated preview
 
 - [x] Replace landing film with a glossy real-page/data narrative
 - [x] Verify RoI cards are computed from organisation evidence, not mock records
@@ -27,8 +27,8 @@
 
 ## Release validation and documentation
 - [ ] Run authenticated and public end-to-end workflow tests
-- [ ] Refresh repository product, deployment, security and verification documents
-- [ ] Refresh the in-app user manual and copilot knowledge source
+- [x] Refresh repository product, deployment, security and verification documents
+- [x] Refresh the in-app user manual and copilot knowledge source
 - [ ] Update the investor product document to the current implementation
 - [ ] Run current security checks and resolve release blockers
 - [ ] Publish and verify the production release
