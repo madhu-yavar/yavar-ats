@@ -25,7 +25,11 @@ export default defineConfig({
       {
         name: "atsiq-stub-browser-3d-on-server",
         enforce: "pre" as const,
-        resolveId(source: string, _importer: string | undefined, options: { ssr?: boolean }) {
+        resolveId(
+          source: string,
+          _importer: string | undefined,
+          options: { ssr?: boolean | undefined },
+        ) {
           if (options?.ssr && BROWSER_ONLY_3D.has(source)) return BROWSER_3D_STUB;
           return null;
         },
