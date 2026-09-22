@@ -96,7 +96,8 @@ export function OntologyGraph3D({
     );
     group.add(sphere);
 
-    const label = new SpriteText(n.name, 4, isSel ? "#0f172a" : "#475569");
+    const label = new SpriteText(n.name, 4, isSel ? "#0f172a" : "#475569") as SpriteText &
+      THREE.Sprite;
     label.position.set(0, r + 3, 0);
     label.fontWeight = isSel ? "700" : "500";
     group.add(label);
@@ -137,9 +138,9 @@ export function OntologyGraph3D({
             linkWidth={(l: unknown) => 0.6 + ((l as { weight?: number }).weight ?? 0) * 1.5}
             linkOpacity={0.6}
             onNodeClick={(n: unknown) => onSelect((n as { id: string }).id)}
-            ref={(fg: unknown) => {
+            ref={((fg: unknown) => {
               fgRef.current = fg as { zoomToFit: (ms?: number, px?: number) => void } | null;
-            }}
+            }) as never}
             onEngineStop={() => fgRef.current?.zoomToFit(600, 40)}
             warmupTicks={40}
             cooldownTicks={160}

@@ -84,7 +84,7 @@ export function buildAuthorizeUrl(
     client_id: clientId,
     redirect_uri: callbackUrl(provider, origin),
     state,
-    scope: cfg.scope,
+    scope: cfg['scope'],
     ...cfg.extraAuthorize,
   });
   return `${cfg.authorize}?${params.toString()}`;
@@ -127,14 +127,14 @@ export async function exchangeCode(
     });
     if (!res.ok) throw new Error(`Microsoft token exchange failed (${res.status}).`);
     const body = (await res.json()) as Record<string, string>;
-    const claims = decodeIdTokenClaims(body.id_token);
+    const claims = decodeIdTokenClaims(body['id_token']);
     return {
-      refresh_token: body.refresh_token ?? "",
-      access_token: body.access_token ?? "",
-      expires_at: String(Math.floor(Date.now() / 1000) + Number(body.expires_in ?? 3600)),
-      tenant_id: String(claims.tid ?? ""),
-      connected_email: String(claims.preferred_username ?? claims.email ?? ""),
-      scope: body.scope ?? "",
+      refresh_token: body['refresh_token'] ?? "",
+      access_token: body['access_token'] ?? "",
+      expires_at: String(Math.floor(Date.now() / 1000) + Number(body['expires_in'] ?? 3600)),
+      tenant_id: String(claims['tid'] ?? ""),
+      connected_email: String(claims['preferred_username'] ?? claims['email'] ?? ""),
+      scope: body['scope'] ?? "",
     };
   }
 
@@ -152,13 +152,13 @@ export async function exchangeCode(
     });
     if (!res.ok) throw new Error(`Google token exchange failed (${res.status}).`);
     const body = (await res.json()) as Record<string, string>;
-    const claims = decodeIdTokenClaims(body.id_token);
+    const claims = decodeIdTokenClaims(body['id_token']);
     return {
-      refresh_token: body.refresh_token ?? "",
-      access_token: body.access_token ?? "",
-      expires_at: String(Math.floor(Date.now() / 1000) + Number(body.expires_in ?? 3600)),
-      connected_email: String(claims.email ?? ""),
-      scope: body.scope ?? "",
+      refresh_token: body['refresh_token'] ?? "",
+      access_token: body['access_token'] ?? "",
+      expires_at: String(Math.floor(Date.now() / 1000) + Number(body['expires_in'] ?? 3600)),
+      connected_email: String(claims['email'] ?? ""),
+      scope: body['scope'] ?? "",
     };
   }
 
@@ -176,7 +176,7 @@ export async function exchangeCode(
   try {
     const me = (await (
       await fetch("https://api.zoom.us/v2/users/me", {
-        headers: { Authorization: `Bearer ${body.access_token}` },
+        headers: { Authorization: `Bearer ${body['access_token']}` },
       })
     ).json()) as Record<string, unknown>;
     connectedEmail = String(me["email"] ?? "");
@@ -184,9 +184,9 @@ export async function exchangeCode(
     /* non-fatal */
   }
   return {
-    access_token: body.access_token ?? "",
-    refresh_token: body.refresh_token ?? "",
-    expires_at: String(Math.floor(Date.now() / 1000) + Number(body.expires_in ?? 3600)),
+    access_token: body['access_token'] ?? "",
+    refresh_token: body['refresh_token'] ?? "",
+    expires_at: String(Math.floor(Date.now() / 1000) + Number(body['expires_in'] ?? 3600)),
     connected_email: connectedEmail,
   };
 }
@@ -258,7 +258,7 @@ export async function finishProviderConnect(
         enabled: true,
         config: {
           ...existingConfig,
-          connected_email: secretsPatch.connected_email ?? null,
+          connected_email: secretsPatch['connected_email'] ?? null,
           connected_at: new Date().toISOString(),
         },
         updatedAt: new Date(),

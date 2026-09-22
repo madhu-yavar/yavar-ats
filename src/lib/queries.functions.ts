@@ -327,7 +327,7 @@ export const listAllScreeningRuns = createServerFn({ method: "POST" })
     const res = (await db.execute(
       sql`select * from screening_runs where org_id = ${context.orgId} order by created_at desc`,
     )) as unknown as { rows?: Record<string, unknown>[] };
-    return res.rows ?? [];
+    return (res.rows ?? []) as unknown as Record<string, string | number | boolean | null>[];
   });
 
 /* ------------------------------------------------- team & sharing (0030) */
@@ -383,7 +383,7 @@ export const listScreeningKits = createServerFn({ method: "POST" })
     const res = (await db.execute(
       sql`select * from screening_kits where org_id = ${context.orgId} order by created_at desc`,
     )) as unknown as { rows?: Record<string, unknown>[] };
-    return res.rows ?? [];
+    return (res.rows ?? []) as unknown as Record<string, string | number | boolean | null>[];
   });
 
 export const listCandidateScreeningKits = createServerFn({ method: "POST" })
@@ -393,7 +393,7 @@ export const listCandidateScreeningKits = createServerFn({ method: "POST" })
     const res = (await db.execute(
       sql`select * from screening_kits where org_id = ${context.orgId} and candidate_id = ${data.candidateId} order by created_at desc`,
     )) as unknown as { rows?: Record<string, unknown>[] };
-    return res.rows ?? [];
+    return (res.rows ?? []) as unknown as Record<string, string | number | boolean | null>[];
   });
 
 export const listCandidateScreeningRuns = createServerFn({ method: "POST" })
@@ -403,7 +403,7 @@ export const listCandidateScreeningRuns = createServerFn({ method: "POST" })
     const res = (await db.execute(
       sql`select * from screening_runs where org_id = ${context.orgId} and candidate_id = ${data.candidateId} order by created_at desc`,
     )) as unknown as { rows?: Record<string, unknown>[] };
-    return res.rows ?? [];
+    return (res.rows ?? []) as unknown as Record<string, string | number | boolean | null>[];
   });
 
 export const listOwnershipEvents = createServerFn({ method: "POST" })

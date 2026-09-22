@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireIdentity } from "@/server/identity";
+import { restClient } from "@/server/pgrest";
 import {
   buildRecruiterPerformance,
   DEFAULT_SCHEME,
@@ -61,12 +62,12 @@ async function loadScheme(supabase: Sb, orgId: string): Promise<IncentiveScheme>
 
 /** Recruiter-by-recruiter delivery, quality and incentive workings for the CHRO. */
 export const getHrPerformance = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireIdentity])
   .inputValidator((input: unknown) =>
     z.object({ days: z.number().int().min(7).max(730).default(90) }).parse(input ?? {}),
   )
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as unknown as Sb;
+    const supabase = restClient() as unknown as Sb;
     const orgId = await requireLeadership(supabase, context.userId);
     const scheme = await loadScheme(supabase, orgId);
 
@@ -134,7 +135,7 @@ export const getHrPerformance = createServerFn({ method: "POST" })
 
 /** Save the incentive scheme the payouts above are calculated from. */
 export const saveIncentiveScheme = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireIdentity])
   .inputValidator((input: unknown) =>
     z
       .object({
@@ -155,7 +156,7 @@ export const saveIncentiveScheme = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as unknown as Sb;
+    const supabase = restClient() as unknown as Sb;
     const orgId = await requireLeadership(supabase, context.userId);
     const { error } = await supabase.from("hr_incentive_schemes").upsert(
       {

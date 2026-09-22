@@ -2,7 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireIdentity } from "@/server/identity";
 import { db } from "../server/db";
 import { applications, matchScores, socialProfiles, sourceIntegrations } from "@db/schema";
 import { requireOrg } from "./auth.middleware";

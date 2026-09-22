@@ -1,20 +1,14 @@
 import { createMiddleware } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
-import { createClient } from "@supabase/supabase-js";
 import { and, eq, gt } from "drizzle-orm";
 
 import { db } from "./db";
 import { sessions, users } from "@db/schema";
 
 /**
- * Identity layer for the cookie-session era.
- *
- * Authn resolution order for every server function:
- *   1. `atsiq_session` httpOnly cookie → sessions table (7-day sliding window)
- *   2. Supabase-compatible JWT bearer (the legacy path, kept for one release)
- *
- * The JWT path exists so an old client bundle cannot lock anyone out; the
- * cookie is what the sign-in flow establishes and what a browser rely on.
+ * Self-hosted identity layer: the `atsiq_session` httpOnly cookie is resolved
+ * against the sessions table on every server-function call (7-day sliding
+ * window). There is no external token service in this path.
  */
 
 export const SESSION_COOKIE = "atsiq_session";
@@ -82,75 +76,24 @@ async function resolveSession(request: Request): Promise<{ userId: string; email
   return row ?? null;
 }
 
-/** Verify a Supabase-compatible JWT the same way the legacy middleware does. */
-async function resolveJwt(
-  request: Request,
-): Promise<{ userId: string; email: string; claims: Record<string, unknown> } | null> {
-  const supabaseUrl = process.env["SUPABASE_URL"];
-  const supabaseKey = process.env["SUPABASE_PUBLISHABLE_KEY"];
-  const authHeader = request.headers.get("authorization");
-  if (!supabaseUrl || !supabaseKey || !authHeader?.startsWith("Bearer ")) return null;
-  const token = authHeader.slice(7).trim();
-  if (token.split(".").length !== 3) return null;
-  const supabase = createClient(supabaseUrl, supabaseKey, {
-    global: { headers: { Authorization: `Bearer ${token}`, apikey: supabaseKey } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data, error } = await supabase.auth.getClaims(token);
-  const claims = (data?.claims ?? {}) as Record<string, unknown>;
-  if (error || !claims["sub"]) return null;
-  return {
-    userId: String(claims["sub"]),
-    email: typeof claims["email"] === "string" ? claims["email"] : "",
-    claims,
-  };
-}
-
 /**
- * Replacement for requireSupabaseAuth: same context shape ({ userId, claims }),
- * cookie session first, JWT bearer second. Everything downstream
- * (requireOrg/requireRole/…) is unchanged.
+ * Authn for every server function: the httpOnly session cookie, validated
+ * against the sessions table. Everything downstream (requireOrg/requireRole/…)
+ * is unchanged.
  */
 export const requireIdentity = createMiddleware({ type: "function" }).server(async ({ next }) => {
   const request = getRequest();
   const session = request ? await resolveSession(request) : null;
 
-  let identity: { userId: string; claims: Record<string, unknown>; via: "session" | "jwt" } | null =
-    null;
-  if (session) {
-    identity = {
+  if (!session) throw new Error("Unauthorized: please sign in again.");
+  return next({
+    context: {
       userId: session.userId,
-      claims: { sub: session.userId, email: session.email, email_verified: true },
-      via: "session",
-    };
-  } else {
-    const jwt = request ? await resolveJwt(request) : null;
-    if (jwt) identity = { userId: jwt.userId, claims: jwt.claims, via: "jwt" };
-  }
-  if (!identity) throw new Error("Unauthorized: No authorization header provided");
-  return next({ context: identity });
-});
-
-/** Establish a cookie session from an already-verified bearer JWT. */
-export async function exchangeTokenForSession(
-  request: Request,
-): Promise<{ ok: true; cookie: string; userId: string; email: string } | { ok: false }> {
-  const jwt = await resolveJwt(request);
-  if (!jwt) return { ok: false };
-  const email =
-    jwt.email ||
-    (
-      await db
-        .select({ email: users.email })
-        .from(users)
-        .where(eq(users.id, jwt.userId))
-        .limit(1)
-    )[0]?.email ||
-    "";
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
-  const token = await createSession(jwt.userId, {
-    ip,
-    userAgent: request.headers.get("user-agent"),
+      claims: { sub: session.userId, email: session.email, email_verified: true } as Record<
+        string,
+        unknown
+      >,
+      via: "session" as const,
+    },
   });
-  return { ok: true, cookie: sessionCookie(token), userId: jwt.userId, email };
-}
+});

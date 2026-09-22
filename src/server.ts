@@ -53,6 +53,8 @@ function isH3SwallowedErrorBody(body: string): boolean {
  */
 const rateBuckets = new Map<string, number[]>();
 const RATE_LIMIT = 60;
+/** Credential endpoints (/api/auth/*) get a far tighter per-IP ceiling. */
+const AUTH_RATE_LIMIT = 12;
 const RATE_WINDOW_MS = 60_000;
 const RATE_MAP_PRUNE_THRESHOLD = 5_000;
 
@@ -75,10 +77,10 @@ function clientIp(request: Request): string {
   return request.headers.get("cf-connecting-ip") ?? "unknown";
 }
 
-function allowRequest(key: string): boolean {
+function allowRequest(key: string, limit = RATE_LIMIT): boolean {
   const now = Date.now();
   const recent = (rateBuckets.get(key) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
-  if (recent.length >= RATE_LIMIT) {
+  if (recent.length >= limit) {
     rateBuckets.set(key, recent);
     return false;
   }
@@ -90,6 +92,10 @@ function allowRequest(key: string): boolean {
     }
   }
   return true;
+}
+
+function isAuthPath(path: string): boolean {
+  return path.startsWith("/api/auth/");
 }
 
 function isPublicApiPath(path: string): boolean {
@@ -106,7 +112,7 @@ function isServerFnPath(path: string): boolean {
   return path === "/_serverFn" || path.startsWith("/_serverFn/");
 }
 
-function applySecurityHeaders(response: Response, request: Request): Response {
+async function applySecurityHeaders(response: Response, request: Request): Promise<Response> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("text/html")) return response;
 
@@ -178,11 +184,17 @@ export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
       const url = new URL(request.url);
-      if (
-        request.method !== "OPTIONS" &&
-        (isPublicApiPath(url.pathname) || isServerFnPath(url.pathname))
-      ) {
-        if (!allowRequest(`${clientIp(request)}:${url.pathname}`)) return tooManyRequests();
+      if (request.method !== "OPTIONS") {
+        // Sign-in, sign-up and reset are credential endpoints: a much tighter
+        // ceiling than ordinary API traffic, on top of the per-account
+        // throttling the auth layer itself applies.
+        if (isAuthPath(url.pathname)) {
+          if (!allowRequest(`auth:${clientIp(request)}:${url.pathname}`, AUTH_RATE_LIMIT)) {
+            return tooManyRequests();
+          }
+        } else if (isPublicApiPath(url.pathname) || isServerFnPath(url.pathname)) {
+          if (!allowRequest(`${clientIp(request)}:${url.pathname}`)) return tooManyRequests();
+        }
       }
 
       const handler = await getServerEntry();

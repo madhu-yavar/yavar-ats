@@ -78,3 +78,13 @@ const darkModeCss = `
   [data-ogsc] .dm-btn { background-color: #ffffff !important; color: #000000 !important; }
   [data-ogsb] .dm-btn { background-color: #ffffff !important; color: #000000 !important; }
 `
+
+export const template = {
+  component: RecoveryEmail,
+  subject: 'Reset your ATSIQ password',
+  displayName: 'Password reset',
+  previewData: {
+    siteName: 'ATSIQ',
+    confirmationUrl: 'https://atsiq.yavar.ai/auth/reset?token=preview',
+  },
+}

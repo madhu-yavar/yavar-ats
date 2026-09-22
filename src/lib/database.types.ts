@@ -202,44 +202,6 @@ export type Database = {
           },
         ]
       }
-      auth_tokens: {
-        Row: {
-          consumed_at: string | null
-          created_at: string
-          expires_at: string
-          id: string
-          purpose: string
-          token_hash: string
-          user_id: string
-        }
-        Insert: {
-          consumed_at?: string | null
-          created_at?: string
-          expires_at: string
-          id?: string
-          purpose: string
-          token_hash: string
-          user_id: string
-        }
-        Update: {
-          consumed_at?: string | null
-          created_at?: string
-          expires_at?: string
-          id?: string
-          purpose?: string
-          token_hash?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "auth_tokens_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       candidate_assessments: {
         Row: {
           answers: Json
@@ -1195,30 +1157,6 @@ export type Database = {
           },
         ]
       }
-      login_attempts: {
-        Row: {
-          created_at: string
-          email: string
-          id: string
-          ip: string | null
-          success: boolean
-        }
-        Insert: {
-          created_at?: string
-          email: string
-          id?: string
-          ip?: string | null
-          success?: boolean
-        }
-        Update: {
-          created_at?: string
-          email?: string
-          id?: string
-          ip?: string | null
-          success?: boolean
-        }
-        Relationships: []
-      }
       master_items: {
         Row: {
           active: boolean
@@ -2084,47 +2022,6 @@ export type Database = {
           },
         ]
       }
-      sessions: {
-        Row: {
-          created_at: string
-          expires_at: string
-          id: string
-          ip: string | null
-          last_used_at: string
-          token_hash: string
-          user_agent: string | null
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          expires_at: string
-          id?: string
-          ip?: string | null
-          last_used_at?: string
-          token_hash: string
-          user_agent?: string | null
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          expires_at?: string
-          id?: string
-          ip?: string | null
-          last_used_at?: string
-          token_hash?: string
-          user_agent?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sessions_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       skill_edges: {
         Row: {
           evidence_count: number
@@ -2596,39 +2493,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      users: {
-        Row: {
-          avatar_url: string | null
-          created_at: string
-          email: string
-          email_confirmed_at: string | null
-          full_name: string | null
-          id: string
-          last_login_at: string | null
-          password_hash: string | null
-        }
-        Insert: {
-          avatar_url?: string | null
-          created_at?: string
-          email: string
-          email_confirmed_at?: string | null
-          full_name?: string | null
-          id?: string
-          last_login_at?: string | null
-          password_hash?: string | null
-        }
-        Update: {
-          avatar_url?: string | null
-          created_at?: string
-          email?: string
-          email_confirmed_at?: string | null
-          full_name?: string | null
-          id?: string
-          last_login_at?: string | null
-          password_hash?: string | null
-        }
-        Relationships: []
       }
     }
     Views: {

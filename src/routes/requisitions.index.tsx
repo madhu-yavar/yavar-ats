@@ -147,7 +147,7 @@ function Requisitions() {
     try {
       const data = await createDepartmentFn({ data: { name: name.trim() } });
       await qc.invalidateQueries({ queryKey: ["departments"] });
-      if (data?.id) setForm((f) => ({ ...f, department_id: data.id }));
+      if (data?.id) setForm((f) => ({ ...f, department_id: String(data.id) }));
       toast.success(`${name.trim()} added — set its budget below`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not add the department");

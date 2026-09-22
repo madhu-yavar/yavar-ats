@@ -3,6 +3,8 @@ import type { ComponentType } from 'react'
 import { template as memberInvitedTemplate } from './member-invited'
 import { template as orgApprovedTemplate } from './org-approved'
 import { template as orgRejectedTemplate } from './org-rejected'
+import { template as authConfirmTemplate } from './signup'
+import { template as authResetTemplate } from './recovery'
 
 export interface TemplateEntry {
   component: ComponentType<any>
@@ -21,4 +23,6 @@ export const TEMPLATES: Record<string, TemplateEntry> = {
   'member-invited': memberInvitedTemplate,
   'org-approved': orgApprovedTemplate,
   'org-rejected': orgRejectedTemplate,
+  'auth-confirm': authConfirmTemplate,
+  'auth-reset': authResetTemplate,
 }

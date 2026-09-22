@@ -139,3 +139,15 @@ const darkModeCss = `
   [data-ogsc] .dm-btn { background-color: #ffffff !important; color: #0f172a !important; }
   [data-ogsb] .dm-btn { background-color: #ffffff !important; color: #0f172a !important; }
 `
+
+export const template = {
+  component: SignupEmail,
+  subject: 'Confirm your ATSIQ work email',
+  displayName: 'Confirm work email',
+  previewData: {
+    siteName: 'ATSIQ',
+    siteUrl: 'https://atsiq.yavar.ai',
+    recipient: 'you@company.com',
+    confirmationUrl: 'https://atsiq.yavar.ai/api/auth/confirm?token=preview',
+  },
+}

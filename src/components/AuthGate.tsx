@@ -1,9 +1,14 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { Session } from "@supabase/supabase-js";
 
-import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
+import {
+  authRequestReset,
+  authSignIn,
+  authSignOut,
+  authSignUp,
+  fetchMe,
+  type MeUser,
+} from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,33 +41,26 @@ import {
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient();
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<MeUser | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
-      setSession(s);
-      setReady(true);
-      // The bearer token is attached per server-function call, so anything fetched
-      // during the sign-in transition must be refetched with the new identity.
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
-        qc.clear();
-        if (s) void qc.invalidateQueries();
-      }
-    });
-    // Never leave the app stuck on the splash if session restore stalls.
-    const bail = setTimeout(() => setReady(true), 4000);
-    supabase.auth
-      .getSession()
-      .then(({ data }) => setSession(data.session))
-      .catch(() => undefined)
+    let live = true;
+    // Never leave the app stuck on the splash if the session check stalls.
+    const bail = setTimeout(() => live && setReady(true), 4000);
+    fetchMe()
+      .then((me) => {
+        if (!live) return;
+        setUser(me);
+      })
       .finally(() => {
+        if (!live) return;
         clearTimeout(bail);
         setReady(true);
       });
     return () => {
+      live = false;
       clearTimeout(bail);
-      sub.subscription.unsubscribe();
     };
   }, [qc]);
 
@@ -74,7 +72,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!session) return <Landing />;
+  if (!user) return <Landing />;
   return <>{children}</>;
 }
 
@@ -631,28 +629,17 @@ function SignInCard() {
     setBusy(true);
     try {
       if (mode === "signin") {
-        const { error, data } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        // Exchange the short-lived JWT for an httpOnly session cookie —
-        // server functions then authenticate from the cookie, not localStorage.
-        try {
-          await fetch("/api/auth/session", {
-            method: "POST",
-            headers: { authorization: `Bearer ${data.session?.access_token ?? ""}` },
-          });
-        } catch {
-          /* cookie is an upgrade — the bearer path still works if it fails */
-        }
+        await authSignIn(email, password);
+        // The session cookie is set by the server; reload so every query
+        // refetches under the new identity.
+        window.location.assign("/");
       } else {
         const problem = workEmailProblem(email);
         if (problem) throw new Error(problem);
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { emailRedirectTo: window.location.origin },
-        });
-        if (error) throw error;
-        toast.success("Check your inbox to confirm your work email, then continue the setup.");
+        const res = await authSignUp(email, password);
+        toast.success(
+          res.message ?? "Check your inbox to confirm your work email, then continue the setup.",
+        );
       }
     } catch (err) {
       toast.error((err as Error).message);
@@ -661,11 +648,20 @@ function SignInCard() {
     }
   }
 
-  async function google() {
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
-    });
-    if (result.error) toast.error("Google sign-in failed. Try email instead.");
+  async function forgot() {
+    if (!email.trim()) {
+      toast.error("Enter your work email first.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await authRequestReset(email);
+      toast.success(res.message ?? "If that address has an account, a reset link is on its way.");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -708,17 +704,16 @@ function SignInCard() {
         {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Create organisation account"}
       </Button>
 
-      <div className="flex items-center gap-3">
-        <span className="h-px flex-1 bg-border" />
-        <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-          or
-        </span>
-        <span className="h-px flex-1 bg-border" />
-      </div>
-
-      <Button type="button" variant="outline" className="w-full" onClick={google}>
-        Continue with Google
-      </Button>
+      {mode === "signin" ? (
+        <button
+          type="button"
+          disabled={busy}
+          className="w-full text-center text-sm text-muted-foreground underline-offset-4 hover:underline"
+          onClick={forgot}
+        >
+          Forgot your password?
+        </button>
+      ) : null}
 
       <button
         type="button"
@@ -726,7 +721,7 @@ function SignInCard() {
         onClick={async () => {
           // Registering a new company always starts from a clean session, so the
           // wizard can never be masked by a previously signed-in workspace.
-          if (mode === "signin") await supabase.auth.signOut().catch(() => undefined);
+          if (mode === "signin") await authSignOut();
           setMode(mode === "signin" ? "signup" : "signin");
         }}
       >

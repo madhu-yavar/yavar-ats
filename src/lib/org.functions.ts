@@ -2,7 +2,7 @@ import { and, eq, ilike, isNull, sql } from "drizzle-orm";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireIdentity } from "@/server/identity";
 import { db } from "../server/db";
 import { emailVerified } from "../server/claims";
 import { departments, masterItems, orgMembers, organizations, userRoles } from "@db/schema";
@@ -136,7 +136,7 @@ function orgRowToOrganization(o: typeof organizations.$inferSelect): Organizatio
  * never mutates state.
  */
 export const myOrg = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireIdentity])
   .handler(async ({ context }): Promise<MyOrg> => {
     const [member] = await db
       .select({
@@ -174,9 +174,9 @@ export const myOrg = createServerFn({ method: "GET" })
  * cannot ride a session.)
  */
 export const claimInvite = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireIdentity])
   .handler(async ({ context }) => {
-    const email = (context.claims?.email as string | undefined)?.toLowerCase();
+    const email = (context.claims?.["email"] as string | undefined)?.toLowerCase();
     if (!email) throw new Error("Your account has no email address.");
 
     const [invite] = await db
@@ -244,10 +244,10 @@ const CreateInput = z.object({
  * departments and locations are seeded, and colleagues are invited by email.
  */
 export const createOrganization = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireIdentity])
   .inputValidator((data: unknown) => CreateInput.parse(data))
   .handler(async ({ data, context }) => {
-    const email = (context.claims?.email as string | undefined) ?? `${context.userId}@user`;
+    const email = (context.claims?.["email"] as string | undefined) ?? `${context.userId}@user`;
 
     // Only a verified corporate mailbox can register a tenant: the address must be
     // confirmed by the auth service and must not be a personal or disposable domain.
@@ -440,7 +440,7 @@ async function orgOf(userId: string) {
 }
 
 export const updateOrganization = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireIdentity])
   .inputValidator((data: unknown) =>
     z
       .object({
@@ -477,7 +477,7 @@ export const updateOrganization = createServerFn({ method: "POST" })
 
 /** Everyone in the organisation, invited or active, with their granted roles. */
 export const listMembers = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireIdentity])
   .handler(async ({ context }): Promise<OrgMember[]> => {
     const orgId = await orgOf(context.userId);
     const [members, roles] = await Promise.all([
@@ -519,7 +519,7 @@ export const listMembers = createServerFn({ method: "GET" })
   });
 
 export const inviteMember = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireIdentity])
   .inputValidator((data: unknown) =>
     z
       .object({
@@ -599,7 +599,7 @@ export const inviteMember = createServerFn({ method: "POST" })
   });
 
 export const setMemberRole = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireIdentity])
   .inputValidator((data: unknown) =>
     z.object({ memberId: z.string().uuid(), role: z.enum(ROLES), grant: z.boolean() }).parse(data),
   )
@@ -654,7 +654,7 @@ export const setMemberRole = createServerFn({ method: "POST" })
   });
 
 export const setMemberStatus = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireIdentity])
   .inputValidator((data: unknown) =>
     z.object({ memberId: z.string().uuid(), status: z.enum(["active", "disabled"]) }).parse(data),
   )
@@ -674,7 +674,7 @@ export const setMemberStatus = createServerFn({ method: "POST" })
   });
 
 export const removeMember = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireIdentity])
   .inputValidator((data: unknown) => z.object({ memberId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
     const orgId = await assertOwner(context.userId);
@@ -698,7 +698,7 @@ export const removeMember = createServerFn({ method: "POST" })
 
 /** The owner can correct a member's display name, title and (pre-signup) email. */
 export const updateMember = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireIdentity])
   .inputValidator((data: unknown) =>
     z
       .object({
@@ -737,7 +737,7 @@ export const updateMember = createServerFn({ method: "POST" })
 
 /** An owner can archive their own organisation: everyone loses access, records are kept. */
 export const archiveOwnOrganization = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireIdentity])
   .inputValidator((data: unknown) =>
     z.object({ reason: z.string().max(300).default("") }).parse(data),
   )

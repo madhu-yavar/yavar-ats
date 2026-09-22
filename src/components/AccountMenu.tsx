@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { LogOut, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { supabase } from "@/integrations/supabase/client";
+import { authSignOut, fetchMe } from "@/lib/auth-client";
 import { useOrg } from "@/hooks/useOrg";
 import { usePlatform } from "@/hooks/usePlatform";
 import { Button } from "@/components/ui/button";
@@ -29,12 +29,12 @@ export function AccountMenu() {
 
   const session = useQuery({
     queryKey: ["auth_identity"],
-    queryFn: async () => (await supabase.auth.getUser()).data.user,
+    queryFn: fetchMe,
     staleTime: 300_000,
   });
 
   const email = session.data?.email ?? null;
-  const name = session.data?.user_metadata?.["full_name"] ?? email ?? "You";
+  const name = session.data?.full_name ?? email ?? "You";
   const initials = String(name)
     .split(" ")
     .filter(Boolean)
@@ -56,11 +56,8 @@ export function AccountMenu() {
 
   async function signOut() {
     setSigningOut(true);
-    try {
-      await fetch("/api/auth/session", { method: "DELETE" }).catch(() => undefined);
-    } finally {
-      await supabase.auth.signOut();
-    }
+    await authSignOut();
+    window.location.assign("/");
   }
 
   return (
