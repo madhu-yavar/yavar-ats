@@ -5,7 +5,7 @@ import { Building2, Check, Plus, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { createOrganization, type AppRole } from "@/lib/org.functions";
-import { supabase } from "@/integrations/supabase/client";
+import { authSignOut } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -105,7 +105,7 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
           </div>
           <button
             className="text-xs text-muted-foreground underline-offset-4 hover:underline"
-            onClick={() => supabase.auth.signOut()}
+            onClick={() => void authSignOut().then(() => window.location.assign("/"))}
           >
             Sign out
           </button>
