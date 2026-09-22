@@ -704,17 +704,16 @@ function SignInCard() {
         {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Create organisation account"}
       </Button>
 
-      <div className="flex items-center gap-3">
-        <span className="h-px flex-1 bg-border" />
-        <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-          or
-        </span>
-        <span className="h-px flex-1 bg-border" />
-      </div>
-
-      <Button type="button" variant="outline" className="w-full" onClick={google}>
-        Continue with Google
-      </Button>
+      {mode === "signin" ? (
+        <button
+          type="button"
+          disabled={busy}
+          className="w-full text-center text-sm text-muted-foreground underline-offset-4 hover:underline"
+          onClick={forgot}
+        >
+          Forgot your password?
+        </button>
+      ) : null}
 
       <button
         type="button"
@@ -722,7 +721,7 @@ function SignInCard() {
         onClick={async () => {
           // Registering a new company always starts from a clean session, so the
           // wizard can never be masked by a previously signed-in workspace.
-          if (mode === "signin") await supabase.auth.signOut().catch(() => undefined);
+          if (mode === "signin") await authSignOut();
           setMode(mode === "signin" ? "signup" : "signin");
         }}
       >
