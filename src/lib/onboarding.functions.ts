@@ -15,6 +15,7 @@ import { applications, candidates, offers, onboardingDocuments, requisitions } f
 import { assertRole, requireOrg } from "./auth.middleware";
 import { writeAudit } from "../server/audit";
 import {
+  compensationReading,
   DOC_TYPES,
   DOC_TYPE_KEYS,
   docTypeLabel,
@@ -22,6 +23,7 @@ import {
   readOnboardingFile,
   readinessFor,
   storeOnboardingDocument,
+  type CompensationReading,
   type ExtractedDoc,
   type Readiness,
 } from "./onboarding.server";
@@ -394,4 +396,15 @@ export const listPreOnboardingQueue = createServerFn({ method: "GET" })
       offeredCtc: String(r.offeredCtc ?? "0"),
       joiningDate: r.joiningDate ?? null,
     }));
+  });
+
+/**
+ * The reconciled compensation reading for one application: last drawn salary as
+ * a dated conclusion with its basis, evidence chain, conflicts and open gaps.
+ */
+export const getCompensationReading = createServerFn({ method: "POST" })
+  .middleware([requireOrg])
+  .inputValidator((data: unknown) => z.object({ applicationId: z.string().uuid() }).parse(data))
+  .handler(async ({ data, context }): Promise<CompensationReading> => {
+    return compensationReading(context.orgId, data.applicationId);
   });

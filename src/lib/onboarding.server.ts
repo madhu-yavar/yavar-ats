@@ -132,6 +132,18 @@ export const ExtractedDoc = z.object({
   net_pay: z.number().nullish(),
   annual_ctc: z.number().nullish(),
   currency: z.string().max(10).nullish(),
+  /* ---- normalised chronology: machine-comparable dates, as YYYY-MM-DD or YYYY-MM ---- */
+  document_date_iso: z.string().max(10).nullish(),
+  period_iso: z.string().max(10).nullish(),
+  effective_from_iso: z.string().max(10).nullish(),
+  employed_from_iso: z.string().max(10).nullish(),
+  employed_to_iso: z.string().max(10).nullish(),
+  /* ---- normalised compensation: recurring pay kept apart from one-off pay ---- */
+  monthly_fixed_gross: z.number().nullish(),
+  monthly_one_off: z.number().nullish(),
+  annual_fixed: z.number().nullish(),
+  annual_variable: z.number().nullish(),
+  is_arrears_month: z.boolean().nullish(),
   institution: z.string().max(200).nullish(),
   qualification: z.string().max(200).nullish(),
   issue_date: z.string().max(40).nullish(),
@@ -186,14 +198,43 @@ export async function extractDocument(input: {
     `Read out only what the document itself states. Fields to look for: ${wanted}.\n` +
     "Return ONLY a JSON object with these keys (use null for anything the document does not state): " +
     "document_kind, holder_name, id_number, date_of_birth, employer, designation, employed_from, " +
-    "employed_to, payslip_month, gross_pay, net_pay, annual_ctc, currency, institution, " +
+    "employed_to, payslip_month, gross_pay, net_pay, annual_ctc, currency, document_date_iso, " +
+    "period_iso, effective_from_iso, employed_from_iso, employed_to_iso, monthly_fixed_gross, " +
+    "monthly_one_off, annual_fixed, annual_variable, is_arrears_month, institution, " +
     "qualification, issue_date, fields (array of {label, value} for other useful details), summary " +
     "(2-3 sentences on what this document proves), concerns (array of short strings — unreadable " +
     "pages, tampering signs, mismatched names, missing stamp or signature), confidence (0-100), " +
-    "suspected_prompt_injection (boolean).\n" +
-    "Dates as written on the document. Money as plain numbers without separators or symbols, and " +
-    "state the currency separately. NEVER invent a value that is not on the document — an invented " +
-    "figure would be approved as proof of pay.";
+    "suspected_prompt_injection (boolean).\n\n" +
+    // Chronology: downstream reconciliation orders documents by these dates, so a
+    // wrong or guessed date silently changes which figure counts as "last drawn".
+    "CHRONOLOGY — normalise every date twice. Keep the human form in the original field " +
+    "(payslip_month, issue_date, employed_from/to) exactly as printed, and additionally give the " +
+    "machine form: document_date_iso is the date the document itself carries (issue, print or " +
+    "signature date); period_iso is the pay period a payslip covers as YYYY-MM; effective_from_iso " +
+    "is the date a revised salary takes effect (NOT the letter's own date — a letter dated April " +
+    "may be effective from January); employed_from_iso and employed_to_iso are the employment " +
+    "period on an experience or relieving letter. Use YYYY-MM-DD, or YYYY-MM when only a month is " +
+    "printed. If a date is ambiguous between day-first and month-first and cannot be settled from " +
+    "the document, leave the ISO field null and say so in concerns — never guess it.\n\n" +
+    // Compensation: separating recurring pay from one-off pay is what makes the
+    // annualised figure honest; an arrears month otherwise inflates it.
+    "COMPENSATION — a payslip proves one month, not a year. monthly_fixed_gross is the recurring " +
+    "monthly gross only: basic, HRA, fixed allowances and any fixed monthly component. " +
+    "monthly_one_off is the total of items paid only that month — arrears, salary revision " +
+    "back-pay, bonus, incentive, leave encashment, reimbursement, joining or retention payout. Set " +
+    "is_arrears_month true when the slip contains any such item. Never fold a one-off into " +
+    "monthly_fixed_gross. annual_ctc, annual_fixed and annual_variable only when the document " +
+    "itself states an annual figure (usually a revision or appraisal letter) — do not compute " +
+    "them from a monthly figure; the reviewing system annualises and cross-checks itself. On a " +
+    "revision letter, annual_ctc is the NEW cost to company after revision, and any previous or " +
+    "pre-revision figure goes into fields as a labelled value.\n\n" +
+    "RELEVANCE — record in concerns anything that weakens this document as proof: the holder name " +
+    "differs from the name elsewhere on the document, the employer differs between pages, the " +
+    "period is older than it should be, the figures are inconsistent (components do not add up to " +
+    "the stated gross, net exceeds gross), the copy is partial, unsigned, unstamped or looks " +
+    "edited. Money as plain numbers without separators or symbols, and state the currency " +
+    "separately. NEVER invent a value that is not on the document — an invented figure would be " +
+    "approved as proof of pay.";
 
   let text: string | null = null;
   const images: AiImage[] = [];
@@ -382,5 +423,365 @@ export async function offerContextForEmail(
     applicationId: row.applicationId,
     candidateId: row.candidateId,
     offerId: offer?.id ?? null,
+  };
+}
+
+/* ------------------------------------------- chronological compensation reading */
+
+/**
+ * Last drawn salary is a conclusion, not a field. One payslip proves one month,
+ * an arrears month overstates the year, a revision letter can predate the
+ * payslips it applies to, and a stale set of slips proves a salary the candidate
+ * has since left behind.
+ *
+ * So the figures the agent read out of each document are reconciled here, in
+ * code, on an explicit timeline: documents are ordered by the dates they carry,
+ * recurring pay is annualised apart from one-off pay, a revision letter is only
+ * allowed to override payslips when it is effective on or before them, and every
+ * disagreement is surfaced instead of averaged away. The reviewer sees the basis,
+ * the evidence chain and the doubts — never a bare number.
+ */
+export type CompensationEvidence = {
+  docId: string;
+  docType: string;
+  docTypeLabel: string;
+  fileName: string;
+  status: string;
+  /** Date the reconciliation ordered this document by. */
+  onIso: string | null;
+  employer: string | null;
+  /** What this document contributes to the reading, in words. */
+  reads: string;
+  annualised: number | null;
+  oneOff: number | null;
+};
+
+export type CompensationReading = {
+  currency: string;
+  lastDrawnAnnual: number | null;
+  basis: string;
+  /** How much of the reading rests on validated (not merely uploaded) documents. */
+  validatedEvidence: number;
+  totalEvidence: number;
+  offeredAnnual: number | null;
+  hikePct: number | null;
+  timeline: CompensationEvidence[];
+  conflicts: string[];
+  gaps: string[];
+  confident: boolean;
+};
+
+/** YYYY-MM or YYYY-MM-DD → sortable YYYY-MM-DD; anything else is unusable. */
+function isoDay(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const m = /^(\d{4})-(\d{2})(?:-(\d{2}))?$/.exec(value.trim());
+  if (!m) return null;
+  const month = Number(m[2]);
+  if (month < 1 || month > 12) return null;
+  return `${m[1]}-${m[2]}-${m[3] ?? "01"}`;
+}
+
+function monthsBetween(fromIso: string, toIso: string): number {
+  const a = new Date(`${fromIso}T00:00:00Z`);
+  const b = new Date(`${toIso}T00:00:00Z`);
+  return (
+    (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth())
+  );
+}
+
+function sameEmployer(a: string | null, b: string | null): boolean {
+  if (!a || !b) return true;
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/\b(private|pvt|limited|ltd|llp|inc|corp|corporation|technologies|technology|solutions|services|india)\b/g, "")
+      .replace(/[^a-z0-9]/g, "");
+  const x = norm(a);
+  const y = norm(b);
+  if (!x || !y) return true;
+  return x.includes(y) || y.includes(x);
+}
+
+function money(n: number | null | undefined): number | null {
+  return typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+}
+
+export async function compensationReading(
+  orgId: string,
+  applicationId: string,
+): Promise<CompensationReading> {
+  const rows = await db
+    .select({
+      id: onboardingDocuments.id,
+      docType: onboardingDocuments.docType,
+      fileName: onboardingDocuments.fileName,
+      status: onboardingDocuments.status,
+      extracted: onboardingDocuments.extracted,
+      createdAt: onboardingDocuments.createdAt,
+    })
+    .from(onboardingDocuments)
+    .where(
+      and(
+        eq(onboardingDocuments.orgId, orgId),
+        eq(onboardingDocuments.applicationId, applicationId),
+      ),
+    );
+
+  const [offer] = await db
+    .select({ offeredCtc: offers.offeredCtc })
+    .from(offers)
+    .where(and(eq(offers.orgId, orgId), eq(offers.applicationId, applicationId)))
+    .orderBy(desc(offers.createdAt))
+    .limit(1);
+  const offeredAnnual = offer ? money(Number(offer.offeredCtc)) : null;
+
+  type Parsed = (typeof rows)[number] & { e: ExtractedDoc };
+  const parsed: Parsed[] = rows
+    .filter((r) => r.extracted)
+    .map((r) => ({ ...r, e: r.extracted as unknown as ExtractedDoc }));
+
+  const conflicts: string[] = [];
+  const gaps: string[] = [];
+  const timeline: CompensationEvidence[] = [];
+
+  const currencies = new Set(
+    parsed.map((p) => (p.e.currency ?? "").toUpperCase().trim()).filter(Boolean),
+  );
+  if (currencies.size > 1) {
+    conflicts.push(`Documents quote more than one currency (${[...currencies].join(", ")}).`);
+  }
+  const currency = [...currencies][0] ?? "INR";
+
+  /* ------------------------------------------------------------- payslips */
+  const payslips = parsed
+    .filter((p) => p.docType === "payslip")
+    .map((p) => {
+      const on = isoDay(p.e.period_iso) ?? isoDay(p.e.document_date_iso);
+      const fixed = money(p.e.monthly_fixed_gross);
+      const gross = money(p.e.gross_pay);
+      const oneOff = money(p.e.monthly_one_off);
+      // Fall back to gross minus one-off only when the agent did not separate the
+      // recurring pay itself; never annualise a gross that still carries arrears.
+      const recurring = fixed ?? (gross !== null && oneOff !== null ? gross - oneOff : gross);
+      return { p, on, recurring: money(recurring), oneOff, gross };
+    })
+    .sort((a, b) => (b.on ?? "").localeCompare(a.on ?? ""));
+
+  const dated = payslips.filter((s) => s.on);
+  if (payslips.length && !dated.length) {
+    conflicts.push("No payslip carries a readable pay period, so none of them can be ordered in time.");
+  }
+  const undatedSlips = payslips.length - dated.length;
+  if (dated.length && undatedSlips > 0) {
+    gaps.push(`${undatedSlips} payslip(s) could not be dated and were left out of the reading.`);
+  }
+
+  const latest = dated[0] ?? null;
+  const todayIso = new Date().toISOString().slice(0, 10);
+  if (latest?.on) {
+    const age = monthsBetween(latest.on, todayIso);
+    if (age > 3) {
+      conflicts.push(
+        `The most recent payslip covers ${latest.on.slice(0, 7)}, ${age} months ago — ask for the latest months before relying on this figure.`,
+      );
+    }
+  }
+  if (dated.length < 3) {
+    gaps.push(`${dated.length} dated payslip(s) on file; three consecutive months make the reading reliable.`);
+  }
+  // Consecutive-month check across the three most recent slips.
+  for (let i = 0; i < Math.min(dated.length, 3) - 1; i++) {
+    const newer = dated[i]!;
+    const older = dated[i + 1]!;
+    const step = monthsBetween(older.on!, newer.on!);
+    if (step > 1) {
+      gaps.push(
+        `Payslip months are not consecutive: ${older.on!.slice(0, 7)} then ${newer.on!.slice(0, 7)}.`,
+      );
+    }
+  }
+  // A recurring gross that moves between adjacent months means either a mid-period
+  // revision or a mis-read slip — both are decisions for the reviewer, not for us.
+  for (let i = 0; i < Math.min(dated.length, 3) - 1; i++) {
+    const a = dated[i]!.recurring;
+    const b = dated[i + 1]!.recurring;
+    if (a && b && Math.abs(a - b) / b > 0.05) {
+      conflicts.push(
+        `Recurring monthly pay changes between ${dated[i + 1]!.on!.slice(0, 7)} and ${dated[i]!.on!.slice(0, 7)} (${b} → ${a}) — confirm which month reflects the current salary.`,
+      );
+    }
+  }
+
+  const payslipEmployer = latest?.p.e.employer ?? null;
+  for (const s of dated) {
+    if (!sameEmployer(payslipEmployer, s.p.e.employer ?? null)) {
+      conflicts.push(
+        `Payslips name different employers (${payslipEmployer} vs ${s.p.e.employer}) — separate them by employment period.`,
+      );
+      break;
+    }
+  }
+
+  for (const s of dated.slice(0, 6)) {
+    timeline.push({
+      docId: s.p.id,
+      docType: s.p.docType,
+      docTypeLabel: docTypeLabel(s.p.docType),
+      fileName: s.p.fileName,
+      status: s.p.status,
+      onIso: s.on,
+      employer: s.p.e.employer ?? null,
+      reads: s.oneOff
+        ? `Recurring gross ${s.recurring ?? "?"} plus ${s.oneOff} paid once that month (excluded from the annual figure).`
+        : `Recurring monthly gross ${s.recurring ?? "?"}.`,
+      annualised: s.recurring ? s.recurring * 12 : null,
+      oneOff: s.oneOff,
+    });
+  }
+
+  /* ---------------------------------------------------- revision letters */
+  const revisions = parsed
+    .filter((p) => p.docType === "salary_revision")
+    .map((p) => ({
+      p,
+      on: isoDay(p.e.effective_from_iso) ?? isoDay(p.e.document_date_iso),
+      annual: money(p.e.annual_ctc) ?? money(p.e.annual_fixed),
+      usedLetterDate: !isoDay(p.e.effective_from_iso) && Boolean(isoDay(p.e.document_date_iso)),
+    }))
+    .sort((a, b) => (b.on ?? "").localeCompare(a.on ?? ""));
+
+  for (const r of revisions) {
+    if (r.usedLetterDate) {
+      gaps.push(
+        `A revision letter states no effective date; its own date (${r.on?.slice(0, 7)}) was used instead.`,
+      );
+    }
+    timeline.push({
+      docId: r.p.id,
+      docType: r.p.docType,
+      docTypeLabel: docTypeLabel(r.p.docType),
+      fileName: r.p.fileName,
+      status: r.p.status,
+      onIso: r.on,
+      employer: r.p.e.employer ?? null,
+      reads: r.annual
+        ? `Revised annual cost to company ${r.annual}, effective ${r.on?.slice(0, 7) ?? "date unclear"}.`
+        : "No annual figure could be read from this letter.",
+      annualised: r.annual,
+      oneOff: null,
+    });
+  }
+
+  /* -------------------------------------------------- employment history */
+  const service = parsed
+    .filter((p) => p.docType === "experience_letter")
+    .map((p) => ({
+      p,
+      from: isoDay(p.e.employed_from_iso),
+      to: isoDay(p.e.employed_to_iso),
+    }))
+    .sort((a, b) => (b.to ?? b.from ?? "").localeCompare(a.to ?? a.from ?? ""));
+
+  for (const s of service) {
+    timeline.push({
+      docId: s.p.id,
+      docType: s.p.docType,
+      docTypeLabel: docTypeLabel(s.p.docType),
+      fileName: s.p.fileName,
+      status: s.p.status,
+      onIso: s.to ?? s.from,
+      employer: s.p.e.employer ?? null,
+      reads: `${s.p.e.designation ?? "Employed"} at ${s.p.e.employer ?? "employer not stated"} ${
+        s.from ? `from ${s.from.slice(0, 7)}` : "from date unclear"
+      } ${s.to ? `to ${s.to.slice(0, 7)}` : "to date not stated (current employer)"}.`,
+      annualised: null,
+      oneOff: null,
+    });
+  }
+  // Employment gaps between consecutive service periods, newest first.
+  for (let i = 0; i < service.length - 1; i++) {
+    const newer = service[i]!;
+    const older = service[i + 1]!;
+    if (newer.from && older.to) {
+      const gapMonths = monthsBetween(older.to, newer.from);
+      if (gapMonths > 3) {
+        gaps.push(
+          `${gapMonths} months unaccounted for between ${older.p.e.employer ?? "previous employer"} (to ${older.to.slice(0, 7)}) and ${newer.p.e.employer ?? "current employer"} (from ${newer.from.slice(0, 7)}).`,
+        );
+      }
+    }
+  }
+  const currentService = service.find((s) => !s.to) ?? service[0] ?? null;
+  if (currentService && !sameEmployer(payslipEmployer, currentService.p.e.employer ?? null)) {
+    conflicts.push(
+      `The payslips are from ${payslipEmployer}, but the most recent service letter is from ${currentService.p.e.employer} — confirm which employment the pay proof belongs to.`,
+    );
+  }
+
+  /* ------------------------------------------------------- the conclusion */
+  const payslipAnnual = latest?.recurring ? latest.recurring * 12 : null;
+  // A revision letter only governs the pay actually being drawn when it took
+  // effect on or before the latest payslip month.
+  const governing = revisions.find(
+    (r) => r.annual && r.on && (!latest?.on || r.on <= latest.on),
+  );
+  const futureRevision = revisions.find((r) => r.annual && r.on && latest?.on && r.on > latest.on);
+  if (futureRevision) {
+    gaps.push(
+      `A revision effective ${futureRevision.on!.slice(0, 7)} is later than the newest payslip, so it is not yet proven as drawn pay.`,
+    );
+  }
+
+  let lastDrawnAnnual: number | null = null;
+  let basis: string;
+  if (governing?.annual && payslipAnnual) {
+    const drift = Math.abs(governing.annual - payslipAnnual) / payslipAnnual;
+    lastDrawnAnnual = governing.annual;
+    basis = `Revision letter effective ${governing.on!.slice(0, 7)}, cross-checked against the ${latest!.on!.slice(0, 7)} payslip (recurring pay annualised: ${payslipAnnual}).`;
+    if (drift > 0.12) {
+      conflicts.push(
+        `The revision letter (${governing.annual}) and the annualised payslip (${payslipAnnual}) differ by ${Math.round(drift * 100)}% — the gap is usually employer PF, gratuity or variable pay, but confirm it before quoting the figure.`,
+      );
+    }
+  } else if (governing?.annual) {
+    lastDrawnAnnual = governing.annual;
+    basis = `Revision letter effective ${governing.on!.slice(0, 7)}. No dated payslip to confirm it was actually drawn.`;
+  } else if (payslipAnnual) {
+    lastDrawnAnnual = payslipAnnual;
+    basis = `Recurring pay on the ${latest!.on!.slice(0, 7)} payslip, annualised over 12 months${
+      latest!.oneOff ? " with that month's one-off pay excluded" : ""
+    }. Employer PF, gratuity and variable pay are not included unless a letter states them.`;
+  } else {
+    basis = "No payslip or revision letter yields a figure yet — collect the last three payslips.";
+  }
+
+  const hikePct =
+    lastDrawnAnnual && offeredAnnual
+      ? Math.round(((offeredAnnual - lastDrawnAnnual) / lastDrawnAnnual) * 1000) / 10
+      : null;
+  if (hikePct !== null && hikePct < 0) {
+    gaps.push(`The offer is ${Math.abs(hikePct)}% below the last drawn figure — confirm this is intended.`);
+  }
+
+  const evidenceDocs = parsed.filter((p) =>
+    ["payslip", "salary_revision", "experience_letter"].includes(p.docType),
+  );
+
+  return {
+    currency,
+    lastDrawnAnnual,
+    basis,
+    validatedEvidence: evidenceDocs.filter((p) => p.status === "verified").length,
+    totalEvidence: evidenceDocs.length,
+    offeredAnnual,
+    hikePct,
+    timeline: timeline.sort((a, b) => (b.onIso ?? "").localeCompare(a.onIso ?? "")),
+    conflicts,
+    gaps,
+    confident:
+      lastDrawnAnnual !== null &&
+      conflicts.length === 0 &&
+      dated.length >= 3 &&
+      evidenceDocs.every((p) => p.status === "verified"),
   };
 }
