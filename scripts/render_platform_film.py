@@ -3,7 +3,7 @@ import math, subprocess, os
 
 W,H,FPS,DURATION=1280,720,30,22
 BG=(249,249,251); INK=(18,18,21); MUTED=(105,105,118); VIOLET=(88,77,255); LINE=(225,225,232); SOFT=(241,240,255); GREEN=(39,154,102); AMBER=(213,143,44); RED=(205,71,77)
-FONT='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'; BOLD='/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'; MONO='/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf'
+FONT='/nix/store/xbs17gmksi0pljxcs4l6gshklzpmv8gr-dejavu-fonts-2.37/share/fonts/truetype/DejaVuSans.ttf'; BOLD='/nix/store/xbs17gmksi0pljxcs4l6gshklzpmv8gr-dejavu-fonts-2.37/share/fonts/truetype/DejaVuSans-Bold.ttf'; MONO='/nix/store/xbs17gmksi0pljxcs4l6gshklzpmv8gr-dejavu-fonts-2.37/share/fonts/truetype/DejaVuSansMono.ttf'
 
 def font(sz,bold=False,mono=False): return ImageFont.truetype(MONO if mono else BOLD if bold else FONT,sz)
 def ease(x):
