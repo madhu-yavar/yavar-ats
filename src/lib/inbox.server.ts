@@ -139,15 +139,26 @@ export async function attachmentText(filename: string, bytes: Uint8Array): Promi
   if (bytes.byteLength > MAX_INPUT_BYTES) return "";
 
   if (name.endsWith(".pdf")) {
-    const { extractText, getDocumentProxy } = await import("unpdf");
+    // pdfjs-dist legacy build, no worker: unpdf's bundled mega-module blows the
+    // build's TypeScript AST walker (stack overflow) when it enters the graph.
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
     // pdf.js transfers (detaches) the buffer it is given — hand it a copy so the
     // caller keeps usable bytes for the resume vault and size reporting.
-    const doc = await getDocumentProxy(new Uint8Array(bytes));
+    const doc = await pdfjs.getDocument({
+      data: new Uint8Array(bytes),
+      useSystemFonts: false,
+    }).promise;
     // Page cap: a multi-thousand-page PDF must not eat the worker.
     if (doc.numPages > 30) return "";
-    const { text } = await extractText(doc, { mergePages: true });
-    return String(text).replace(/\s+/g, " ").trim();
+    const pages: string[] = [];
+    for (let i = 1; i <= doc.numPages; i++) {
+      const content = await (await doc.getPage(i)).getTextContent();
+      pages.push(content.items.map((it) => ("str" in it ? it.str : "")).join(" "));
+    }
+    return pages.join(" ").replace(/\s+/g, " ").trim();
   }
+
+
 
   if (name.endsWith(".docx")) {
     const { unzipSync, strFromU8 } = await import("fflate");
