@@ -92,15 +92,20 @@ function readCookie(request: Request, name: string): string | null {
 export async function resolveSession(request: Request): Promise<{ userId: string; email: string } | null> {
   const raw = readCookie(request, SESSION_COOKIE);
   if (!raw || raw.length < 32) return null;
+  const tokenHash = await hashToken(raw);
   const [row] = await db
     .select({ userId: sessions.userId, email: users.email })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
-    .where(and(eq(sessions.tokenHash, await hashToken(raw)), gt(sessions.expiresAt, new Date()))); 
-  if (row) { 
-    await db.update(sessions).set({ lastUsedAt: new Date(), expiresAt: new Date(Date.now() + SESSION_TTL_MS) }).where(eq(sessions.tokenHash, await hashToken(raw))); 
-  }
+    .where(and(eq(sessions.tokenHash, tokenHash), gt(sessions.expiresAt, new Date())))
     .limit(1);
+  if (row) {
+    const now = new Date();
+    await db
+      .update(sessions)
+      .set({ lastUsedAt: now, expiresAt: new Date(now.getTime() + SESSION_TTL_MS) })
+      .where(eq(sessions.tokenHash, tokenHash));
+  }
   return row ?? null;
 }
 
@@ -148,5 +153,5 @@ export async function exchangeTokenForSession(
     ip,
     userAgent: request.headers.get("user-agent"),
   });
-  return { ok: true, cookie: sessionCookie(token), userId: jwt.userId, email };
+  return { ok: true, cookie: sessionCookie(token, request), userId: jwt.userId, email };
 }
