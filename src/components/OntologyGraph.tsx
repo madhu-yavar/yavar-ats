@@ -212,7 +212,7 @@ export function OntologyGraph({
             ))}
           </g>
           <g>
-            {layout.links.map((l) => {
+            {layout.links.map((l, index) => {
               const a = byslug.get(l.from);
               const b = byslug.get(l.to);
               if (!a || !b) return null;
@@ -229,13 +229,17 @@ export function OntologyGraph({
                   stroke={lit ? "var(--primary)" : "var(--border)"}
                   strokeWidth={lit ? 1.9 : Math.min(1.3, 0.3 + l.weight)}
                   strokeOpacity={focus ? (lit ? 0.85 : 0.05) : 0.32}
-                  style={{ transition: "stroke-opacity 220ms ease, stroke 220ms ease" }}
+                  className={focus ? undefined : "graph-link"}
+                  style={{
+                    transition: "stroke-opacity 220ms ease, stroke 220ms ease",
+                    animationDelay: `${(index % 18) * 90}ms`,
+                  }}
                 />
               );
             })}
           </g>
           <g>
-            {layout.placed.map((n) => {
+            {layout.placed.map((n, index) => {
               const dim = focus ? !connected.has(n.slug) : false;
               const isFocus = focus === n.slug;
               // Labels only where they can be read: big bubbles, the focus and its neighbours.
@@ -250,8 +254,11 @@ export function OntologyGraph({
                   onMouseEnter={() => setHover(n.slug)}
                   onMouseLeave={() => setHover(null)}
                   onClick={() => onSelect(n.slug)}
-                  className="cursor-pointer"
-                  style={{ transition: "opacity 220ms ease" }}
+                  className="graph-node cursor-pointer"
+                  style={{
+                    transition: "opacity 220ms ease",
+                    animationDelay: `${(index % 14) * -170}ms`,
+                  }}
                 >
                   <title>{`${n.name} — ${n.supply} in pool, ${n.demand} weighted demand`}</title>
                   {selected === n.slug ? (

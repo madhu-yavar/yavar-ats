@@ -259,6 +259,39 @@
   }
 }
 
+@keyframes graph-link-flow {
+  0%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0.22;
+  }
+  50% {
+    stroke-dashoffset: -18;
+    opacity: 0.52;
+  }
+}
+
+@keyframes graph-node-breathe {
+  0%,
+  100% {
+    transform: scale(0.97);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+.graph-link {
+  stroke-dasharray: 3 7;
+  animation: graph-link-flow 4.8s ease-in-out infinite;
+}
+
+.graph-node {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: graph-node-breathe 5.6s ease-in-out infinite;
+}
+
 .graph-ring {
   transform-origin: center;
   transform-box: fill-box;
@@ -266,8 +299,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .graph-ring {
+  .graph-ring,
+  .graph-link,
+  .graph-node {
     animation: none;
-    opacity: 0.6;
   }
+
+  .graph-ring { opacity: 0.6; }
 }
