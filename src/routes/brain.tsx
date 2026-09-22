@@ -415,11 +415,17 @@ function Figure({
   tone?: "warn" | undefined;
 }) {
   return (
-    <div className="rounded-xl border bg-card p-4">
+    <div className="panel-lift hover:panel-lift-hover p-4">
       <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
         {label}
       </p>
-      <p className={`mt-1 text-2xl ${tone === "warn" ? "text-amber-600" : ""}`}>{value ?? "—"}</p>
+      <p
+        className={`num mt-1.5 text-2xl font-semibold leading-none tracking-tight ${
+          tone === "warn" ? "text-warning" : ""
+        }`}
+      >
+        {value ?? "—"}
+      </p>
     </div>
   );
 }

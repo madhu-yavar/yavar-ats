@@ -25,6 +25,7 @@ import { Route as OrganisationRouteImport } from './routes/organisation'
 import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ReportsRouteImport } from './routes/reports'
+import { Route as RoiRouteImport } from './routes/roi'
 import { Route as ScreeningRouteImport } from './routes/screening'
 import { Route as TeamRouteImport } from './routes/team'
 import { Route as TemplatesRouteImport } from './routes/templates'
@@ -134,6 +135,11 @@ const PrivacyRoute = PrivacyRouteImport.update({
 const ReportsRoute = ReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RoiRoute = RoiRouteImport.update({
+  id: '/roi',
+  path: '/roi',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ScreeningRoute = ScreeningRouteImport.update({
@@ -309,6 +315,7 @@ export interface FileRoutesByFullPath {
   '/platform': typeof PlatformRoute
   '/privacy': typeof PrivacyRoute
   '/reports': typeof ReportsRoute
+  '/roi': typeof RoiRoute
   '/screening': typeof ScreeningRoute
   '/team': typeof TeamRoute
   '/templates': typeof TemplatesRoute
@@ -357,6 +364,7 @@ export interface FileRoutesByTo {
   '/platform': typeof PlatformRoute
   '/privacy': typeof PrivacyRoute
   '/reports': typeof ReportsRoute
+  '/roi': typeof RoiRoute
   '/screening': typeof ScreeningRoute
   '/team': typeof TeamRoute
   '/templates': typeof TemplatesRoute
@@ -406,6 +414,7 @@ export interface FileRoutesById {
   '/platform': typeof PlatformRoute
   '/privacy': typeof PrivacyRoute
   '/reports': typeof ReportsRoute
+  '/roi': typeof RoiRoute
   '/screening': typeof ScreeningRoute
   '/team': typeof TeamRoute
   '/templates': typeof TemplatesRoute
@@ -456,6 +465,7 @@ export interface FileRouteTypes {
     | '/platform'
     | '/privacy'
     | '/reports'
+    | '/roi'
     | '/screening'
     | '/team'
     | '/templates'
@@ -504,6 +514,7 @@ export interface FileRouteTypes {
     | '/platform'
     | '/privacy'
     | '/reports'
+    | '/roi'
     | '/screening'
     | '/team'
     | '/templates'
@@ -552,6 +563,7 @@ export interface FileRouteTypes {
     | '/platform'
     | '/privacy'
     | '/reports'
+    | '/roi'
     | '/screening'
     | '/team'
     | '/templates'
@@ -601,6 +613,7 @@ export interface RootRouteChildren {
   PlatformRoute: typeof PlatformRoute
   PrivacyRoute: typeof PrivacyRoute
   ReportsRoute: typeof ReportsRoute
+  RoiRoute: typeof RoiRoute
   ScreeningRoute: typeof ScreeningRoute
   TeamRoute: typeof TeamRoute
   TemplatesRoute: typeof TemplatesRoute
@@ -745,6 +758,13 @@ declare module '@tanstack/react-router' {
       path: '/reports'
       fullPath: '/reports'
       preLoaderRoute: typeof ReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/roi': {
+      id: '/roi'
+      path: '/roi'
+      fullPath: '/roi'
+      preLoaderRoute: typeof RoiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/screening': {
@@ -977,6 +997,7 @@ const rootRouteChildren: RootRouteChildren = {
   PlatformRoute: PlatformRoute,
   PrivacyRoute: PrivacyRoute,
   ReportsRoute: ReportsRoute,
+  RoiRoute: RoiRoute,
   ScreeningRoute: ScreeningRoute,
   TeamRoute: TeamRoute,
   TemplatesRoute: TemplatesRoute,

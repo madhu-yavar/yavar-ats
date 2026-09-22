@@ -42,6 +42,7 @@ import { Brain } from "lucide-react";
 import { usePlatform } from "@/hooks/usePlatform";
 import { attachApplication } from "@/lib/candidates.functions";
 import { getHrPerformance } from "@/lib/hr-performance.functions";
+import { readReturnOnIndividual } from "@/lib/roi.functions";
 import { listAllOrganizations } from "@/lib/platform.functions";
 import { Button } from "@/components/ui/button";
 import { useServerFn } from "@tanstack/react-start";
@@ -137,11 +138,13 @@ function Panel({
   className?: string;
 }) {
   return (
-    <section className={`panel ${className}`}>
-      <div className="flex items-start justify-between gap-3 border-b border-border p-4">
+    <section className={`panel-lift hover:panel-lift-hover overflow-hidden ${className}`}>
+      <div className="flex items-start justify-between gap-3 border-b border-border bg-gradient-to-r from-accent/45 via-card to-card px-4 py-3.5">
         <div>
-          <h2 className="font-semibold">{title}</h2>
-          {subtitle ? <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p> : null}
+          <h2 className="font-semibold tracking-tight">{title}</h2>
+          {subtitle ? (
+            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{subtitle}</p>
+          ) : null}
         </div>
         {action}
       </div>
@@ -560,10 +563,11 @@ function Dashboard() {
   ]);
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-card">
-      <header className="flex flex-col gap-4 border-b border-border px-5 py-5 sm:px-7 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0">
-          <div className="mb-1 flex flex-wrap items-center gap-2 text-xs font-semibold text-muted-foreground">
+    <div className="panel-lift overflow-hidden rounded-2xl">
+      <header className="relative flex flex-col gap-4 overflow-hidden border-b border-border bg-gradient-to-br from-accent/55 via-card to-card px-5 py-6 sm:px-7 lg:flex-row lg:items-center lg:justify-between">
+        <div className="pointer-events-none absolute -right-24 -top-24 size-64 rounded-full bg-primary/10 blur-3xl" />
+        <div className="relative min-w-0">
+          <div className="mb-1 flex flex-wrap items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground">
             <span className="uppercase">Talent acquisition</span>
             <span aria-hidden="true" className="size-1 rounded-full bg-border" />
             <span>Command centre</span>
@@ -623,17 +627,23 @@ function Dashboard() {
         ].map((metric) => (
           <div
             key={metric.label}
-            className="border-b border-border px-5 py-4 last:border-b-0 sm:[&:nth-child(odd)]:border-r xl:border-b-0 xl:border-r xl:last:border-r-0"
+            className="group relative border-b border-border px-5 py-4 transition-colors last:border-b-0 hover:bg-card sm:[&:nth-child(odd)]:border-r xl:border-b-0 xl:border-r xl:last:border-r-0"
           >
-            <p className="text-xs font-medium text-muted-foreground">{metric.label}</p>
-            <p className="num mt-1 text-2xl font-bold">{metric.value}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{metric.note}</p>
+            <span className="absolute inset-x-5 top-0 h-px scale-x-0 bg-primary/70 transition-transform duration-300 group-hover:scale-x-100" />
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              {metric.label}
+            </p>
+            <p className="num mt-1.5 text-[1.7rem] font-bold leading-none tracking-tight">
+              {metric.value}
+            </p>
+            <p className="mt-1.5 text-xs text-muted-foreground">{metric.note}</p>
           </div>
         ))}
       </section>
 
       {isExecutive ? (
         <>
+          <RoiBand />
           <div className="grid lg:grid-cols-[minmax(0,1.65fr)_minmax(280px,0.75fr)]">
             <section className="border-b border-border p-5 sm:p-7 lg:border-b-0 lg:border-r">
               <div className="mb-5 flex items-start justify-between gap-3">
@@ -645,11 +655,18 @@ function Dashboard() {
                 </div>
                 <div className="flex items-center gap-2">
                   {canBrain ? (
-                    <Button asChild variant="ghost" size="sm">
-                      <Link to="/brain">
-                        Talent Brain <ArrowUpRight />
-                      </Link>
-                    </Button>
+                    <>
+                      <Button asChild variant="outline" size="sm">
+                        <Link to="/roi">
+                          Return on Individual <ArrowUpRight />
+                        </Link>
+                      </Button>
+                      <Button asChild variant="ghost" size="sm">
+                        <Link to="/brain">
+                          Talent Brain <ArrowUpRight />
+                        </Link>
+                      </Button>
+                    </>
                   ) : null}
                   <Button asChild variant="ghost" size="sm">
                     <Link to="/reports">
@@ -988,6 +1005,79 @@ function Dashboard() {
 }
 
 /** CHRO / HR-head governance: how the recruiting team is actually performing. */
+/**
+ * The one question a CHRO opens with: what return did we get on the individuals
+ * we hired, and what can the organisation now go and do with them?
+ */
+function RoiBand() {
+  const read = useServerFn(readReturnOnIndividual);
+  const q = useQuery({
+    queryKey: ["return_on_individual", "mine"],
+    queryFn: () => read({ data: {} }),
+    retry: false,
+  });
+  const d = q.data;
+  if (q.isLoading || q.error || !d) return null;
+
+  const cells = [
+    { label: "Return on Individual", value: `${d.totals.portfolioRoi}`, note: "100 = your median hire", accent: true },
+    { label: "Capability returned", value: `${d.totals.avgCapability}`, note: `${d.totals.hires} hires read` },
+    {
+      label: "Cost per capability point",
+      value: d.totals.costPerCapabilityPoint ? inr(d.totals.costPerCapabilityPoint) : "—",
+      note: d.totals.costBasis === "offer" ? "Committed offers" : "Offer where released, budget elsewhere",
+    },
+    { label: "Programmes staffable now", value: `${d.totals.goalsReady}`, note: `${d.totals.goalsPartial} need one lead hire` },
+    {
+      label: "Succession exposure",
+      value: `${d.totals.soleSource}`,
+      note: "In-demand skills resting on one person",
+      warn: d.totals.soleSource > 0,
+    },
+  ];
+
+  return (
+    <section className="border-b border-border">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3 sm:px-7">
+        <div>
+          <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-primary">
+            • Return on Individual
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            What your hiring returned, and what the organisation can staff from it today.
+          </p>
+        </div>
+        <Button asChild variant="outline" size="sm">
+          <Link to="/roi">
+            Open the full reading <ArrowUpRight />
+          </Link>
+        </Button>
+      </div>
+      <div className="grid sm:grid-cols-2 xl:grid-cols-5">
+        {cells.map((c) => (
+          <div
+            key={c.label}
+            className="group relative border-b border-border px-5 py-4 last:border-b-0 sm:[&:nth-child(odd)]:border-r xl:border-b-0 xl:border-r xl:last:border-r-0"
+          >
+            <span className="absolute inset-x-5 top-0 h-px scale-x-0 bg-primary/70 transition-transform duration-300 group-hover:scale-x-100" />
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              {c.label}
+            </p>
+            <p
+              className={`num mt-1.5 text-[1.6rem] font-bold leading-none tracking-tight ${
+                c.warn ? "text-warning" : c.accent ? "text-primary" : ""
+              }`}
+            >
+              {c.value}
+            </p>
+            <p className="mt-1.5 text-xs text-muted-foreground">{c.note}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function TeamGovernance() {
   const fetchPerf = useServerFn(getHrPerformance);
   const perf = useQuery({
@@ -1174,10 +1264,12 @@ function ActionRow({
 
 function Signal({ label, value, note }: { label: string; value: string | number; note: string }) {
   return (
-    <div className="bg-card p-4">
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <p className="num mt-1 text-xl font-bold">{value}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{note}</p>
+    <div className="bg-card p-4 transition-colors hover:bg-accent/30">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className="num mt-1.5 text-xl font-bold leading-none tracking-tight">{value}</p>
+      <p className="mt-1.5 text-xs text-muted-foreground">{note}</p>
     </div>
   );
 }

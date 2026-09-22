@@ -202,3 +202,72 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
+
+/* ---------- Surface polish: soft elevation used across dashboard & brain ---------- */
+
+@utility panel-lift {
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-card);
+  color: var(--color-card-foreground);
+  box-shadow:
+    0 1px 2px oklch(0.12 0 0 / 4%),
+    0 18px 40px -28px oklch(0.12 0 0 / 22%);
+  transition:
+    box-shadow 220ms ease,
+    transform 220ms ease,
+    border-color 220ms ease;
+}
+
+@utility panel-lift-hover {
+  box-shadow:
+    0 1px 2px oklch(0.12 0 0 / 5%),
+    0 26px 56px -26px oklch(0.4 0.2 277 / 26%);
+  border-color: color-mix(in oklab, var(--color-primary) 26%, var(--color-border));
+  transform: translateY(-1px);
+}
+
+@utility graph-shell {
+  box-shadow:
+    0 1px 2px oklch(0.12 0 0 / 4%),
+    0 30px 70px -40px oklch(0.4 0.2 277 / 30%);
+}
+
+/* Slow violet bloom behind the ontology canvas. */
+@utility graph-bloom {
+  background:
+    radial-gradient(
+      620px 380px at 18% 12%,
+      color-mix(in oklab, var(--color-primary) 12%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(520px 340px at 88% 86%, var(--color-surface-2), transparent 72%);
+}
+
+@keyframes graph-ring-pulse {
+  0% {
+    opacity: 0.85;
+    transform: scale(0.94);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+
+.graph-ring {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: graph-ring-pulse 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .graph-ring {
+    animation: none;
+    opacity: 0.6;
+  }
+}
