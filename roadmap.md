@@ -26,6 +26,14 @@
 - [x] Harden interview scheduling, scorecard progression and audit trails
 - [x] Add an explicitly labelled 50-person accepted-offer test cohort
 
+## Pre-onboarding document validation
+- [x] onboarding_documents table, private storage and org-scoped access
+- [x] Extraction agent for ID, experience letters, payslips and certificates on the org's own AI key
+- [x] Careers-inbox routing of offer-stage candidate documents
+- [x] HR validation screen: original document beside the agent's reading, validate / reject / re-read
+- [x] Offer release gated on validated mandatory documents
+- [x] User manual and repository documentation updated
+
 ## Release validation and documentation
 - [ ] Restore the database to immediately before 2026-09-22 22:13 UTC and reconcile all business-record counts (blocked: provider point-in-time recovery required)
 - [ ] Run authenticated and public end-to-end workflow tests (blocked until database recovery)

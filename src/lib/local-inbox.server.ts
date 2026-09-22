@@ -207,10 +207,22 @@ export async function receiveMail(mail: InboundMail): Promise<InboundResult> {
     return { ...result, messageId: savedId };
   };
 
+  // Pre-onboarding: a candidate who already has an offer mails their ID,
+  // experience letters and payslips to the same careers address. Those files are
+  // filed against their offer and read by the extraction agent for HR to validate.
+  const filedDocs = await filePreOnboardingAttachments({
+    orgId: org.id,
+    senderEmail: sender.email,
+    attachments: (mail.attachments ?? []).filter((a) => a.filename !== cv?.filename),
+    inboxMessageId: savedId,
+  });
+
   if (!cv) {
     return finish({
-      status: "skipped",
-      detail: "No CV attached — nothing to file.",
+      status: filedDocs.length ? "stored" : "skipped",
+      detail: filedDocs.length
+        ? `${filedDocs.length} pre-onboarding document(s) filed for validation: ${filedDocs.join(", ")}.`
+        : "No CV attached — nothing to file.",
       messageId: savedId,
     });
   }
@@ -369,4 +381,51 @@ export async function processPendingMail(
     else out.skipped++;
   }
   return out;
+}
+
+/**
+ * File the proof documents an offer-stage candidate mails to the careers
+ * address. Anything that is not a CV, from a sender who already has an offer in
+ * flight, becomes a pre-onboarding document awaiting HR validation.
+ */
+async function filePreOnboardingAttachments(input: {
+  orgId: string;
+  senderEmail: string;
+  attachments: { filename?: string; content: string }[];
+  inboxMessageId: string;
+}): Promise<string[]> {
+  if (!input.senderEmail) return [];
+  const docs = input.attachments.filter((a) => a.filename && a.content);
+  if (!docs.length) return [];
+
+  const { offerContextForEmail, storeOnboardingDocument, guessDocType, docTypeLabel } = await import(
+    "./onboarding.server"
+  );
+  const ctx = await offerContextForEmail(input.orgId, input.senderEmail);
+  if (!ctx) return [];
+
+  const filed: string[] = [];
+  for (const att of docs) {
+    const fileName = att.filename as string;
+    try {
+      const bytes = base64ToBytes(att.content);
+      if (!bytes.byteLength) continue;
+      const docType = guessDocType(fileName);
+      await storeOnboardingDocument({
+        orgId: input.orgId,
+        applicationId: ctx.applicationId,
+        candidateId: ctx.candidateId,
+        offerId: ctx.offerId,
+        docType,
+        fileName,
+        bytes,
+        source: "careers_inbox",
+        inboxMessageId: input.inboxMessageId,
+      });
+      filed.push(docTypeLabel(docType));
+    } catch {
+      // One unreadable attachment must not fail the whole delivery.
+    }
+  }
+  return filed;
 }

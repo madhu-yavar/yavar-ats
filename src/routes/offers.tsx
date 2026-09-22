@@ -7,6 +7,8 @@ import { applicationsQuery, candidatesQuery, offersQuery, requisitionsQuery } fr
 import { advanceOffer, createOffer } from "@/lib/offers.functions";
 import { EmptyState, PageHeader, StatusBadge, inr } from "@/components/ats";
 import { OfferLetterDialog } from "@/components/OfferLetterDialog";
+import { PreOnboardingDialog } from "@/components/PreOnboardingDialog";
+import { listOnboardingReadiness } from "@/lib/onboarding.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,6 +66,11 @@ function Offers() {
   const [ctc, setCtc] = useState("");
   const [joining, setJoining] = useState("");
   const [letterOfferId, setLetterOfferId] = useState<string | null>(null);
+  const [docsAppId, setDocsAppId] = useState<string | null>(null);
+  const readiness = useQuery({
+    queryKey: ["onboarding_readiness"],
+    queryFn: () => listOnboardingReadiness(),
+  });
   const letterOffer = (offers.data ?? []).find((o) => o.id === letterOfferId);
 
   const raisedFor = new Set((offers.data ?? []).map((o) => o.application_id));
@@ -132,7 +139,7 @@ function Offers() {
       <PageHeader
         eyebrow="Closure"
         title="Offers"
-        description="A candidate becomes offer-ready when the final interview round is recorded as a select (or you move them to offer manually). Raising the offer sets the candidate to Offer pending approval. The creator then opens Letter, picks the offer-letter template, generates and reviews the letter — an offer cannot go for approval until its letter exists. HR then CBO sign off against the requisition budget, releasing sets Offer released, and acceptance sets Offer accepted — joining is confirmed from the candidate's stage mover."
+        description="A candidate becomes offer-ready when the final interview round is recorded as a select (or you move them to offer manually). Raising the offer sets the candidate to Offer pending approval. The creator then opens Letter, picks the offer-letter template, generates and reviews the letter — an offer cannot go for approval until its letter exists. HR then CBO sign off against the requisition budget, releasing sets Offer released, and acceptance sets Offer accepted — joining is confirmed from the candidate's stage mover. Before release, collect the candidate's ID, experience letters, payslips and education certificate under Documents — the agent reads each one, HR validates it against the original, and release stays locked until every mandatory document is validated."
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -155,6 +162,10 @@ function Offers() {
                 const r = (reqs.data ?? []).find((x) => x.id === app?.requisition_id);
                 const step = FLOW[o.status];
                 const overBudget = r ? Number(o.offered_ctc) > Number(r.budget_ctc) : false;
+                const ready = (readiness.data ?? []).find(
+                  (x) => x.applicationId === o.application_id,
+                );
+                const blocked = o.status === "approved" && !ready?.ready;
                 return (
                   <li key={o.id} className="flex flex-wrap items-center gap-4 p-5">
                     <div className="min-w-0 flex-1">
@@ -185,13 +196,34 @@ function Offers() {
                       </div>
                     </div>
                     <StatusBadge status={o.status} />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setDocsAppId(o.application_id)}
+                    >
+                      Documents
+                      {ready
+                        ? ready.ready
+                          ? " ✓"
+                          : ` ${ready.verified}/${ready.verified + ready.missing.length}`
+                        : ""}
+                    </Button>
                     {!LETTER_HIDDEN.includes(o.status) || o.letter ? (
                       <Button size="sm" variant="outline" onClick={() => setLetterOfferId(o.id)}>
                         Letter{o.letter ? " ✓" : ""}
                       </Button>
                     ) : null}
                     {step ? (
-                      <Button size="sm" onClick={() => advance(o.id, o.status, o.approval_trail)}>
+                      <Button
+                        size="sm"
+                        disabled={blocked}
+                        title={
+                          blocked
+                            ? "Pre-onboarding documents are not validated yet — open Documents."
+                            : undefined
+                        }
+                        onClick={() => advance(o.id, o.status, o.approval_trail)}
+                      >
                         {step.label}
                       </Button>
                     ) : null}
@@ -246,6 +278,25 @@ function Offers() {
           </div>
         </section>
       </div>
+
+      {docsAppId ? (
+        (() => {
+          const app = (apps.data ?? []).find((a) => a.id === docsAppId);
+          const c = (cands.data ?? []).find((x) => x.id === app?.candidate_id);
+          const r = (reqs.data ?? []).find((x) => x.id === app?.requisition_id);
+          return (
+            <PreOnboardingDialog
+              applicationId={docsAppId}
+              candidateName={c?.full_name ?? "Candidate"}
+              roleTitle={r?.title ?? "Requisition"}
+              open
+              onOpenChange={(v) => {
+                if (!v) setDocsAppId(null);
+              }}
+            />
+          );
+        })()
+      ) : null}
 
       {letterOffer ? (
         <OfferLetterDialog
