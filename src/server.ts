@@ -53,6 +53,8 @@ function isH3SwallowedErrorBody(body: string): boolean {
  */
 const rateBuckets = new Map<string, number[]>();
 const RATE_LIMIT = 60;
+/** Credential endpoints (/api/auth/*) get a far tighter per-IP ceiling. */
+const AUTH_RATE_LIMIT = 12;
 const RATE_WINDOW_MS = 60_000;
 const RATE_MAP_PRUNE_THRESHOLD = 5_000;
 
@@ -75,10 +77,10 @@ function clientIp(request: Request): string {
   return request.headers.get("cf-connecting-ip") ?? "unknown";
 }
 
-function allowRequest(key: string): boolean {
+function allowRequest(key: string, limit = RATE_LIMIT): boolean {
   const now = Date.now();
   const recent = (rateBuckets.get(key) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
-  if (recent.length >= RATE_LIMIT) {
+  if (recent.length >= limit) {
     rateBuckets.set(key, recent);
     return false;
   }
@@ -90,6 +92,10 @@ function allowRequest(key: string): boolean {
     }
   }
   return true;
+}
+
+function isAuthPath(path: string): boolean {
+  return path.startsWith("/api/auth/");
 }
 
 function isPublicApiPath(path: string): boolean {
