@@ -68,7 +68,7 @@ export const saveCompFigure = createServerFn({ method: "POST" })
     });
 
     await writeAudit({
-      actor: context.email ?? "user",
+      actor: context.memberEmail,
       actorUserId: context.userId,
       orgId: context.orgId,
       action: "comp_knowledge.save",
