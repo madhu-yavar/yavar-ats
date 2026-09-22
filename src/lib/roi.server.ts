@@ -49,6 +49,8 @@ export type RoiHire = {
   /** 100 = exactly the value the median hire returns for the money. */
   roiIndex: number;
   verdict: "compounding" | "solid" | "watch";
+  /** joined = on the payroll; committed = offer out or accepted, not joined yet. */
+  cohort: "joined" | "committed";
   daysToHire: number | null;
   /** Scarce, in-demand capabilities this person brings into the organisation. */
   scarceSkills: string[];
@@ -97,6 +99,8 @@ export type RoiReport = {
     avgDaysToHire: number | null;
     compounding: number;
     watch: number;
+    joined: number;
+    committed: number;
     scarceCovered: number;
     soleSource: number;
     goalsReady: number;
@@ -395,6 +399,7 @@ export function buildRoi(input: RoiInput): RoiReport {
       costBasis,
       roiIndex,
       verdict: roiIndex >= 120 ? "compounding" : roiIndex >= 80 ? "solid" : "watch",
+      cohort: ["joined", "hired"].includes(h.stage) ? "joined" : "committed",
       daysToHire,
       scarceSkills: scarce.slice(0, 6).map((n) => n.name),
       soleSourceSkills: sole.slice(0, 6).map((n) => n.name),
@@ -607,9 +612,16 @@ export function buildRoi(input: RoiInput): RoiReport {
 
   const days = hires.map((h) => h.daysToHire).filter((d): d is number => d !== null);
 
+  const joinedCount = hires.filter((h) => h.cohort === "joined").length;
   const basis: string[] = [
-    `${hires.length} hired or joined individuals, scored against ${input.nodes.length} capabilities in the Talent Brain.`,
+    `${hires.length} individuals in scope — ${joinedCount} joined and ${
+      hires.length - joinedCount
+    } with an offer committed — scored against ${input.nodes.length} capabilities in the Talent Brain.`,
   ];
+  if (joinedCount === 0 && hires.length > 0)
+    basis.push(
+      "Nobody has joined yet, so this reads the value already committed through offers rather than realised value.",
+    );
   if (costBasis !== "offer")
     basis.push(
       "Where no offer is released, cost falls back to the requisition budget — the RoI index is then indicative, not committed spend.",
@@ -637,6 +649,8 @@ export function buildRoi(input: RoiInput): RoiReport {
       avgDaysToHire: days.length
         ? Math.round(days.reduce((a, b) => a + b, 0) / days.length)
         : null,
+      joined: hires.filter((h) => h.cohort === "joined").length,
+      committed: hires.filter((h) => h.cohort === "committed").length,
       compounding: hires.filter((h) => h.verdict === "compounding").length,
       watch: hires.filter((h) => h.verdict === "watch").length,
       scarceCovered: new Set(hires.flatMap((h) => h.scarceSkills)).size,

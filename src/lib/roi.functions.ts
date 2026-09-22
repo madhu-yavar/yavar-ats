@@ -107,7 +107,16 @@ async function requireRoiAccess(userId: string, email: string | null, wantedOrgI
   };
 }
 
-const HIRED_STAGES = ["offer_accepted", "hired", "joined"] as const;
+// Realised value (joined/hired) plus value already committed through an offer —
+// a CHRO needs both, labelled apart.
+const HIRED_STAGES = [
+  "offer",
+  "offer_pending",
+  "offer_released",
+  "offer_accepted",
+  "hired",
+  "joined",
+] as const;
 
 async function loadCapabilities(orgId: string): Promise<{ nodes: OntologyNode[]; open: number }> {
   const stored = await db
