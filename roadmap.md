@@ -24,3 +24,11 @@
 - [x] Verify RoI cards are computed from organisation evidence, not mock records
 - [x] Harden interview scheduling, scorecard progression and audit trails
 - [x] Add an explicitly labelled 50-person accepted-offer test cohort
+
+## Release validation and documentation
+- [ ] Run authenticated and public end-to-end workflow tests
+- [ ] Refresh repository product, deployment, security and verification documents
+- [ ] Refresh the in-app user manual and copilot knowledge source
+- [ ] Update the investor product document to the current implementation
+- [ ] Run current security checks and resolve release blockers
+- [ ] Publish and verify the production release
