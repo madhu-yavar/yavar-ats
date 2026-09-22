@@ -381,15 +381,15 @@ function PlatformFilm() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-              &bull; The platform in motion
+              &bull; Executive intelligence in motion
             </p>
             <h2 className="mt-3 text-2xl font-semibold">
-              Eighteen seconds, end to end
+              From hiring evidence to organisational capability
             </h2>
           </div>
           <p className="max-w-md text-xs leading-relaxed text-muted-foreground">
-            Weighted JD&nbsp;↔&nbsp;CV mapping, a funnel that stays accountable at every stage, and
-            the Talent Brain ontology that watches capability across the organisation.
+            See the CHRO command centre, Return on Individual, programme readiness, evidence-led
+            JD&nbsp;↔&nbsp;CV mapping, pipeline health and the Talent Brain in 22 seconds.
           </p>
         </div>
         <figure className="mt-8 overflow-hidden rounded-xl border border-border bg-card shadow-[0_24px_60px_-30px_rgba(17,17,19,0.35)]">

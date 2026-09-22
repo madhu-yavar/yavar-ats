@@ -119,8 +119,8 @@ function TalentBrainPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
+    <div className="space-y-6 p-4 sm:p-6">
+      <header className="dotted-canvas -mx-4 -mt-4 flex flex-wrap items-start justify-between gap-4 border-b border-border px-4 py-6 sm:-mx-6 sm:-mt-6 sm:px-6">
         <div>
           <p className="text-[11px] font-mono uppercase tracking-widest text-primary">
             Leadership intelligence
@@ -136,20 +136,21 @@ function TalentBrainPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {isSuperUser ? (
-            <div className="flex rounded-md border p-0.5">
+            <div className="flex rounded-md border bg-card p-0.5 shadow-sm">
               {(["org", "platform"] as const).map((s) => (
-                <button
+                <Button
                   key={s}
+                  type="button"
+                  size="sm"
+                  variant={scope === s ? "default" : "ghost"}
                   onClick={() => {
                     setScope(s);
                     setSelected(null);
                   }}
-                  className={`rounded px-3 py-1.5 text-xs ${
-                    scope === s ? "bg-primary text-primary-foreground" : "text-muted-foreground"
-                  }`}
+                  className="h-7 px-3 text-xs shadow-none"
                 >
                   {s === "org" ? "My organisation" : "All organisations"}
-                </button>
+                </Button>
               ))}
             </div>
           ) : null}
@@ -173,7 +174,7 @@ function TalentBrainPage() {
       </div>
 
       {data?.narrative ? (
-        <section className="rounded-xl border bg-card p-4">
+        <section className="panel-lift border-l-2 border-l-primary p-4">
           <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
             Executive reading {data.engine ? `· ${data.engine}` : ""}
           </p>
@@ -192,7 +193,7 @@ function TalentBrainPage() {
               className="pl-9"
             />
           </div>
-          <section className="rounded-xl border bg-card p-4">
+          <section className="panel-lift p-4">
             <div className="flex items-center gap-2">
               <CircleHelp className="size-4 text-primary" />
               <h2 className="text-sm font-semibold">Read this map in 30 seconds</h2>
@@ -222,23 +223,22 @@ function TalentBrainPage() {
           </section>
           <div className="mb-3 flex items-center justify-end gap-1.5">
             {(["3d", "2d"] as const).map((v) => (
-              <button
+              <Button
                 key={v}
+                type="button"
+                size="sm"
+                variant={view === v ? "default" : "ghost"}
                 onClick={() => setView(v)}
-                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                  view === v
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-muted"
-                }`}
+                className="h-7 px-2.5 text-xs shadow-none"
               >
                 {v.toUpperCase()}
-              </button>
+              </Button>
             ))}
           </div>
           {brain.isLoading ? (
             <p className="text-sm text-muted-foreground">Reading the ontology…</p>
           ) : !nodes.length ? (
-            <p className="rounded-xl border bg-card p-6 text-sm text-muted-foreground">
+            <p className="panel-lift p-6 text-sm text-muted-foreground">
               No skill evidence yet. Add candidates or raise a requisition, then press “Relearn
               ontology”.
             </p>
@@ -264,7 +264,7 @@ function TalentBrainPage() {
         </div>
 
         <aside className="space-y-4">
-          <section className="rounded-xl border bg-card p-4">
+          <section className="panel-lift p-4">
             <h2 className="text-sm font-semibold">{node ? node.name : "Select a skill"}</h2>
             {node ? (
               <div className="mt-3 space-y-3 text-sm">
@@ -296,12 +296,15 @@ function TalentBrainPage() {
                     <ul className="mt-1 space-y-1 text-xs">
                       {neighbours.map((n) => (
                         <li key={n.slug}>
-                          <button
+                          <Button
                             className="text-left hover:text-primary"
+                            type="button"
+                            variant="link"
+                            size="sm"
                             onClick={() => setSelected(n.slug)}
                           >
                             {n.name} · {Math.round(n.weight * 100)}%
-                          </button>
+                          </Button>
                         </li>
                       ))}
                     </ul>
@@ -315,7 +318,7 @@ function TalentBrainPage() {
             )}
           </section>
 
-          <section className="rounded-xl border bg-card p-4">
+          <section className="panel-lift p-4">
             <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
               How the graph moved
             </p>
@@ -357,7 +360,7 @@ function TalentBrainPage() {
         {data?.insights.length ? (
           <div className="grid gap-3 lg:grid-cols-2">
             {data.insights.map((i) => (
-              <article key={i.kind} className="rounded-xl border bg-card p-4">
+              <article key={i.kind} className="panel-lift p-4 hover:panel-lift-hover">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold">{i.title}</h3>
                   <Badge

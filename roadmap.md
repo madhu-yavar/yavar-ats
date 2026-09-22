@@ -5,8 +5,8 @@
 - [x] Remove the "Who pays for AI" note from integrations
 - [x] Polish the dashboard shell, KPI band and panels
 - [x] Polish the Talent Brain knowledge graph
-- [ ] Repair first-party sign-in and verify session persistence
-- [ ] Expand the film with CHRO dashboard, RoI and capability highlights
+- [x] Repair first-party sign-in and verify session persistence
+- [x] Expand the film with CHRO dashboard, RoI and capability highlights
 - [ ] Review the dashboard and Talent Brain in the signed-in application
 
 ## Return on Individual (RoI) semantic layer — CHRO
