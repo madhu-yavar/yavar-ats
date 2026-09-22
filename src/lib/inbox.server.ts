@@ -146,7 +146,6 @@ export async function attachmentText(filename: string, bytes: Uint8Array): Promi
     // caller keeps usable bytes for the resume vault and size reporting.
     const doc = await pdfjs.getDocument({
       data: new Uint8Array(bytes),
-      isEvalSupported: false,
       useSystemFonts: false,
     }).promise;
     // Page cap: a multi-thousand-page PDF must not eat the worker.
