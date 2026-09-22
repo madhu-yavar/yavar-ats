@@ -208,8 +208,6 @@ export async function receiveMail(mail: InboundMail): Promise<InboundResult> {
   };
 
   // Pre-onboarding: a candidate who already has an offer mails their ID,
-  // eslint-disable-next-line no-use-before-define
-  // (helper defined below this function)
   // experience letters and payslips to the same careers address. Those files are
   // filed against their offer and read by the extraction agent for HR to validate.
   const filedDocs = await filePreOnboardingAttachments({
