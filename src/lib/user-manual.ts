@@ -52,7 +52,7 @@ export const MANUAL_SECTIONS: ManualSection[] = [
       "Integrations (/integrations) is split into three tabs: Candidate sources, Interview meetings and AI model. Each row is closed until you click it, so the page stays short; open a row to paste credentials, press Save and then Test.",
       "Credentials are stored on the server and are never sent back to the browser. 'What each source can do' at the bottom of the sources tab explains what every channel needs: the LinkedIn company sign-in, the ATSIQ Capture browser extension (pair it with the org's capture token), public apply links, the careers inbox, Naukri/Indeed keys, and GitHub for public-signal verification.",
       "Organisation (/organisation): keep the organisation profile, currency and careers inbox current. The owner can also archive the organisation here — archiving locks everyone out but deletes nothing.",
-      "AI provider: choose Gemini, OpenAI or Claude and the model used for matching, scoring, verification and the copilot. Test the connection before running batches.",
+      "AI provider: choose Gemini, OpenAI or Claude and the model used for matching, scoring, verification and the copilot. Every organisation must supply its own key; ATSIQ never substitutes a shared platform key. Test the connection before running batches.",
     ],
   },
   {
@@ -92,7 +92,8 @@ export const MANUAL_SECTIONS: ManualSection[] = [
     summary: "Source candidates without losing their origin, evidence or original CV.",
     steps: [
       "Configure candidate sources on Integrations (/integrations). The careers inbox can import attached CVs; LinkedIn Recruiter capture uses the downloadable ATSIQ browser companion.",
-      "In LinkedIn Recruiter, open the job's applicant list and start the companion. It visits applicants in the authenticated Recruiter session, reads the active profile and public profile link, finds the CV under Highlights or Attachments, and sends the evidence to ATSIQ.",
+      "Install ATSIQ Capture from the download on Integrations, open its popup, paste the organisation capture token and pair it. Treat the token like a password and rotate it from Integrations if it may have been exposed.",
+      "In LinkedIn Recruiter, open the job's applicant list and start the companion. It performs a deep read of every visited profile even when no CV is present: expanding collapsed sections, scrolling lazy content, opening profile tabs and following relevant credential or detail links before it sends deduplicated evidence to ATSIQ.",
       "The companion reports the precise failed stage when navigation, identity confirmation, attachment discovery, download, private storage or analysis does not complete. Stop interrupts the current wait rather than leaving the run stuck.",
       "A successful original-file capture is parsed and stored privately. When only validated profile evidence is available, ATSIQ keeps the candidate, runs available social analysis and matching, and waits for a later CV capture to enrich the same person.",
       "Use Careers inbox (/inbox) to trigger mailbox intake and background matching for CVs received through job advertisements.",
@@ -177,8 +178,47 @@ export const MANUAL_SECTIONS: ManualSection[] = [
     ],
   },
   {
+    id: "roi",
+    title: "13. Return on Individual and capability-to-goal planning",
+    summary:
+      "A CHRO decision layer that relates the cost of each accepted hire to evidenced capability and shows what the organisation can credibly execute now.",
+    steps: [
+      "Open Return on Individual (/roi). CHROs, HR heads and owners see their organisation; the platform super admin can select a particular organisation for a governed comparison.",
+      "Read the individual index as an organisation-relative decision aid built from JD↔CV match evidence, capability scarcity, delivered impact, innovation and learning, career trajectory and breadth. It is not a financial return guarantee.",
+      "The cost anchor uses the released offer where one exists and the requisition budget otherwise. Records without defensible evidence remain visible with their evidence limitations rather than receiving invented values.",
+      "Use What this organisation can go and do now to review programme blueprints calculated from accepted-hire skills and current organisation evidence. Cards are generated from live records, not sample cards; team readiness and wider-pool readiness are shown separately.",
+      "Open a blueprint to see contributors, enabling capabilities and missing capabilities. Use the gaps to decide whether to hire, build, borrow or redeploy.",
+      "The Strengths and exposures view highlights concentrated strengths, single-person dependencies, dormant capabilities and coverage weaknesses by department.",
+      "Records marked test_roi_cohort are explicitly labelled test evidence and must not be represented as production hires in executive reporting.",
+    ],
+  },
+  {
+    id: "ijp",
+    title: "14. Internal job postings (IJP)",
+    summary:
+      "Approved roles can be opened to employees so internal mobility uses the same governed demand and evidence model as external hiring.",
+    steps: [
+      "Open Internal jobs (/ijp) to review roles published for internal applicants.",
+      "Publish only an approved, open requisition and confirm the internal description, eligibility and closing details before sharing it.",
+      "Employees apply through the internal posting journey; their source remains IJP so internal mobility can be measured separately from external sourcing.",
+      "Review and progress internal applicants through the same evidence, screening, interview and decision controls used for other candidates.",
+    ],
+  },
+  {
+    id: "market-intelligence",
+    title: "15. Live market compensation intelligence",
+    summary:
+      "Market ranges combine current evidence from quality salary and hiring sources with the organisation's own approved knowledge.",
+    steps: [
+      "From a requisition, select Get market range. ATSIQ searches approved public sources live and shows the source name, quoted evidence, retrieval date and confidence behind the low, median and high range.",
+      "Review the role, location, currency, seniority and evidence before using a recommendation. A live result can still be incomplete when publishers block access or the market is thin.",
+      "Choose Use to apply the researched range, or Correct to enter the organisation's known value with context.",
+      "Used and corrected values are saved in PostgreSQL as organisation knowledge and can inform future recommendations; one organisation's knowledge is never shared with another.",
+    ],
+  },
+  {
     id: "reports",
-    title: "13. Dashboards, reports and HR performance",
+    title: "16. Dashboards, reports and HR performance",
     summary:
       "Operational work for recruiters and governance, quality and performance views for HR leadership.",
     steps: [
@@ -190,23 +230,50 @@ export const MANUAL_SECTIONS: ManualSection[] = [
   },
   {
     id: "copilot",
-    title: "14. HR copilot",
+    title: "17. HR copilot",
     summary: "An embedded assistant grounded in your own live data and in this manual.",
     steps: [
       "Open the copilot from any page and ask about your pipeline, a requisition, pool coverage for a skill, or how to perform any task in the platform.",
       "It answers only from your organisation's data and this manual — it never invents candidates or numbers.",
+      "The copilot uses the organisation's selected AI provider and encrypted organisation-owned key. If no key is configured, it stops and asks an authorised owner or HR head to configure one.",
       "The conversation is stored per user and can be cleared at any time.",
     ],
   },
   {
+    id: "roles",
+    title: "18. Permission guide",
+    summary: "Access follows the smallest role needed for each decision, with the organisation owner and platform super admin kept distinct.",
+    steps: [
+      "Recruiters source, own, match, screen, schedule and progress candidates within their organisation.",
+      "Hiring managers and department heads review their demand, interview assignments and approval steps; department heads control the business-side requisition decision.",
+      "HR heads govern templates, AI configuration, offer release, Talent Brain, Return on Individual and HR performance controls.",
+      "President/CBO users complete executive approvals and can administer organisation roles where policy permits; capture-token rotation is restricted to this governed administrative role.",
+      "The organisation owner controls membership, organisation settings and archival. The platform super admin separately approves organisations and performs cross-organisation platform operations.",
+      "If a page or action is absent, confirm the user's active membership and role in Users & roles rather than sharing credentials or widening access informally.",
+    ],
+  },
+  {
     id: "platform",
-    title: "15. Platform super admin (product owner only)",
+    title: "19. Platform super admin (product owner only)",
     summary: "Cross-tenant administration lives on Platform console (/platform).",
     steps: [
       "Review the pending registration queue and approve or reject organisations; the registering owner is emailed the decision.",
       "See every organisation's live statistics: members, requisitions, candidates, interviews, offers and hires.",
       "Edit an organisation profile, archive and restore it, or permanently delete it — deletion is irreversible, requires the exact organisation name and also removes login accounts left without any other membership.",
       "Manage the super-admin allowlist by email.",
+      "Open Product catalogue (/catalogue) to govern platform-level product and commercial definitions. Organisation members cannot access this page.",
+    ],
+  },
+  {
+    id: "account-recovery",
+    title: "20. Sign-in and account recovery",
+    summary: "ATSIQ uses first-party database-backed sessions and secure browser cookies.",
+    steps: [
+      "Sign in with the confirmed work email and password used during registration or invitation. A successful session remains active in the browser and is renewed while it is used.",
+      "Choose Forgot password on the sign-in form, submit the work email and use the time-limited link delivered to that inbox.",
+      "If the link is invalid or expired, request a new one. For privacy, the request screen does not reveal whether an address exists.",
+      "If sign-in fails during a temporary database interruption, wait briefly and retry; do not create a duplicate account.",
+      "Sign out on a shared device. Administrators can pause a membership immediately from Users & roles without deleting its audit history.",
     ],
   },
 ];

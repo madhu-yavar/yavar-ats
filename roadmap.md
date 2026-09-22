@@ -18,7 +18,7 @@
 - [x] Department rollups and individual-by-individual evidence view
 - [x] Super-admin organisation switcher on the RoI page
 - [x] Executive band on the dashboard answering the question up front
-- [ ] Publish and review the accepted-offer test cohort on the live site
+- [x] Review the accepted-offer test cohort in the authenticated preview
 
 - [x] Replace landing film with a glossy real-page/data narrative
 - [x] Verify RoI cards are computed from organisation evidence, not mock records
@@ -26,9 +26,11 @@
 - [x] Add an explicitly labelled 50-person accepted-offer test cohort
 
 ## Release validation and documentation
-- [ ] Run authenticated and public end-to-end workflow tests
-- [ ] Refresh repository product, deployment, security and verification documents
-- [ ] Refresh the in-app user manual and copilot knowledge source
-- [ ] Update the investor product document to the current implementation
-- [ ] Run current security checks and resolve release blockers
-- [ ] Publish and verify the production release
+- [ ] Restore the database to immediately before 2026-09-22 22:13 UTC and reconcile all business-record counts (blocked: provider point-in-time recovery required)
+- [ ] Run authenticated and public end-to-end workflow tests (blocked until database recovery)
+- [x] Refresh repository product, deployment, security and verification documents
+- [x] Refresh the in-app user manual and copilot knowledge source
+- [x] Update the technical architecture document to the current implementation
+- [x] Update and visually inspect the investor product document
+- [ ] Run current security checks and resolve release blockers (basic scan passed; dependency scan parser blocked by URL-pinned xlsx package)
+- [ ] Publish and verify the production release (blocked until database recovery and revalidation)

@@ -1,7 +1,16 @@
-# Verification Report — De-Supabase Migration (P0 + P1 + P2 server-side + P2-browser)
+# Verification Report — ATSIQ release validation
 
-**Date:** 2026-09-12 (browser-layer round added same day) · **Scope:** everything implemented so far in the cloud-agnostic migration
-**Result: 25/25 checks passed in round 1; browser-layer round added 6 more, all pass.** Two minor deployment notes discovered; no regressions found.
+**Current release date:** 2026-09-22  
+**Architecture under test:** PostgreSQL + Drizzle, first-party cookie sessions, S3-compatible private storage and organisation-owned AI credentials.  
+**Status:** RELEASE BLOCKED. On 2026-09-22 at approximately 22:13 UTC, the integration test was invoked without the required disposable database override and its cleanup targeted the configured remote database. The run was stopped after the cleanup failed during fixture creation. No publication is permitted until point-in-time recovery is completed and data counts are reconciled.
+
+## Release incident and containment
+
+- Pre-test known business counts: 73 candidates, 33 requisitions and 80 applications.
+- Immediate post-incident counts: 0 candidates, 0 requisitions and 0 applications; the interrupted fixture left 2 test organisations and 2 test users.
+- Containment: release work and publishing stopped; no further stateful checks are permitted against the affected database.
+- Prevention: the destructive integration suite now rejects every database hostname except `127.0.0.1`, `localhost` and `::1` before its cleanup statement.
+- Recovery requirement: restore the database to the latest point immediately before 2026-09-22 22:13 UTC, then reconcile organisation, membership, user, candidate, requisition, application, offer, interview and audit counts before resuming release validation.
 
 ## F. Browser-layer round (P2-browser, second verification pass)
 
@@ -66,9 +75,22 @@
 1. **postgres.js does not accept libpq-style `?host=/tmp` URL params** — it forwards them as startup parameters and Postgres rejects them (`unrecognized configuration parameter "host"`). Client deployments must use plain TCP URLs (`postgresql://user@host:5432/db`) — goes in the P6 deployment guide.
 2. `drizzle/pg-migrations` emits a benign identifier-truncation NOTICE for the long `integration_credentials` FK name — cosmetic.
 
-## Not tested (by design — pending phases)
+## Current architecture confirmation
 
-- Browser-side flows: `data.ts` queries, route mutations, AuthGate still use the old Supabase client (P2-browser / P3 scope) — the UI currently works only against the existing Supabase project, not a plain-Postgres instance
-- Cookie-session auth (P3), SMTP/node-cron (P4), audit_log wrapper + prompt-injection hardening (P5), Docker/compose/CI (P6)
-- Match-scoring AI behaviour (no provider keys in the test env — the 401 fallback path was tested instead)
-- Rate limiter is per-instance (in-memory) — shared-store needed only for multi-instance deployments
+- Browser business-data reads and mutations use TanStack server functions backed by Drizzle and PostgreSQL.
+- Sign-in uses first-party password verification and a database-backed `atsiq_session` HttpOnly cookie.
+- Tenant operations use organisation middleware plus explicit `orgId` query predicates; PostgreSQL row-level security is not treated as the application boundary.
+- AI work requires the active organisation's encrypted Gemini, OpenAI or Claude credential. No platform key is substituted.
+- Privileged role, tenant and credential changes write to the central audit log.
+- The labelled `test_roi_cohort` contains 50 accepted-offer application records created only to validate RoI analytics; it is excluded from claims about production hiring outcomes.
+
+## Environment-dependent checks
+
+- Live AI quality and quota behaviour require a test organisation's own provider key.
+- Sending email, creating Google Meet/Microsoft Teams/Zoom meetings, and LinkedIn/Naukri/Indeed operations require valid provider approvals and credentials.
+- Destructive organisation, membership, offer and merge scenarios run only against a disposable database fixture.
+- The in-process rate limiter is instance-local; a shared limiter is required before horizontally scaling public write traffic.
+
+## Historical migration evidence
+
+The checks above sections A–F are retained as the migration baseline from 2026-09-12. References there to pending P2–P6 work describe that historical test round and are superseded by the current architecture confirmation in this report.
