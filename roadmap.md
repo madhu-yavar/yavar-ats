@@ -18,9 +18,9 @@
 - [x] Department rollups and individual-by-individual evidence view
 - [x] Super-admin organisation switcher on the RoI page
 - [x] Executive band on the dashboard answering the question up front
-- [ ] Publish and review with accepted-offer test cohort
+- [ ] Publish and review the accepted-offer test cohort on the live site
 
-- [ ] Replace landing film with a glossy real-page/data narrative
+- [x] Replace landing film with a glossy real-page/data narrative
 - [x] Verify RoI cards are computed from organisation evidence, not mock records
 - [x] Harden interview scheduling, scorecard progression and audit trails
-- [ ] Add an explicitly labelled 50-person accepted-offer test cohort
+- [x] Add an explicitly labelled 50-person accepted-offer test cohort
