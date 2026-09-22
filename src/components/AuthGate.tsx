@@ -378,7 +378,7 @@ function PlatformFilm() {
   return (
     <section className="border-b border-border bg-surface-2">
       <div className="mx-auto max-w-[1200px] px-5 py-14">
-        <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
               &bull; Executive intelligence in motion
@@ -387,10 +387,6 @@ function PlatformFilm() {
               From hiring evidence to organisational capability
             </h2>
           </div>
-          <p className="max-w-md text-xs leading-relaxed text-muted-foreground">
-            See the CHRO command centre, Return on Individual, programme readiness, evidence-led
-            JD&nbsp;↔&nbsp;CV mapping, pipeline health and the Talent Brain in 22 seconds.
-          </p>
         </div>
         <figure className="mt-8 overflow-hidden rounded-xl border border-border bg-card shadow-[0_24px_60px_-30px_rgba(17,17,19,0.35)]">
           <video

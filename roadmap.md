@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Landing film + visual polish
+- [x] Remove the landing-film explainer sentence and add an animated Talent Brain graph sequence
 - [x] Render enterprise brand film and place it on the landing page
 - [x] Remove the "Who pays for AI" note from integrations
 - [x] Polish the dashboard shell, KPI band and panels
