@@ -74,10 +74,8 @@ function RoiPage() {
             • Semantic layer
           </p>
           <h1 className="mt-1.5 text-2xl font-semibold tracking-tight">Return on Individual</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            What capability each hire actually returned for the money committed, which programmes the
-            organisation can staff from the talent it already hired, and where it is strong or
-            exposed — all read from hiring evidence, not opinion.
+          <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+            What every hire returned for the money committed — read from hiring evidence.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -158,23 +156,45 @@ function RoiPage() {
             />
           </section>
 
-          <section className="panel-lift p-5">
+          <section className="panel-lift flex flex-wrap items-center gap-x-8 gap-y-4 border-l-4 border-l-primary p-5">
+            <p className="max-w-3xl text-base font-medium leading-snug">
+              {data.totals.joined + data.totals.committed === 0
+                ? "No hire has reached offer yet — release an offer and this page starts reading value automatically."
+                : `Every ₹ committed to hiring is currently returning ${data.totals.portfolioRoi} index points of capability, with ${data.totals.goalsReady} programme${data.totals.goalsReady === 1 ? "" : "s"} fully staffable today and ${data.totals.soleSource} single-person dependenc${data.totals.soleSource === 1 ? "y" : "ies"} to protect.`}
+            </p>
             <div className="flex items-center gap-2">
-              <CircleHelp className="size-4 text-primary" />
-              <h2 className="text-sm font-semibold">How to read this in 30 seconds</h2>
+              <Bar
+                label="Compounding"
+                value={data.totals.compounding}
+                total={data.totals.joined + data.totals.committed}
+                tone="primary"
+              />
+              <Bar
+                label="To watch"
+                value={data.totals.watch}
+                total={data.totals.joined + data.totals.committed}
+                tone="warn"
+              />
             </div>
+          </section>
+
+          <details className="panel-lift px-5 py-3 text-sm [&[open]>summary>svg]:rotate-90">
+            <summary className="flex cursor-pointer list-none items-center gap-2 font-medium">
+              <ChevronRight className="size-4 text-primary transition-transform" />
+              How these numbers are calculated
+            </summary>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <Hint
                 title="Return on Individual"
-                body="Capability the person brings, divided by what they cost relative to your own median hire. 120 means 20% more capability per rupee than your median."
+                body="Capability the person brings, divided by what they cost relative to your own median hire. 120 means 20% more capability per rupee."
               />
               <Hint
                 title="Capability"
-                body="A weighted blend of JD ↔ CV match, scarce capability brought in, delivered impact, innovation signal, career trajectory and breadth."
+                body="Weighted blend of JD ↔ CV match, scarce capability, delivered impact, innovation signal, trajectory and breadth."
               />
               <Hint
-                title="What we can now do"
-                body="Programmes your hired talent can staff today, with the named people behind each one and the capabilities still missing."
+                title="What we can do now"
+                body="Programmes the hired talent can staff today, with the people behind each one and the capabilities still missing."
               />
               <Hint
                 title="Strength & exposure"
@@ -186,7 +206,7 @@ function RoiPage() {
                 <li key={b}>· {b}</li>
               ))}
             </ul>
-          </section>
+          </details>
 
           <section className="panel-lift">
             <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-gradient-to-r from-primary/[0.06] to-transparent px-5 py-4">
@@ -237,28 +257,41 @@ function RoiPage() {
                   <p className="mt-1.5 text-[11px] text-muted-foreground">
                     Team {g.readiness}% · with the talent pool {g.poolReadiness}%
                   </p>
-                  <p className="mt-3 text-xs">{g.note}</p>
                   {g.covered.length ? (
-                    <p className="mt-2 text-[11px] text-muted-foreground">
-                      <span className="font-medium text-foreground">On the bench: </span>
-                      {g.covered.join(", ")}
-                    </p>
+                    <div className="mt-3 flex flex-wrap gap-1">
+                      {g.covered.slice(0, 6).map((s) => (
+                        <Chip key={s} tone="ok">
+                          {s}
+                        </Chip>
+                      ))}
+                    </div>
                   ) : null}
                   {g.missing.length ? (
-                    <p className="mt-1 text-[11px] text-muted-foreground">
-                      <span className="font-medium text-warning">Missing: </span>
-                      {g.missing.join(", ")}
-                    </p>
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {g.missing.slice(0, 5).map((s) => (
+                        <Chip key={s} tone="gap">
+                          {s}
+                        </Chip>
+                      ))}
+                    </div>
                   ) : null}
-                  {g.contributors.length ? (
-                    <p className="mt-2 text-[11px] text-muted-foreground">
-                      <span className="font-medium text-foreground">Who can staff it: </span>
-                      {g.contributors.map((c) => c.name).join(", ")}
-                    </p>
+                  <div className="mt-3 flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span>
+                      {g.contributors.length
+                        ? `${g.contributors.length} can staff it`
+                        : "No internal staffing yet"}
+                    </span>
+                    <span className="font-mono uppercase tracking-widest">{g.horizon}</span>
+                  </div>
+                  {g.note ? (
+                    <details className="mt-2 text-[11px] text-muted-foreground">
+                      <summary className="cursor-pointer list-none text-primary">Detail</summary>
+                      <p className="mt-1.5">{g.note}</p>
+                      {g.contributors.length ? (
+                        <p className="mt-1.5">{g.contributors.map((c) => c.name).join(", ")}</p>
+                      ) : null}
+                    </details>
                   ) : null}
-                  <p className="mt-2 text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
-                    {g.horizon}
-                  </p>
                 </article>
               ))}
             </div>
@@ -384,44 +417,50 @@ function RoiPage() {
                     </div>
                   </div>
 
-                  <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                    <div className="space-y-1.5">
-                      {h.contribution.map((c) => (
-                        <div key={c.label} className="flex items-center gap-2">
-                          <span className="w-44 shrink-0 text-[11px] text-muted-foreground">
-                            {c.label}
-                          </span>
-                          <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-accent">
-                            <span
-                              className="block h-full rounded-full bg-primary/70"
-                              style={{ width: `${c.value}%` }}
-                            />
-                          </span>
-                          <span className="num w-8 text-right text-[11px]">{c.value}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="space-y-2">
-                      {h.scarceSkills.length ? (
-                        <p className="text-xs">
-                          <Sparkles className="mr-1 inline size-3.5 text-primary" />
-                          <span className="font-medium">Scarce capability added: </span>
-                          {h.scarceSkills.join(", ")}
-                        </p>
-                      ) : null}
-                      {h.soleSourceSkills.length ? (
-                        <p className="text-xs text-warning">
-                          <ShieldAlert className="mr-1 inline size-3.5" />
-                          Only source for {h.soleSourceSkills.join(", ")}
-                        </p>
-                      ) : null}
-                      <ul className="space-y-0.5 text-[11px] text-muted-foreground">
-                        {h.evidence.map((e) => (
-                          <li key={e}>· {e}</li>
+                  <details className="mt-2 [&[open]>summary>svg]:rotate-90">
+                    <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium text-primary">
+                      <ChevronRight className="size-3.5 transition-transform" /> Evidence &
+                      contribution
+                    </summary>
+                    <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                      <div className="space-y-1.5">
+                        {h.contribution.map((c) => (
+                          <div key={c.label} className="flex items-center gap-2">
+                            <span className="w-44 shrink-0 text-[11px] text-muted-foreground">
+                              {c.label}
+                            </span>
+                            <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-accent">
+                              <span
+                                className="block h-full rounded-full bg-primary/70"
+                                style={{ width: `${c.value}%` }}
+                              />
+                            </span>
+                            <span className="num w-8 text-right text-[11px]">{c.value}</span>
+                          </div>
                         ))}
-                      </ul>
+                      </div>
+                      <div className="space-y-2">
+                        {h.scarceSkills.length ? (
+                          <p className="text-xs">
+                            <Sparkles className="mr-1 inline size-3.5 text-primary" />
+                            <span className="font-medium">Scarce capability added: </span>
+                            {h.scarceSkills.join(", ")}
+                          </p>
+                        ) : null}
+                        {h.soleSourceSkills.length ? (
+                          <p className="text-xs text-warning">
+                            <ShieldAlert className="mr-1 inline size-3.5" />
+                            Only source for {h.soleSourceSkills.join(", ")}
+                          </p>
+                        ) : null}
+                        <ul className="space-y-0.5 text-[11px] text-muted-foreground">
+                          {h.evidence.map((e) => (
+                            <li key={e}>· {e}</li>
+                          ))}
+                        </ul>
+                      </div>
                     </div>
-                  </div>
+                  </details>
                 </article>
               ))}
               {data.hires.length === 0 ? (
@@ -479,6 +518,46 @@ function Metric({ label, value, accent }: { label: string; value: string; accent
       >
         {value}
       </p>
+    </div>
+  );
+}
+
+function Chip({ children, tone }: { children: React.ReactNode; tone: "ok" | "gap" }) {
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+        tone === "ok" ? "bg-success/10 text-success" : "bg-warning/15 text-warning"
+      }`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function Bar({
+  label,
+  value,
+  total,
+  tone,
+}: {
+  label: string;
+  value: number;
+  total: number;
+  tone: "primary" | "warn";
+}) {
+  const pct = total ? Math.round((value / total) * 100) : 0;
+  return (
+    <div className="w-32">
+      <div className="flex items-baseline justify-between text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+        <span>{label}</span>
+        <span className="num text-foreground">{value}</span>
+      </div>
+      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-accent">
+        <div
+          className={`h-full rounded-full ${tone === "primary" ? "bg-primary" : "bg-warning"}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
     </div>
   );
 }
