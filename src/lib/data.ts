@@ -48,7 +48,10 @@ export type MatchScore = Tables<"match_scores">;
 export type SocialProfile = Tables<"social_profiles">;
 export type Evaluation = Tables<"evaluations">;
 export type Interview = Tables<"interviews">;
-export type Offer = Tables<"offers">;
+export type Offer = Tables<"offers"> & {
+  letter: Json | null;
+  letter_template_id: string | null;
+};
 export type AiInterview = Tables<"ai_interviews">;
 export type MasterItem = Tables<"master_items">;
 export type MasterKind =
