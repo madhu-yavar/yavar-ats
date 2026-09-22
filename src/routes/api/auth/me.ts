@@ -10,11 +10,19 @@ export const Route = createFileRoute("/api/auth/me")({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        const session = await resolveSession(request);
-        if (!session) {
-          return Response.json({ error: "Not signed in." }, { status: 401 });
+        try {
+          const session = await resolveSession(request);
+          if (!session) {
+            return Response.json({ error: "Not signed in." }, { status: 401 });
+          }
+          return Response.json({ ok: true, email: session.email });
+        } catch (err) {
+          console.error("Session lookup failed", err);
+          return Response.json(
+            { error: "Session service is temporarily unavailable." },
+            { status: 503 },
+          );
         }
-        return Response.json({ ok: true, email: session.email });
       },
     },
   },
