@@ -409,19 +409,27 @@ export function buildRoi(input: RoiInput): RoiReport {
   const goals: CapabilityGoal[] = GOAL_BLUEPRINTS.map((bp) => {
     const covered: string[] = [];
     const missing: string[] = [];
+    const poolOnly: string[] = [];
     const contributorIds = new Map<string, Set<string>>();
 
     for (const group of bp.needs) {
-      let hit: OntologyNode | null = null;
+      // Covered means somebody the organisation hired actually brings it.
+      let fromTeam: OntologyNode | null = null;
+      let fromPool: OntologyNode | null = null;
       for (const slug of group) {
         const node = nodeBySlug.get(slug);
-        if (node && node.weight > 0) {
-          hit = node;
+        if (!node) continue;
+        if ((suppliers.get(node.slug)?.size ?? 0) > 0) {
+          fromTeam = node;
           break;
         }
+        if (!fromPool && node.weight > 0) fromPool = node;
       }
-      if (hit) {
-        covered.push(hit.name);
+      if (fromTeam) {
+        covered.push(fromTeam.name);
+      } else if (fromPool) {
+        poolOnly.push(fromPool.name);
+        missing.push(prettyGroup(group));
       } else {
         missing.push(prettyGroup(group));
       }
@@ -432,7 +440,7 @@ export function buildRoi(input: RoiInput): RoiReport {
     for (const h of input.hires) {
       const matched = h.skills
         .map((s) => resolve(s))
-        .filter((n): n is OntologyNode => Boolean(n) && needSlugs.has(n!.slug))
+        .filter((n): n is OntologyNode => Boolean(n) && needSlugs.has(n.slug))
         .map((n) => n.name);
       if (matched.length) {
         const set = contributorIds.get(h.candidateId) ?? new Set<string>();
@@ -442,10 +450,12 @@ export function buildRoi(input: RoiInput): RoiReport {
     }
 
     const readiness = Math.round((covered.length / bp.needs.length) * 100);
-    const niceHits = bp.nice.filter((slug) => (nodeBySlug.get(slug)?.weight ?? 0) > 0).length;
-    const boosted = clamp(readiness + Math.min(niceHits * 3, 12), 0, 100);
+    const poolCovered = bp.needs.filter((group) =>
+      group.some((slug) => (nodeBySlug.get(slug)?.weight ?? 0) > 0),
+    ).length;
+    const poolReadiness = Math.round((poolCovered / bp.needs.length) * 100);
     const status: CapabilityGoal["status"] =
-      boosted >= 80 ? "ready" : boosted >= 45 ? "partial" : "gap";
+      readiness >= 80 ? "ready" : readiness >= 45 ? "partial" : "gap";
 
     const contributors = Array.from(contributorIds.entries())
       .map(([candidateId, skills]) => ({
@@ -457,12 +467,16 @@ export function buildRoi(input: RoiInput): RoiReport {
 
     const note =
       status === "ready"
-        ? `Every core capability is on the bench — ${contributors.length || "no"} named ${
+        ? `Every core capability is on the team — ${contributors.length || "no"} named ${
             contributors.length === 1 ? "person" : "people"
           } from recent hiring can staff it.`
         : status === "partial"
-          ? `Startable with a lead hire: ${missing.slice(0, 2).join(" and ") || "one gap"} still missing.`
-          : `Not staffable today — ${missing.slice(0, 3).join(", ")} absent from the organisation.`;
+          ? `Startable with one lead hire: ${missing.slice(0, 2).join(" and ") || "one gap"} still missing on the team.`
+          : poolOnly.length
+            ? `Not staffable from the team yet, but ${poolOnly
+                .slice(0, 3)
+                .join(", ")} already exist in the talent pool — ${poolReadiness}% hireable without new sourcing.`
+            : `Not staffable today — ${missing.slice(0, 3).join(", ")} absent from the organisation and the pool.`;
 
     return {
       id: bp.id,
