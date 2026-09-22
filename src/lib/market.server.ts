@@ -17,7 +17,7 @@
  * `untrusted()`.
  */
 
-import { aiJson, untrusted } from "./ai-gateway.server";
+import { aiResearchJson, untrusted } from "./ai-gateway.server";
 import { safeFetchText } from "../server/safe-fetch";
 import { readRoleKnowledge, type CompKnowledgeEntry } from "./comp-knowledge.server";
 
@@ -62,6 +62,8 @@ export type MarketBenchmark = {
     discovered: number;
     read: number;
     domains: string[];
+    /** True when the model's live web search was armed for this run. */
+    grounded: boolean;
   };
   /** Which model actually did the reasoning, so nobody has to guess. */
   engine: { provider: string; model: string };
@@ -212,46 +214,6 @@ function searchQueries(role: string, location: string, currency: string) {
   ];
 }
 
-const LINK_RE = /href="(https?:\/\/[^"]+)"/gi;
-const DDG_RE = /uddg=([^&"]+)/i;
-
-function decodeDdg(href: string) {
-  const m = DDG_RE.exec(href);
-  if (!m?.[1]) return href;
-  try {
-    return decodeURIComponent(m[1]);
-  } catch {
-    return href;
-  }
-}
-
-/** One engine call → vetted result URLs. Failures are silent by design. */
-async function runSearch(engine: "ddg" | "bing" | "mojeek", query: string): Promise<string[]> {
-  const q = encodeURIComponent(query);
-  const url =
-    engine === "ddg"
-      ? `https://html.duckduckgo.com/html/?q=${q}`
-      : engine === "bing"
-        ? `https://www.bing.com/search?q=${q}&count=30`
-        : `https://www.mojeek.com/search?q=${q}`;
-  try {
-    const { text } = await safeFetchText(url, { timeoutMs: 9000, maxBytes: 900_000, hops: 2 });
-    const out: string[] = [];
-    for (const m of text.matchAll(LINK_RE)) {
-      const raw = decodeDdg(m[1] ?? "");
-      if (!raw.startsWith("http")) continue;
-      if (/duckduckgo|bing\.com|mojeek|microsoft|google\./i.test(hostOf(raw))) continue;
-      if (!isQualityDomain(raw)) continue;
-      const clean = raw.split("#")[0] ?? raw;
-      if (!out.includes(clean)) out.push(clean);
-      if (out.length >= 10) break;
-    }
-    return out;
-  } catch {
-    return [];
-  }
-}
-
 /* ------------------------------------------------------------- stage 2: read */
 
 function htmlToText(html: string) {
@@ -333,36 +295,18 @@ export async function benchmarkMarket(input: {
 }): Promise<MarketBenchmark> {
   const queries = searchQueries(input.role, input.location, input.currency);
 
-  // Live discovery + the org's own saved figures, in parallel.
-  const [discoveredLists, inHouse] = await Promise.all([
-    mapPool(
-      [
-        ...queries.map((q) => ({ engine: "ddg" as const, q })),
-        ...queries.slice(0, 2).map((q) => ({ engine: "bing" as const, q })),
-        { engine: "mojeek" as const, q: queries[0] ?? input.role },
-      ],
-      4,
-      ({ engine, q }) => runSearch(engine, q),
-    ),
-    readRoleKnowledge(input.orgId, input.role).catch(() => [] as CompKnowledgeEntry[]),
-  ]);
-
-  const direct = directSources(input.role, input.location, input.currency);
+  // The org's own saved figures, and the vetted deep links we can read ourselves.
+  const inHouse = await readRoleKnowledge(input.orgId, input.role).catch(
+    () => [] as CompKnowledgeEntry[],
+  );
   const seen = new Set<string>();
   const candidates: { title: string; url: string; via: "search" | "direct" }[] = [];
-  const pushCandidate = (c: { title: string; url: string; via: "search" | "direct" }) => {
-    const key = c.url.replace(/\/$/, "");
-    if (seen.has(key)) return;
+  for (const d of directSources(input.role, input.location, input.currency)) {
+    const key = d.url.replace(/\/$/, "");
+    if (seen.has(key)) continue;
     seen.add(key);
-    candidates.push(c);
-  };
-  // Live search results lead (freshest), with the deep links as the floor.
-  for (const list of discoveredLists) {
-    for (const url of list) {
-      pushCandidate({ title: `${hostOf(url)} — ${input.role}`, url, via: "search" });
-    }
+    candidates.push({ ...d, via: "direct" });
   }
-  for (const d of direct) pushCandidate({ ...d, via: "direct" });
 
   // At most two pages per publisher, so one chatty domain can't crowd the sweep.
   const perDomain = new Map<string, number>();
@@ -392,14 +336,19 @@ export async function benchmarkMarket(input: {
     .map((s) => `SOURCE: ${s.title} (${s.url})\n${s.text}`)
     .join("\n\n---\n\n");
 
-  const result = await aiJson<MarketBenchmark>({
+  const result = await aiResearchJson<MarketBenchmark>({
     orgId: input.orgId,
     system:
-      "You are a compensation market-research analyst. From the supplied live web extracts, derive annual total " +
+      "You are a compensation market-research analyst with live web search. Run the supplied search queries now, "+
+      "open the best results, and combine them with the supplied live page extracts to derive annual total " +
       "compensation bands for the role in the given location and currency, broken down by career level. " +
       "Use these levels, each mapped to an experience band: Intern (0-1 yrs), Junior (0-2), Mid (3-5), " +
       "Senior (6-9), Lead (10-15), Manager (10-15), Director (15+), VP/Head (15+). " +
       "Figures are absolute annual amounts in the requested currency (not lakhs, not abbreviated). " +
+      "Search and cite only credible compensation publishers — Levels.fyi, AmbitionBox, 6figr, Glassdoor, Payscale, "+
+      "Salary.com, Talent.com, Naukri/Indeed pay ranges, and the annual salary guides from Michael Page, Randstad, "+
+      "Robert Half, Robert Walters, Hays, Korn Ferry, Mercer, Aon and TeamLease. Ignore blogs, aggregated listicles "+
+      "and any page that does not state a figure. "+
       "Weigh sources by quality: crowd-sourced aggregators and recruiting-firm salary guides first, single job " +
       "postings last; prefer figures published in the last 12-18 months and say so in the caveats when the " +
       "freshest evidence is older. Where the extracts disagree, take the mid-point of the credible ones and " +
@@ -425,7 +374,7 @@ export async function benchmarkMarket(input: {
         experience_range: [input.experienceMin, input.experienceMax],
         key_skills: input.skills.slice(0, 15),
         today: new Date().toISOString().slice(0, 10),
-        search_queries_run: queries,
+        search_queries_to_run: queries,
         pages_read: sources.filter((s) => s.read).map((s) => s.url),
         pages_unreachable: sources.filter((s) => !s.read).map((s) => s.url),
         internal_knowledge: inHouse.map((k) => ({
@@ -488,6 +437,7 @@ export async function benchmarkMarket(input: {
       discovered: candidates.length,
       read: readCount,
       domains: Array.from(new Set(sources.filter((s) => s.read).map((s) => s.domain))),
+      grounded: result.grounded,
     },
     engine: { provider: result.provider, model: result.model },
   };
