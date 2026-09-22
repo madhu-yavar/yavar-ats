@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireIdentity } from "@/server/identity";
 import {
   buildRecruiterPerformance,
   DEFAULT_SCHEME,
@@ -61,7 +61,7 @@ async function loadScheme(supabase: Sb, orgId: string): Promise<IncentiveScheme>
 
 /** Recruiter-by-recruiter delivery, quality and incentive workings for the CHRO. */
 export const getHrPerformance = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireIdentity])
   .inputValidator((input: unknown) =>
     z.object({ days: z.number().int().min(7).max(730).default(90) }).parse(input ?? {}),
   )
@@ -134,7 +134,7 @@ export const getHrPerformance = createServerFn({ method: "POST" })
 
 /** Save the incentive scheme the payouts above are calculated from. */
 export const saveIncentiveScheme = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireIdentity])
   .inputValidator((input: unknown) =>
     z
       .object({

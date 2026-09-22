@@ -6,10 +6,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireIdentity } from "@/server/identity";
 
 export const careersInboxStatus = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireIdentity])
   .handler(async () => {
     const { inboxConfigured, inboxProfile } = await import("./inbox.server");
     if (!inboxConfigured()) {
@@ -34,7 +34,7 @@ const SyncInput = z.object({
 });
 
 export const importCareersInbox = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireIdentity])
   .inputValidator((data: unknown) => SyncInput.parse(data ?? {}))
   .handler(async ({ data, context }) => {
     // The careers mailbox receives every tenant's applicants. A manual import
