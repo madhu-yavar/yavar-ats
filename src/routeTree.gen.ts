@@ -41,6 +41,7 @@ import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
 import { Route as ApiAuthMeRouteImport } from './routes/api/auth/me'
 import { Route as ApiAuthRegisterRouteImport } from './routes/api/auth/register'
 import { Route as ApiAuthRequestResetRouteImport } from './routes/api/auth/request-reset'
+import { Route as ApiAuthResetRouteImport } from './routes/api/auth/reset'
 import { Route as ApiAuthSessionRouteImport } from './routes/api/auth/session'
 import { Route as ApiPublicCaptureRouteImport } from './routes/api/public/capture'
 import { Route as ApiPublicInboundEmailRouteImport } from './routes/api/public/inbound-email'
@@ -214,6 +215,11 @@ const ApiAuthRequestResetRoute = ApiAuthRequestResetRouteImport.update({
   path: '/api/auth/request-reset',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthResetRoute = ApiAuthResetRouteImport.update({
+  id: '/api/auth/reset',
+  path: '/api/auth/reset',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthSessionRoute = ApiAuthSessionRouteImport.update({
   id: '/api/auth/session',
   path: '/api/auth/session',
@@ -313,6 +319,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/me': typeof ApiAuthMeRoute
   '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/auth/request-reset': typeof ApiAuthRequestResetRoute
+  '/api/auth/reset': typeof ApiAuthResetRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/public/capture': typeof ApiPublicCaptureRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
@@ -359,6 +366,7 @@ export interface FileRoutesByTo {
   '/api/auth/me': typeof ApiAuthMeRoute
   '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/auth/request-reset': typeof ApiAuthRequestResetRoute
+  '/api/auth/reset': typeof ApiAuthResetRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/public/capture': typeof ApiPublicCaptureRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
@@ -406,6 +414,7 @@ export interface FileRoutesById {
   '/api/auth/me': typeof ApiAuthMeRoute
   '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/auth/request-reset': typeof ApiAuthRequestResetRoute
+  '/api/auth/reset': typeof ApiAuthResetRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/public/capture': typeof ApiPublicCaptureRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
@@ -454,6 +463,7 @@ export interface FileRouteTypes {
     | '/api/auth/me'
     | '/api/auth/register'
     | '/api/auth/request-reset'
+    | '/api/auth/reset'
     | '/api/auth/session'
     | '/api/public/capture'
     | '/api/public/inbound-email'
@@ -500,6 +510,7 @@ export interface FileRouteTypes {
     | '/api/auth/me'
     | '/api/auth/register'
     | '/api/auth/request-reset'
+    | '/api/auth/reset'
     | '/api/auth/session'
     | '/api/public/capture'
     | '/api/public/inbound-email'
@@ -546,6 +557,7 @@ export interface FileRouteTypes {
     | '/api/auth/me'
     | '/api/auth/register'
     | '/api/auth/request-reset'
+    | '/api/auth/reset'
     | '/api/auth/session'
     | '/api/public/capture'
     | '/api/public/inbound-email'
@@ -593,6 +605,7 @@ export interface RootRouteChildren {
   ApiAuthMeRoute: typeof ApiAuthMeRoute
   ApiAuthRegisterRoute: typeof ApiAuthRegisterRoute
   ApiAuthRequestResetRoute: typeof ApiAuthRequestResetRoute
+  ApiAuthResetRoute: typeof ApiAuthResetRoute
   ApiAuthSessionRoute: typeof ApiAuthSessionRoute
   ApiPublicCaptureRoute: typeof ApiPublicCaptureRoute
   ApiPublicInboundEmailRoute: typeof ApiPublicInboundEmailRoute
@@ -833,6 +846,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthRequestResetRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/reset': {
+      id: '/api/auth/reset'
+      path: '/api/auth/reset'
+      fullPath: '/api/auth/reset'
+      preLoaderRoute: typeof ApiAuthResetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/session': {
       id: '/api/auth/session'
       path: '/api/auth/session'
@@ -953,6 +973,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthMeRoute: ApiAuthMeRoute,
   ApiAuthRegisterRoute: ApiAuthRegisterRoute,
   ApiAuthRequestResetRoute: ApiAuthRequestResetRoute,
+  ApiAuthResetRoute: ApiAuthResetRoute,
   ApiAuthSessionRoute: ApiAuthSessionRoute,
   ApiPublicCaptureRoute: ApiPublicCaptureRoute,
   ApiPublicInboundEmailRoute: ApiPublicInboundEmailRoute,
