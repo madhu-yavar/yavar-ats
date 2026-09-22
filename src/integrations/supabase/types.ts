@@ -770,6 +770,81 @@ export type Database = {
           },
         ]
       }
+      comp_knowledge: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          currency: string
+          experience_max: number | null
+          experience_min: number | null
+          high: number | null
+          id: string
+          level_key: string
+          location: string | null
+          low: number | null
+          median: number
+          note: string | null
+          org_id: string
+          requisition_id: string | null
+          role_key: string
+          source: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          experience_max?: number | null
+          experience_min?: number | null
+          high?: number | null
+          id?: string
+          level_key: string
+          location?: string | null
+          low?: number | null
+          median: number
+          note?: string | null
+          org_id: string
+          requisition_id?: string | null
+          role_key: string
+          source?: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          experience_max?: number | null
+          experience_min?: number | null
+          high?: number | null
+          id?: string
+          level_key?: string
+          location?: string | null
+          low?: number | null
+          median?: number
+          note?: string | null
+          org_id?: string
+          requisition_id?: string | null
+          role_key?: string
+          source?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comp_knowledge_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comp_knowledge_requisition_id_fkey"
+            columns: ["requisition_id"]
+            isOneToOne: false
+            referencedRelation: "requisitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_templates: {
         Row: {
           background_content_type: string | null
