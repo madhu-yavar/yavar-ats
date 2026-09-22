@@ -25,7 +25,7 @@ export const Route = createFileRoute("/auth/reset")({
     ],
   }),
   validateSearch: (search: Record<string, unknown>) => ({
-    token: typeof search.token === "string" ? search.token : "",
+    token: typeof search["token"] === "string" ? (search["token"] as string) : "",
   }),
   component: ResetPage,
 });

@@ -30,6 +30,7 @@ import { Route as TeamRouteImport } from './routes/team'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as ApplyIdRouteImport } from './routes/apply.$id'
 import { Route as AssessTokenRouteImport } from './routes/assess.$token'
+import { Route as AuthResetRouteImport } from './routes/auth.reset'
 import { Route as CandidatesIndexRouteImport } from './routes/candidates.index'
 import { Route as CandidatesIdRouteImport } from './routes/candidates.$id'
 import { Route as InterviewsIndexRouteImport } from './routes/interviews.index'
@@ -158,6 +159,11 @@ const ApplyIdRoute = ApplyIdRouteImport.update({
 const AssessTokenRoute = AssessTokenRouteImport.update({
   id: '/assess/$token',
   path: '/assess/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthResetRoute = AuthResetRouteImport.update({
+  id: '/auth/reset',
+  path: '/auth/reset',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CandidatesIndexRoute = CandidatesIndexRouteImport.update({
@@ -308,6 +314,7 @@ export interface FileRoutesByFullPath {
   '/templates': typeof TemplatesRoute
   '/apply/$id': typeof ApplyIdRoute
   '/assess/$token': typeof AssessTokenRoute
+  '/auth/reset': typeof AuthResetRoute
   '/candidates/$id': typeof CandidatesIdRoute
   '/interviews/mine': typeof InterviewsMineRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
@@ -355,6 +362,7 @@ export interface FileRoutesByTo {
   '/templates': typeof TemplatesRoute
   '/apply/$id': typeof ApplyIdRoute
   '/assess/$token': typeof AssessTokenRoute
+  '/auth/reset': typeof AuthResetRoute
   '/candidates/$id': typeof CandidatesIdRoute
   '/interviews/mine': typeof InterviewsMineRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
@@ -403,6 +411,7 @@ export interface FileRoutesById {
   '/templates': typeof TemplatesRoute
   '/apply/$id': typeof ApplyIdRoute
   '/assess/$token': typeof AssessTokenRoute
+  '/auth/reset': typeof AuthResetRoute
   '/candidates/$id': typeof CandidatesIdRoute
   '/interviews/mine': typeof InterviewsMineRoute
   '/requisitions/$id': typeof RequisitionsIdRoute
@@ -452,6 +461,7 @@ export interface FileRouteTypes {
     | '/templates'
     | '/apply/$id'
     | '/assess/$token'
+    | '/auth/reset'
     | '/candidates/$id'
     | '/interviews/mine'
     | '/requisitions/$id'
@@ -499,6 +509,7 @@ export interface FileRouteTypes {
     | '/templates'
     | '/apply/$id'
     | '/assess/$token'
+    | '/auth/reset'
     | '/candidates/$id'
     | '/interviews/mine'
     | '/requisitions/$id'
@@ -546,6 +557,7 @@ export interface FileRouteTypes {
     | '/templates'
     | '/apply/$id'
     | '/assess/$token'
+    | '/auth/reset'
     | '/candidates/$id'
     | '/interviews/mine'
     | '/requisitions/$id'
@@ -594,6 +606,7 @@ export interface RootRouteChildren {
   TemplatesRoute: typeof TemplatesRoute
   ApplyIdRoute: typeof ApplyIdRoute
   AssessTokenRoute: typeof AssessTokenRoute
+  AuthResetRoute: typeof AuthResetRoute
   CandidatesIdRoute: typeof CandidatesIdRoute
   InterviewsMineRoute: typeof InterviewsMineRoute
   RequisitionsIdRoute: typeof RequisitionsIdRoute
@@ -767,6 +780,13 @@ declare module '@tanstack/react-router' {
       path: '/assess/$token'
       fullPath: '/assess/$token'
       preLoaderRoute: typeof AssessTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/reset': {
+      id: '/auth/reset'
+      path: '/auth/reset'
+      fullPath: '/auth/reset'
+      preLoaderRoute: typeof AuthResetRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/candidates/': {
@@ -962,6 +982,7 @@ const rootRouteChildren: RootRouteChildren = {
   TemplatesRoute: TemplatesRoute,
   ApplyIdRoute: ApplyIdRoute,
   AssessTokenRoute: AssessTokenRoute,
+  AuthResetRoute: AuthResetRoute,
   CandidatesIdRoute: CandidatesIdRoute,
   InterviewsMineRoute: InterviewsMineRoute,
   RequisitionsIdRoute: RequisitionsIdRoute,

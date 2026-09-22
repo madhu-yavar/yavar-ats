@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { fetchMe, loginRequest, registerRequest, signOutApp } from "@/lib/auth-client";
+import {
+  fetchMe,
+  loginRequest,
+  registerRequest,
+  requestResetRequest,
+  signOutApp,
+} from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -676,6 +682,29 @@ function SignInCard() {
       <Button type="submit" className="w-full" disabled={busy}>
         {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Create organisation account"}
       </Button>
+
+      {mode === "signin" ? (
+        <button
+          type="button"
+          className="w-full text-center text-sm text-muted-foreground underline-offset-4 hover:underline"
+          onClick={async () => {
+            if (!email.trim()) {
+              toast.error("Enter your work email first.");
+              return;
+            }
+            setBusy(true);
+            try {
+              toast.success(await requestResetRequest(email));
+            } catch (err) {
+              toast.error((err as Error).message);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          Forgot your password?
+        </button>
+      ) : null}
 
       <div className="flex items-center gap-3">
         <span className="h-px flex-1 bg-border" />
