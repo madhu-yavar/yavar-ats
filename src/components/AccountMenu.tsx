@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { LogOut, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { supabase } from "@/integrations/supabase/client";
+import { fetchMe, signOutApp } from "@/lib/auth-client";
 import { useOrg } from "@/hooks/useOrg";
 import { usePlatform } from "@/hooks/usePlatform";
 import { Button } from "@/components/ui/button";
@@ -29,12 +29,15 @@ export function AccountMenu() {
 
   const session = useQuery({
     queryKey: ["auth_identity"],
-    queryFn: async () => (await supabase.auth.getUser()).data.user,
+    queryFn: async () => {
+      const email = await fetchMe();
+      return email ? { email, fullName: email } : null;
+    },
     staleTime: 300_000,
   });
 
   const email = session.data?.email ?? null;
-  const name = session.data?.user_metadata?.["full_name"] ?? email ?? "You";
+  const name = session.data?.fullName ?? email ?? "You";
   const initials = String(name)
     .split(" ")
     .filter(Boolean)
@@ -56,11 +59,9 @@ export function AccountMenu() {
 
   async function signOut() {
     setSigningOut(true);
-    try {
-      await fetch("/api/auth/session", { method: "DELETE" }).catch(() => undefined);
-    } finally {
-      await supabase.auth.signOut();
-    }
+    await signOutApp();
+    // The session is the httpOnly cookie — reload so the auth gate re-bootstraps.
+    window.location.assign("/");
   }
 
   return (

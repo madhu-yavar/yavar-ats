@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { Session } from "@supabase/supabase-js";
-
-import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
+import { fetchMe, loginRequest, registerRequest, signOutApp } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,33 +33,25 @@ import {
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient();
-  const [session, setSession] = useState<Session | null>(null);
+  const [me, setMe] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
-      setSession(s);
+    // Identity now lives in the atsiq_session httpOnly cookie; the server
+    // tells us who is signed in. Anything cached before a sign-in transition
+    // must be refetched under the new identity.
+    let cancelled = false;
+    fetchMe().then((email) => {
+      if (cancelled) return;
+      setMe(email);
       setReady(true);
-      // The bearer token is attached per server-function call, so anything fetched
-      // during the sign-in transition must be refetched with the new identity.
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
-        qc.clear();
-        if (s) void qc.invalidateQueries();
-      }
+      if (email) void qc.invalidateQueries();
     });
     // Never leave the app stuck on the splash if session restore stalls.
     const bail = setTimeout(() => setReady(true), 4000);
-    supabase.auth
-      .getSession()
-      .then(({ data }) => setSession(data.session))
-      .catch(() => undefined)
-      .finally(() => {
-        clearTimeout(bail);
-        setReady(true);
-      });
     return () => {
+      cancelled = true;
       clearTimeout(bail);
-      sub.subscription.unsubscribe();
     };
   }, [qc]);
 
@@ -74,7 +63,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!session) return <Landing />;
+  if (!me) return <Landing />;
   return <>{children}</>;
 }
 
@@ -631,41 +620,21 @@ function SignInCard() {
     setBusy(true);
     try {
       if (mode === "signin") {
-        const { error, data } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        // Exchange the short-lived JWT for an httpOnly session cookie —
-        // server functions then authenticate from the cookie, not localStorage.
-        try {
-          await fetch("/api/auth/session", {
-            method: "POST",
-            headers: { authorization: `Bearer ${data.session?.access_token ?? ""}` },
-          });
-        } catch {
-          /* cookie is an upgrade — the bearer path still works if it fails */
-        }
+        await loginRequest(email, password);
+        // Cookie is set httpOnly by the server; a reload lets AuthGate pick up
+        // the session, exactly like the old onAuthStateChange behaviour.
+        window.location.assign("/");
       } else {
         const problem = workEmailProblem(email);
         if (problem) throw new Error(problem);
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { emailRedirectTo: window.location.origin },
-        });
-        if (error) throw error;
-        toast.success("Check your inbox to confirm your work email, then continue the setup.");
+        const message = await registerRequest(email, password);
+        toast.success(message);
       }
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
       setBusy(false);
     }
-  }
-
-  async function google() {
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
-    });
-    if (result.error) toast.error("Google sign-in failed. Try email instead.");
   }
 
   return (
@@ -716,17 +685,13 @@ function SignInCard() {
         <span className="h-px flex-1 bg-border" />
       </div>
 
-      <Button type="button" variant="outline" className="w-full" onClick={google}>
-        Continue with Google
-      </Button>
-
       <button
         type="button"
         className="w-full text-center text-sm text-muted-foreground underline-offset-4 hover:underline"
         onClick={async () => {
           // Registering a new company always starts from a clean session, so the
           // wizard can never be masked by a previously signed-in workspace.
-          if (mode === "signin") await supabase.auth.signOut().catch(() => undefined);
+          if (mode === "signin") await signOutApp();
           setMode(mode === "signin" ? "signup" : "signin");
         }}
       >

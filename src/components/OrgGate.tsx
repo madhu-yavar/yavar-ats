@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { signOutApp } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { useOrg } from "@/hooks/useOrg";
 import { usePlatform } from "@/hooks/usePlatform";
@@ -33,7 +33,7 @@ export function OrgGate({ children }: { children: React.ReactNode }) {
           <Button size="sm" onClick={() => refetch()}>
             Retry
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}>
+          <Button variant="ghost" size="sm" onClick={async () => { await signOutApp(); window.location.assign("/"); }}>
             Sign out
           </Button>
         </div>
@@ -106,7 +106,7 @@ function Waiting({ title, body, onRefresh }: { title: string; body: string; onRe
             Check status
           </Button>
         )}
-        <Button variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}>
+        <Button variant="ghost" size="sm" onClick={async () => { await signOutApp(); window.location.assign("/"); }}>
           Sign out
         </Button>
       </div>

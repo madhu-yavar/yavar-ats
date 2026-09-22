@@ -294,7 +294,7 @@ export const masterItems = pgTable(
       "master_items_kind_check",
       sql`${t.kind} in ('skill','location','education','employment_type','industry','role_title','billing_type','engagement_type','client','rejection_reason')`,
     ),
-    uniqueIndex("master_items_kind_name_unique").on(t.kind, sql`lower(${t.name})`),
+    uniqueIndex("master_items_kind_name_unique").on(t.orgId, t.kind, sql`lower(${t.name})`),
     index("master_items_kind_idx").on(t.kind, t.active),
   ],
 );
@@ -1225,3 +1225,19 @@ export const screeningRuns = pgTable(
     index("screening_runs_org_created_idx").on(t.orgId, t.createdAt),
   ],
 );
+
+export const hrIncentiveSchemes = pgTable("hr_incentive_schemes", {
+  orgId: uuid("org_id")
+    .primaryKey()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  currency: text("currency").notNull().default("INR"),
+  targetClosuresPerMonth: integer("target_closures_per_month").notNull().default(3),
+  payoutPerClosure: numeric("payout_per_closure").notNull().default("10000"),
+  qualityBands: jsonb("quality_bands")
+    .notNull()
+    .default(sql`'[{"min_score":85,"multiplier":1.2},{"min_score":70,"multiplier":1},{"min_score":0,"multiplier":0.8}]'::jsonb`),
+  monthlyCap: numeric("monthly_cap"),
+  notes: text("notes"),
+  updatedBy: uuid("updated_by"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

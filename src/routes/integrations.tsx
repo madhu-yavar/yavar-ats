@@ -16,6 +16,7 @@ import {
   Video,
 } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import type { Tables } from "@/integrations/supabase/types";
 import {
   disconnectIntegration,

@@ -29,6 +29,8 @@ import {
   offers,
   requisitions,
   socialProfiles,
+  screeningKits,
+  screeningRuns,
   stageEvents,
   talentRequestSuggestions,
   talentRequests,
@@ -324,10 +326,12 @@ export const listCandidateAssessments = createServerFn({ method: "POST" })
 export const listAllScreeningRuns = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .handler(async ({ context }) => {
-    const res = (await db.execute(
-      sql`select * from screening_runs where org_id = ${context.orgId} order by created_at desc`,
-    )) as unknown as { rows?: Record<string, unknown>[] };
-    return res.rows ?? [];
+    const rows = await db
+      .select()
+      .from(screeningRuns)
+      .where(eq(screeningRuns.orgId, context.orgId))
+      .orderBy(desc(screeningRuns.createdAt));
+    return snakeRows(rows);
   });
 
 /* ------------------------------------------------- team & sharing (0030) */
@@ -380,30 +384,46 @@ export const listCandidateNotes = createServerFn({ method: "POST" })
 export const listScreeningKits = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .handler(async ({ context }) => {
-    const res = (await db.execute(
-      sql`select * from screening_kits where org_id = ${context.orgId} order by created_at desc`,
-    )) as unknown as { rows?: Record<string, unknown>[] };
-    return res.rows ?? [];
+    const rows = await db
+      .select()
+      .from(screeningKits)
+      .where(eq(screeningKits.orgId, context.orgId))
+      .orderBy(desc(screeningKits.createdAt));
+    return snakeRows(rows);
   });
 
 export const listCandidateScreeningKits = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((data: unknown) => z.object({ candidateId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
-    const res = (await db.execute(
-      sql`select * from screening_kits where org_id = ${context.orgId} and candidate_id = ${data.candidateId} order by created_at desc`,
-    )) as unknown as { rows?: Record<string, unknown>[] };
-    return res.rows ?? [];
+    const rows = await db
+      .select()
+      .from(screeningKits)
+      .where(
+        and(
+          eq(screeningKits.orgId, context.orgId),
+          eq(screeningKits.candidateId, data.candidateId),
+        ),
+      )
+      .orderBy(desc(screeningKits.createdAt));
+    return snakeRows(rows);
   });
 
 export const listCandidateScreeningRuns = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((data: unknown) => z.object({ candidateId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
-    const res = (await db.execute(
-      sql`select * from screening_runs where org_id = ${context.orgId} and candidate_id = ${data.candidateId} order by created_at desc`,
-    )) as unknown as { rows?: Record<string, unknown>[] };
-    return res.rows ?? [];
+    const rows = await db
+      .select()
+      .from(screeningRuns)
+      .where(
+        and(
+          eq(screeningRuns.orgId, context.orgId),
+          eq(screeningRuns.candidateId, data.candidateId),
+        ),
+      )
+      .orderBy(desc(screeningRuns.createdAt));
+    return snakeRows(rows);
   });
 
 export const listOwnershipEvents = createServerFn({ method: "POST" })

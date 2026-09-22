@@ -40,6 +40,7 @@ import { useRoles } from "@/hooks/useRoles";
 import { useOrg } from "@/hooks/useOrg";
 import { Brain } from "lucide-react";
 import { usePlatform } from "@/hooks/usePlatform";
+import { attachApplication } from "@/lib/candidates.functions";
 import { getHrPerformance } from "@/lib/hr-performance.functions";
 import { listAllOrganizations } from "@/lib/platform.functions";
 import { Button } from "@/components/ui/button";

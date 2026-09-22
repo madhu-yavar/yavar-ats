@@ -1,119 +1,139 @@
 import { createServerFn } from "@tanstack/react-start";
+import { and, eq, gte } from "drizzle-orm";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertRole, requireOrg } from "@/lib/auth.middleware";
 import {
   buildRecruiterPerformance,
   DEFAULT_SCHEME,
   type IncentiveScheme,
   type QualityBand,
 } from "./hr-performance.server";
+import { db } from "@/server/db";
+import {
+  applications,
+  hrIncentiveSchemes,
+  interviews,
+  matchScores,
+  offers,
+  screeningRuns,
+  stageEvents,
+} from "@db/schema";
 
-type Sb = { from: (t: string) => any; rpc: (fn: string, args: Record<string, unknown>) => any };
-
-/** Only the owner, President/CBO (CHRO) and HR Head may see team-wide numbers. */
-async function requireLeadership(supabase: Sb, userId: string) {
-  const { data: member, error } = await supabase
-    .from("org_members")
-    .select("org_id, is_owner")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .order("created_at")
-    .limit(1)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!member?.org_id) throw new Error("You are not part of an organisation yet.");
-
-  if (member.is_owner) return member.org_id as string;
-  const { data: roles, error: rErr } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId);
-  if (rErr) throw new Error(rErr.message);
-  const allowed = (roles ?? []).some((r: { role: string }) =>
-    ["president_cbo", "hr_head"].includes(r.role),
-  );
-  if (!allowed) {
-    throw new Error("Team performance is visible to the CHRO, HR Head and the account owner only.");
-  }
-  return member.org_id as string;
-}
-
-async function loadScheme(supabase: Sb, orgId: string): Promise<IncentiveScheme> {
-  const { data, error } = await supabase
-    .from("hr_incentive_schemes")
-    .select("*")
-    .eq("org_id", orgId)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!data) return DEFAULT_SCHEME;
+async function loadScheme(orgId: string): Promise<IncentiveScheme> {
+  const [row] = await db
+    .select()
+    .from(hrIncentiveSchemes)
+    .where(eq(hrIncentiveSchemes.orgId, orgId))
+    .limit(1);
+  if (!row) return DEFAULT_SCHEME;
   return {
-    currency: data.currency ?? "INR",
-    target_closures_per_month: Number(data.target_closures_per_month ?? 3),
-    payout_per_closure: Number(data.payout_per_closure ?? 10000),
-    quality_bands: (Array.isArray(data.quality_bands)
-      ? data.quality_bands
+    currency: row.currency ?? "INR",
+    target_closures_per_month: Number(row.targetClosuresPerMonth ?? 3),
+    payout_per_closure: Number(row.payoutPerClosure ?? 10000),
+    quality_bands: (Array.isArray(row.qualityBands)
+      ? row.qualityBands
       : DEFAULT_SCHEME.quality_bands) as QualityBand[],
-    monthly_cap: data.monthly_cap === null ? null : Number(data.monthly_cap),
-    notes: data.notes ?? null,
+    monthly_cap: row.monthlyCap === null ? null : Number(row.monthlyCap),
+    notes: row.notes ?? null,
   };
 }
 
 /** Recruiter-by-recruiter delivery, quality and incentive workings for the CHRO. */
 export const getHrPerformance = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((input: unknown) =>
     z.object({ days: z.number().int().min(7).max(730).default(90) }).parse(input ?? {}),
   )
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as unknown as Sb;
-    const orgId = await requireLeadership(supabase, context.userId);
-    const scheme = await loadScheme(supabase, orgId);
-
-    const since = new Date(Date.now() - data.days * 86_400_000).toISOString();
-
-    const [events, applications, interviews, offers, matches, runs] = await Promise.all([
-      supabase
-        .from("stage_events")
-        .select("application_id, actor, to_stage, created_at")
-        .eq("org_id", orgId)
-        .gte("created_at", since),
-      supabase.from("applications").select("id, applied_at").eq("org_id", orgId),
-      supabase
-        .from("interviews")
-        .select("application_id, status, scheduled_at")
-        .eq("org_id", orgId),
-      supabase.from("offers").select("application_id, status").eq("org_id", orgId),
-      supabase
-        .from("match_scores")
-        .select("application_id, overall_score, computed_at")
-        .eq("org_id", orgId),
-      supabase
-        .from("screening_runs")
-        .select("application_id, combined_score, created_at")
-        .eq("org_id", orgId),
-    ]);
-    for (const r of [events, applications, interviews, offers, matches, runs]) {
-      if (r.error) throw new Error(r.error.message);
+    // Team-wide numbers: owner plus the CHRO (President/CBO) and HR Head only.
+    if (!context.isOwner) {
+      await assertRole(
+        context.userId,
+        context.orgId,
+        ["president_cbo", "hr_head"],
+        "Team performance is visible to the CHRO, HR Head and the account owner only.",
+      );
     }
+    const orgId = context.orgId;
+    const scheme = await loadScheme(orgId);
+
+    const since = new Date(Date.now() - data.days * 86_400_000);
+
+    const [events, applicationRows, interviewRows, offerRows, matchRows, runRows] =
+      await Promise.all([
+        db
+          .select({
+            application_id: stageEvents.applicationId,
+            actor: stageEvents.actor,
+            to_stage: stageEvents.toStage,
+            created_at: stageEvents.createdAt,
+          })
+          .from(stageEvents)
+          .where(and(eq(stageEvents.orgId, orgId), gte(stageEvents.createdAt, since))),
+        db
+          .select({ id: applications.id, applied_at: applications.appliedAt })
+          .from(applications)
+          .where(eq(applications.orgId, orgId)),
+        db
+          .select({
+            application_id: interviews.applicationId,
+            status: interviews.status,
+            scheduled_at: interviews.scheduledAt,
+          })
+          .from(interviews)
+          .where(eq(interviews.orgId, orgId)),
+        db
+          .select({ application_id: offers.applicationId, status: offers.status })
+          .from(offers)
+          .where(eq(offers.orgId, orgId)),
+        db
+          .select({
+            application_id: matchScores.applicationId,
+            overall_score: matchScores.overallScore,
+            computed_at: matchScores.computedAt,
+          })
+          .from(matchScores)
+          .where(eq(matchScores.orgId, orgId)),
+        db
+          .select({
+            application_id: screeningRuns.applicationId,
+            combined_score: screeningRuns.combinedScore,
+            created_at: screeningRuns.createdAt,
+          })
+          .from(screeningRuns)
+          .where(eq(screeningRuns.orgId, orgId)),
+      ]);
 
     // Quality per application: the screening-backed combined fit when it exists,
     // otherwise the JD/CV match score.
     const quality = new Map<string, number>();
-    for (const m of matches.data ?? []) {
+    for (const m of matchRows) {
       if (typeof m.overall_score === "number") quality.set(m.application_id, m.overall_score);
     }
-    for (const r of runs.data ?? []) {
+    for (const r of runRows) {
       if (r.application_id && typeof r.combined_score === "number") {
         quality.set(r.application_id, r.combined_score);
       }
     }
 
     const result = buildRecruiterPerformance({
-      events: events.data ?? [],
-      applications: applications.data ?? [],
-      interviews: interviews.data ?? [],
-      offers: offers.data ?? [],
+      events: events.map((e) => ({
+        application_id: e.application_id,
+        actor: e.actor,
+        to_stage: e.to_stage,
+        created_at: e.created_at.toISOString(),
+      })),
+      applications: applicationRows.map((a) => ({
+        id: a.id,
+        applied_at: a.applied_at.toISOString(),
+      })),
+      interviews: interviewRows.map((i) => ({
+        application_id: i.application_id,
+        status: i.status,
+        scheduled_at: i.scheduled_at ? i.scheduled_at.toISOString() : null,
+      })),
+      offers: offerRows,
       quality: [...quality.entries()].map(([application_id, score]) => ({ application_id, score })),
       scheme,
       months: Math.max(1, Math.round(data.days / 30)),
@@ -134,7 +154,7 @@ export const getHrPerformance = createServerFn({ method: "POST" })
 
 /** Save the incentive scheme the payouts above are calculated from. */
 export const saveIncentiveScheme = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireOrg])
   .inputValidator((input: unknown) =>
     z
       .object({
@@ -155,22 +175,31 @@ export const saveIncentiveScheme = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as unknown as Sb;
-    const orgId = await requireLeadership(supabase, context.userId);
-    const { error } = await supabase.from("hr_incentive_schemes").upsert(
-      {
-        org_id: orgId,
+    await db
+      .insert(hrIncentiveSchemes)
+      .values({
+        orgId: context.orgId,
         currency: data.currency,
-        target_closures_per_month: data.target_closures_per_month,
-        payout_per_closure: data.payout_per_closure,
-        quality_bands: data.quality_bands,
-        monthly_cap: data.monthly_cap,
+        targetClosuresPerMonth: data.target_closures_per_month,
+        payoutPerClosure: String(data.payout_per_closure),
+        qualityBands: data.quality_bands,
+        monthlyCap: data.monthly_cap === null ? null : String(data.monthly_cap),
         notes: data.notes,
-        updated_by: context.userId,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "org_id" },
-    );
-    if (error) throw new Error(error.message);
+        updatedBy: context.userId,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: hrIncentiveSchemes.orgId,
+        set: {
+          currency: data.currency,
+          targetClosuresPerMonth: data.target_closures_per_month,
+          payoutPerClosure: String(data.payout_per_closure),
+          qualityBands: data.quality_bands,
+          monthlyCap: data.monthly_cap === null ? null : String(data.monthly_cap),
+          notes: data.notes,
+          updatedBy: context.userId,
+          updatedAt: new Date(),
+        },
+      });
     return { ok: true as const };
   });

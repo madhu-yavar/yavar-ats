@@ -191,6 +191,12 @@ function RequisitionDetail() {
 
   const savedOverrides = (r?.job_card_overrides ?? {}) as {
     zones?: JobCardZone[];
+    theme?: {
+      overlayOpacity?: number;
+      textColor?: string;
+      backgroundBrightness?: number;
+      accentColor?: string;
+    };
     values?: { role?: string; location?: string; skills?: string[]; contact?: string };
   };
   const templateZones =

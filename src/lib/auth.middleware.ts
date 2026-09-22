@@ -10,10 +10,12 @@
  * authn step, leaving these wrappers untouched.
  */
 import { createMiddleware } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { emailVerified } from "../server/claims";
-import { requireIdentity } from "../server/identity";
+import type { Database } from "../integrations/supabase/types";
+import type { SupabaseClaims } from "../server/identity";
 import { db } from "../server/db";
 import { orgMembers, platformAdmins, userRoles } from "@db/schema";
 
@@ -59,6 +61,35 @@ export async function assertRole(
     .limit(1);
   if (!row) throw new Error(message);
 }
+
+/** Authn only: cookie session first, legacy GoTrue-JWT bearer second.
+ *  The definition lives in this client-reached module; the server-only
+ *  resolution (server/identity.ts) is imported lazily inside the .server()
+ *  body, so the client bundle never pulls it in. */
+export const requireIdentity = createMiddleware({ type: "function" }).server(async ({ next }) => {
+  const { resolveSession, resolveJwt } = await import("../server/identity");
+  const request = getRequest();
+  const session = request ? await resolveSession(request) : null;
+
+  let identity: { userId: string; claims: SupabaseClaims } | null = null;
+  if (session) {
+    identity = {
+      userId: session.userId,
+      // A cookie session is not a real JWT — fabricate the claim shape the
+      // rest of the app reads (sub / email / email_verified).
+      claims: {
+        sub: session.userId,
+        email: session.email,
+        email_verified: true,
+      } as unknown as SupabaseClaims,
+    };
+  } else {
+    const jwt = request ? await resolveJwt(request) : null;
+    if (jwt) identity = { userId: jwt.userId, claims: jwt.claims };
+  }
+  if (!identity) throw new Error("Unauthorized: No authorization header provided");
+  return next({ context: identity });
+});
 
 /** Authn + tenant resolution. Context gains a verified `orgId`; queries must scope on it. */
 export const requireOrg = createMiddleware({ type: "function" })

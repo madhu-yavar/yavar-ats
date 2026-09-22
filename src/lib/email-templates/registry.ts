@@ -1,5 +1,7 @@
 import type { ComponentType } from 'react'
 
+import { SignupEmail } from './signup'
+
 import { template as memberInvitedTemplate } from './member-invited'
 import { template as orgApprovedTemplate } from './org-approved'
 import { template as orgRejectedTemplate } from './org-rejected'
@@ -18,6 +20,10 @@ export interface TemplateEntry {
  * Import and register new templates here after creating them in this directory.
  */
 export const TEMPLATES: Record<string, TemplateEntry> = {
+  'email-confirmation': {
+    component: SignupEmail as ComponentType<any>,
+    subject: (d) => `Confirm your ${d?.["siteName"] ?? "ATSIQ"} email address`,
+  },
   'member-invited': memberInvitedTemplate,
   'org-approved': orgApprovedTemplate,
   'org-rejected': orgRejectedTemplate,

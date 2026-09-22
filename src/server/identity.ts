@@ -1,6 +1,12 @@
 import { createMiddleware } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { createClient } from "@supabase/supabase-js";
+import type { Database } from "../integrations/supabase/types";
+
+type AuthClient = ReturnType<typeof createClient<Database>>;
+/** Exact claims shape GoTrue's getClaims() returns (jose JwtPayload). */
+type GetClaimsResult = Awaited<ReturnType<AuthClient["auth"]["getClaims"]>>;
+export type SupabaseClaims = Extract<GetClaimsResult["data"], { claims: unknown }>["claims"];
 import { and, eq, gt } from "drizzle-orm";
 
 import { db } from "./db";
@@ -70,7 +76,7 @@ function readCookie(request: Request, name: string): string | null {
 }
 
 /** Validate the cookie against the sessions table; returns the user identity. */
-async function resolveSession(request: Request): Promise<{ userId: string; email: string } | null> {
+export async function resolveSession(request: Request): Promise<{ userId: string; email: string } | null> {
   const raw = readCookie(request, SESSION_COOKIE);
   if (!raw || raw.length < 32) return null;
   const [row] = await db
@@ -83,9 +89,9 @@ async function resolveSession(request: Request): Promise<{ userId: string; email
 }
 
 /** Verify a Supabase-compatible JWT the same way the legacy middleware does. */
-async function resolveJwt(
+export async function resolveJwt(
   request: Request,
-): Promise<{ userId: string; email: string; claims: Record<string, unknown> } | null> {
+): Promise<{ userId: string; email: string; claims: SupabaseClaims } | null> {
   const supabaseUrl = process.env["SUPABASE_URL"];
   const supabaseKey = process.env["SUPABASE_PUBLISHABLE_KEY"];
   const authHeader = request.headers.get("authorization");
@@ -97,39 +103,13 @@ async function resolveJwt(
     auth: { persistSession: false, autoRefreshToken: false },
   });
   const { data, error } = await supabase.auth.getClaims(token);
-  const claims = (data?.claims ?? {}) as Record<string, unknown>;
-  if (error || !claims["sub"]) return null;
+  if (error || !data?.claims) return null;
   return {
-    userId: String(claims["sub"]),
-    email: typeof claims["email"] === "string" ? claims["email"] : "",
-    claims,
+    userId: String(data.claims.sub),
+    email: typeof data.claims.email === "string" ? data.claims.email : "",
+    claims: data.claims,
   };
 }
-
-/**
- * Replacement for requireSupabaseAuth: same context shape ({ userId, claims }),
- * cookie session first, JWT bearer second. Everything downstream
- * (requireOrg/requireRole/…) is unchanged.
- */
-export const requireIdentity = createMiddleware({ type: "function" }).server(async ({ next }) => {
-  const request = getRequest();
-  const session = request ? await resolveSession(request) : null;
-
-  let identity: { userId: string; claims: Record<string, unknown>; via: "session" | "jwt" } | null =
-    null;
-  if (session) {
-    identity = {
-      userId: session.userId,
-      claims: { sub: session.userId, email: session.email, email_verified: true },
-      via: "session",
-    };
-  } else {
-    const jwt = request ? await resolveJwt(request) : null;
-    if (jwt) identity = { userId: jwt.userId, claims: jwt.claims, via: "jwt" };
-  }
-  if (!identity) throw new Error("Unauthorized: No authorization header provided");
-  return next({ context: identity });
-});
 
 /** Establish a cookie session from an already-verified bearer JWT. */
 export async function exchangeTokenForSession(

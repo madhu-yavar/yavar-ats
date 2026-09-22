@@ -17,6 +17,14 @@ import { sourceIntegrations } from "@db/schema";
 
 export type MeetingOAuthProvider = "microsoft" | "google" | "zoom";
 
+type OAuthTokenResponse = {
+  id_token?: string;
+  refresh_token?: string;
+  access_token?: string;
+  expires_in?: string | number;
+  scope?: string;
+};
+
 type ProviderOAuth = {
   authorize: string;
   scope: string;
@@ -126,14 +134,14 @@ export async function exchangeCode(
       }),
     });
     if (!res.ok) throw new Error(`Microsoft token exchange failed (${res.status}).`);
-    const body = (await res.json()) as Record<string, string>;
+    const body = (await res.json()) as OAuthTokenResponse;
     const claims = decodeIdTokenClaims(body.id_token);
     return {
       refresh_token: body.refresh_token ?? "",
       access_token: body.access_token ?? "",
       expires_at: String(Math.floor(Date.now() / 1000) + Number(body.expires_in ?? 3600)),
-      tenant_id: String(claims.tid ?? ""),
-      connected_email: String(claims.preferred_username ?? claims.email ?? ""),
+      tenant_id: String(claims["tid"] ?? ""),
+      connected_email: String(claims["preferred_username"] ?? claims["email"] ?? ""),
       scope: body.scope ?? "",
     };
   }
@@ -151,13 +159,13 @@ export async function exchangeCode(
       }),
     });
     if (!res.ok) throw new Error(`Google token exchange failed (${res.status}).`);
-    const body = (await res.json()) as Record<string, string>;
+    const body = (await res.json()) as OAuthTokenResponse;
     const claims = decodeIdTokenClaims(body.id_token);
     return {
       refresh_token: body.refresh_token ?? "",
       access_token: body.access_token ?? "",
       expires_at: String(Math.floor(Date.now() / 1000) + Number(body.expires_in ?? 3600)),
-      connected_email: String(claims.email ?? ""),
+      connected_email: String(claims["email"] ?? ""),
       scope: body.scope ?? "",
     };
   }
@@ -171,7 +179,7 @@ export async function exchangeCode(
     },
   });
   if (!res.ok) throw new Error(`Zoom token exchange failed (${res.status}).`);
-  const body = (await res.json()) as Record<string, string>;
+  const body = (await res.json()) as OAuthTokenResponse;
   let connectedEmail = "";
   try {
     const me = (await (
@@ -258,7 +266,7 @@ export async function finishProviderConnect(
         enabled: true,
         config: {
           ...existingConfig,
-          connected_email: secretsPatch.connected_email ?? null,
+          connected_email: secretsPatch["connected_email"] ?? null,
           connected_at: new Date().toISOString(),
         },
         updatedAt: new Date(),

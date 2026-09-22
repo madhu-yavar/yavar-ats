@@ -1,9 +1,11 @@
 import * as React from 'react'
 import { render } from '@react-email/render'
 import { EmailAPIError, sendLovableEmail } from '@lovable.dev/email-js'
+import nodemailer from 'nodemailer'
 import { TEMPLATES } from './registry'
 
-// Server-only: reads LOVABLE_API_KEY. Never import from client components.
+// Server-only: reads SMTP_URL (self-hosted) or LOVABLE_API_KEY (Lovable Cloud).
+// Never import from client components.
 
 // Configuration baked in at scaffold time
 const SITE_NAME = "ATSIQ"
@@ -37,11 +39,6 @@ export async function sendTemplateEmail(
   to: string,
   options: SendTemplateEmailOptions = {}
 ): Promise<SendTemplateEmailResult> {
-  const apiKey = process.env['LOVABLE_API_KEY']
-  if (!apiKey) {
-    throw new Error('LOVABLE_API_KEY is not configured')
-  }
-
   const template = TEMPLATES[templateName]
   if (!template) {
     throw new Error(
@@ -64,12 +61,37 @@ export async function sendTemplateEmail(
     typeof template.subject === 'function'
       ? template.subject(templateData)
       : template.subject
+  const from = process.env['EMAIL_FROM'] || `${SITE_NAME} <noreply@${FROM_DOMAIN}>`
+
+  // Self-hosted deployments send over their own SMTP (documented in
+  // DEPLOYMENT-GCP.md); the Lovable API path only exists on Lovable Cloud.
+  const smtpUrl = process.env['SMTP_URL']
+  if (smtpUrl) {
+    const transporter = nodemailer.createTransport(smtpUrl)
+    await transporter.sendMail({
+      from,
+      to: recipient,
+      subject,
+      html,
+      text,
+      ...(options.replyTo ? { replyTo: options.replyTo } : {}),
+      headers: { 'X-ATSIQ-Idempotency-Key': options.idempotencyKey || crypto.randomUUID() },
+    })
+    return { sent: true }
+  }
+
+  const apiKey = process.env['LOVABLE_API_KEY']
+  if (!apiKey) {
+    throw new Error(
+      'Email is not configured: set SMTP_URL (self-hosted) or LOVABLE_API_KEY (Lovable Cloud)'
+    )
+  }
 
   try {
     await sendLovableEmail(
       {
         to: recipient,
-        from: `${SITE_NAME} <noreply@${FROM_DOMAIN}>`,
+        from,
         sender_domain: SENDER_DOMAIN,
         subject,
         html,

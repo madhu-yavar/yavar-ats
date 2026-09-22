@@ -2,6 +2,8 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import SpriteText from "three-spritetext";
 
+import type { ForceGraphMethods } from "react-force-graph-3d";
+
 import type { OntologyEdge, OntologyNode } from "@/lib/ontology.server";
 
 const ForceGraph3D = lazy(() => import("react-force-graph-3d"));
@@ -45,7 +47,7 @@ export function OntologyGraph3D({
   limit?: number;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
-  const fgRef = useRef<{ zoomToFit: (ms?: number, px?: number) => void } | null>(null);
+  const fgRef = useRef<ForceGraphMethods | undefined>(undefined);
   const [width, setWidth] = useState(960);
   const [ready, setReady] = useState(false);
 
@@ -137,9 +139,7 @@ export function OntologyGraph3D({
             linkWidth={(l: unknown) => 0.6 + ((l as { weight?: number }).weight ?? 0) * 1.5}
             linkOpacity={0.6}
             onNodeClick={(n: unknown) => onSelect((n as { id: string }).id)}
-            ref={(fg: unknown) => {
-              fgRef.current = fg as { zoomToFit: (ms?: number, px?: number) => void } | null;
-            }}
+            ref={fgRef}
             onEngineStop={() => fgRef.current?.zoomToFit(600, 40)}
             warmupTicks={40}
             cooldownTicks={160}

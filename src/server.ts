@@ -106,7 +106,7 @@ function isServerFnPath(path: string): boolean {
   return path === "/_serverFn" || path.startsWith("/_serverFn/");
 }
 
-function applySecurityHeaders(response: Response, request: Request): Response {
+async function applySecurityHeaders(response: Response, request: Request): Promise<Response> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("text/html")) return response;
 
@@ -123,7 +123,7 @@ function applySecurityHeaders(response: Response, request: Request): Response {
   headers.set("X-Frame-Options", "SAMEORIGIN");
 
   if (!response.body) return new Response(null, { status: response.status, statusText: response.statusText, headers });
-  return stampNonces(response, nonce, headers);
+  return await stampNonces(response, nonce, headers);
 }
 
 function generateNonce(): string {
@@ -187,7 +187,7 @@ export default {
 
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      return applySecurityHeaders(await normalizeCatastrophicSsrResponse(response), request);
+      return await applySecurityHeaders(await normalizeCatastrophicSsrResponse(response), request);
     } catch (error) {
       console.error(error);
       return new Response(renderErrorPage(), {

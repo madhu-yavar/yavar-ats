@@ -223,14 +223,14 @@ export type ScreeningRun = Tables<"screening_runs">;
 export const screeningKitsQuery = (candidateId: string) =>
   queryOptions({
     queryKey: ["screening_kits", candidateId],
-    queryFn: async () => (await listCandidateScreeningKits(candidateId)) as ScreeningKit[],
+    queryFn: async () => (await listCandidateScreeningKits({ data: { candidateId } })) as ScreeningKit[],
   });
 
 /** Graded screening calls for one candidate, newest first. */
 export const screeningRunsQuery = (candidateId: string) =>
   queryOptions({
     queryKey: ["screening_runs", candidateId],
-    queryFn: async () => (await listCandidateScreeningRuns(candidateId)) as ScreeningRun[],
+    queryFn: async () => (await listCandidateScreeningRuns({ data: { candidateId } })) as ScreeningRun[],
   });
 
 /** Every screening kit in the organisation, newest first. */
@@ -257,14 +257,14 @@ export type OwnershipEvent = Tables<"candidate_ownership_events">;
 export const candidateNotesQuery = (candidateId: string) =>
   queryOptions({
     queryKey: ["candidate_notes", candidateId],
-    queryFn: async () => (await listCandidateNotes(candidateId)) as CandidateNote[],
+    queryFn: async () => (await listCandidateNotes({ data: { candidateId } })) as CandidateNote[],
   });
 
 /** Ownership hand-over audit trail for one candidate, newest first. */
 export const ownershipEventsQuery = (candidateId: string) =>
   queryOptions({
     queryKey: ["ownership_events", candidateId],
-    queryFn: async () => (await listOwnershipEvents(candidateId)) as OwnershipEvent[],
+    queryFn: async () => (await listOwnershipEvents({ data: { candidateId } })) as OwnershipEvent[],
   });
 
 /** Referrals sent between colleagues. */

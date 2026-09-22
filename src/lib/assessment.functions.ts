@@ -141,17 +141,18 @@ export const submitAssessment = createServerFn({ method: "POST" })
       .where(eq(candidateAssessments.token, data.token))
       .limit(1);
     if (!row) throw new Error("This assessment link is not valid");
+    if (!row.orgId) throw new Error("This assessment link is not valid");
     if (row.status === "completed") throw new Error("This assessment has already been submitted");
 
     const questions = (row.questions as unknown as AssessmentQuestion[]) ?? [];
-    let title = "the role";
+    let title: string = "the role";
     if (row.requisitionId) {
       const [req] = await db
         .select({ title: requisitions.title })
         .from(requisitions)
         .where(eq(requisitions.id, row.requisitionId))
         .limit(1);
-      if (req) title = req.title;
+      if (req?.title) title = req.title;
     }
 
     const result = await scoreAnswers({ orgId: row.orgId, title, questions, answers: data.answers });
