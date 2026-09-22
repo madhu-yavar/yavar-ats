@@ -67,9 +67,6 @@ export type MarketBenchmark = {
   engine: { provider: string; model: string };
 };
 
-const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
-
 /**
  * Publishers whose pay data is worth reading. Live search results outside this
  * list are dropped — that is what keeps "more sources" from meaning "worse
