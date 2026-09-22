@@ -34,7 +34,7 @@ export function AccountMenu() {
   });
 
   const email = session.data?.email ?? null;
-  const name = session.data?.user_metadata?.["full_name"] ?? email ?? "You";
+  const name = session.data?.full_name ?? email ?? "You";
   const initials = String(name)
     .split(" ")
     .filter(Boolean)
@@ -56,11 +56,8 @@ export function AccountMenu() {
 
   async function signOut() {
     setSigningOut(true);
-    try {
-      await fetch("/api/auth/session", { method: "DELETE" }).catch(() => undefined);
-    } finally {
-      await authSignOut();
-    }
+    await authSignOut();
+    window.location.assign("/");
   }
 
   return (
