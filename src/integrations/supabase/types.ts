@@ -202,6 +202,45 @@ export type Database = {
           },
         ]
       }
+      audit_log: {
+        Row: {
+          action: string
+          actor: string | null
+          actor_user_id: string | null
+          created_at: string
+          detail: Json | null
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          ip: string | null
+          org_id: string | null
+        }
+        Insert: {
+          action: string
+          actor?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          detail?: Json | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          ip?: string | null
+          org_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          detail?: Json | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          ip?: string | null
+          org_id?: string | null
+        }
+        Relationships: []
+      }
       auth_tokens: {
         Row: {
           consumed_at: string | null
