@@ -29,6 +29,6 @@
 - [ ] Run authenticated and public end-to-end workflow tests
 - [x] Refresh repository product, deployment, security and verification documents
 - [x] Refresh the in-app user manual and copilot knowledge source
-- [ ] Update the investor product document to the current implementation
+- [x] Update the technical architecture document to the current implementation
 - [ ] Run current security checks and resolve release blockers
 - [ ] Publish and verify the production release

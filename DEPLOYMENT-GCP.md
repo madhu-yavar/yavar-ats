@@ -11,7 +11,7 @@ Instructions for DevOps to deploy the ATSIQ ATS to a GCP cluster under the domai
 | App type | TanStack Start (React 19) SSR app on Nitro → plain **Node server** (`.output/server/index.mjs`) |
 | Package manager | Bun (lockfile `bun.lock`); runtime image needs only Node |
 | Database | Plain **PostgreSQL** (Drizzle ORM, SQL migrations in `drizzle/pg-migrations/`) — no Supabase DB |
-| Auth | Supabase-compatible auth (GoTrue) **endpoint only** — see §4 |
+| Auth | First-party password authentication and PostgreSQL-backed cookie sessions |
 | Files (CV vault, templates) | S3-compatible object storage |
 
 A production `Dockerfile` is at the repo root. `vite build` produces a Node server (nitro `node-server` preset, already configured in `vite.config.ts`). Verified locally: `node .output/server/index.mjs` serves `/` and `/privacy` with HTTP 200.
@@ -31,13 +31,11 @@ A production `Dockerfile` is at the repo root. `vite build` produces a Node serv
 
 ## 3. Build & run
 
-**Image** (build args bake the auth endpoint into the client bundle):
+**Image:**
 
 ```bash
 gcloud builds submit \
-  --tag REGION-docker.pkg.dev/PROJECT/REGISTRY/atsiq:TAG \
-  --build-arg VITE_SUPABASE_URL="https://lxvchkkaxfrbfqxcrkxo.supabase.co" \
-  --build-arg VITE_SUPABASE_PUBLISHABLE_KEY="<publishable key — §4>"
+  --tag REGION-docker.pkg.dev/PROJECT/REGISTRY/atsiq:TAG
 ```
 
 Container: port **3000**, `HOST=0.0.0.0`. No `/health` endpoint exists — use `GET /` (HTTP 200) as readiness/liveness probe. One DB migration **Job per release** (below) must complete before rolling the Deployment.
@@ -57,12 +55,7 @@ DATABASE_URL="postgresql://USER:PASS@PRIVATE_IP:5432/atsiq" bunx drizzle-kit mig
 | `DATABASE_URL` | `postgresql://…` Cloud SQL private IP |
 | `SESSION_SECRET` | `openssl rand -hex 32` (must be ≥ 32 chars) |
 | `PUBLIC_SITE_URL` | `https://z-atsiq.yavar.ai` (used in capture links, OAuth redirects, emails) |
-| `SUPABASE_URL` | `https://lxvchkkaxfrbfqxcrkxo.supabase.co` — the **auth** endpoint (GoTrue). Data does NOT live here; identity/JWT verification does. |
-| `SUPABASE_PUBLISHABLE_KEY` | Publishable key of that project (the `sb_publishable_…` value from the repo's tracked `.env`). Not a secret; safe in config. |
-
-### Build-time (Docker build args, same values as above)
-
-`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` — the browser bundle reads these at build time; runtime env alone is not enough for sign-in.
+| `SECRET_ENCRYPTION_KEY` | Random 32-byte key used to encrypt organisation AI and integration credentials at rest |
 
 ### Object storage (required for CV upload / templates / brand assets)
 
@@ -77,7 +70,7 @@ DATABASE_URL="postgresql://USER:PASS@PRIVATE_IP:5432/atsiq" bunx drizzle-kit mig
 
 | Feature | Variables |
 |---|---|
-| AI scoring / copilot (needs ≥1 provider) | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GITHUB_TOKEN` (social profiling) |
+| Social-profile public API allowance | `GITHUB_TOKEN` (optional; raises GitHub API limits) |
 | LinkedIn org-level connect | `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET`, `LINKEDIN_REDIRECT_URI=https://z-atsiq.yavar.ai/api/public/linkedin/callback`, `LINKEDIN_SCOPES`, `LINKEDIN_STATE_SECRET` (random 32+) |
 | Google Calendar / Meet 1-click | `GOOGLE_CALENDAR_OAUTH_CLIENT_ID`, `GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET` |
 | Microsoft Teams meeting | `MICROSOFT_OAUTH_CLIENT_ID`, `MICROSOFT_OAUTH_CLIENT_SECRET` |
@@ -88,7 +81,11 @@ DATABASE_URL="postgresql://USER:PASS@PRIVATE_IP:5432/atsiq" bunx drizzle-kit mig
 | Scheduler/cron routes | `LOVABLE_CRON_SECRET` (random 32+; optional `LOVABLE_CRON_SECRET_PREVIOUS` for rotation) |
 | Transactional email | `SMTP_URL` (e.g. `smtps://user:pass@smtp.example.com:465`), `EMAIL_FROM` |
 
-**Secrets to generate:** `SESSION_SECRET`, `SECRET_ENCRYPTION_KEY` (AES-256 key for credentials at rest; `openssl rand -base64 32`), `OAUTH_STATE_SECRET`, `LINKEDIN_STATE_SECRET`, `INBOUND_EMAIL_SECRET`, `LOVABLE_CRON_SECRET` — stored in Secret Manager. Setting `SECRET_ENCRYPTION_KEY` enables encryption of OAuth/AI/capture credentials; without it they are stored in the clear (a one-time warning is logged). Rotate-sensitive: decryptSecret returns empty on mismatch rather than erroring.
+**Secrets to generate:** `SESSION_SECRET`, `SECRET_ENCRYPTION_KEY` (AES-256 key for credentials at rest; `openssl rand -base64 32`), `OAUTH_STATE_SECRET`, `LINKEDIN_STATE_SECRET`, `INBOUND_EMAIL_SECRET`, `LOVABLE_CRON_SECRET` — stored in Secret Manager. `SECRET_ENCRYPTION_KEY` is mandatory before saving OAuth or AI credentials. Rotating it requires re-encrypting stored values.
+
+### Organisation-owned AI credentials
+
+Do not configure deployment-level Gemini, OpenAI or Anthropic keys. An authorised HR head or organisation owner selects Gemini, OpenAI or Claude in ATSIQ and stores that organisation's key through Integrations. The encrypted value is held in PostgreSQL and is resolved only for that organisation. Missing, invalid or quota-limited keys stop the requested AI operation with a clear error; the application never falls back to a shared platform key.
 
 ### Rate limiter — proxy positioning (required)
 
@@ -156,7 +153,7 @@ Plus a `Service` (port 80 → 3000) and an `Ingress` with `ManagedCertificate` f
 ## 8. First-boot checklist
 
 1. Migration Job ran clean against `atsiq` DB.
-2. `https://z-atsiq.yavar.ai` loads and sign-in works (auth endpoint reachable from both browser and cluster).
+2. `https://z-atsiq.yavar.ai` loads; sign-up, confirmation, sign-in, session renewal, sign-out and password recovery work through the first-party auth routes.
 3. Create first org/user, upload a CV — confirms `DATABASE_URL` + S3/HMAC path.
 4. Trigger one cron route manually with the bearer token → HTTP 200.
 5. Smoke: `/`, `/candidates`, `/requisitions`, `/privacy` → HTTP 200.
