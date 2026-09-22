@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import {
   ArrowUpRight,
   Building2,
-  CircleHelp,
+  ChevronRight,
   Gauge,
   Layers,
   Rocket,
