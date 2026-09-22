@@ -499,6 +499,174 @@ function discoverPreviewResumeUrls() {
   return urls.slice(-20).reverse();
 }
 
+/**
+ * Deep read of the profile that is on screen: expand every collapsed block,
+ * walk every tab on the record, then follow the profile's own inner detail
+ * pages (experience, education, skills, certifications, projects,
+ * recommendations, recent activity) in the recruiter's signed-in session.
+ * Runs whether or not a CV is attached, so a missing file never costs the
+ * written record.
+ */
+async function deepHarvestProfile(expectedName, publicProfileUrl) {
+  const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+  const clean = (value) =>
+    String(value || "")
+      .replace(/\r/g, "")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  const root = () => document.querySelector("main, [role=main]") || document.body;
+  const visible = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  };
+  const labelOf = (el) =>
+    [el.innerText, el.getAttribute?.("aria-label"), el.getAttribute?.("title")]
+      .filter(Boolean)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const sections = [];
+  const seen = new Set();
+  const push = (name, body) => {
+    const text = clean(body);
+    if (text.length < 40) return;
+    const key = text.slice(0, 500);
+    if (seen.has(key)) return;
+    seen.add(key);
+    sections.push({ label: clean(name).slice(0, 60) || "Section", text });
+  };
+
+  /* 1. open everything that is collapsed */
+  const EXPAND = /see more|show more|show all|see all|read more|…\s*more|\bmore\b|expand|view all|show \d+ more/i;
+  const SKIP = /message|connect|follow|invite|save to|hide|show less|see less|feedback|report|download|attachments?/i;
+  let expanded = 0;
+  for (let pass = 0; pass < 4; pass += 1) {
+    const controls = [
+      ...root().querySelectorAll('button, [role="button"], a[role="button"], [aria-expanded="false"]'),
+    ].filter(visible);
+    let clicked = 0;
+    for (const el of controls) {
+      if (el.dataset?.atsiqExpanded) continue;
+      const text = labelOf(el);
+      if (SKIP.test(text)) continue;
+      const wants = el.getAttribute("aria-expanded") === "false" || EXPAND.test(text);
+      if (!wants) continue;
+      if (el.dataset) el.dataset.atsiqExpanded = "1";
+      try {
+        el.click();
+        clicked += 1;
+        expanded += 1;
+      } catch {
+        /* control refused the click */
+      }
+      if (clicked >= 12) break;
+    }
+    if (!clicked) break;
+    await pause(500);
+  }
+
+  /* 2. nudge lazy sections into the DOM */
+  const scroller = document.scrollingElement || document.body;
+  const home = scroller.scrollTop;
+  for (let step = 1; step <= 6; step += 1) {
+    scroller.scrollTop = (scroller.scrollHeight * step) / 6;
+    await pause(250);
+  }
+  scroller.scrollTop = home;
+  push("Profile", root().innerText);
+
+  /* 3. every tab on the record */
+  const tabs = [...root().querySelectorAll('[role="tab"], [data-test-tab], nav a')]
+    .filter(visible)
+    .filter((el) => {
+      const text = labelOf(el);
+      return text.length > 1 && text.length < 40;
+    });
+  const wasSelected = tabs.find((el) => el.getAttribute("aria-selected") === "true") || null;
+  const visited = [];
+  for (const tab of tabs.slice(0, 12)) {
+    const name = labelOf(tab);
+    try {
+      tab.scrollIntoView({ block: "center" });
+      tab.click();
+    } catch {
+      continue;
+    }
+    await pause(900);
+    const panelId = tab.getAttribute("aria-controls");
+    const panel = panelId ? document.getElementById(panelId) : null;
+    push(name, (panel || root()).innerText);
+    visited.push(name);
+  }
+  if (wasSelected) {
+    try {
+      wasSelected.click();
+    } catch {
+      /* leaving the last tab open is harmless */
+    }
+    await pause(400);
+  }
+
+  /* 4. follow the profile's own inner detail pages */
+  const WANTED =
+    /\/details\/|\/overlay\/|recent-activity|\/skills|\/experience|\/education|\/certifications|\/courses|\/projects|\/publications|\/patents|\/recommendations|\/volunteering|\/honors/i;
+  const inner = new Set();
+  for (const anchor of [...root().querySelectorAll("a[href]")].filter(visible)) {
+    try {
+      const url = new URL(anchor.href, location.href);
+      if (url.origin === location.origin && WANTED.test(url.pathname)) inner.add(url.href);
+    } catch {
+      /* malformed href */
+    }
+  }
+  if (publicProfileUrl) {
+    const base = String(publicProfileUrl).replace(/\/+$/, "");
+    for (const part of [
+      "experience",
+      "education",
+      "skills",
+      "certifications",
+      "projects",
+      "publications",
+      "recommendations",
+      "courses",
+    ]) {
+      inner.add(`${base}/details/${part}/`);
+    }
+  }
+  let followed = 0;
+  for (const href of [...inner].slice(0, 14)) {
+    try {
+      const res = await fetch(href, { credentials: "include" });
+      if (!res.ok) continue;
+      const html = await res.text();
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      doc.querySelectorAll("script, style, noscript, svg").forEach((node) => node.remove());
+      const scope = doc.querySelector("main, [role=main]") || doc.body;
+      const name = new URL(href).pathname.split("/").filter(Boolean).slice(-2).join(" / ");
+      push(name, scope?.innerText || scope?.textContent);
+      followed += 1;
+    } catch {
+      /* inner page unavailable in this session */
+    }
+    await pause(250);
+  }
+
+  const text = sections
+    .map((section) => `## ${section.label}\n${section.text}`)
+    .join("\n\n")
+    .slice(0, 380000);
+  return {
+    text,
+    expanded,
+    tabs: visited,
+    followed,
+    name: expectedName || null,
+  };
+}
+
 function openAttachmentsTab() {
   const main = document.querySelector("main, [role=main]") || document.body;
   const tab = [...main.querySelectorAll('[role="tab"], button, a')].find((el) =>
@@ -920,6 +1088,15 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
       if (!page) throw new Error("[profile] applicant details could not be read");
       const candidateName = page.candidateName || item.label;
       if (!candidateName) throw new Error("the applicant name could not be confirmed");
+      // Deep read: every tab, every collapsed block and the profile's own inner
+      // detail pages, done before the CV step so a missing file never costs the
+      // written record.
+      await setRun({ note: `Reading every tab and section for ${candidateName}…` });
+      const deep = await run(workTabId, deepHarvestProfile, [
+        candidateName,
+        page.publicProfileUrl || null,
+      ]).catch(() => null);
+      if (deep?.text && deep.text.length > (page.text?.length ?? 0)) page.text = deep.text;
       if (!page.resume) {
         try {
           page.resume = await downloadResumeFromButton(workTabId, candidateName);
@@ -977,6 +1154,20 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
 
 if (typeof chrome !== "undefined" && chrome.runtime?.onMessage)
   chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
+    if (msg?.type === "deepRead") {
+      (async () => {
+        try {
+          const deep = await run(msg.tabId, deepHarvestProfile, [
+            msg.candidateName || null,
+            msg.publicProfileUrl || null,
+          ]);
+          respond({ ok: true, deep });
+        } catch (error) {
+          respond({ ok: false, error: error?.message || "deep read failed" });
+        }
+      })();
+      return true;
+    }
     if (msg?.type === "status") {
       getRun().then((r) => respond({ run: r }));
       return true;

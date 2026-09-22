@@ -104,6 +104,16 @@ $("send").addEventListener("click", async () => {
     });
     if (!result || (!result.resume && result.text.length < 80))
       throw new Error("There was not enough readable text on this page.");
+
+    // Deep read: open every tab and collapsed block on this page and follow its
+    // own inner detail pages, so nothing is missed when no CV is attached.
+    status("Reading every tab and section on this page…");
+    const deepRes = await chrome.runtime
+      .sendMessage({ type: "deepRead", tabId: tab.id })
+      .catch(() => null);
+    const deepText = deepRes?.ok ? deepRes.deep?.text : null;
+    if (deepText && deepText.length > (result.text?.length ?? 0)) result.text = deepText;
+
     if (result.resume) status("Found the attached CV — sending it across…");
 
     const res = await fetch(`${site}/api/public/capture`, {
