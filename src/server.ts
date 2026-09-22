@@ -178,11 +178,17 @@ export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
       const url = new URL(request.url);
-      if (
-        request.method !== "OPTIONS" &&
-        (isPublicApiPath(url.pathname) || isServerFnPath(url.pathname))
-      ) {
-        if (!allowRequest(`${clientIp(request)}:${url.pathname}`)) return tooManyRequests();
+      if (request.method !== "OPTIONS") {
+        // Sign-in, sign-up and reset are credential endpoints: a much tighter
+        // ceiling than ordinary API traffic, on top of the per-account
+        // throttling the auth layer itself applies.
+        if (isAuthPath(url.pathname)) {
+          if (!allowRequest(`auth:${clientIp(request)}:${url.pathname}`, AUTH_RATE_LIMIT)) {
+            return tooManyRequests();
+          }
+        } else if (isPublicApiPath(url.pathname) || isServerFnPath(url.pathname)) {
+          if (!allowRequest(`${clientIp(request)}:${url.pathname}`)) return tooManyRequests();
+        }
       }
 
       const handler = await getServerEntry();
