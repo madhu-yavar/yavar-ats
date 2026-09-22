@@ -1307,6 +1307,12 @@ function AiModelCard() {
         scoring and AI screening. Deterministic scoring (experience band, GitHub signals, weighted
         roll-up) never uses a model.
       </p>
+      <p className="mt-2 text-xs font-medium text-foreground">
+        Your own key is required. Every AI action on this workspace is billed to the key saved here —
+        there is no shared or platform key, and no other organisation&apos;s key is ever used. Until a
+        key is saved, AI steps stop with a clear message instead of running on someone else&apos;s
+        account.
+      </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
