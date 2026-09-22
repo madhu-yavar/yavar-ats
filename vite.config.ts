@@ -6,10 +6,30 @@
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
+/** three / 3d-force-graph read `window.THREE` at module scope. They are only ever
+ *  loaded client-side (lazy import in src/routes/brain.tsx), but Rollup used to
+ *  merge them into the same vendor chunk as the unenv polyfills that SSR imports,
+ *  which crashed every server-rendered page with "window is not defined".
+ *  Keeping them in a dedicated chunk means the server never evaluates them. */
+const BROWSER_ONLY_3D =
+  /node_modules\/(three|three-spritetext|three-render-objects|3d-force-graph|react-force-graph-3d|force-graph|kapsule|accessor-fn)\//;
+
 export default defineConfig({
   // Self-hosted deploys (Docker/GKE) need a Node server, not the Lovable
   // Cloudflare default. Produces .output/server/index.mjs via `vite build`.
   nitro: { preset: "node-server" },
+  vite: {
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id: string) {
+            if (BROWSER_ONLY_3D.test(id)) return "browser-3d";
+            return undefined;
+          },
+        },
+      },
+    },
+  },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this

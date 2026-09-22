@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Brain,
@@ -22,7 +22,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { OntologyGraph } from "@/components/OntologyGraph";
-import { OntologyGraph3D } from "@/components/OntologyGraph3D";
+// three / react-force-graph-3d touch `window` at module scope, so this module
+// must never be evaluated during server rendering — load it lazily, client-side.
+const OntologyGraph3D = lazy(() =>
+  import("@/components/OntologyGraph3D").then((m) => ({ default: m.OntologyGraph3D })),
+);
 
 export const Route = createFileRoute("/brain")({
   head: () => ({
@@ -239,12 +243,16 @@ function TalentBrainPage() {
               ontology”.
             </p>
           ) : mounted && view === "3d" ? (
-            <OntologyGraph3D
-              nodes={nodes}
-              edges={data?.edges ?? []}
-              selected={selected}
-              onSelect={(slug) => setSelected((cur) => (cur === slug ? null : slug))}
-            />
+            <Suspense
+              fallback={<p className="text-sm text-muted-foreground">Loading the 3D map…</p>}
+            >
+              <OntologyGraph3D
+                nodes={nodes}
+                edges={data?.edges ?? []}
+                selected={selected}
+                onSelect={(slug) => setSelected((cur) => (cur === slug ? null : slug))}
+              />
+            </Suspense>
           ) : (
             <OntologyGraph
               nodes={nodes}

@@ -63,7 +63,7 @@ export const Route = createFileRoute("/api/auth/login")({
 
           return new Response(JSON.stringify({ ok: true, email: user.email }), {
             status: 200,
-            headers: { "content-type": "application/json", "set-cookie": sessionCookie(token) },
+            headers: { "content-type": "application/json", "set-cookie": sessionCookie(token, request) },
           });
         } catch (err) {
           return Response.json({ error: (err as Error).message || "Sign-in failed." }, { status: 500 });
