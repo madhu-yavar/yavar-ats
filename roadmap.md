@@ -26,9 +26,10 @@
 - [x] Add an explicitly labelled 50-person accepted-offer test cohort
 
 ## Release validation and documentation
-- [ ] Run authenticated and public end-to-end workflow tests
+- [ ] Restore the database to immediately before 2026-09-22 22:13 UTC and reconcile all business-record counts (blocked: provider point-in-time recovery required)
+- [ ] Run authenticated and public end-to-end workflow tests (blocked until database recovery)
 - [x] Refresh repository product, deployment, security and verification documents
 - [x] Refresh the in-app user manual and copilot knowledge source
 - [x] Update the technical architecture document to the current implementation
-- [ ] Run current security checks and resolve release blockers
-- [ ] Publish and verify the production release
+- [ ] Run current security checks and resolve release blockers (basic scan passed; dependency scan parser blocked by URL-pinned xlsx package)
+- [ ] Publish and verify the production release (blocked until database recovery and revalidation)

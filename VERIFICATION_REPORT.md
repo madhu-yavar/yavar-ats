@@ -2,7 +2,15 @@
 
 **Current release date:** 2026-09-22  
 **Architecture under test:** PostgreSQL + Drizzle, first-party cookie sessions, S3-compatible private storage and organisation-owned AI credentials.  
-**Status:** Current automated and browser results are recorded below. Historical migration evidence is retained for traceability and is not a statement that legacy browser data paths remain active.
+**Status:** RELEASE BLOCKED. On 2026-09-22 at approximately 22:13 UTC, the integration test was invoked without the required disposable database override and its cleanup targeted the configured remote database. The run was stopped after the cleanup failed during fixture creation. No publication is permitted until point-in-time recovery is completed and data counts are reconciled.
+
+## Release incident and containment
+
+- Pre-test known business counts: 73 candidates, 33 requisitions and 80 applications.
+- Immediate post-incident counts: 0 candidates, 0 requisitions and 0 applications; the interrupted fixture left 2 test organisations and 2 test users.
+- Containment: release work and publishing stopped; no further stateful checks are permitted against the affected database.
+- Prevention: the destructive integration suite now rejects every database hostname except `127.0.0.1`, `localhost` and `::1` before its cleanup statement.
+- Recovery requirement: restore the database to the latest point immediately before 2026-09-22 22:13 UTC, then reconcile organisation, membership, user, candidate, requisition, application, offer, interview and audit counts before resuming release validation.
 
 ## F. Browser-layer round (P2-browser, second verification pass)
 

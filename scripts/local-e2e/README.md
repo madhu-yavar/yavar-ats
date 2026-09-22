@@ -4,6 +4,10 @@ Everything runs locally: a disposable Postgres (fixture with two demo tenants),
 a GoTrue-compatible auth stub, and the Vite dev server. Production Supabase is
 never touched — `.env.local` points the app at the local stub.
 
+The integration suite has a mandatory hostname guard and refuses to run unless
+`DATABASE_URL` resolves to `127.0.0.1`, `localhost` or `::1`. Never weaken or
+remove this guard.
+
     scripts/local-e2e/local-dev.sh        # start
     scripts/local-e2e/local-dev.sh stop   # stop
 

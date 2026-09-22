@@ -35,6 +35,17 @@ async function seedUser(email: string) {
 }
 
 beforeAll(async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error("DATABASE_URL is required and must point to the disposable local test database");
+  }
+  const databaseHost = new URL(databaseUrl).hostname;
+  if (!(["127.0.0.1", "localhost", "::1"].includes(databaseHost))) {
+    throw new Error(
+      `Refusing destructive integration tests against non-local database host: ${databaseHost}`,
+    );
+  }
+
   // Clean slate (cascades handle children)
   await db.execute(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
