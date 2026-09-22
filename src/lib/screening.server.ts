@@ -278,7 +278,6 @@ export async function gradeScreening(input: {
 
 /* ----------------------------------------------------------- transcribe */
 
-const LOVABLE_TRANSCRIBE = "https://ai.gateway.lovable.dev/v1/audio/transcriptions";
 const OPENAI_TRANSCRIBE = "https://api.openai.com/v1/audio/transcriptions";
 
 /**
