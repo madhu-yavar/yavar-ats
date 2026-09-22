@@ -31,5 +31,6 @@
 - [x] Refresh repository product, deployment, security and verification documents
 - [x] Refresh the in-app user manual and copilot knowledge source
 - [x] Update the technical architecture document to the current implementation
+- [x] Update and visually inspect the investor product document
 - [ ] Run current security checks and resolve release blockers (basic scan passed; dependency scan parser blocked by URL-pinned xlsx package)
 - [ ] Publish and verify the production release (blocked until database recovery and revalidation)
