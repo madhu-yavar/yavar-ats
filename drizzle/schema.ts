@@ -1280,3 +1280,58 @@ export const compKnowledge = pgTable(
     index("comp_knowledge_org_created_idx").on(t.orgId, t.createdAt),
   ],
 );
+
+/**
+ * Pre-onboarding document collection and validation.
+ *
+ * Before an approved offer may be released, the candidate's documents — photo
+ * ID, experience letters, payslips proving the last drawn CTC, education
+ * certificates — are collected (uploaded by TA or received on the careers
+ * inbox), read by the extraction agent into `extracted`, and then validated by
+ * HR/TA against the original file. The stored file, the extracted reading and
+ * the reviewer's decision live on the same row so the audit is transparent.
+ */
+export const onboardingDocuments = pgTable(
+  "onboarding_documents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    applicationId: uuid("application_id")
+      .notNull()
+      .references(() => applications.id, { onDelete: "cascade" }),
+    candidateId: uuid("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    offerId: uuid("offer_id").references(() => offers.id, { onDelete: "set null" }),
+    /** Catalogue key — see DOC_TYPES in src/lib/onboarding.server.ts. */
+    docType: text("doc_type").notNull(),
+    fileName: text("file_name").notNull(),
+    /** Private object-storage key, always under `<org_id>/…`. */
+    filePath: text("file_path"),
+    fileBytes: integer("file_bytes"),
+    contentType: text("content_type"),
+    /** "upload" (TA/HR) or "careers_inbox" (received by mail). */
+    source: text("source").notNull().default("upload"),
+    inboxMessageId: uuid("inbox_message_id"),
+    /** Text the agent read out of the file, kept for reviewer transparency. */
+    extractedText: text("extracted_text"),
+    extracted: jsonb("extracted"),
+    /** pending | extracted | failed */
+    extractionStatus: text("extraction_status").notNull().default("pending"),
+    extractionNote: text("extraction_note"),
+    model: text("model"),
+    /** pending | verified | rejected */
+    status: text("status").notNull().default("pending"),
+    reviewNote: text("review_note"),
+    reviewedBy: uuid("reviewed_by"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    uploadedBy: uuid("uploaded_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("onboarding_documents_org_app_idx").on(t.orgId, t.applicationId, t.createdAt),
+    index("onboarding_documents_org_status_idx").on(t.orgId, t.status),
+  ],
+);
