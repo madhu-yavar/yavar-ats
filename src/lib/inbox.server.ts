@@ -139,7 +139,12 @@ export async function attachmentText(filename: string, bytes: Uint8Array): Promi
   if (bytes.byteLength > MAX_INPUT_BYTES) return "";
 
   if (name.endsWith(".pdf")) {
-    const { extractText, getDocumentProxy } = await import("unpdf");
+    // Import through the serverless-safe subpath: importing the package root
+    // pulls the bundled pdfjs mega-module into the build's static analysis and
+    // overflows the TypeScript AST walker.
+    const { extractText, getDocumentProxy } = await import("unpdf/pdfjs").then(
+      async (pdfjs) => ({ ...(await import("unpdf")), ...pdfjs }),
+    );
     // pdf.js transfers (detaches) the buffer it is given — hand it a copy so the
     // caller keeps usable bytes for the resume vault and size reporting.
     const doc = await getDocumentProxy(new Uint8Array(bytes));
