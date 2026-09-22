@@ -50,13 +50,26 @@ export async function createSession(
   return token;
 }
 
-export function sessionCookie(token: string): string {
-  const secure = process.env["PUBLIC_SITE_URL"]?.startsWith("https") ? "; Secure" : "";
-  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_MS / 1000}${secure}`;
+/**
+ * Cookie attributes. The app is also rendered inside the Lovable preview
+ * iframe, which is a third-party context: a SameSite=Lax cookie is never sent
+ * back there, so over HTTPS we issue `SameSite=None; Secure`. Plain HTTP
+ * (local dev) keeps Lax because Chrome drops `None` without `Secure`.
+ */
+function cookieFlags(request?: Request): string {
+  const proto =
+    request?.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ??
+    (request?.url.startsWith("https") ? "https" : "");
+  const https = proto === "https" || process.env["PUBLIC_SITE_URL"]?.startsWith("https") === true;
+  return https ? "SameSite=None; Secure" : "SameSite=Lax";
 }
 
-export function clearSessionCookie(): string {
-  return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+export function sessionCookie(token: string, request?: Request): string {
+  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; ${cookieFlags(request)}; Max-Age=${SESSION_TTL_MS / 1000}`;
+}
+
+export function clearSessionCookie(request?: Request): string {
+  return `${SESSION_COOKIE}=; Path=/; HttpOnly; ${cookieFlags(request)}; Max-Age=0`;
 }
 
 export async function destroySession(request: Request): Promise<void> {

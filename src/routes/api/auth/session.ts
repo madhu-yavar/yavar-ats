@@ -28,7 +28,7 @@ export const Route = createFileRoute("/api/auth/session")({
         await destroySession(request);
         return new Response(JSON.stringify({ ok: true }), {
           status: 200,
-          headers: { "content-type": "application/json", "set-cookie": clearSessionCookie() },
+          headers: { "content-type": "application/json", "set-cookie": clearSessionCookie(request) },
         });
       },
     },

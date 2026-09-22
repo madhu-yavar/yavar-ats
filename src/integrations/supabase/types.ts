@@ -610,6 +610,7 @@ export type Database = {
           resume_text: string | null
           skills: string[]
           source: string
+          suspected_prompt_injection: boolean
           sync_status: string
           website_url: string | null
           willing_to_relocate: boolean | null
@@ -650,6 +651,7 @@ export type Database = {
           resume_text?: string | null
           skills?: string[]
           source?: string
+          suspected_prompt_injection?: boolean
           sync_status?: string
           website_url?: string | null
           willing_to_relocate?: boolean | null
@@ -690,6 +692,7 @@ export type Database = {
           resume_text?: string | null
           skills?: string[]
           source?: string
+          suspected_prompt_injection?: boolean
           sync_status?: string
           website_url?: string | null
           willing_to_relocate?: boolean | null
@@ -763,6 +766,71 @@ export type Database = {
             columns: ["requisition_id"]
             isOneToOne: false
             referencedRelation: "requisitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_templates: {
+        Row: {
+          background_content_type: string | null
+          background_path: string | null
+          config: Json
+          created_at: string
+          id: string
+          instructions: string | null
+          is_default: boolean
+          kind: string
+          logo_content_type: string | null
+          logo_path: string | null
+          name: string
+          org_id: string
+          source_content_type: string | null
+          source_name: string | null
+          source_path: string | null
+          updated_at: string
+        }
+        Insert: {
+          background_content_type?: string | null
+          background_path?: string | null
+          config?: Json
+          created_at?: string
+          id?: string
+          instructions?: string | null
+          is_default?: boolean
+          kind: string
+          logo_content_type?: string | null
+          logo_path?: string | null
+          name: string
+          org_id: string
+          source_content_type?: string | null
+          source_name?: string | null
+          source_path?: string | null
+          updated_at?: string
+        }
+        Update: {
+          background_content_type?: string | null
+          background_path?: string | null
+          config?: Json
+          created_at?: string
+          id?: string
+          instructions?: string | null
+          is_default?: boolean
+          kind?: string
+          logo_content_type?: string | null
+          logo_path?: string | null
+          name?: string
+          org_id?: string
+          source_content_type?: string | null
+          source_name?: string | null
+          source_path?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_templates_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -1143,6 +1211,8 @@ export type Database = {
           responsibilities: string | null
           status: Database["public"]["Enums"]["jd_status"]
           success_factors: string | null
+          template_id: string | null
+          template_name: string | null
           version: number
         }
         Insert: {
@@ -1160,6 +1230,8 @@ export type Database = {
           responsibilities?: string | null
           status?: Database["public"]["Enums"]["jd_status"]
           success_factors?: string | null
+          template_id?: string | null
+          template_name?: string | null
           version?: number
         }
         Update: {
@@ -1177,6 +1249,8 @@ export type Database = {
           responsibilities?: string | null
           status?: Database["public"]["Enums"]["jd_status"]
           success_factors?: string | null
+          template_id?: string | null
+          template_name?: string | null
           version?: number
         }
         Relationships: [
@@ -1414,6 +1488,8 @@ export type Database = {
           created_at: string
           id: string
           joining_date: string | null
+          letter: Json | null
+          letter_template_id: string | null
           offered_ctc: number
           org_id: string | null
           status: Database["public"]["Enums"]["offer_status"]
@@ -1424,6 +1500,8 @@ export type Database = {
           created_at?: string
           id?: string
           joining_date?: string | null
+          letter?: Json | null
+          letter_template_id?: string | null
           offered_ctc?: number
           org_id?: string | null
           status?: Database["public"]["Enums"]["offer_status"]
@@ -1434,6 +1512,8 @@ export type Database = {
           created_at?: string
           id?: string
           joining_date?: string | null
+          letter?: Json | null
+          letter_template_id?: string | null
           offered_ctc?: number
           org_id?: string | null
           status?: Database["public"]["Enums"]["offer_status"]
@@ -1669,6 +1749,7 @@ export type Database = {
           archived_at: string | null
           archived_reason: string | null
           capture_token: string | null
+          capture_token_hash: string | null
           careers_email: string | null
           created_at: string
           created_by: string | null
@@ -1696,6 +1777,7 @@ export type Database = {
           archived_at?: string | null
           archived_reason?: string | null
           capture_token?: string | null
+          capture_token_hash?: string | null
           careers_email?: string | null
           created_at?: string
           created_by?: string | null
@@ -1723,6 +1805,7 @@ export type Database = {
           archived_at?: string | null
           archived_reason?: string | null
           capture_token?: string | null
+          capture_token_hash?: string | null
           careers_email?: string | null
           created_at?: string
           created_by?: string | null
@@ -1811,6 +1894,7 @@ export type Database = {
           approval_trail: Json
           billing_type: string
           budget_ctc: number
+          career_level: string | null
           client_name: string | null
           code: string
           cost_center: string | null
@@ -1828,6 +1912,7 @@ export type Database = {
           ijp_enabled: boolean
           ijp_notes: string | null
           ijp_posted_at: string | null
+          job_card_overrides: Json
           location: string | null
           max_notice_period_days: number | null
           must_have_skills: string[]
@@ -1850,6 +1935,7 @@ export type Database = {
           approval_trail?: Json
           billing_type?: string
           budget_ctc?: number
+          career_level?: string | null
           client_name?: string | null
           code: string
           cost_center?: string | null
@@ -1867,6 +1953,7 @@ export type Database = {
           ijp_enabled?: boolean
           ijp_notes?: string | null
           ijp_posted_at?: string | null
+          job_card_overrides?: Json
           location?: string | null
           max_notice_period_days?: number | null
           must_have_skills?: string[]
@@ -1889,6 +1976,7 @@ export type Database = {
           approval_trail?: Json
           billing_type?: string
           budget_ctc?: number
+          career_level?: string | null
           client_name?: string | null
           code?: string
           cost_center?: string | null
@@ -1906,6 +1994,7 @@ export type Database = {
           ijp_enabled?: boolean
           ijp_notes?: string | null
           ijp_posted_at?: string | null
+          job_card_overrides?: Json
           location?: string | null
           max_notice_period_days?: number | null
           must_have_skills?: string[]
@@ -1937,6 +2026,75 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      salary_benchmarks: {
+        Row: {
+          confidence: string
+          created_at: string
+          currency: string
+          experience_max: number
+          experience_min: number
+          grounded: boolean
+          id: string
+          input_key: string
+          location: string | null
+          model: string
+          org_id: string
+          payload: Json
+          provider: string
+          requisition_id: string | null
+          title: string
+        }
+        Insert: {
+          confidence?: string
+          created_at?: string
+          currency?: string
+          experience_max?: number
+          experience_min?: number
+          grounded?: boolean
+          id?: string
+          input_key: string
+          location?: string | null
+          model: string
+          org_id: string
+          payload: Json
+          provider: string
+          requisition_id?: string | null
+          title: string
+        }
+        Update: {
+          confidence?: string
+          created_at?: string
+          currency?: string
+          experience_max?: number
+          experience_min?: number
+          grounded?: boolean
+          id?: string
+          input_key?: string
+          location?: string | null
+          model?: string
+          org_id?: string
+          payload?: Json
+          provider?: string
+          requisition_id?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "salary_benchmarks_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "salary_benchmarks_requisition_id_fkey"
+            columns: ["requisition_id"]
+            isOneToOne: false
+            referencedRelation: "requisitions"
             referencedColumns: ["id"]
           },
         ]
