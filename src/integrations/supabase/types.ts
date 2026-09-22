@@ -1610,6 +1610,113 @@ export type Database = {
           },
         ]
       }
+      onboarding_documents: {
+        Row: {
+          application_id: string
+          candidate_id: string
+          content_type: string | null
+          created_at: string
+          doc_type: string
+          extracted: Json | null
+          extracted_text: string | null
+          extraction_note: string | null
+          extraction_status: string
+          file_bytes: number | null
+          file_name: string
+          file_path: string | null
+          id: string
+          inbox_message_id: string | null
+          model: string | null
+          offer_id: string | null
+          org_id: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          source: string
+          status: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          application_id: string
+          candidate_id: string
+          content_type?: string | null
+          created_at?: string
+          doc_type: string
+          extracted?: Json | null
+          extracted_text?: string | null
+          extraction_note?: string | null
+          extraction_status?: string
+          file_bytes?: number | null
+          file_name: string
+          file_path?: string | null
+          id?: string
+          inbox_message_id?: string | null
+          model?: string | null
+          offer_id?: string | null
+          org_id: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source?: string
+          status?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          application_id?: string
+          candidate_id?: string
+          content_type?: string | null
+          created_at?: string
+          doc_type?: string
+          extracted?: Json | null
+          extracted_text?: string | null
+          extraction_note?: string | null
+          extraction_status?: string
+          file_bytes?: number | null
+          file_name?: string
+          file_path?: string | null
+          id?: string
+          inbox_message_id?: string | null
+          model?: string | null
+          offer_id?: string | null
+          org_id?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source?: string
+          status?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_documents_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_documents_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_documents_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_documents_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ontology_snapshots: {
         Row: {
           added: string[]
