@@ -40,7 +40,6 @@ import { Route as ApiAuthConfirmRouteImport } from './routes/api/auth/confirm'
 import { Route as ApiAuthMeRouteImport } from './routes/api/auth/me'
 import { Route as ApiAuthRequestResetRouteImport } from './routes/api/auth/request-reset'
 import { Route as ApiAuthResetRouteImport } from './routes/api/auth/reset'
-import { Route as ApiAuthSessionRouteImport } from './routes/api/auth/session'
 import { Route as ApiAuthSigninRouteImport } from './routes/api/auth/signin'
 import { Route as ApiAuthSignoutRouteImport } from './routes/api/auth/signout'
 import { Route as ApiAuthSignupRouteImport } from './routes/api/auth/signup'
@@ -211,11 +210,6 @@ const ApiAuthResetRoute = ApiAuthResetRouteImport.update({
   path: '/api/auth/reset',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiAuthSessionRoute = ApiAuthSessionRouteImport.update({
-  id: '/api/auth/session',
-  path: '/api/auth/session',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiAuthSigninRoute = ApiAuthSigninRouteImport.update({
   id: '/api/auth/signin',
   path: '/api/auth/signin',
@@ -324,7 +318,6 @@ export interface FileRoutesByFullPath {
   '/api/auth/me': typeof ApiAuthMeRoute
   '/api/auth/request-reset': typeof ApiAuthRequestResetRoute
   '/api/auth/reset': typeof ApiAuthResetRoute
-  '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/auth/signin': typeof ApiAuthSigninRoute
   '/api/auth/signout': typeof ApiAuthSignoutRoute
   '/api/auth/signup': typeof ApiAuthSignupRoute
@@ -372,7 +365,6 @@ export interface FileRoutesByTo {
   '/api/auth/me': typeof ApiAuthMeRoute
   '/api/auth/request-reset': typeof ApiAuthRequestResetRoute
   '/api/auth/reset': typeof ApiAuthResetRoute
-  '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/auth/signin': typeof ApiAuthSigninRoute
   '/api/auth/signout': typeof ApiAuthSignoutRoute
   '/api/auth/signup': typeof ApiAuthSignupRoute
@@ -421,7 +413,6 @@ export interface FileRoutesById {
   '/api/auth/me': typeof ApiAuthMeRoute
   '/api/auth/request-reset': typeof ApiAuthRequestResetRoute
   '/api/auth/reset': typeof ApiAuthResetRoute
-  '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/auth/signin': typeof ApiAuthSigninRoute
   '/api/auth/signout': typeof ApiAuthSignoutRoute
   '/api/auth/signup': typeof ApiAuthSignupRoute
@@ -471,7 +462,6 @@ export interface FileRouteTypes {
     | '/api/auth/me'
     | '/api/auth/request-reset'
     | '/api/auth/reset'
-    | '/api/auth/session'
     | '/api/auth/signin'
     | '/api/auth/signout'
     | '/api/auth/signup'
@@ -519,7 +509,6 @@ export interface FileRouteTypes {
     | '/api/auth/me'
     | '/api/auth/request-reset'
     | '/api/auth/reset'
-    | '/api/auth/session'
     | '/api/auth/signin'
     | '/api/auth/signout'
     | '/api/auth/signup'
@@ -567,7 +556,6 @@ export interface FileRouteTypes {
     | '/api/auth/me'
     | '/api/auth/request-reset'
     | '/api/auth/reset'
-    | '/api/auth/session'
     | '/api/auth/signin'
     | '/api/auth/signout'
     | '/api/auth/signup'
@@ -616,7 +604,6 @@ export interface RootRouteChildren {
   ApiAuthMeRoute: typeof ApiAuthMeRoute
   ApiAuthRequestResetRoute: typeof ApiAuthRequestResetRoute
   ApiAuthResetRoute: typeof ApiAuthResetRoute
-  ApiAuthSessionRoute: typeof ApiAuthSessionRoute
   ApiAuthSigninRoute: typeof ApiAuthSigninRoute
   ApiAuthSignoutRoute: typeof ApiAuthSignoutRoute
   ApiAuthSignupRoute: typeof ApiAuthSignupRoute
@@ -852,13 +839,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthResetRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/auth/session': {
-      id: '/api/auth/session'
-      path: '/api/auth/session'
-      fullPath: '/api/auth/session'
-      preLoaderRoute: typeof ApiAuthSessionRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/auth/signin': {
       id: '/api/auth/signin'
       path: '/api/auth/signin'
@@ -992,7 +972,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthMeRoute: ApiAuthMeRoute,
   ApiAuthRequestResetRoute: ApiAuthRequestResetRoute,
   ApiAuthResetRoute: ApiAuthResetRoute,
-  ApiAuthSessionRoute: ApiAuthSessionRoute,
   ApiAuthSigninRoute: ApiAuthSigninRoute,
   ApiAuthSignoutRoute: ApiAuthSignoutRoute,
   ApiAuthSignupRoute: ApiAuthSignupRoute,
