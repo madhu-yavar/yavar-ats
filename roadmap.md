@@ -1,19 +1,18 @@
 # Roadmap
 
-## Landing film + visual polish (in progress)
+## Landing film + visual polish
 - [x] Render enterprise brand film and place it on the landing page
 - [x] Remove the "Who pays for AI" note from integrations
 - [x] Polish the dashboard shell, KPI band and panels
 - [x] Polish the Talent Brain knowledge graph
-- [ ] Typecheck, verify in the browser, publish
 
 ## Return on Individual (RoI) semantic layer — CHRO
-- [ ] Plan the RoI model: per-hire value signals from hiring data
-- [ ] Server layer: RoI computation per hire / department / requisition
-- [ ] CHRO dashboard band answering "What return on individual have we got?"
-- [ ] Capability-to-goal engine: what goals/projects the hired talent can deliver (from the skill graph)
-- [ ] Organisation strength / weakness reading from the ontology
-- [ ] Super-admin organisation switcher for cross-org strength & weakness
-
-## Done earlier
-- [x] Investor product document (DOCX)
+- [x] RoI model: capability per hire from match evidence, scarcity, impact, innovation, trajectory, breadth
+- [x] Cost anchor with honest fallback (offer where released, requisition budget otherwise)
+- [x] RoI index normalised against the organisation's own median hire cost
+- [x] Capability-to-goal engine: 10 programme blueprints, team readiness vs pool readiness, named contributors
+- [x] Organisation strength / exposure readings, incl. single-person dependencies and dormant capability
+- [x] Department rollups and individual-by-individual evidence view
+- [x] Super-admin organisation switcher on the RoI page
+- [x] Executive band on the dashboard answering the question up front
+- [ ] Publish and review with live data once offers start flowing
