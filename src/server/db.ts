@@ -8,11 +8,11 @@ import postgres from "postgres";
 import * as schema from "@db/schema";
 import { env } from "./env";
 
-const globalForDb = globalThis as unknown as { __atsiqPg?: postgres.Sql };
+const globalForDb = globalThis as unknown as { __atsiqPgV2?: postgres.Sql };
 
 function createSql(): postgres.Sql {
-  if (!globalForDb.__atsiqPg) {
-    globalForDb.__atsiqPg = postgres(env.DATABASE_URL, {
+  if (!globalForDb.__atsiqPgV2) {
+    globalForDb.__atsiqPgV2 = postgres(env.DATABASE_URL, {
       // Serverless-safe defaults are unnecessary here (long-lived node process);
       // cap the pool so many concurrent server fns cannot exhaust connections.
       max: 10,
@@ -25,7 +25,7 @@ function createSql(): postgres.Sql {
       connection: { statement_timeout: 12_000 },
     });
   }
-  return globalForDb.__atsiqPg;
+  return globalForDb.__atsiqPgV2;
 }
 
 export const sql = createSql();
