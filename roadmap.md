@@ -43,3 +43,4 @@
 - [x] Update and visually inspect the investor product document
 - [ ] Run current security checks and resolve release blockers (basic scan passed; dependency scan parser blocked by URL-pinned xlsx package)
 - [ ] Publish and verify the production release (blocked until database recovery and revalidation)
+- [x] Pre-onboarding: per-employer salary breakup captured verbatim; multi-page, scanned, merged and zipped uploads read as individual documents

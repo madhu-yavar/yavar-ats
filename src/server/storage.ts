@@ -157,5 +157,6 @@ export function contentTypeFor(fileName: string): string {
   if (/\.jpe?g$/i.test(fileName)) return "image/jpeg";
   if (/\.webp$/i.test(fileName)) return "image/webp";
   if (/\.(txt|md)$/i.test(fileName)) return "text/plain";
+  if (/\.zip$/i.test(fileName)) return "application/zip";
   return "application/octet-stream";
 }

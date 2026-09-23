@@ -684,9 +684,36 @@ export async function compensationReading(
   const offeredAnnual = offer ? money(Number(offer.offeredCtc)) : null;
 
   type Parsed = (typeof rows)[number] & { e: ExtractedDoc };
+
+  /**
+   * A merged upload — three payslips and a revision letter in one PDF — was read
+   * as several documents. Each one is reconciled in its own right, otherwise the
+   * timeline would show one file and the months inside it would be lost. The top
+   * level repeats the newest part, so when parts exist only the parts are used.
+   */
+  const classify = (facts: ExtractedDoc, fallback: string): string => {
+    if (isoDay(facts.period_iso)) return "payslip";
+    if (isoDay(facts.effective_from_iso) && (facts.annual_ctc || facts.annual_fixed))
+      return "salary_revision";
+    if (isoDay(facts.employed_from_iso) || isoDay(facts.employed_to_iso)) return "experience_letter";
+    return fallback;
+  };
+
   const parsed: Parsed[] = rows
     .filter((r) => r.extracted)
-    .map((r) => ({ ...r, e: r.extracted as unknown as ExtractedDoc }));
+    .flatMap((r) => {
+      const e = r.extracted as unknown as ExtractedDoc;
+      const parts = (e.parts ?? []).filter(Boolean);
+      if (!parts.length) return [{ ...r, e }];
+      return parts.map((part, i) => ({
+        ...r,
+        docType: classify(part as ExtractedDoc, r.docType),
+        fileName: part.part_label
+          ? `${r.fileName} — ${part.part_label}`
+          : `${r.fileName} (part ${i + 1}${part.pages ? `, p. ${part.pages}` : ""})`,
+        e: part as ExtractedDoc,
+      }));
+    });
 
   const conflicts: string[] = [];
   const gaps: string[] = [];
