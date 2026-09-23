@@ -398,9 +398,8 @@ async function filePreOnboardingAttachments(input: {
   const docs = input.attachments.filter((a) => a.filename && a.content);
   if (!docs.length) return [];
 
-  const { offerContextForEmail, storeOnboardingDocument, guessDocType, docTypeLabel } = await import(
-    "./onboarding.server"
-  );
+  const { offerContextForEmail, storeOnboardingDocument, guessDocType, docTypeLabel, expandUpload } =
+    await import("./onboarding.server");
   const ctx = await offerContextForEmail(input.orgId, input.senderEmail);
   if (!ctx) return [];
 
@@ -410,14 +409,16 @@ async function filePreOnboardingAttachments(input: {
     try {
       const bytes = base64ToBytes(att.content);
       if (!bytes.byteLength) continue;
-      const docType = guessDocType(fileName);
+      // A zipped bundle of proofs is filed as the documents inside it.
+      for (const member of await expandUpload(fileName, bytes)) {
+      const docType = guessDocType(member.fileName);
       await storeOnboardingDocument({
         orgId: input.orgId,
         applicationId: ctx.applicationId,
         candidateId: ctx.candidateId,
         offerId: ctx.offerId,
         docType,
-        fileName,
+        fileName: member.fileName,
         bytes,
         source: "careers_inbox",
         inboxMessageId: input.inboxMessageId,

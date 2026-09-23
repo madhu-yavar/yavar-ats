@@ -22,11 +22,16 @@ import {
   extractDocument,
   readOnboardingFile,
   readinessFor,
+  expandUpload,
+  guessDocType,
   storeOnboardingDocument,
   type CompensationReading,
   type ExtractedDoc,
   type Readiness,
 } from "./onboarding.server";
+
+/** 40 MB decoded — a zipped set of proofs is bigger than a single letter. */
+const MAX_ARCHIVE_BYTES = 40_000_000;
 
 /** 15 MB decoded — a scanned experience letter is comfortably inside this. */
 const MAX_UPLOAD_BYTES = 15_000_000;
@@ -160,7 +165,7 @@ export const uploadOnboardingDoc = createServerFn({ method: "POST" })
         applicationId: z.string().uuid(),
         docType: z.enum(DOC_TYPE_KEYS),
         fileName: z.string().min(1).max(300),
-        base64: z.string().min(16).refine((v) => v.length * 0.75 <= MAX_UPLOAD_BYTES, "File too large"),
+        base64: z.string().min(16).refine((v) => v.length * 0.75 <= MAX_ARCHIVE_BYTES, "File too large"),
       })
       .parse(data),
   )
@@ -182,29 +187,49 @@ export const uploadOnboardingDoc = createServerFn({ method: "POST" })
       .limit(1);
 
     const bytes = base64ToBytes(data.base64);
-    if (bytes.byteLength > MAX_UPLOAD_BYTES) throw new Error("That file is too large (15 MB maximum).");
+    const isArchive = /\.zip$/i.test(data.fileName);
+    const limit = isArchive ? MAX_ARCHIVE_BYTES : MAX_UPLOAD_BYTES;
+    if (bytes.byteLength > limit)
+      throw new Error(`That file is too large (${Math.round(limit / 1_000_000)} MB maximum).`);
 
-    const filed = await storeOnboardingDocument({
-      orgId: context.orgId,
-      applicationId: app.id,
-      candidateId: app.candidateId,
-      offerId: offer?.id ?? null,
-      docType: data.docType,
-      fileName: data.fileName,
-      bytes,
-      source: "upload",
-      uploadedBy: context.userId,
-    });
-    await writeAudit({
-      actor: context.memberEmail,
-      actorUserId: context.userId,
-      orgId: context.orgId,
-      action: "onboarding_document_uploaded",
-      entityType: "onboarding_document",
-      entityId: filed.id,
-      detail: { docType: data.docType, applicationId: app.id, extraction: filed.extractionStatus },
-    });
-    return filed;
+    // A ZIP of proofs becomes one row per document inside it, each typed on its
+    // own so HR validates documents, not an archive.
+    const members = await expandUpload(data.fileName, bytes);
+    const results: Awaited<ReturnType<typeof storeOnboardingDocument>>[] = [];
+    for (const member of members) {
+      if (member.bytes.byteLength > MAX_UPLOAD_BYTES) continue;
+      const docType =
+        members.length === 1 ? data.docType : guessDocType(member.fileName) || data.docType;
+      const filed = await storeOnboardingDocument({
+        orgId: context.orgId,
+        applicationId: app.id,
+        candidateId: app.candidateId,
+        offerId: offer?.id ?? null,
+        docType,
+        fileName: member.fileName,
+        bytes: member.bytes,
+        source: "upload",
+        uploadedBy: context.userId,
+      });
+      results.push(filed);
+      await writeAudit({
+        actor: context.memberEmail,
+        actorUserId: context.userId,
+        orgId: context.orgId,
+        action: "onboarding_document_uploaded",
+        entityType: "onboarding_document",
+        entityId: filed.id,
+        detail: {
+          docType,
+          applicationId: app.id,
+          extraction: filed.extractionStatus,
+          ...(members.length > 1 ? { archive: data.fileName, filed: members.length } : {}),
+        },
+      });
+    }
+    const first = results[0];
+    if (!first) throw new Error("Nothing readable was found in that file.");
+    return { ...first, filed: results.length };
   });
 
 /** Re-run the extraction agent on a stored document (after a clearer copy, or a key change). */
