@@ -14,12 +14,19 @@ import { getRequest } from "@tanstack/react-start/server";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { emailVerified } from "../server/claims";
-import type { Database } from "../integrations/supabase/types";
-import type { SupabaseClaims } from "../server/identity";
 import { db } from "../server/db";
 import { orgMembers, platformAdmins, userRoles } from "@db/schema";
 
-export type AppRole = "recruiter" | "hiring_manager" | "department_head" | "hr_head" | "president_cbo";
+/** The verified-identity claim shape the rest of the app reads. */
+export type IdentityClaims = {
+  sub: string;
+  email?: string;
+  email_verified?: boolean;
+  email_confirmed_at?: string | null;
+};
+
+export type AppRole =
+  "recruiter" | "hiring_manager" | "department_head" | "hr_head" | "president_cbo";
 
 export type OrgContext = {
   orgId: string;
@@ -57,38 +64,38 @@ export async function assertRole(
   const [row] = await db
     .select({ role: userRoles.role })
     .from(userRoles)
-    .where(and(eq(userRoles.userId, userId), eq(userRoles.orgId, orgId), inArray(userRoles.role, wanted)))
+    .where(
+      and(
+        eq(userRoles.userId, userId),
+        eq(userRoles.orgId, orgId),
+        inArray(userRoles.role, wanted),
+      ),
+    )
     .limit(1);
   if (!row) throw new Error(message);
 }
 
-/** Authn only: cookie session first, legacy GoTrue-JWT bearer second.
+/** Authn only: the atsiq_session httpOnly cookie.
  *  The definition lives in this client-reached module; the server-only
  *  resolution (server/identity.ts) is imported lazily inside the .server()
  *  body, so the client bundle never pulls it in. */
 export const requireIdentity = createMiddleware({ type: "function" }).server(async ({ next }) => {
-  const { resolveSession, resolveJwt } = await import("../server/identity");
+  const { resolveSession } = await import("../server/identity");
   const request = getRequest();
   const session = request ? await resolveSession(request) : null;
-
-  let identity: { userId: string; claims: SupabaseClaims } | null = null;
-  if (session) {
-    identity = {
+  if (!session) throw new Error("Unauthorized: No authorization header provided");
+  return next({
+    context: {
       userId: session.userId,
-      // A cookie session is not a real JWT — fabricate the claim shape the
+      // A cookie session carries no JWT — fabricate the claim shape the
       // rest of the app reads (sub / email / email_verified).
       claims: {
         sub: session.userId,
         email: session.email,
         email_verified: true,
-      } as unknown as SupabaseClaims,
-    };
-  } else {
-    const jwt = request ? await resolveJwt(request) : null;
-    if (jwt) identity = { userId: jwt.userId, claims: jwt.claims };
-  }
-  if (!identity) throw new Error("Unauthorized: No authorization header provided");
-  return next({ context: identity });
+      } satisfies IdentityClaims,
+    },
+  });
 });
 
 /** Authn + tenant resolution. Context gains a verified `orgId`; queries must scope on it. */

@@ -15,7 +15,7 @@ export const Route = createFileRoute("/api/auth/me")({
           if (!session) {
             return Response.json({ error: "Not signed in." }, { status: 401 });
           }
-          return Response.json({ ok: true, email: session.email });
+          return Response.json({ ok: true, email: session.email, userId: session.userId });
         } catch (err) {
           console.error("Session lookup failed", err);
           return Response.json(

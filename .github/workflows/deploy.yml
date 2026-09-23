@@ -1,0 +1,70 @@
+# Deploys ATSIQ to Google Cloud Run on every push to main.
+#
+# One-time setup (details in infra/SELF-HOSTING.md):
+#   1. Enable Cloud Run, Artifact Registry, Cloud SQL Admin, Secret Manager.
+#      Create the Cloud SQL instance `atsiq` and the Secret Manager secrets
+#      listed in that document (atsiq-database-url, atsiq-session-secret, ...).
+#   2. Create a service account with roles: Cloud Run Admin, Artifact Registry
+#      Writer, Cloud SQL Client, Secret Manager Secret Accessor; save its JSON
+#      key as the repo secret GCP_SA_KEY.
+#   3. Add repo secrets GCP_PROJECT and repo variables GCP_REGION, GCP_REPOSITORY.
+#   4. Set the repo variable DEPLOY_ENABLED=true.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Configure Artifact Registry
+        run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Fetch DATABASE_URL from Secret Manager
+        run: |
+          echo "DATABASE_URL=$(gcloud secrets versions access latest \
+            --project "${{ secrets.GCP_PROJECT }}" --secret=atsiq-database-url)" >> "$GITHUB_ENV"
+
+      - name: Run database migrations
+        run: bun scripts/migrate-pg.mjs
+
+      - name: Build and push image
+        run: |
+          IMAGE="${{ vars.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/${{ vars.GCP_REPOSITORY }}/atsiq:${{ github.sha }}"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Deploy service
+        run: |
+          gcloud run deploy atsiq \
+            --image "$IMAGE" \
+            --region "${{ vars.GCP_REGION }}" \
+            --port 3000 \
+            --allow-unauthenticated \
+            --set-secrets "DATABASE_URL=atsiq-database-url:latest,SESSION_SECRET=atsiq-session-secret:latest,SECRET_ENCRYPTION_KEY=atsiq-secret-encryption-key:latest,SMTP_URL=atsiq-smtp-url:latest,INBOUND_EMAIL_SECRET=atsiq-inbound-email-secret:latest,LOVABLE_CRON_SECRET=atsiq-cron-secret:latest" \
+            --set-env-vars "PUBLIC_SITE_URL=https://atsiq.yavar.ai,TRUSTED_PROXY_COUNT=1" \
+            --add-cloudsql-instances "${{ secrets.GCP_PROJECT }}:${{ vars.GCP_REGION }}:atsiq" \
+            --quiet

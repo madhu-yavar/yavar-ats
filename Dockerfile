@@ -9,13 +9,6 @@ RUN bun install --frozen-lockfile
 
 COPY . .
 
-# Auth endpoint + key are baked into the client bundle at build time
-# (Vite import.meta.env.VITE_*). Pass via --build-arg.
-ARG VITE_SUPABASE_URL
-ARG VITE_SUPABASE_PUBLISHABLE_KEY
-ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL \
-    VITE_SUPABASE_PUBLISHABLE_KEY=$VITE_SUPABASE_PUBLISHABLE_KEY
-
 RUN bun run build
 
 FROM node:22-slim

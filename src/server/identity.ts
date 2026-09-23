@@ -1,12 +1,3 @@
-import { createMiddleware } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "../integrations/supabase/types";
-
-type AuthClient = ReturnType<typeof createClient<Database>>;
-/** Exact claims shape GoTrue's getClaims() returns (jose JwtPayload). */
-type GetClaimsResult = Awaited<ReturnType<AuthClient["auth"]["getClaims"]>>;
-export type SupabaseClaims = Extract<GetClaimsResult["data"], { claims: unknown }>["claims"];
 import { and, eq, gt } from "drizzle-orm";
 
 import { db } from "./db";
@@ -15,12 +6,8 @@ import { sessions, users } from "@db/schema";
 /**
  * Identity layer for the cookie-session era.
  *
- * Authn resolution order for every server function:
- *   1. `atsiq_session` httpOnly cookie → sessions table (7-day sliding window)
- *   2. Supabase-compatible JWT bearer (the legacy path, kept for one release)
- *
- * The JWT path exists so an old client bundle cannot lock anyone out; the
- * cookie is what the sign-in flow establishes and what a browser rely on.
+ * Authn resolution for every server function: the `atsiq_session` httpOnly
+ * cookie → sessions table (7-day sliding window). Nothing else.
  */
 
 export const SESSION_COOKIE = "atsiq_session";
@@ -51,9 +38,9 @@ export async function createSession(
 }
 
 /**
- * Cookie attributes. The app is also rendered inside the Lovable preview
- * iframe, which is a third-party context: a SameSite=Lax cookie is never sent
- * back there, so over HTTPS we issue `SameSite=None; Secure`. Plain HTTP
+ * Cookie attributes. The app may also be rendered inside preview iframes,
+ * which are third-party contexts: a SameSite=Lax cookie is never sent back
+ * there, so over HTTPS we issue `SameSite=None; Secure`. Plain HTTP
  * (local dev) keeps Lax because Chrome drops `None` without `Secure`.
  */
 function cookieFlags(request?: Request): string {
@@ -89,7 +76,9 @@ function readCookie(request: Request, name: string): string | null {
 }
 
 /** Validate the cookie against the sessions table; returns the user identity. */
-export async function resolveSession(request: Request): Promise<{ userId: string; email: string } | null> {
+export async function resolveSession(
+  request: Request,
+): Promise<{ userId: string; email: string } | null> {
   const raw = readCookie(request, SESSION_COOKIE);
   if (!raw || raw.length < 32) return null;
   const tokenHash = await hashToken(raw);
@@ -107,51 +96,4 @@ export async function resolveSession(request: Request): Promise<{ userId: string
       .where(eq(sessions.tokenHash, tokenHash));
   }
   return row ?? null;
-}
-
-/** Verify a Supabase-compatible JWT the same way the legacy middleware does. */
-export async function resolveJwt(
-  request: Request,
-): Promise<{ userId: string; email: string; claims: SupabaseClaims } | null> {
-  const supabaseUrl = process.env["SUPABASE_URL"];
-  const supabaseKey = process.env["SUPABASE_PUBLISHABLE_KEY"];
-  const authHeader = request.headers.get("authorization");
-  if (!supabaseUrl || !supabaseKey || !authHeader?.startsWith("Bearer ")) return null;
-  const token = authHeader.slice(7).trim();
-  if (token.split(".").length !== 3) return null;
-  const supabase = createClient(supabaseUrl, supabaseKey, {
-    global: { headers: { Authorization: `Bearer ${token}`, apikey: supabaseKey } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data, error } = await supabase.auth.getClaims(token);
-  if (error || !data?.claims) return null;
-  return {
-    userId: String(data.claims.sub),
-    email: typeof data.claims.email === "string" ? data.claims.email : "",
-    claims: data.claims,
-  };
-}
-
-/** Establish a cookie session from an already-verified bearer JWT. */
-export async function exchangeTokenForSession(
-  request: Request,
-): Promise<{ ok: true; cookie: string; userId: string; email: string } | { ok: false }> {
-  const jwt = await resolveJwt(request);
-  if (!jwt) return { ok: false };
-  const email =
-    jwt.email ||
-    (
-      await db
-        .select({ email: users.email })
-        .from(users)
-        .where(eq(users.id, jwt.userId))
-        .limit(1)
-    )[0]?.email ||
-    "";
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
-  const token = await createSession(jwt.userId, {
-    ip,
-    userAgent: request.headers.get("user-agent"),
-  });
-  return { ok: true, cookie: sessionCookie(token, request), userId: jwt.userId, email };
 }

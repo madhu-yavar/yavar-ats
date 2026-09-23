@@ -1,16 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { supabase } from "@/integrations/supabase/client";
-
-/** The signed-in identity, used to tell "mine" from "the team's". */
+/** The signed-in identity from the atsiq_session cookie, used to tell "mine" from "the team's". */
 export function useMe() {
   const q = useQuery({
     queryKey: ["auth_identity"],
-    queryFn: async () => (await supabase.auth.getUser()).data.user,
+    queryFn: async () => {
+      const res = await fetch("/api/auth/me");
+      if (!res.ok) return null;
+      const body = (await res.json()) as { email?: string; userId?: string };
+      return body.email ? { email: body.email, userId: body.userId ?? null } : null;
+    },
     staleTime: 300_000,
   });
   return {
-    userId: q.data?.id ?? null,
+    userId: q.data?.userId ?? null,
     email: q.data?.email ?? null,
     isLoading: q.isLoading,
   };
