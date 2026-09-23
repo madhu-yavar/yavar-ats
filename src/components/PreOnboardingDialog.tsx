@@ -94,6 +94,70 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+type Component = { label?: string; amount?: number; cadence?: string; kind?: string; recurring?: boolean };
+
+/**
+ * The employer's own breakup, line by line and unrenamed. Two employers paying
+ * the same CTC structure it differently, and that structure is what the reviewer
+ * has to judge — so nothing is re-bucketed into a house template here.
+ */
+function Breakup({ facts, title }: { facts: Record<string, unknown>; title?: string }) {
+  const all = Array.isArray(facts["pay_components"]) ? (facts["pay_components"] as Component[]) : [];
+  const lines = all.filter((c) => c?.label && typeof c.amount === "number");
+  if (!lines.length) return null;
+  const group = (kind: string) =>
+    lines.filter((c) => (c.kind ?? "earning").toLowerCase().startsWith(kind));
+  const blocks: [string, Component[]][] = [
+    ["Earnings", group("earning")],
+    ["Deductions", group("deduction")],
+    ["Employer contributions", group("employer")],
+    ["Stated totals", group("total")],
+  ];
+  const unclassified = lines.filter((c) => !blocks.some(([, g]) => g.includes(c)));
+  if (unclassified.length) blocks.push(["Other lines", unclassified]);
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-xs font-medium">{title ?? "Salary breakup as printed"}</span>
+        {typeof facts["pay_frequency"] === "string" && facts["pay_frequency"] ? (
+          <span className="text-[11px] text-muted-foreground">
+            stated {String(facts["pay_frequency"]).replace(/_/g, " ")}
+          </span>
+        ) : null}
+      </div>
+      {blocks
+        .filter(([, g]) => g.length)
+        .map(([heading, g]) => (
+          <div key={heading}>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{heading}</div>
+            <ul className="divide-y divide-border">
+              {g.map((c, i) => (
+                <li key={`${c.label}-${i}`} className="flex items-baseline gap-2 py-1 text-sm">
+                  <span className="min-w-0 flex-1 break-words">{c.label}</span>
+                  {c.recurring === false ? (
+                    <span className="rounded-full border border-amber-300 bg-amber-50 px-1.5 text-[10px] text-amber-800">
+                      one-off
+                    </span>
+                  ) : null}
+                  {c.cadence && c.cadence !== "monthly" ? (
+                    <span className="text-[10px] text-muted-foreground">
+                      {String(c.cadence).replace(/_/g, " ")}
+                    </span>
+                  ) : null}
+                  <span className="num font-medium">{Math.round(Number(c.amount)).toLocaleString()}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      {typeof facts["breakup_notes"] === "string" && facts["breakup_notes"] ? (
+        <p className="text-xs text-muted-foreground">{String(facts["breakup_notes"])}</p>
+      ) : null}
+    </div>
+  );
+}
+
 function Extraction({ doc }: { doc: OnboardingDocWire }) {
   const e = (doc.extracted ?? null) as Record<string, unknown> | null;
   if (doc.extraction_status === "failed" || !e) {
@@ -137,6 +201,41 @@ function Extraction({ doc }: { doc: OnboardingDocWire }) {
           </div>
         ) : null}
       </dl>
+      <Breakup facts={e} />
+      {Array.isArray(e["parts"]) && (e["parts"] as unknown[]).length ? (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            This file holds {(e["parts"] as unknown[]).length} separate document(s) — each one is read,
+            dated and reconciled on its own.
+          </p>
+          {(e["parts"] as Record<string, unknown>[]).map((part, i) => (
+            <details key={i} className="rounded-lg border border-border p-3 text-sm">
+              <summary className="cursor-pointer">
+                {typeof part["part_label"] === "string" && part["part_label"]
+                  ? String(part["part_label"])
+                  : `Document ${i + 1}`}
+                {typeof part["pages"] === "string" && part["pages"] ? (
+                  <span className="ml-2 text-xs text-muted-foreground">p. {String(part["pages"])}</span>
+                ) : null}
+              </summary>
+              <div className="mt-2 space-y-2">
+                <dl className="divide-y divide-border rounded-lg border border-border">
+                  {Object.entries(FIELD_LABELS)
+                    .map(([key, label]) => [label, part[key]] as const)
+                    .filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== "")
+                    .map(([label, v]) => (
+                      <div key={label} className="flex gap-3 p-2 text-sm">
+                        <dt className="w-40 shrink-0 text-xs text-muted-foreground">{label}</dt>
+                        <dd className="num min-w-0 flex-1 break-words font-medium">{String(v)}</dd>
+                      </div>
+                    ))}
+                </dl>
+                <Breakup facts={part} title="Breakup on this document" />
+              </div>
+            </details>
+          ))}
+        </div>
+      ) : null}
       {typeof e["summary"] === "string" && e["summary"] ? (
         <p className="text-sm text-muted-foreground">{String(e["summary"])}</p>
       ) : null}
