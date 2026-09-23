@@ -61,3 +61,17 @@ export async function applyResetRequest(token: string, password: string): Promis
   if (!res.ok) throw new Error(body.error || "Could not update the password.");
   return body.message || "Password updated — sign in with your new password.";
 }
+
+export async function changePasswordRequest(
+  currentPassword: string,
+  newPassword: string,
+): Promise<string> {
+  const res = await fetch("/api/auth/change-password", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  const body = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+  if (!res.ok) throw new Error(body.error || "Could not update the password.");
+  return body.message || "Password updated — every other device was signed out.";
+}

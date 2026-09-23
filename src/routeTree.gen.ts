@@ -38,6 +38,7 @@ import { Route as InterviewsIndexRouteImport } from './routes/interviews.index'
 import { Route as InterviewsMineRouteImport } from './routes/interviews.mine'
 import { Route as RequisitionsIndexRouteImport } from './routes/requisitions.index'
 import { Route as RequisitionsIdRouteImport } from './routes/requisitions.$id'
+import { Route as ApiAuthChangePasswordRouteImport } from './routes/api/auth/change-password'
 import { Route as ApiAuthConfirmRouteImport } from './routes/api/auth/confirm'
 import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
 import { Route as ApiAuthMeRouteImport } from './routes/api/auth/me'
@@ -202,6 +203,11 @@ const RequisitionsIdRoute = RequisitionsIdRouteImport.update({
   path: '/requisitions/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthChangePasswordRoute = ApiAuthChangePasswordRouteImport.update({
+  id: '/api/auth/change-password',
+  path: '/api/auth/change-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthConfirmRoute = ApiAuthConfirmRouteImport.update({
   id: '/api/auth/confirm',
   path: '/api/auth/confirm',
@@ -328,6 +334,7 @@ export interface FileRoutesByFullPath {
   '/candidates/': typeof CandidatesIndexRoute
   '/interviews/': typeof InterviewsIndexRoute
   '/requisitions/': typeof RequisitionsIndexRoute
+  '/api/auth/change-password': typeof ApiAuthChangePasswordRoute
   '/api/auth/confirm': typeof ApiAuthConfirmRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/me': typeof ApiAuthMeRoute
@@ -377,6 +384,7 @@ export interface FileRoutesByTo {
   '/candidates': typeof CandidatesIndexRoute
   '/interviews': typeof InterviewsIndexRoute
   '/requisitions': typeof RequisitionsIndexRoute
+  '/api/auth/change-password': typeof ApiAuthChangePasswordRoute
   '/api/auth/confirm': typeof ApiAuthConfirmRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/me': typeof ApiAuthMeRoute
@@ -427,6 +435,7 @@ export interface FileRoutesById {
   '/candidates/': typeof CandidatesIndexRoute
   '/interviews/': typeof InterviewsIndexRoute
   '/requisitions/': typeof RequisitionsIndexRoute
+  '/api/auth/change-password': typeof ApiAuthChangePasswordRoute
   '/api/auth/confirm': typeof ApiAuthConfirmRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/me': typeof ApiAuthMeRoute
@@ -478,6 +487,7 @@ export interface FileRouteTypes {
     | '/candidates/'
     | '/interviews/'
     | '/requisitions/'
+    | '/api/auth/change-password'
     | '/api/auth/confirm'
     | '/api/auth/login'
     | '/api/auth/me'
@@ -527,6 +537,7 @@ export interface FileRouteTypes {
     | '/candidates'
     | '/interviews'
     | '/requisitions'
+    | '/api/auth/change-password'
     | '/api/auth/confirm'
     | '/api/auth/login'
     | '/api/auth/me'
@@ -576,6 +587,7 @@ export interface FileRouteTypes {
     | '/candidates/'
     | '/interviews/'
     | '/requisitions/'
+    | '/api/auth/change-password'
     | '/api/auth/confirm'
     | '/api/auth/login'
     | '/api/auth/me'
@@ -626,6 +638,7 @@ export interface RootRouteChildren {
   CandidatesIndexRoute: typeof CandidatesIndexRoute
   InterviewsIndexRoute: typeof InterviewsIndexRoute
   RequisitionsIndexRoute: typeof RequisitionsIndexRoute
+  ApiAuthChangePasswordRoute: typeof ApiAuthChangePasswordRoute
   ApiAuthConfirmRoute: typeof ApiAuthConfirmRoute
   ApiAuthLoginRoute: typeof ApiAuthLoginRoute
   ApiAuthMeRoute: typeof ApiAuthMeRoute
@@ -851,6 +864,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RequisitionsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/change-password': {
+      id: '/api/auth/change-password'
+      path: '/api/auth/change-password'
+      fullPath: '/api/auth/change-password'
+      preLoaderRoute: typeof ApiAuthChangePasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/confirm': {
       id: '/api/auth/confirm'
       path: '/api/auth/confirm'
@@ -1010,6 +1030,7 @@ const rootRouteChildren: RootRouteChildren = {
   CandidatesIndexRoute: CandidatesIndexRoute,
   InterviewsIndexRoute: InterviewsIndexRoute,
   RequisitionsIndexRoute: RequisitionsIndexRoute,
+  ApiAuthChangePasswordRoute: ApiAuthChangePasswordRoute,
   ApiAuthConfirmRoute: ApiAuthConfirmRoute,
   ApiAuthLoginRoute: ApiAuthLoginRoute,
   ApiAuthMeRoute: ApiAuthMeRoute,
