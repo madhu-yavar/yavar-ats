@@ -1,16 +1,22 @@
+import { useLocation } from "@tanstack/react-router";
+
 import { signOutApp } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { useOrg } from "@/hooks/useOrg";
 import { usePlatform } from "@/hooks/usePlatform";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
+import { isPublicPath } from "@/lib/public-paths";
 
 /**
  * Nothing in the ATS exists outside an organisation, so a signed-in user with no
  * membership is sent through onboarding before the workspace renders.
  */
 export function OrgGate({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
   const { org, membership, isLoading, isError, error, refetch } = useOrg();
   const platform = usePlatform();
+
+  if (isPublicPath(location.pathname)) return <>{children}</>;
 
   if (isLoading || platform.isLoading) {
     return (
@@ -33,7 +39,14 @@ export function OrgGate({ children }: { children: React.ReactNode }) {
           <Button size="sm" onClick={() => refetch()}>
             Retry
           </Button>
-          <Button variant="ghost" size="sm" onClick={async () => { await signOutApp(); window.location.assign("/"); }}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={async () => {
+              await signOutApp();
+              window.location.assign("/");
+            }}
+          >
             Sign out
           </Button>
         </div>
@@ -46,7 +59,9 @@ export function OrgGate({ children }: { children: React.ReactNode }) {
 
   if (!org || !membership) return <OnboardingWizard onDone={() => refetch()} />;
 
-  if (org.status === "pending") {
+  // A super user who owns a pending tenant must still reach the platform
+  // console — otherwise the first tenant can never be approved.
+  if (org.status === "pending" && !platform.isSuperUser) {
     return (
       <Waiting
         title="Awaiting platform approval"
@@ -60,7 +75,10 @@ export function OrgGate({ children }: { children: React.ReactNode }) {
     return (
       <Waiting
         title="Registration not approved"
-        body={org.rejection_reason || "This organisation registration was not approved by the platform team."}
+        body={
+          org.rejection_reason ||
+          "This organisation registration was not approved by the platform team."
+        }
         onRefresh={() => refetch()}
       />
     );
@@ -74,7 +92,6 @@ export function OrgGate({ children }: { children: React.ReactNode }) {
       />
     );
   }
-
 
   if (membership.status === "disabled") {
     return (
@@ -93,7 +110,15 @@ export function OrgGate({ children }: { children: React.ReactNode }) {
 }
 
 /** Full-screen status card for tenants that cannot enter the workspace yet. */
-function Waiting({ title, body, onRefresh }: { title: string; body: string; onRefresh?: () => void }) {
+function Waiting({
+  title,
+  body,
+  onRefresh,
+}: {
+  title: string;
+  body: string;
+  onRefresh?: () => void;
+}) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-4">
       <div className="panel max-w-md space-y-2 p-6 text-center">
@@ -106,7 +131,14 @@ function Waiting({ title, body, onRefresh }: { title: string; body: string; onRe
             Check status
           </Button>
         )}
-        <Button variant="ghost" size="sm" onClick={async () => { await signOutApp(); window.location.assign("/"); }}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={async () => {
+            await signOutApp();
+            window.location.assign("/");
+          }}
+        >
           Sign out
         </Button>
       </div>

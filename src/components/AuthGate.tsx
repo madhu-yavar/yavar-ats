@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   fetchMe,
@@ -12,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { workEmailProblem } from "@/lib/work-email";
+import { isPublicPath } from "@/lib/public-paths";
 import { BrandFooter, BrandLogo } from "@/components/Brand";
 import {
   BarChart3,
@@ -39,8 +41,10 @@ import {
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient();
+  const location = useLocation();
   const [me, setMe] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const publicPath = isPublicPath(location.pathname);
 
   useEffect(() => {
     // Identity now lives in the atsiq_session httpOnly cookie; the server
@@ -61,7 +65,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     };
   }, [qc]);
 
-  if (!ready) {
+  if (!ready && !publicPath) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
         Loading workspace…
@@ -69,7 +73,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!me) return <Landing />;
+  if (!me) return publicPath ? <>{children}</> : <Landing />;
   return <>{children}</>;
 }
 
