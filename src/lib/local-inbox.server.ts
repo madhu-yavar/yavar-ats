@@ -411,19 +411,20 @@ async function filePreOnboardingAttachments(input: {
       if (!bytes.byteLength) continue;
       // A zipped bundle of proofs is filed as the documents inside it.
       for (const member of await expandUpload(fileName, bytes)) {
-      const docType = guessDocType(member.fileName);
-      await storeOnboardingDocument({
-        orgId: input.orgId,
-        applicationId: ctx.applicationId,
-        candidateId: ctx.candidateId,
-        offerId: ctx.offerId,
-        docType,
-        fileName: member.fileName,
-        bytes,
-        source: "careers_inbox",
-        inboxMessageId: input.inboxMessageId,
-      });
-      filed.push(docTypeLabel(docType));
+        const docType = guessDocType(member.fileName);
+        await storeOnboardingDocument({
+          orgId: input.orgId,
+          applicationId: ctx.applicationId,
+          candidateId: ctx.candidateId,
+          offerId: ctx.offerId,
+          docType,
+          fileName: member.fileName,
+          bytes: member.bytes,
+          source: "careers_inbox",
+          inboxMessageId: input.inboxMessageId,
+        });
+        filed.push(docTypeLabel(docType));
+      }
     } catch {
       // One unreadable attachment must not fail the whole delivery.
     }
