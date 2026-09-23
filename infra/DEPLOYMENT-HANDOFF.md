@@ -12,6 +12,7 @@
 | Object storage (CV vault, template sources, brand logos) | Any S3-compatible store. Recommended: **GCS bucket with HMAC keys**. |
 | Email | Any SMTP relay (`SMTP_URL`). Used for: registration confirmation, invitations, password reset, org approval notices. |
 | Health probe | **`GET /`** (HTTP 200). There is no `/health` endpoint. |
+| Environment variables | **Copy-ready template: `infra/env.production.example`** — the annotated production `.env`. Only `DATABASE_URL` + `SESSION_SECRET` are required to boot; `SMTP_URL` is required for email delivery. |
 
 ---
 

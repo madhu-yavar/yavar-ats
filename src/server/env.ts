@@ -2,10 +2,9 @@
  * Server environment — validated once at import, so a misconfigured deployment
  * fails fast at boot instead of deep inside a request path.
  *
- * NOTE: authentication still verifies JWTs against SUPABASE_URL /
- * SUPABASE_PUBLISHABLE_KEY (GoTrue-compatible), so those remain REQUIRED even
- * though all data lives in the plain-Postgres DATABASE_URL. They are read in
- * src/integrations/supabase/auth-middleware.ts, not here.
+ * Only DATABASE_URL and SESSION_SECRET are required. Authentication is the
+ * first-party cookie session (server/identity.ts) — no external identity
+ * provider is consulted.
  */
 import { z } from "zod";
 
