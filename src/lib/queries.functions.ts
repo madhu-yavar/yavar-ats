@@ -376,7 +376,12 @@ export const listCandidateNotes = createServerFn({ method: "POST" })
     const rows = await db
       .select()
       .from(candidateNotes)
-      .where(and(eq(candidateNotes.orgId, context.orgId), eq(candidateNotes.candidateId, data.candidateId)))
+      .where(
+        and(
+          eq(candidateNotes.orgId, context.orgId),
+          eq(candidateNotes.candidateId, data.candidateId),
+        ),
+      )
       .orderBy(desc(candidateNotes.createdAt));
     return snakeRows(rows);
   });

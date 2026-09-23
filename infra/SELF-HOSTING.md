@@ -9,14 +9,14 @@ redirects, cron jobs).
 
 ## 0. Runtime dependencies after the exit
 
-| Need | Provider | Env |
-|---|---|---|
-| Postgres 14+ | Cloud SQL (or any in-house PG) | `DATABASE_URL` |
-| Sessions/auth | The app itself (`sessions` table) | `SESSION_SECRET` |
+| Need                                              | Provider                             | Env                                                                                 |
+| ------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------- |
+| Postgres 14+                                      | Cloud SQL (or any in-house PG)       | `DATABASE_URL`                                                                      |
+| Sessions/auth                                     | The app itself (`sessions` table)    | `SESSION_SECRET`                                                                    |
 | Object storage (CV vault, templates, brand logos) | GCS with HMAC keys, MinIO, or any S3 | `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` |
-| Transactional email | Any SMTP | `SMTP_URL`, `EMAIL_FROM` |
-| Encryption of stored org credentials | App itself | `SECRET_ENCRYPTION_KEY` |
-| Public URL | Your DNS | `PUBLIC_SITE_URL` |
+| Transactional email                               | Any SMTP                             | `SMTP_URL`, `EMAIL_FROM`                                                            |
+| Encryption of stored org credentials              | App itself                           | `SECRET_ENCRYPTION_KEY`                                                             |
+| Public URL                                        | Your DNS                             | `PUBLIC_SITE_URL`                                                                   |
 
 Optional feature flags (LinkedIn/Google/Teams/Zoom OAuth, cron secrets) are
 listed in `DEPLOYMENT-GCP.md` §4 and stay dark when unset.
@@ -88,7 +88,7 @@ every push to `main`. Enable it by adding the repo secrets `GCP_PROJECT`,
 
 ## 5. Remaining legacy fragments (non-blocking)
 
-- `@lovable.dev/email-js` is only a *fallback* in `src/lib/email-templates/send-email.ts`;
+- `@lovable.dev/email-js` is only a _fallback_ in `src/lib/email-templates/send-email.ts`;
   with `SMTP_URL` set, email never touches Lovable. Removing the fallback is a
   small cleanup.
 - `@lovable.dev/vite-tanstack-config` is a build-time vite helper; swapping it

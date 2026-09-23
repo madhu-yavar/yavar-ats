@@ -18,7 +18,11 @@ export type MeetingRequest = {
   agenda?: string | null;
 };
 
-export type MeetingResult = { joinUrl: string; externalId: string | null; provider: MeetingProviderId };
+export type MeetingResult = {
+  joinUrl: string;
+  externalId: string | null;
+  provider: MeetingProviderId;
+};
 
 const FIELD_LABEL: Record<string, string> = {
   tenant_id: "Directory (tenant) ID",
@@ -38,7 +42,6 @@ function need(secrets: Record<string, string>, keys: string[], label: string) {
         .join(", ")} on the Integrations page, then test again.`,
     );
 }
-
 
 async function jsonOrThrow(res: Response, label: string) {
   const text = await res.text();
@@ -97,13 +100,18 @@ async function zoomMeeting(s: Record<string, string>, req: MeetingRequest): Prom
     }),
   });
   const body = await jsonOrThrow(res, "Zoom meeting creation");
-  return { joinUrl: String(body["join_url"] ?? ""), externalId: String(body["id"] ?? "") || null, provider: "zoom" };
+  return {
+    joinUrl: String(body["join_url"] ?? ""),
+    externalId: String(body["id"] ?? "") || null,
+    provider: "zoom",
+  };
 }
 
 /* ---------------------------------------------------------- Google / Meet */
 
 async function googleToken(s: Record<string, string>) {
-  const clientId = s["client_id"] ?? env.GOOGLE_CALENDAR_OAUTH_CLIENT_ID ?? env.GOOGLE_OAUTH_CLIENT_ID;
+  const clientId =
+    s["client_id"] ?? env.GOOGLE_CALENDAR_OAUTH_CLIENT_ID ?? env.GOOGLE_OAUTH_CLIENT_ID;
   const clientSecret =
     s["client_secret"] ?? env.GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET ?? env.GOOGLE_OAUTH_CLIENT_SECRET;
   if (!clientId || !clientSecret || !s["refresh_token"])
@@ -124,7 +132,10 @@ async function googleToken(s: Record<string, string>) {
   return String(body["access_token"] ?? "");
 }
 
-async function googleMeeting(s: Record<string, string>, req: MeetingRequest): Promise<MeetingResult> {
+async function googleMeeting(
+  s: Record<string, string>,
+  req: MeetingRequest,
+): Promise<MeetingResult> {
   const token = await googleToken(s);
   const start = new Date(req.startIso);
   const end = new Date(start.getTime() + req.durationMins * 60_000);
@@ -140,7 +151,10 @@ async function googleMeeting(s: Record<string, string>, req: MeetingRequest): Pr
         end: { dateTime: end.toISOString() },
         attendees: req.attendees.filter(Boolean).map((email) => ({ email })),
         conferenceData: {
-          createRequest: { requestId: crypto.randomUUID(), conferenceSolutionKey: { type: "hangoutsMeet" } },
+          createRequest: {
+            requestId: crypto.randomUUID(),
+            conferenceSolutionKey: { type: "hangoutsMeet" },
+          },
         },
       }),
     },
@@ -151,7 +165,11 @@ async function googleMeeting(s: Record<string, string>, req: MeetingRequest): Pr
     (typeof body["hangoutLink"] === "string" ? body["hangoutLink"] : "") ||
     conf?.entryPoints?.find((e) => typeof e.uri === "string")?.uri ||
     "";
-  return { joinUrl, externalId: (body["id"] as string | undefined) ?? null, provider: "google_meet" };
+  return {
+    joinUrl,
+    externalId: (body["id"] as string | undefined) ?? null,
+    provider: "google_meet",
+  };
 }
 
 /* ------------------------------------------------------------------ Teams */
@@ -195,7 +213,10 @@ async function msDelegatedToken(s: Record<string, string>): Promise<string> {
   return String(body["access_token"] ?? "");
 }
 
-async function teamsMeeting(s: Record<string, string>, req: MeetingRequest): Promise<MeetingResult> {
+async function teamsMeeting(
+  s: Record<string, string>,
+  req: MeetingRequest,
+): Promise<MeetingResult> {
   // Delegated consent tokens mint the meeting as the connected HR user via /me —
   // no application-permission access policy involved.
   if (s["refresh_token"]) {
@@ -284,7 +305,6 @@ async function teamsMeeting(s: Record<string, string>, req: MeetingRequest): Pro
   };
 }
 
-
 /* --------------------------------------------------------------- dispatch */
 
 export async function createMeeting(
@@ -303,7 +323,10 @@ export async function createMeeting(
 }
 
 /** Credential check used by the Integrations "Test" button. */
-export async function testMeetingProvider(provider: MeetingProviderId, secrets: Record<string, string>) {
+export async function testMeetingProvider(
+  provider: MeetingProviderId,
+  secrets: Record<string, string>,
+) {
   try {
     if (provider === "zoom") {
       await zoomToken(secrets);
@@ -311,12 +334,18 @@ export async function testMeetingProvider(provider: MeetingProviderId, secrets: 
     }
     if (provider === "google_meet") {
       await googleToken(secrets);
-      return { status: "ok" as const, message: "Google refresh token accepted — Meet links can be created." };
+      return {
+        status: "ok" as const,
+        message: "Google refresh token accepted — Meet links can be created.",
+      };
     }
     await graphToken(secrets);
     return { status: "ok" as const, message: "Microsoft Graph credentials accepted." };
   } catch (e) {
     const msg = (e as Error).message;
-    return { status: msg.includes("not fully configured") ? ("pending" as const) : ("failed" as const), message: msg };
+    return {
+      status: msg.includes("not fully configured") ? ("pending" as const) : ("failed" as const),
+      message: msg,
+    };
   }
 }

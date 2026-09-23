@@ -40,11 +40,7 @@ import { balanceWeights, extractResumeText } from "@/lib/cv-extract";
 import { intakeCvs, type IntakeStatus } from "@/lib/cv-intake";
 import { rankPool } from "@/lib/shortlist";
 import { publishToLinkedIn } from "@/lib/linkedin.functions";
-import {
-  getTemplateBackground,
-  getTemplateLogo,
-  validateJobCard,
-} from "@/lib/templates.functions";
+import { getTemplateBackground, getTemplateLogo, validateJobCard } from "@/lib/templates.functions";
 
 import { useRoles } from "@/hooks/useRoles";
 import { useOrg } from "@/hooks/useOrg";
@@ -199,8 +195,7 @@ function RequisitionDetail() {
     };
     values?: { role?: string; location?: string; skills?: string[]; contact?: string };
   };
-  const templateZones =
-    (cardTemplate?.config as { zones?: JobCardZone[] } | null)?.zones ?? [];
+  const templateZones = (cardTemplate?.config as { zones?: JobCardZone[] } | null)?.zones ?? [];
   const cardZoneList = cardZones ?? savedOverrides.zones ?? templateZones;
 
   const templateTheme =
@@ -226,8 +221,7 @@ function RequisitionDetail() {
       cardValues?.skills ??
       savedOverrides.values?.skills ??
       (latestJd?.must_have?.length ? latestJd.must_have : r.must_have_skills).slice(0, 6),
-    contact:
-      cardValues?.contact ?? savedOverrides.values?.contact ?? org?.careers_email ?? "",
+    contact: cardValues?.contact ?? savedOverrides.values?.contact ?? org?.careers_email ?? "",
   };
 
   /** Talent-pool candidates not yet applied here, pre-ranked against this JD. */
@@ -479,7 +473,9 @@ function RequisitionDetail() {
   }
 
   function updateCardZone(i: number, patch: Partial<JobCardZone>) {
-    setCardZones((zs) => (zs ?? templateZones).map((z, idx) => (idx === i ? { ...z, ...patch } : z)));
+    setCardZones((zs) =>
+      (zs ?? templateZones).map((z, idx) => (idx === i ? { ...z, ...patch } : z)),
+    );
   }
 
   function duplicateCardZone(i: number) {
@@ -1179,7 +1175,9 @@ function RequisitionDetail() {
                   )}
                   {cardEditing && (
                     <div className="mb-3 rounded-md border border-dashed border-border p-3">
-                      <Label className="mb-1 block text-xs text-muted-foreground">Background touch-up</Label>
+                      <Label className="mb-1 block text-xs text-muted-foreground">
+                        Background touch-up
+                      </Label>
                       <div className="grid gap-2 sm:grid-cols-2">
                         <div>
                           <Label className="text-[10px] uppercase text-muted-foreground">
@@ -1190,7 +1188,9 @@ function RequisitionDetail() {
                             min={0}
                             max={75}
                             value={cardThemeFinal.overlayOpacity ?? 0}
-                            onChange={(e) => updateCardTheme({ overlayOpacity: Number(e.target.value) })}
+                            onChange={(e) =>
+                              updateCardTheme({ overlayOpacity: Number(e.target.value) })
+                            }
                             className="w-full"
                           />
                         </div>
@@ -1203,7 +1203,9 @@ function RequisitionDetail() {
                             min={50}
                             max={130}
                             value={cardThemeFinal.backgroundBrightness ?? 100}
-                            onChange={(e) => updateCardTheme({ backgroundBrightness: Number(e.target.value) })}
+                            onChange={(e) =>
+                              updateCardTheme({ backgroundBrightness: Number(e.target.value) })
+                            }
                             className="w-full"
                           />
                         </div>
@@ -1213,117 +1215,142 @@ function RequisitionDetail() {
                       </p>
                     </div>
                   )}
-                  {cardEditing && selectedCardZone !== null && cardZoneList[selectedCardZone] && (() => {
-                    const zone = cardZoneList[selectedCardZone]!;
-                    const stepper = (field: "x" | "y" | "w" | "h" | "fontSize", step: number, min = 0) => (
-                      <div className="flex items-center gap-1">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-7 px-2"
-                          onClick={() =>
-                            updateCardZone(selectedCardZone, {
-                              [field]: Math.max(min, (zone[field] ?? 0) - step),
-                            } as Partial<JobCardZone>)
-                          }
-                        >
-                          −
-                        </Button>
-                        <span className="num min-w-9 text-center text-xs">
-                          {Math.round(zone[field] ?? 0)}
-                        </span>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-7 px-2"
-                          onClick={() =>
-                            updateCardZone(selectedCardZone, {
-                              [field]: (zone[field] ?? 0) + step,
-                            } as Partial<JobCardZone>)
-                          }
-                        >
-                          +
-                        </Button>
-                      </div>
-                    );
-                    return (
-                      <div className="mb-3 rounded-md border border-border p-3">
-                        <div className="mb-2 flex items-center justify-between">
-                          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Zone: {zone.slot}
+                  {cardEditing &&
+                    selectedCardZone !== null &&
+                    cardZoneList[selectedCardZone] &&
+                    (() => {
+                      const zone = cardZoneList[selectedCardZone]!;
+                      const stepper = (
+                        field: "x" | "y" | "w" | "h" | "fontSize",
+                        step: number,
+                        min = 0,
+                      ) => (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2"
+                            onClick={() =>
+                              updateCardZone(selectedCardZone, {
+                                [field]: Math.max(min, (zone[field] ?? 0) - step),
+                              } as Partial<JobCardZone>)
+                            }
+                          >
+                            −
+                          </Button>
+                          <span className="num min-w-9 text-center text-xs">
+                            {Math.round(zone[field] ?? 0)}
                           </span>
-                          <div className="flex gap-1.5">
-                            <Button size="sm" variant="ghost" onClick={() => duplicateCardZone(selectedCardZone)}>
-                              Duplicate
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-destructive"
-                              onClick={() => removeCardZone(selectedCardZone)}
-                            >
-                              Remove
-                            </Button>
-                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2"
+                            onClick={() =>
+                              updateCardZone(selectedCardZone, {
+                                [field]: (zone[field] ?? 0) + step,
+                              } as Partial<JobCardZone>)
+                            }
+                          >
+                            +
+                          </Button>
                         </div>
-                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                          {([
-                            ["x", 1, 0],
-                            ["y", 1, 0],
-                            ["w", 1, 1],
-                            ["h", 1, 1],
-                            ["fontSize", 2, 8],
-                          ] as const).map(([field, step, min]) => (
-                            <div key={field}>
-                              <Label className="text-[10px] uppercase text-muted-foreground">{field}</Label>
-                              {stepper(field, step, min)}
+                      );
+                      return (
+                        <div className="mb-3 rounded-md border border-border p-3">
+                          <div className="mb-2 flex items-center justify-between">
+                            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              Zone: {zone.slot}
+                            </span>
+                            <div className="flex gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => duplicateCardZone(selectedCardZone)}
+                              >
+                                Duplicate
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-destructive"
+                                onClick={() => removeCardZone(selectedCardZone)}
+                              >
+                                Remove
+                              </Button>
                             </div>
-                          ))}
-                          <div>
-                            <Label className="text-[10px] uppercase text-muted-foreground">align</Label>
-                            <select
-                              className="h-7 w-full rounded-md border bg-background px-1 text-xs"
-                              value={zone.align}
-                              onChange={(e) =>
-                                updateCardZone(selectedCardZone, { align: e.target.value as JobCardZone["align"] })
-                              }
-                            >
-                              <option value="left">left</option>
-                              <option value="center">center</option>
-                              <option value="right">right</option>
-                            </select>
                           </div>
-                          <div>
-                            <Label className="text-[10px] uppercase text-muted-foreground">font</Label>
-                            <select
-                              className="h-7 w-full rounded-md border bg-background px-1 text-xs"
-                              value={zone.fontFamily ?? "system"}
-                              onChange={(e) =>
-                                updateCardZone(selectedCardZone, {
-                                  fontFamily: e.target.value as "system" | "serif" | "mono",
-                                })
-                              }
-                            >
-                              <option value="system">System</option>
-                              <option value="serif">Serif</option>
-                              <option value="mono">Mono</option>
-                            </select>
-                          </div>
-                          <div>
-                            <Label className="text-[10px] uppercase text-muted-foreground">colour</Label>
-                            <input
-                              type="color"
-                              value={zone.color ?? cardThemeFinal.textColor ?? "#ffffff"}
-                              onChange={(e) => updateCardZone(selectedCardZone, { color: e.target.value })}
-                              className="h-7 w-full cursor-pointer rounded-md border bg-background p-0.5"
-                            />
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                            {(
+                              [
+                                ["x", 1, 0],
+                                ["y", 1, 0],
+                                ["w", 1, 1],
+                                ["h", 1, 1],
+                                ["fontSize", 2, 8],
+                              ] as const
+                            ).map(([field, step, min]) => (
+                              <div key={field}>
+                                <Label className="text-[10px] uppercase text-muted-foreground">
+                                  {field}
+                                </Label>
+                                {stepper(field, step, min)}
+                              </div>
+                            ))}
+                            <div>
+                              <Label className="text-[10px] uppercase text-muted-foreground">
+                                align
+                              </Label>
+                              <select
+                                className="h-7 w-full rounded-md border bg-background px-1 text-xs"
+                                value={zone.align}
+                                onChange={(e) =>
+                                  updateCardZone(selectedCardZone, {
+                                    align: e.target.value as JobCardZone["align"],
+                                  })
+                                }
+                              >
+                                <option value="left">left</option>
+                                <option value="center">center</option>
+                                <option value="right">right</option>
+                              </select>
+                            </div>
+                            <div>
+                              <Label className="text-[10px] uppercase text-muted-foreground">
+                                font
+                              </Label>
+                              <select
+                                className="h-7 w-full rounded-md border bg-background px-1 text-xs"
+                                value={zone.fontFamily ?? "system"}
+                                onChange={(e) =>
+                                  updateCardZone(selectedCardZone, {
+                                    fontFamily: e.target.value as "system" | "serif" | "mono",
+                                  })
+                                }
+                              >
+                                <option value="system">System</option>
+                                <option value="serif">Serif</option>
+                                <option value="mono">Mono</option>
+                              </select>
+                            </div>
+                            <div>
+                              <Label className="text-[10px] uppercase text-muted-foreground">
+                                colour
+                              </Label>
+                              <input
+                                type="color"
+                                value={zone.color ?? cardThemeFinal.textColor ?? "#ffffff"}
+                                onChange={(e) =>
+                                  updateCardZone(selectedCardZone, { color: e.target.value })
+                                }
+                                className="h-7 w-full cursor-pointer rounded-md border bg-background p-0.5"
+                              />
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })()}
+                      );
+                    })()}
                   {cardEditing && cardIssues.length > 0 && (
                     <ul className="mb-3 list-disc space-y-1 rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
                       {cardIssues.map((issue, i) => (
@@ -1337,13 +1364,11 @@ function RequisitionDetail() {
                     theme={{
                       accentColor: cardThemeFinal.accentColor ?? "#4f46e5",
                       layout:
-                        (cardTemplate?.config as
-                          { layout?: "banner" | "side" | "artwork" } | null)?.layout ?? "banner",
+                        (cardTemplate?.config as { layout?: "banner" | "side" | "artwork" } | null)
+                          ?.layout ?? "banner",
                       overlayOpacity: cardThemeFinal.overlayOpacity ?? 0,
                       backgroundBrightness: cardThemeFinal.backgroundBrightness ?? 100,
-                      ...(cardThemeFinal.textColor
-                        ? { textColor: cardThemeFinal.textColor }
-                        : {}),
+                      ...(cardThemeFinal.textColor ? { textColor: cardThemeFinal.textColor } : {}),
                       zones: cardZoneList,
                     }}
                     background={cardBackground}

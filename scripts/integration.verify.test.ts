@@ -37,10 +37,12 @@ async function seedUser(email: string) {
 beforeAll(async () => {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
-    throw new Error("DATABASE_URL is required and must point to the disposable local test database");
+    throw new Error(
+      "DATABASE_URL is required and must point to the disposable local test database",
+    );
   }
   const databaseHost = new URL(databaseUrl).hostname;
-  if (!(["127.0.0.1", "localhost", "::1"].includes(databaseHost))) {
+  if (!["127.0.0.1", "localhost", "::1"].includes(databaseHost)) {
     throw new Error(
       `Refusing destructive integration tests against non-local database host: ${databaseHost}`,
     );
@@ -49,7 +51,8 @@ beforeAll(async () => {
   // Clean slate (cascades handle children)
   await db.execute(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (await import("drizzle-orm")).sql`truncate table ${organizations}, ${users}, ${candidates}, ${captureEvents} restart identity cascade`,
+    (await import("drizzle-orm"))
+      .sql`truncate table ${organizations}, ${users}, ${candidates}, ${captureEvents} restart identity cascade`,
   );
 
   // Org A + owner (no user_roles rows: owner bypasses role checks)
@@ -87,7 +90,12 @@ beforeAll(async () => {
   // Archived org, for capture-token rejection
   const [arch] = await db
     .insert(organizations)
-    .values({ name: "Archived", slug: `arch-${Date.now()}`, status: "archived", captureToken: "archived-token-0123456789" })
+    .values({
+      name: "Archived",
+      slug: `arch-${Date.now()}`,
+      status: "archived",
+      captureToken: "archived-token-0123456789",
+    })
     .returning({ id: organizations.id });
   archivedOrg = arch!.id;
 
@@ -156,7 +164,8 @@ describe("authz seam (src/lib/auth.middleware.ts)", () => {
 describe("C2 fix: public apply cannot overwrite existing candidates", () => {
   const base = {
     fileName: "cv.pdf",
-    resumeText: "Experienced engineer with ten years of building distributed systems and platforms.",
+    resumeText:
+      "Experienced engineer with ten years of building distributed systems and platforms.",
     source: "linkedin_post",
   };
 
@@ -212,7 +221,10 @@ describe("C2 fix: public apply cannot overwrite existing candidates", () => {
     expect(res.ok).toBe(true);
     expect(res.merged).toBe(false);
 
-    const rows = await db.select({ orgId: candidates.orgId }).from(candidates).where(eq(candidates.email, "priya@test.local"));
+    const rows = await db
+      .select({ orgId: candidates.orgId })
+      .from(candidates)
+      .where(eq(candidates.email, "priya@test.local"));
     expect(rows.length).toBe(2);
     expect(new Set(rows.map((r) => r.orgId))).toEqual(new Set([orgA, orgB]));
   });
@@ -223,7 +235,12 @@ describe("C2 fix: public apply cannot overwrite existing candidates", () => {
       .values({ orgId: orgA, code: "REQ-A-2", title: "Draft Role", status: "draft" })
       .returning({ id: requisitions.id });
     await expect(
-      submitApplicationImpl({ ...base, requisitionId: draft!.id, email: "x@test.local", fullName: "X" }),
+      submitApplicationImpl({
+        ...base,
+        requisitionId: draft!.id,
+        email: "x@test.local",
+        fullName: "X",
+      }),
     ).rejects.toThrow(/no longer accepting/);
   });
 });
@@ -286,19 +303,28 @@ describe("capture() full flow without LLM keys (graceful degradation)", () => {
 
   test("insufficient text is skipped", async () => {
     const token = "flow-token-aaaaaaaaaaaaaaaaaaaa";
-    const result = await capture({ token, kind: "cv", text: "too short", candidateName: "Someone" });
+    const result = await capture({
+      token,
+      kind: "cv",
+      text: "too short",
+      candidateName: "Someone",
+    });
     expect(result.status).toBe("skipped");
   });
 
   test("invalid token never touches the database", async () => {
-    const result = await capture({ token: "bogus-token-aaaaaaaaaaaaaaaaaaaa", kind: "cv", text: "x".repeat(200) });
+    const result = await capture({
+      token: "bogus-token-aaaaaaaaaaaaaaaaaaaa",
+      kind: "cv",
+      text: "x".repeat(200),
+    });
     expect(result.status).toBe("error");
     expect(result.detail).toMatch(/capture key/i);
   });
 });
 
 describe("H4: CV vault degrades gracefully without storage configured", () => {
-  test("storeResumeFile returns an error instead of throwing when S3 env is unset", async () => {
+  test("storeResumeFile falls back to local storage (no S3 env) and never throws", async () => {
     const [cand] = await db
       .insert(candidates)
       .values({ fullName: "Vault Test", email: "vault@test.local", orgId: orgA })
@@ -309,8 +335,11 @@ describe("H4: CV vault degrades gracefully without storage configured", () => {
       filename: "../../evil.pdf",
       bytes: new Uint8Array(10),
     });
-    // No S3 endpoint configured in the test env → clean error, no throw
-    expect(res.path).toBeNull();
-    expect(res.error).toBeTruthy();
+    // Without S3 env the vault writes to the local .local-storage fallback;
+    // either way it must not throw, and the traversal filename must be sanitised.
+    expect(res.error).toBeNull();
+    expect(res.path).toBeTruthy();
+    // No path segment may be ".." (traversal); dots inside a segment are fine.
+    expect(res.path!.split("/")).not.toContain("..");
   });
 });

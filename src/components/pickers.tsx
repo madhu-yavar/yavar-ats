@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Check, Plus, X } from "lucide-react";
 
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -32,7 +31,9 @@ export function TokenPicker({
 
   const matches = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return options.filter((o) => (needle ? o.name.toLowerCase().includes(needle) : true)).slice(0, 60);
+    return options
+      .filter((o) => (needle ? o.name.toLowerCase().includes(needle) : true))
+      .slice(0, 60);
   }, [options, q]);
 
   const exact = matches.some((m) => m.name.toLowerCase() === q.trim().toLowerCase());
@@ -89,7 +90,9 @@ export function TokenPicker({
         )}
       </div>
       <ul className="max-h-44 overflow-y-auto p-1 text-sm">
-        {matches.length === 0 && <li className="px-2 py-3 text-xs text-muted-foreground">No matches in the library.</li>}
+        {matches.length === 0 && (
+          <li className="px-2 py-3 text-xs text-muted-foreground">No matches in the library.</li>
+        )}
         {matches.map((o) => {
           const on = selected.has(o.name.toLowerCase());
           return (
@@ -101,7 +104,9 @@ export function TokenPicker({
               >
                 <span>
                   {o.name}
-                  {o.category && <span className="ml-2 text-xs text-muted-foreground">{o.category}</span>}
+                  {o.category && (
+                    <span className="ml-2 text-xs text-muted-foreground">{o.category}</span>
+                  )}
                 </span>
                 {on && <Check className="h-4 w-4 text-primary" />}
               </button>
@@ -172,7 +177,9 @@ export function CreatableSelect({
 
   const matches = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return options.filter((o) => (needle ? o.name.toLowerCase().includes(needle) : true)).slice(0, 60);
+    return options
+      .filter((o) => (needle ? o.name.toLowerCase().includes(needle) : true))
+      .slice(0, 60);
   }, [options, q]);
 
   const exact = options.some((o) => o.name.toLowerCase() === q.trim().toLowerCase());
@@ -210,7 +217,9 @@ export function CreatableSelect({
         )}
       </div>
       <ul className="max-h-40 overflow-y-auto p-1 text-sm">
-        {matches.length === 0 && <li className="px-2 py-3 text-xs text-muted-foreground">No matches yet.</li>}
+        {matches.length === 0 && (
+          <li className="px-2 py-3 text-xs text-muted-foreground">No matches yet.</li>
+        )}
         {matches.map((o) => (
           <li key={o.id}>
             <button
@@ -224,13 +233,14 @@ export function CreatableSelect({
             >
               <span>
                 {o.name}
-                {o.category && <span className="ml-2 text-xs text-muted-foreground">{o.category}</span>}
+                {o.category && (
+                  <span className="ml-2 text-xs text-muted-foreground">{o.category}</span>
+                )}
               </span>
               {o.name === value && <Check className="h-4 w-4 text-primary" />}
             </button>
           </li>
         ))}
-
       </ul>
       {value && (
         <div className="flex items-center gap-2 border-t border-primary/20 bg-primary/10 p-2 text-xs">
@@ -243,8 +253,6 @@ export function CreatableSelect({
           </span>
         </div>
       )}
-
     </div>
   );
 }
-

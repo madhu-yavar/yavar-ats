@@ -2,7 +2,11 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireOrg } from "./auth.middleware";
-import { buildAuthorizeUrl, oauthConfigured, type MeetingOAuthProvider } from "./meetings-oauth.server";
+import {
+  buildAuthorizeUrl,
+  oauthConfigured,
+  type MeetingOAuthProvider,
+} from "./meetings-oauth.server";
 import { assertAllowedOrigin, signOAuthState } from "./oauth-state";
 
 /**

@@ -4,7 +4,12 @@ import { useServerFn } from "@tanstack/react-start";
 import { ArrowUp, RotateCcw, Sparkle, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { askCopilot, clearCopilot, copilotHistory, type CopilotMessage } from "@/lib/copilot.functions";
+import {
+  askCopilot,
+  clearCopilot,
+  copilotHistory,
+  type CopilotMessage,
+} from "@/lib/copilot.functions";
 
 const PROMPTS = [
   "Which open requisitions are at risk this week?",
@@ -37,7 +42,12 @@ export function Copilot() {
     onMutate: (message) => {
       qc.setQueryData<CopilotMessage[]>(["copilot"], (prev) => [
         ...(prev ?? []),
-        { id: `tmp-${Date.now()}`, role: "user", content: message, createdAt: new Date().toISOString() },
+        {
+          id: `tmp-${Date.now()}`,
+          role: "user",
+          content: message,
+          createdAt: new Date().toISOString(),
+        },
       ]);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["copilot"] }),
@@ -117,8 +127,8 @@ export function Copilot() {
         {messages.length === 0 ? (
           <div className="space-y-4">
             <p className="text-[13px] leading-relaxed text-muted-foreground">
-              Ask about your live pipeline, pool health, interviews or offers — every answer is grounded in your
-              organisation's own data.
+              Ask about your live pipeline, pool health, interviews or offers — every answer is
+              grounded in your organisation's own data.
             </p>
             <div className="space-y-2">
               {PROMPTS.map((p) => (
@@ -143,7 +153,10 @@ export function Copilot() {
               {m.content}
             </div>
           ) : (
-            <div key={m.id} className="max-w-[94%] whitespace-pre-wrap leading-relaxed text-foreground">
+            <div
+              key={m.id}
+              className="max-w-[94%] whitespace-pre-wrap leading-relaxed text-foreground"
+            >
               {m.content}
             </div>
           ),

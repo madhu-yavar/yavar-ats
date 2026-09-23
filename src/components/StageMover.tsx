@@ -8,7 +8,13 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { byKind, masterItemsQuery } from "@/lib/data";
-import { allowedTransitions, REASON_REQUIRED, reasonsForStage, STAGE_LABEL, type Stage } from "@/lib/lifecycle";
+import {
+  allowedTransitions,
+  REASON_REQUIRED,
+  reasonsForStage,
+  STAGE_LABEL,
+  type Stage,
+} from "@/lib/lifecycle";
 import { moveStage, moveStages } from "@/lib/lifecycle.functions";
 
 import { Button } from "@/components/ui/button";
@@ -21,7 +27,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 export function StageMover({
@@ -61,7 +73,6 @@ export function StageMover({
     setReason("");
   }, [toStage]);
 
-
   const options = useMemo<Stage[]>(() => {
     if (currentStage) return allowedTransitions(currentStage);
     // Bulk move across mixed stages: offer every stage, the server rejects illegal rows.
@@ -78,20 +89,28 @@ export function StageMover({
   }, [toStage, masterRejectReasons.join("|")]);
   const needsReason = toStage ? REASON_REQUIRED.includes(toStage) : false;
 
-
   async function submit() {
     if (!toStage) return;
     setBusy(true);
     try {
       if (applicationIds.length === 1) {
-        await move({ data: { applicationId: applicationIds[0]!, toStage, reason: reason || null, note: note || null } });
+        await move({
+          data: {
+            applicationId: applicationIds[0]!,
+            toStage,
+            reason: reason || null,
+            note: note || null,
+          },
+        });
         toast.success(`Moved to ${STAGE_LABEL[toStage]}`);
       } else {
         const out = await moveMany({
           data: { applicationIds, toStage, reason: reason || null, note: note || null },
         });
         if (out.blocked > 0)
-          toast.warning(`${out.moved} moved · ${out.blocked} skipped (transition not allowed from their stage)`);
+          toast.warning(
+            `${out.moved} moved · ${out.blocked} skipped (transition not allowed from their stage)`,
+          );
         else toast.success(`${out.moved} moved to ${STAGE_LABEL[toStage]}`);
       }
       onOpenChange(false);
@@ -136,7 +155,11 @@ export function StageMover({
             <Label className="mb-1.5 block text-xs text-muted-foreground">
               Reason {needsReason ? <span className="text-destructive">*</span> : "(optional)"}
             </Label>
-            <Select value={reason} onValueChange={setReason} disabled={!toStage || reasons.length === 0}>
+            <Select
+              value={reason}
+              onValueChange={setReason}
+              disabled={!toStage || reasons.length === 0}
+            >
               <SelectTrigger>
                 <SelectValue
                   placeholder={
@@ -157,7 +180,6 @@ export function StageMover({
               </SelectContent>
             </Select>
           </div>
-
 
           <div>
             <Label className="mb-1.5 block text-xs text-muted-foreground">Note</Label>

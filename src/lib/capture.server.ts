@@ -132,9 +132,7 @@ export async function orgForCaptureToken(
     .from(organizations)
     // Hash match covers encrypted tokens; the plaintext equality is the
     // pre-migration fallback and disappears once every org rotates its key.
-    .where(
-      or(eq(organizations.captureTokenHash, hash), eq(organizations.captureToken, token)),
-    )
+    .where(or(eq(organizations.captureTokenHash, hash), eq(organizations.captureToken, token)))
     .limit(1);
   if (!org) return null;
   if (org.status && org.status !== "active") return null;

@@ -114,7 +114,9 @@ async function requireRoiAccess(userId: string, email: string | null, wantedOrgI
     .from(userRoles)
     .where(and(eq(userRoles.userId, userId), eq(userRoles.orgId, member.orgId)));
   if (!roles.some((r) => ["president_cbo", "hr_head"].includes(r.role))) {
-    throw new Error("Return on Individual is available to the CHRO, HR Head and the account owner.");
+    throw new Error(
+      "Return on Individual is available to the CHRO, HR Head and the account owner.",
+    );
   }
   return {
     orgId: member.orgId,
@@ -136,11 +138,7 @@ const HIRED_STAGES = [
 ] as const;
 
 async function loadCapabilities(orgId: string): Promise<{ nodes: OntologyNode[]; open: number }> {
-  const stored = await db
-    .select()
-    .from(skillNodes)
-    .where(eq(skillNodes.orgId, orgId))
-    .limit(4000);
+  const stored = await db.select().from(skillNodes).where(eq(skillNodes.orgId, orgId)).limit(4000);
 
   const reqRows = await db
     .select({
@@ -306,7 +304,7 @@ export const readReturnOnIndividual = createServerFn({ method: "POST" })
         appliedAt: (r.appliedAt ?? new Date()).toISOString(),
         joinedAt: offer?.joiningDate
           ? new Date(offer.joiningDate).toISOString()
-          : (r.lastActivityAt ?? null)?.toISOString() ?? null,
+          : ((r.lastActivityAt ?? null)?.toISOString() ?? null),
         skills: (r.skills ?? []) as string[],
         experienceYears: Number(r.experienceYears ?? 0),
         offeredCtc: offered > 0 ? offered : null,

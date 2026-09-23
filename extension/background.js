@@ -448,7 +448,10 @@ function discoverResumeActions(expectedName) {
     controls.forEach((control, controlIndex) => {
       const semantic = valueOf(control).toLowerCase();
       const href = control.href || "";
-      if (/preview|hide preview|open viewer/.test(semantic) || control.getAttribute("aria-haspopup") === "menu")
+      if (
+        /preview|hide preview|open viewer/.test(semantic) ||
+        control.getAttribute("aria-haspopup") === "menu"
+      )
         return;
       let score = 0;
       if (control.hasAttribute("download")) score += 100;
@@ -485,7 +488,10 @@ function discoverPreviewResumeUrls() {
     if (!value) return;
     try {
       const href = new URL(value, location.href).href;
-      if (!urls.includes(href) && /licdn|linkedin|ambry|dms|media-proxy|attachment|\.pdf|\.doc/i.test(href)) {
+      if (
+        !urls.includes(href) &&
+        /licdn|linkedin|ambry|dms|media-proxy|attachment|\.pdf|\.doc/i.test(href)
+      ) {
         urls.push(href);
       }
     } catch {
@@ -539,12 +545,16 @@ async function deepHarvestProfile(expectedName, publicProfileUrl) {
   };
 
   /* 1. open everything that is collapsed */
-  const EXPAND = /see more|show more|show all|see all|read more|…\s*more|\bmore\b|expand|view all|show \d+ more/i;
-  const SKIP = /message|connect|follow|invite|save to|hide|show less|see less|feedback|report|download|attachments?/i;
+  const EXPAND =
+    /see more|show more|show all|see all|read more|…\s*more|\bmore\b|expand|view all|show \d+ more/i;
+  const SKIP =
+    /message|connect|follow|invite|save to|hide|show less|see less|feedback|report|download|attachments?/i;
   let expanded = 0;
   for (let pass = 0; pass < 4; pass += 1) {
     const controls = [
-      ...root().querySelectorAll('button, [role="button"], a[role="button"], [aria-expanded="false"]'),
+      ...root().querySelectorAll(
+        'button, [role="button"], a[role="button"], [aria-expanded="false"]',
+      ),
     ].filter(visible);
     let clicked = 0;
     for (const el of controls) {
@@ -959,7 +969,14 @@ async function send(site, token, payload) {
   }
 }
 
-async function fileApplicant({ site, token, page, requisitionId, candidateName, profileOnly = false }) {
+async function fileApplicant({
+  site,
+  token,
+  page,
+  requisitionId,
+  candidateName,
+  profileOnly = false,
+}) {
   const payload = {
     kind: "cv",
     text: page.text && page.text.length > 80 ? page.text : null,
@@ -1113,7 +1130,10 @@ async function sweep({ site, token, pace, tabId, captureJd }) {
           await setRun({
             note: `${candidateName} — profile captured and analysed; CV pending because ${downloadError.message}.`,
           });
-          if (i < queue.length - 1 && !(await interruptibleSleep(jitter(PACE[pace] ?? PACE.safe)))) {
+          if (
+            i < queue.length - 1 &&
+            !(await interruptibleSleep(jitter(PACE[pace] ?? PACE.safe)))
+          ) {
             await setRun({ running: false, note: "Stopped." });
             return;
           }
@@ -1173,9 +1193,7 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage)
       return true;
     }
     if (msg?.type === "stop") {
-      setRun({ stop: true, running: false, note: "Stopped." }).then(() =>
-        respond({ ok: true }),
-      );
+      setRun({ stop: true, running: false, note: "Stopped." }).then(() => respond({ ok: true }));
       return true;
     }
     if (msg?.type === "start") {

@@ -158,8 +158,6 @@ export async function attachmentText(filename: string, bytes: Uint8Array): Promi
     return pages.join(" ").replace(/\s+/g, " ").trim();
   }
 
-
-
   if (name.endsWith(".docx")) {
     const { unzipSync, strFromU8 } = await import("fflate");
     const files = unzipSync(bytes);

@@ -25,11 +25,15 @@ async function main() {
   }
 
   let flagged = false;
-  console.log(`Selection-rate parity for org ${orgId} (best source: ${rows[0]!.source} @ ${(rows[0]!.rate * 100).toFixed(1)}%)`);
+  console.log(
+    `Selection-rate parity for org ${orgId} (best source: ${rows[0]!.source} @ ${(rows[0]!.rate * 100).toFixed(1)}%)`,
+  );
   for (const r of rows) {
     const flag = r.parity < 0.8 ? "  ← BELOW 0.8 — investigate" : "";
     if (r.parity < 0.8) flagged = true;
-    console.log(`  ${r.source.padEnd(16)} ${String(r.advanced).padStart(4)}/${String(r.total).padEnd(5)} rate=${(r.rate * 100).toFixed(1)}%  parity=${r.parity.toFixed(2)}${flag}`);
+    console.log(
+      `  ${r.source.padEnd(16)} ${String(r.advanced).padStart(4)}/${String(r.total).padEnd(5)} rate=${(r.rate * 100).toFixed(1)}%  parity=${r.parity.toFixed(2)}${flag}`,
+    );
   }
   if (flagged) process.exit(1);
 }

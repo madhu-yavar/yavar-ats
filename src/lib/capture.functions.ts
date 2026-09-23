@@ -88,6 +88,13 @@ export const rotateCaptureToken = createServerFn({ method: "POST" })
       })
       .where(eq(organizations.id, context.orgId));
     const { writeAudit } = await import("../server/audit");
-    await writeAudit({ actor: context.memberEmail, actorUserId: context.userId, orgId: context.orgId, action: "capture.token.rotate", entityType: "organization", entityId: context.orgId });
+    await writeAudit({
+      actor: context.memberEmail,
+      actorUserId: context.userId,
+      orgId: context.orgId,
+      action: "capture.token.rotate",
+      entityType: "organization",
+      entityId: context.orgId,
+    });
     return loadSetup(context.orgId);
   });

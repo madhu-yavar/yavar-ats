@@ -226,14 +226,16 @@ export type ScreeningRun = Tables<"screening_runs">;
 export const screeningKitsQuery = (candidateId: string) =>
   queryOptions({
     queryKey: ["screening_kits", candidateId],
-    queryFn: async () => (await listCandidateScreeningKits({ data: { candidateId } })) as ScreeningKit[],
+    queryFn: async () =>
+      (await listCandidateScreeningKits({ data: { candidateId } })) as ScreeningKit[],
   });
 
 /** Graded screening calls for one candidate, newest first. */
 export const screeningRunsQuery = (candidateId: string) =>
   queryOptions({
     queryKey: ["screening_runs", candidateId],
-    queryFn: async () => (await listCandidateScreeningRuns({ data: { candidateId } })) as ScreeningRun[],
+    queryFn: async () =>
+      (await listCandidateScreeningRuns({ data: { candidateId } })) as ScreeningRun[],
   });
 
 /** Every screening kit in the organisation, newest first. */

@@ -113,7 +113,8 @@ export async function safeFetchText(
     }
     if (!res.ok) throw new Error(`Upstream returned ${res.status}`);
     const reader = res.body?.getReader();
-    if (!reader) return { text: "", contentType: res.headers.get("content-type") ?? "", finalUrl: current };
+    if (!reader)
+      return { text: "", contentType: res.headers.get("content-type") ?? "", finalUrl: current };
     const chunks: Uint8Array[] = [];
     let total = 0;
     for (;;) {

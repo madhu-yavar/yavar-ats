@@ -71,9 +71,9 @@ export async function generateQuestions(opts: {
 }
 
 export async function scoreAnswers(opts: {
-
   /** Org context for AI credential resolution. */
-  orgId: string;  title: string;
+  orgId: string;
+  title: string;
   questions: AssessmentQuestion[];
   answers: { id: string; answer: string }[];
 }): Promise<MindsetResult> {

@@ -23,7 +23,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/interviews/")({
   head: () => ({
@@ -37,7 +43,8 @@ export const Route = createFileRoute("/interviews/")({
       { property: "og:title", content: "Interviews & 3-Level Evaluations" },
       {
         property: "og:description",
-        content: "Level-wise scheduling with calendar invites, structured competency scorecards and select/hold/reject auto-progression.",
+        content:
+          "Level-wise scheduling with calendar invites, structured competency scorecards and select/hold/reject auto-progression.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -69,7 +76,10 @@ function Interviews() {
   const doSchedule = useServerFn(scheduleInterview);
   const doSubmit = useServerFn(submitScorecard);
   const mintLink = useServerFn(createMeetingLink);
-  const providers = useQuery({ queryKey: ["meeting_providers"], queryFn: () => meetingProviders() });
+  const providers = useQuery({
+    queryKey: ["meeting_providers"],
+    queryFn: () => meetingProviders(),
+  });
   const readyProviders = (providers.data ?? []).filter((p) => p.ready);
 
   const [busy, setBusy] = useState(false);
@@ -114,11 +124,12 @@ function Interviews() {
     if (q && ![c?.full_name, r?.title, r?.code].join(" ").toLowerCase().includes(q)) return false;
     if (stageFilter === "all") return true;
     if (stageFilter === "unscheduled") {
-      return (ivs.data ?? []).filter((i) => i.application_id === a.id && i.scheduled_at).length === 0;
+      return (
+        (ivs.data ?? []).filter((i) => i.application_id === a.id && i.scheduled_at).length === 0
+      );
     }
     return a.stage === stageFilter;
   });
-
 
   function openSlot(applicationId: string, level: number, interviewId: string | null) {
     const existing = (ivs.data ?? []).find((i) => i.id === interviewId);
@@ -132,7 +143,9 @@ function Interviews() {
       interviewerEmail: existing?.interviewer_email ?? "",
       candidateEmail: candidate?.email ?? "",
       scheduledAt: localInputValue(
-        existing?.scheduled_at ? new Date(existing.scheduled_at) : new Date(Date.now() + 86_400_000),
+        existing?.scheduled_at
+          ? new Date(existing.scheduled_at)
+          : new Date(Date.now() + 86_400_000),
       ),
       durationMins: String(existing?.duration_mins ?? 60),
       mode: (existing?.mode as "online" | "onsite" | "phone") ?? "online",
@@ -141,7 +154,6 @@ function Interviews() {
       rescheduleReason: "",
     });
   }
-
 
   async function saveSlot() {
     if (!slot) return;
@@ -198,7 +210,9 @@ function Interviews() {
           topic: `L${slot.level} interview — ${candidate?.full_name ?? "Candidate"} — ${req?.title ?? "Requisition"}`,
           startIso: new Date(slot.scheduledAt).toISOString(),
           durationMins: Number(slot.durationMins) || 60,
-          attendees: [slot.interviewerEmail, slot.candidateEmail].filter((e): e is string => Boolean(e)),
+          attendees: [slot.interviewerEmail, slot.candidateEmail].filter((e): e is string =>
+            Boolean(e),
+          ),
           agenda: slot.agenda || null,
         },
       });
@@ -240,7 +254,9 @@ function Interviews() {
         },
       });
       toast.success(
-        res.movedTo ? `Evaluation recorded — moved to ${STAGE_LABEL[res.movedTo]}` : "Evaluation recorded",
+        res.movedTo
+          ? `Evaluation recorded — moved to ${STAGE_LABEL[res.movedTo]}`
+          : "Evaluation recorded",
       );
       if (res.blocked) toast.warning(res.blocked);
       if (res.nextInterviewCreated) toast.info("Next round queued for scheduling");
@@ -300,7 +316,9 @@ function Interviews() {
               <div className="text-xs font-semibold sm:col-span-2">
                 {slot.interviewId ? "Re-schedule" : "Schedule"} L{slot.level} —{" "}
                 {(cands.data ?? []).find(
-                  (c) => c.id === (apps.data ?? []).find((a) => a.id === slot.applicationId)?.candidate_id,
+                  (c) =>
+                    c.id ===
+                    (apps.data ?? []).find((a) => a.id === slot.applicationId)?.candidate_id,
                 )?.full_name ?? "Candidate"}
               </div>
               <div className="sm:col-span-2">
@@ -327,7 +345,9 @@ function Interviews() {
                 </div>
               ) : null}
               <div>
-                <Label className="mb-1.5 block text-xs text-muted-foreground">Interviewer name</Label>
+                <Label className="mb-1.5 block text-xs text-muted-foreground">
+                  Interviewer name
+                </Label>
                 <Input
                   value={slot.interviewer}
                   onChange={(e) => setSlot({ ...slot, interviewer: e.target.value })}
@@ -364,7 +384,10 @@ function Interviews() {
                 </div>
                 <div>
                   <Label className="mb-1.5 block text-xs text-muted-foreground">Mode</Label>
-                  <Select value={slot.mode} onValueChange={(v) => setSlot({ ...slot, mode: v as typeof slot.mode })}>
+                  <Select
+                    value={slot.mode}
+                    onValueChange={(v) => setSlot({ ...slot, mode: v as typeof slot.mode })}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -393,14 +416,27 @@ function Interviews() {
                         disabled={minting || busy}
                         onClick={() => generateLink(p.provider)}
                       >
-                        {minting ? <Loader2 className="size-3.5 animate-spin" /> : <Video className="size-3.5" />}
-                        Generate {p.provider === "google_meet" ? "Meet" : p.provider === "teams" ? "Teams" : "Zoom"} link
+                        {minting ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Video className="size-3.5" />
+                        )}
+                        Generate{" "}
+                        {p.provider === "google_meet"
+                          ? "Meet"
+                          : p.provider === "teams"
+                            ? "Teams"
+                            : "Zoom"}{" "}
+                        link
                       </Button>
                     ))
                   ) : (
                     <p className="text-xs text-muted-foreground">
                       Connect Zoom, Google Meet or Teams on the{" "}
-                      <Link to="/integrations" className="text-primary underline-offset-4 hover:underline">
+                      <Link
+                        to="/integrations"
+                        className="text-primary underline-offset-4 hover:underline"
+                      >
                         Integrations
                       </Link>{" "}
                       page to generate links automatically.
@@ -457,7 +493,10 @@ function Interviews() {
                     const rounds = (ivs.data ?? []).filter((i) => i.application_id === a.id);
                     const done = (evals.data ?? []).filter((e) => e.application_id === a.id);
                     return (
-                      <tr key={a.id} className="border-b border-border align-top hover:bg-surface-2/60">
+                      <tr
+                        key={a.id}
+                        className="border-b border-border align-top hover:bg-surface-2/60"
+                      >
                         <td className="max-w-[190px] px-3 py-2">
                           <Link
                             to="/candidates/$id"
@@ -472,7 +511,9 @@ function Interviews() {
                         </td>
                         <td className="max-w-[170px] px-3 py-2">
                           <div className="truncate">{r?.title ?? "—"}</div>
-                          <div className="num truncate text-[11px] text-muted-foreground">{r?.code}</div>
+                          <div className="num truncate text-[11px] text-muted-foreground">
+                            {r?.code}
+                          </div>
                         </td>
                         <td className="px-3 py-2">
                           <StageBadge stage={a.stage} />
@@ -515,8 +556,17 @@ function Interviews() {
                                       {round ? "Re-sched" : "Schedule"}
                                     </Button>
                                     {round?.teams_link ? (
-                                      <Button size="sm" variant="ghost" className="h-6 px-1.5" asChild>
-                                        <a href={round.teams_link} target="_blank" rel="noreferrer noopener">
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-6 px-1.5"
+                                        asChild
+                                      >
+                                        <a
+                                          href={round.teams_link}
+                                          target="_blank"
+                                          rel="noreferrer noopener"
+                                        >
                                           <Video className="size-3.5" />
                                         </a>
                                       </Button>
@@ -572,11 +622,11 @@ function Interviews() {
           )}
         </section>
 
-
         <section className="panel p-5 lg:max-w-xl">
           <h2 className="font-semibold">Record an evaluation</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Use this when feedback comes to you offline. Panel members should submit their own scorecard from{" "}
+            Use this when feedback comes to you offline. Panel members should submit their own
+            scorecard from{" "}
             <Link to="/interviews/mine" className="underline">
               My interviews
             </Link>
@@ -585,7 +635,10 @@ function Interviews() {
           <div className="mt-4 space-y-4">
             <div>
               <Label className="mb-1.5 block text-xs text-muted-foreground">Candidate</Label>
-              <Select value={form.application_id} onValueChange={(v) => setForm({ ...form, application_id: v })}>
+              <Select
+                value={form.application_id}
+                onValueChange={(v) => setForm({ ...form, application_id: v })}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select candidate" />
                 </SelectTrigger>
@@ -638,14 +691,17 @@ function Interviews() {
               <Label className="mb-1.5 block text-xs text-muted-foreground">Verdict</Label>
               <Select
                 value={form.recommendation}
-                onValueChange={(v) => setForm({ ...form, recommendation: v as typeof form.recommendation })}
+                onValueChange={(v) =>
+                  setForm({ ...form, recommendation: v as typeof form.recommendation })
+                }
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="select">
-                    Select — {form.level === "3" ? "raise offer" : `move to L${Number(form.level) + 1}`}
+                    Select —{" "}
+                    {form.level === "3" ? "raise offer" : `move to L${Number(form.level) + 1}`}
                   </SelectItem>
                   <SelectItem value="hold">Hold — park on hold</SelectItem>
                   <SelectItem value="reject">Reject — close the candidate</SelectItem>
@@ -654,8 +710,13 @@ function Interviews() {
             </div>
             {form.recommendation !== "select" && (
               <div>
-                <Label className="mb-1.5 block text-xs text-muted-foreground">Reason (required)</Label>
-                <Input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
+                <Label className="mb-1.5 block text-xs text-muted-foreground">
+                  Reason (required)
+                </Label>
+                <Input
+                  value={form.reason}
+                  onChange={(e) => setForm({ ...form, reason: e.target.value })}
+                />
               </div>
             )}
             <div>

@@ -12,6 +12,7 @@ remove this guard.
     scripts/local-e2e/local-dev.sh stop   # stop
 
 Logins (password `demo1234`):
+
 - `madhu@demo.com` — platform super admin, owner of **Demo Corp**
 - `hr@yavar.ai` — owner of **Yavar Technologies**
 

@@ -1,9 +1,11 @@
 # Release validation, documentation refresh, and publish
 
 ## Scope
+
 Bring the product documentation and in-app user manual in line with the current ATSIQ implementation, verify the critical journeys end to end, run current security checks, and publish only after release blockers are cleared.
 
 ## Implementation
+
 1. **End-to-end validation**
    - Exercise public landing, sign-in failure/recovery entry points, authenticated session restoration, dashboard, requisitions, talent pool, matching, screening, interviews, offers, reports, Return on Individual, Talent Brain, integrations, IJP, templates, help, and platform-only access.
    - Prefer read-only and non-destructive checks against live organisation data. Use isolated records only where a write is essential, and remove or clearly label test records.
@@ -34,6 +36,7 @@ Bring the product documentation and in-app user manual in line with the current 
    - Publish the validated project, then confirm the expected production URL responds and report any third-party integration checks that require real provider credentials.
 
 ## Technical notes
+
 - The operational data path remains Drizzle against plain PostgreSQL via `DATABASE_URL`.
 - Authentication remains first-party, database-backed, HttpOnly cookie sessions; the temporary legacy bearer compatibility path will be documented accurately rather than presented as the primary architecture.
 - Every tenant-scoped server operation must retain `requireOrg`/role middleware and explicit `orgId` predicates.
@@ -41,6 +44,7 @@ Bring the product documentation and in-app user manual in line with the current 
 - Existing labelled `test_roi_cohort` rows remain identifiable and will not be represented as production hires.
 
 ## Acceptance criteria
+
 - Current E2E, integration, and type checks have recorded results.
 - `/help` and the HR copilot share the updated manual content.
 - README, deployment, security, verification, technical architecture, and investor documents agree with the shipped implementation.

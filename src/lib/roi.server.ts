@@ -328,8 +328,7 @@ export function buildRoi(input: RoiInput): RoiReport {
         ? (h.scores.skills + h.scores.experience) / 2
         : null);
     const breadth = clamp(resolved.length * 9, 0, 100);
-    const careerScore =
-      h.scores.career ?? clamp((h.experienceYears / 15) * 100, 0, 100);
+    const careerScore = h.scores.career ?? clamp((h.experienceYears / 15) * 100, 0, 100);
     const impactScore = h.scores.impact ?? clamp((h.experienceYears / 12) * 90, 0, 100);
     const innovationScore = h.scores.innovation ?? clamp(scarce.length * 18, 0, 100);
 
@@ -385,7 +384,8 @@ export function buildRoi(input: RoiInput): RoiReport {
       );
     if (costBasis === "budget")
       evidence.push("Cost read from the requisition budget; no released offer on record yet.");
-    if (costBasis === "unknown") evidence.push("No cost on record — value shown without a cost view.");
+    if (costBasis === "unknown")
+      evidence.push("No cost on record — value shown without a cost view.");
     if (daysToHire !== null) evidence.push(`Closed in ${daysToHire} days from application.`);
 
     return {
@@ -482,7 +482,9 @@ export function buildRoi(input: RoiInput): RoiReport {
           : poolOnly.length
             ? `Not staffable from the team yet, but ${poolOnly
                 .slice(0, 3)
-                .join(", ")} already exist in the talent pool — ${poolReadiness}% hireable without new sourcing.`
+                .join(
+                  ", ",
+                )} already exist in the talent pool — ${poolReadiness}% hireable without new sourcing.`
             : `Not staffable today — ${missing.slice(0, 3).join(", ")} absent from the organisation and the pool.`;
 
     return {
@@ -599,7 +601,10 @@ export function buildRoi(input: RoiInput): RoiReport {
           ? "budget"
           : "unknown";
 
-  const deptMap = new Map<string, { hires: number; capability: number; roi: number; cost: number }>();
+  const deptMap = new Map<
+    string,
+    { hires: number; capability: number; roi: number; cost: number }
+  >();
   for (const h of hires) {
     const key = h.department ?? "Unassigned";
     const row = deptMap.get(key) ?? { hires: 0, capability: 0, roi: 0, cost: 0 };
@@ -627,8 +632,12 @@ export function buildRoi(input: RoiInput): RoiReport {
       "Where no offer is released, cost falls back to the requisition budget — the RoI index is then indicative, not committed spend.",
     );
   if (input.hires.some((h) => h.scores.overall === null))
-    basis.push("Hires without a weighted match score use experience and capability breadth instead.");
-  basis.push(`${input.openRequisitions} open requisitions set the demand side of every scarcity read.`);
+    basis.push(
+      "Hires without a weighted match score use experience and capability breadth instead.",
+    );
+  basis.push(
+    `${input.openRequisitions} open requisitions set the demand side of every scarcity read.`,
+  );
 
   return {
     hires: hires.sort((a, b) => b.roiIndex - a.roiIndex),
@@ -646,9 +655,7 @@ export function buildRoi(input: RoiInput): RoiReport {
       costPerCapabilityPoint:
         capabilitySum > 0 && committedCost > 0 ? Math.round(committedCost / capabilitySum) : null,
       medianCost,
-      avgDaysToHire: days.length
-        ? Math.round(days.reduce((a, b) => a + b, 0) / days.length)
-        : null,
+      avgDaysToHire: days.length ? Math.round(days.reduce((a, b) => a + b, 0) / days.length) : null,
       joined: hires.filter((h) => h.cohort === "joined").length,
       committed: hires.filter((h) => h.cohort === "committed").length,
       compounding: hires.filter((h) => h.verdict === "compounding").length,

@@ -253,7 +253,8 @@ export const MANUAL_SECTIONS: ManualSection[] = [
   {
     id: "roles",
     title: "18. Permission guide",
-    summary: "Access follows the smallest role needed for each decision, with the organisation owner and platform super admin kept distinct.",
+    summary:
+      "Access follows the smallest role needed for each decision, with the organisation owner and platform super admin kept distinct.",
     steps: [
       "Recruiters source, own, match, screen, schedule and progress candidates within their organisation.",
       "Hiring managers and department heads review their demand, interview assignments and approval steps; department heads control the business-side requisition decision.",

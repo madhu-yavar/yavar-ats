@@ -1,9 +1,11 @@
 # Product document plan
 
 ## Deliverable
+
 Create a professionally designed, investor-grade DOCX that comprehensively documents ATSIQ from business, product, AI, solution-design, architecture, security, governance, scalability and commercial-value perspectives.
 
 ## Structure
+
 1. Executive overview and investment narrative
 2. Market problem, personas and value proposition
 3. Product operating model and end-to-end journeys
@@ -17,6 +19,7 @@ Create a professionally designed, investor-grade DOCX that comprehensively docum
 11. Appendices: roles, workflows, data domains and glossary
 
 ## Quality
+
 - Separate verified implemented capabilities from forward-looking positioning.
 - Use diagrams, tables and consistent industrial document styling.
 - Generate DOCX, validate it, convert every page to images and inspect all pages before delivery.

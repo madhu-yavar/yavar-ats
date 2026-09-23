@@ -305,5 +305,7 @@
     animation: none;
   }
 
-  .graph-ring { opacity: 0.6; }
+  .graph-ring {
+    opacity: 0.6;
+  }
 }

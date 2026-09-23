@@ -27,7 +27,9 @@ const ReqStatus = z.enum([
  * UI: each target status names the legal source statuses and the role that may
  * make the hop. Org owners pass every role check (assertRole semantics).
  */
-const REQ_TRANSITIONS: Partial<Record<(typeof ReqStatus.options)[number], { from: string[]; role?: AppRole | AppRole[] }>> = {
+const REQ_TRANSITIONS: Partial<
+  Record<(typeof ReqStatus.options)[number], { from: string[]; role?: AppRole | AppRole[] }>
+> = {
   draft: { from: ["draft", "rejected", "on_hold"] },
   pending_dh: { from: ["draft", "rejected", "on_hold"] },
   pending_hr: { from: ["pending_dh"], role: "department_head" },
@@ -461,9 +463,15 @@ export const saveJobCardOverrides = createServerFn({ method: "POST" })
         theme: z
           .object({
             overlayOpacity: z.number().int().min(0).max(75).optional(),
-            textColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+            textColor: z
+              .string()
+              .regex(/^#[0-9a-fA-F]{6}$/)
+              .optional(),
             backgroundBrightness: z.number().int().min(50).max(130).optional(),
-            accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+            accentColor: z
+              .string()
+              .regex(/^#[0-9a-fA-F]{6}$/)
+              .optional(),
           })
           .optional(),
       })

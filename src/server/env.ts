@@ -87,7 +87,9 @@ if (!parsed.success) {
   const hasStateSecret = Boolean(e.OAUTH_STATE_SECRET ?? e.LINKEDIN_STATE_SECRET);
   const problems: string[] = [];
   if (e.LINKEDIN_CLIENT_ID && e.LINKEDIN_CLIENT_SECRET && !hasStateSecret) {
-    problems.push("LINKEDIN_CLIENT_ID is set but neither LINKEDIN_STATE_SECRET nor OAUTH_STATE_SECRET is (min 32 chars).");
+    problems.push(
+      "LINKEDIN_CLIENT_ID is set but neither LINKEDIN_STATE_SECRET nor OAUTH_STATE_SECRET is (min 32 chars).",
+    );
   }
   const meetingProvider =
     (e.MICROSOFT_OAUTH_CLIENT_ID && "MICROSOFT_OAUTH_CLIENT_ID") ??

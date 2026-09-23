@@ -68,7 +68,10 @@ const TRUSTED_PROXY_COUNT = Math.max(0, Number(process.env["TRUSTED_PROXY_COUNT"
 function clientIp(request: Request): string {
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) {
-    const hops = forwarded.split(",").map((h) => h.trim()).filter(Boolean);
+    const hops = forwarded
+      .split(",")
+      .map((h) => h.trim())
+      .filter(Boolean);
     const idx = hops.length - TRUSTED_PROXY_COUNT;
     if (idx >= 0 && hops[idx]) return hops[idx]!;
   }
@@ -122,22 +125,22 @@ async function applySecurityHeaders(response: Response, request: Request): Promi
   );
   headers.set("X-Frame-Options", "SAMEORIGIN");
 
-  if (!response.body) return new Response(null, { status: response.status, statusText: response.statusText, headers });
+  if (!response.body)
+    return new Response(null, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
   return await stampNonces(response, nonce, headers);
 }
 
 function generateNonce(): string {
-  return crypto.getRandomValues(new Uint8Array(16)).reduce(
-    (s, b) => s + b.toString(16).padStart(2, "0"),
-    "",
-  );
+  return crypto
+    .getRandomValues(new Uint8Array(16))
+    .reduce((s, b) => s + b.toString(16).padStart(2, "0"), "");
 }
 
-async function stampNonces(
-  response: Response,
-  nonce: string,
-  headers: Headers,
-): Promise<Response> {
+async function stampNonces(response: Response, nonce: string, headers: Headers): Promise<Response> {
   try {
     const html = await response.text();
     const stamped = html.replace(/<script(?![^>]*\bnonce=)([^>]*)/gi, (_m, attrs: string) => {

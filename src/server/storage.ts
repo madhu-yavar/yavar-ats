@@ -9,7 +9,12 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 
 import { env } from "./env";
 
@@ -105,11 +110,18 @@ export async function putObject(
 ): Promise<void> {
   if (!s3Configured()) return localPut(key, bytes, contentType);
   await s3().send(
-    new PutObjectCommand({ Bucket: env.S3_BUCKET, Key: key, Body: bytes, ContentType: contentType }),
+    new PutObjectCommand({
+      Bucket: env.S3_BUCKET,
+      Key: key,
+      Body: bytes,
+      ContentType: contentType,
+    }),
   );
 }
 
-export async function getObject(key: string): Promise<{ bytes: Uint8Array; contentType: string } | null> {
+export async function getObject(
+  key: string,
+): Promise<{ bytes: Uint8Array; contentType: string } | null> {
   if (!s3Configured()) return localGet(key);
   try {
     const res = await s3().send(new GetObjectCommand({ Bucket: env.S3_BUCKET, Key: key }));
@@ -117,7 +129,8 @@ export async function getObject(key: string): Promise<{ bytes: Uint8Array; conte
     const bytes = new Uint8Array(await res.Body.transformToByteArray());
     return { bytes, contentType: res.ContentType ?? "application/octet-stream" };
   } catch (e) {
-    const status = (e as { name?: string; $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+    const status = (e as { name?: string; $metadata?: { httpStatusCode?: number } }).$metadata
+      ?.httpStatusCode;
     if (status === 404 || (e as { name?: string }).name === "NoSuchKey") return null;
     throw e;
   }
@@ -139,11 +152,18 @@ export async function deletePrefix(prefix: string): Promise<void> {
   let token: string | undefined;
   do {
     const listed = await c.send(
-      new ListObjectsV2Command({ Bucket: env.S3_BUCKET, Prefix: prefix, MaxKeys: 1000, ContinuationToken: token }),
+      new ListObjectsV2Command({
+        Bucket: env.S3_BUCKET,
+        Prefix: prefix,
+        MaxKeys: 1000,
+        ContinuationToken: token,
+      }),
     );
     const objects = (listed.Contents ?? []).map((o) => ({ Key: o.Key! })).filter((o) => o.Key);
     if (objects.length) {
-      await c.send(new DeleteObjectsCommand({ Bucket: env.S3_BUCKET, Delete: { Objects: objects } }));
+      await c.send(
+        new DeleteObjectsCommand({ Bucket: env.S3_BUCKET, Delete: { Objects: objects } }),
+      );
     }
     token = listed.IsTruncated ? listed.NextContinuationToken : undefined;
   } while (token);
@@ -151,7 +171,8 @@ export async function deletePrefix(prefix: string): Promise<void> {
 
 export function contentTypeFor(fileName: string): string {
   if (/\.pdf$/i.test(fileName)) return "application/pdf";
-  if (/\.docx$/i.test(fileName)) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (/\.docx$/i.test(fileName))
+    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
   if (/\.doc$/i.test(fileName)) return "application/msword";
   if (/\.png$/i.test(fileName)) return "image/png";
   if (/\.jpe?g$/i.test(fileName)) return "image/jpeg";

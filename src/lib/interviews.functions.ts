@@ -487,7 +487,9 @@ export const saveAiInterview = createServerFn({ method: "POST" })
     const from = application.stage as Stage;
     if (from !== "ai_screened") {
       if (!canMove(from, "ai_screened")) {
-        throw new Error(`${STAGE_LABEL[from]} → ${STAGE_LABEL.ai_screened} is not an allowed transition.`);
+        throw new Error(
+          `${STAGE_LABEL[from]} → ${STAGE_LABEL.ai_screened} is not an allowed transition.`,
+        );
       }
       const now = new Date();
       await db

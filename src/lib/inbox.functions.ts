@@ -13,7 +13,11 @@ export const careersInboxStatus = createServerFn({ method: "GET" })
   .handler(async () => {
     const { inboxConfigured, inboxProfile } = await import("./inbox.server");
     if (!inboxConfigured()) {
-      return { connected: false as const, email: null as string | null, error: null as string | null };
+      return {
+        connected: false as const,
+        email: null as string | null,
+        error: null as string | null,
+      };
     }
     try {
       const profile = await inboxProfile();

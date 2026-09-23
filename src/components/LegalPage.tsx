@@ -24,7 +24,9 @@ export function LegalPage({
       <div className="mt-8 space-y-7">
         {sections.map((s) => (
           <section key={s.title}>
-            <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-primary">{s.title}</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-primary">
+              {s.title}
+            </h2>
             <div className="mt-2 space-y-2 text-sm leading-relaxed text-muted-foreground">
               {s.body.map((p, i) => (
                 <p key={i}>{p}</p>

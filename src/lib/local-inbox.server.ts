@@ -398,8 +398,13 @@ async function filePreOnboardingAttachments(input: {
   const docs = input.attachments.filter((a) => a.filename && a.content);
   if (!docs.length) return [];
 
-  const { offerContextForEmail, storeOnboardingDocument, guessDocType, docTypeLabel, expandUpload } =
-    await import("./onboarding.server");
+  const {
+    offerContextForEmail,
+    storeOnboardingDocument,
+    guessDocType,
+    docTypeLabel,
+    expandUpload,
+  } = await import("./onboarding.server");
   const ctx = await offerContextForEmail(input.orgId, input.senderEmail);
   if (!ctx) return [];
 

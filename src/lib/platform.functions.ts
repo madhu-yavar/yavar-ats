@@ -144,7 +144,13 @@ export const addPlatformAdmin = createServerFn({ method: "POST" })
         /duplicate|unique/i.test(message) ? "That email is already a super user." : message,
       );
     }
-    await writeAudit({ actor: context.email, actorUserId: context.userId, action: "platform.admin.add", entityType: "platform_admin", detail: { email: data.email.toLowerCase() } });
+    await writeAudit({
+      actor: context.email,
+      actorUserId: context.userId,
+      action: "platform.admin.add",
+      entityType: "platform_admin",
+      detail: { email: data.email.toLowerCase() },
+    });
     return { ok: true };
   });
 
@@ -162,7 +168,14 @@ export const removePlatformAdmin = createServerFn({ method: "POST" })
       throw new Error("You cannot remove your own super-user access.");
     }
     await db.delete(platformAdmins).where(eq(platformAdmins.id, data.id));
-    await writeAudit({ actor: context.email, actorUserId: context.userId, action: "platform.admin.remove", entityType: "platform_admin", entityId: row.id, detail: { email: row.email } });
+    await writeAudit({
+      actor: context.email,
+      actorUserId: context.userId,
+      action: "platform.admin.remove",
+      entityType: "platform_admin",
+      entityId: row.id,
+      detail: { email: row.email },
+    });
     return { ok: true };
   });
 
@@ -249,7 +262,15 @@ export const setOrganizationStatus = createServerFn({ method: "POST" })
         archivedReason: data.status === "archived" ? data.reason.trim() || null : null,
       })
       .where(eq(organizations.id, data.orgId));
-    await writeAudit({ actor: context.email, actorUserId: context.userId, orgId: data.orgId, action: "platform.org.status", entityType: "organization", entityId: data.orgId, detail: { status: data.status, reason: data.reason } });
+    await writeAudit({
+      actor: context.email,
+      actorUserId: context.userId,
+      orgId: data.orgId,
+      action: "platform.org.status",
+      entityType: "organization",
+      entityId: data.orgId,
+      detail: { status: data.status, reason: data.reason },
+    });
     return { ok: true };
   });
 
@@ -304,7 +325,15 @@ export const deleteOrganizationAsSuperUser = createServerFn({ method: "POST" })
     );
 
     const removedAccounts = await purgeOrphanAccounts(memberUserIds);
-    await writeAudit({ actor: context.email, actorUserId: context.userId, orgId: data.orgId, action: "platform.org.delete", entityType: "organization", entityId: data.orgId, detail: { removedAccounts } });
+    await writeAudit({
+      actor: context.email,
+      actorUserId: context.userId,
+      orgId: data.orgId,
+      action: "platform.org.delete",
+      entityType: "organization",
+      entityId: data.orgId,
+      detail: { removedAccounts },
+    });
     return { ok: true, removedAccounts };
   });
 

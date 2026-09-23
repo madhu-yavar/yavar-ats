@@ -1,4 +1,5 @@
 <!-- LOVABLE:BEGIN -->
+
 > [!IMPORTANT]
 > This project is connected to [Lovable](https://lovable.dev). Avoid rewriting
 > published git history — force pushing, or rebasing/amending/squashing commits
@@ -7,9 +8,11 @@
 >
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
+
 <!-- LOVABLE:END -->
 
 <!-- SECURITY:BEGIN -->
+
 ## Security invariants (do not regress)
 
 - Every tenant-scoped server function uses `requireOrg` / `requireRole` /
@@ -35,4 +38,5 @@
   not add new public routes without limiter coverage.
 - Security review reports live in SECURITY_AUDIT_REPORT*.md — never commit
   them while the repository is public.
+
 <!-- SECURITY:END -->

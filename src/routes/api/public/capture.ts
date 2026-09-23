@@ -60,7 +60,10 @@ async function handle(request: Request) {
     body = Payload.parse(await request.json());
   } catch (e) {
     return Response.json(
-      { status: "error", detail: e instanceof Error ? e.message.slice(0, 200) : "Invalid capture payload." },
+      {
+        status: "error",
+        detail: e instanceof Error ? e.message.slice(0, 200) : "Invalid capture payload.",
+      },
       { status: 400, headers: cors },
     );
   }

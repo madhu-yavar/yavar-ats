@@ -65,7 +65,18 @@ export const saveAiSettings = createServerFn({ method: "POST" })
       await db.insert(aiSettings).values({ ...payload, orgId: context.orgId, singleton: true });
     }
     const { writeAudit } = await import("../server/audit");
-    await writeAudit({ actor: context.memberEmail, actorUserId: context.userId, orgId: context.orgId, action: "ai.settings.save", entityType: "ai_settings", detail: { provider: data.provider, model: data.model, keyChanged: Boolean(data.apiKey.trim()) } });
+    await writeAudit({
+      actor: context.memberEmail,
+      actorUserId: context.userId,
+      orgId: context.orgId,
+      action: "ai.settings.save",
+      entityType: "ai_settings",
+      detail: {
+        provider: data.provider,
+        model: data.model,
+        keyChanged: Boolean(data.apiKey.trim()),
+      },
+    });
     return { ok: true };
   });
 
@@ -76,7 +87,14 @@ export const removeAiKey = createServerFn({ method: "POST" })
     const { clearProviderKey } = await import("./ai-gateway.server");
     await clearProviderKey(context.orgId, data.provider);
     const { writeAudit } = await import("../server/audit");
-    await writeAudit({ actor: context.memberEmail, actorUserId: context.userId, orgId: context.orgId, action: "ai.key.remove", entityType: "ai_provider_credentials", detail: { provider: data.provider } });
+    await writeAudit({
+      actor: context.memberEmail,
+      actorUserId: context.userId,
+      orgId: context.orgId,
+      action: "ai.key.remove",
+      entityType: "ai_provider_credentials",
+      detail: { provider: data.provider },
+    });
     return { ok: true };
   });
 
@@ -94,9 +112,8 @@ export const testAiModel = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((data: unknown) => TestInput.parse(data))
   .handler(async ({ context, data }) => {
-    const { aiJson, resolveAiConfig, readProviderKey, DEFAULT_MODEL } = await import(
-      "./ai-gateway.server"
-    );
+    const { aiJson, resolveAiConfig, readProviderKey, DEFAULT_MODEL } =
+      await import("./ai-gateway.server");
     let cfg = await resolveAiConfig(context.orgId);
     if (data && (data.provider || data.model || data.apiKey !== undefined)) {
       const provider = data.provider ?? cfg.provider;

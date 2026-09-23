@@ -21,4 +21,5 @@ export const benchmarkCompensation = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((data: unknown) => BenchmarkInput.parse(data))
   .handler(async ({ data, context }): Promise<MarketBenchmark> =>
-    benchmarkMarket({ ...data, orgId: context.orgId }));
+    benchmarkMarket({ ...data, orgId: context.orgId }),
+  );

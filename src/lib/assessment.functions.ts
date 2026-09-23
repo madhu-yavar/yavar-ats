@@ -155,7 +155,12 @@ export const submitAssessment = createServerFn({ method: "POST" })
       if (req?.title) title = req.title;
     }
 
-    const result = await scoreAnswers({ orgId: row.orgId, title, questions, answers: data.answers });
+    const result = await scoreAnswers({
+      orgId: row.orgId,
+      title,
+      questions,
+      answers: data.answers,
+    });
 
     // Atomic lock: the status guard lives in the UPDATE itself, so two
     // concurrent submissions cannot both write (TOCTOU).

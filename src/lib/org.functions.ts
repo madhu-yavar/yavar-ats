@@ -630,7 +630,15 @@ export const setMemberRole = createServerFn({ method: "POST" })
       try {
         await db.insert(userRoles).values({ userId: member.userId, role: data.role, orgId });
         const { writeAudit } = await import("../server/audit");
-        await writeAudit({ actor: context.userId, actorUserId: context.userId, orgId, action: "member.role.grant", entityType: "org_member", entityId: member.id, detail: { role: data.role, memberUserId: member.userId } });
+        await writeAudit({
+          actor: context.userId,
+          actorUserId: context.userId,
+          orgId,
+          action: "member.role.grant",
+          entityType: "org_member",
+          entityId: member.id,
+          detail: { role: data.role, memberUserId: member.userId },
+        });
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         if (!/duplicate|unique/i.test(message)) throw new Error(message);
@@ -648,7 +656,15 @@ export const setMemberRole = createServerFn({ method: "POST" })
           ),
         );
       const { writeAudit } = await import("../server/audit");
-      await writeAudit({ actor: context.userId, actorUserId: context.userId, orgId, action: "member.role.revoke", entityType: "org_member", entityId: member.id, detail: { role: data.role, memberUserId: member.userId } });
+      await writeAudit({
+        actor: context.userId,
+        actorUserId: context.userId,
+        orgId,
+        action: "member.role.revoke",
+        entityType: "org_member",
+        entityId: member.id,
+        detail: { role: data.role, memberUserId: member.userId },
+      });
     }
     return { ok: true };
   });

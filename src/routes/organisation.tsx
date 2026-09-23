@@ -33,7 +33,10 @@ export const Route = createFileRoute("/organisation")({
           "Owner settings: edit the organisation profile, currency and fiscal year, and archive the organisation while preserving every hiring record.",
       },
       { property: "og:title", content: "Organisation profile & lifecycle" },
-      { property: "og:description", content: "Edit organisation details or archive the tenant as its owner." },
+      {
+        property: "og:description",
+        content: "Edit organisation details or archive the tenant as its owner.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -170,8 +173,8 @@ function OrganisationSettings() {
             <Archive className="size-4" /> Archive organisation
           </h2>
           <p className="text-sm text-muted-foreground">
-            Everyone loses access to {org?.name} immediately. Nothing is deleted — a platform super user can restore
-            it at any time.
+            Everyone loses access to {org?.name} immediately. Nothing is deleted — a platform super
+            user can restore it at any time.
           </p>
           <Button variant="destructive" onClick={() => setConfirm(true)}>
             Archive organisation
@@ -184,10 +187,15 @@ function OrganisationSettings() {
           <AlertDialogHeader>
             <AlertDialogTitle>Archive {org?.name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              All members, including you, lose access until a platform super user restores the organisation.
+              All members, including you, lose access until a platform super user restores the
+              organisation.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (optional)" />
+          <Input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Reason (optional)"
+          />
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction

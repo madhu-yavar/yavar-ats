@@ -14,7 +14,8 @@ export const Route = createFileRoute("/privacy")({
       { property: "og:title", content: "Privacy Policy — ATSIQ by Yavar AI" },
       {
         property: "og:description",
-        content: "Data collection, purpose, retention, sharing and data-subject rights for the ATSIQ platform.",
+        content:
+          "Data collection, purpose, retention, sharing and data-subject rights for the ATSIQ platform.",
       },
       { property: "og:type", content: "article" },
       { property: "og:url", content: "https://atsiq.yavar.ai/privacy" },

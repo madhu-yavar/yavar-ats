@@ -53,10 +53,10 @@ export function useNavCtx(): NavCtx {
             r === "hr_head" ||
             r === "president_cbo",
         )),
-    governance:
-      inOrg && (isOwner || roles.some((r) => r === "hr_head" || r === "president_cbo")),
+    governance: inOrg && (isOwner || roles.some((r) => r === "hr_head" || r === "president_cbo")),
     // The Talent Brain is a governance view: CHRO, HR head, owner or the product owner.
-    leadership: isSuperUser || isOwner || roles.some((r) => r === "president_cbo" || r === "hr_head"),
+    leadership:
+      isSuperUser || isOwner || roles.some((r) => r === "president_cbo" || r === "hr_head"),
     isSuperUser,
     claimable,
   };

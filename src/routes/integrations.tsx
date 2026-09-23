@@ -403,7 +403,6 @@ function LinkedinOneClick() {
     qc.invalidateQueries({ queryKey: ["linkedin_connect"] });
   }, [qc]);
 
-
   async function onConnect() {
     setBusy(true);
     // LinkedIn refuses to load inside an embedded frame, so the sign-in must
@@ -679,11 +678,13 @@ function MeetingOAuthPanel({ row }: { row: Integration }) {
   const drop = useServerFn(disconnectIntegration);
 
   const cfg = (row.config ?? {}) as Record<string, unknown>;
-  const connectedEmail = typeof cfg["connected_email"] === "string" ? (cfg["connected_email"] as string) : "";
+  const connectedEmail =
+    typeof cfg["connected_email"] === "string" ? (cfg["connected_email"] as string) : "";
 
   const provider = row.provider as "teams" | "google_meet" | "zoom";
   const startFn = provider === "teams" ? startMs : provider === "google_meet" ? startGm : startZm;
-  const label = provider === "teams" ? "Microsoft Teams" : provider === "google_meet" ? "Google Meet" : "Zoom";
+  const label =
+    provider === "teams" ? "Microsoft Teams" : provider === "google_meet" ? "Google Meet" : "Zoom";
 
   async function onConnect() {
     setBusy(true);
@@ -719,14 +720,12 @@ function MeetingOAuthPanel({ row }: { row: Integration }) {
           <Plug className="size-4 text-primary" />
           One-click connect — no secrets to paste
         </div>
-        {connectedEmail ? (
-          <Badge variant="secondary">Connected as {connectedEmail}</Badge>
-        ) : null}
+        {connectedEmail ? <Badge variant="secondary">Connected as {connectedEmail}</Badge> : null}
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
-        Sign in with the work account that hosts your {label} meetings. An organisation
-        owner or HR head connects it once; every recruiter's schedule reuses the same
-        account for invites and links.
+        Sign in with the work account that hosts your {label} meetings. An organisation owner or HR
+        head connects it once; every recruiter's schedule reuses the same account for invites and
+        links.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         {connectedEmail ? (
@@ -1272,8 +1271,7 @@ function AiModelCard() {
         toast.success(
           apiKey.trim() ? `${out.message} Now press Save to store this key.` : out.message,
         );
-      }
-      else toast.error(out.message);
+      } else toast.error(out.message);
       qc.invalidateQueries({ queryKey: ["ai_settings"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Test failed");
@@ -1308,10 +1306,10 @@ function AiModelCard() {
         roll-up) never uses a model.
       </p>
       <p className="mt-2 text-xs font-medium text-foreground">
-        Your own key is required. Every AI action on this workspace is billed to the key saved here —
-        there is no shared or platform key, and no other organisation&apos;s key is ever used. Until a
-        key is saved, AI steps stop with a clear message instead of running on someone else&apos;s
-        account.
+        Your own key is required. Every AI action on this workspace is billed to the key saved here
+        — there is no shared or platform key, and no other organisation&apos;s key is ever used.
+        Until a key is saved, AI steps stop with a clear message instead of running on someone
+        else&apos;s account.
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -1358,7 +1356,7 @@ function AiModelCard() {
           </div>
         )}
 
-        {(
+        {
           <div className="space-y-1.5 sm:col-span-2">
             <Label className="flex items-center gap-1.5">
               <KeyRound className="size-3.5" />
@@ -1378,7 +1376,7 @@ function AiModelCard() {
               Stored server-side only; it is never returned to the browser.
             </p>
           </div>
-        )}
+        }
       </div>
 
       {s?.last_test_message ? (
@@ -1398,7 +1396,6 @@ function AiModelCard() {
           </Button>
         ) : null}
       </div>
-
     </article>
   );
 }
@@ -1414,9 +1411,18 @@ function Integrations() {
     if (!outcome) return;
     const provider = params.get("provider");
     const name =
-      provider === "microsoft" ? "Microsoft Teams" : provider === "google" ? "Google Meet" : provider === "zoom" ? "Zoom" : "The provider";
+      provider === "microsoft"
+        ? "Microsoft Teams"
+        : provider === "google"
+          ? "Google Meet"
+          : provider === "zoom"
+            ? "Zoom"
+            : "The provider";
     if (outcome === "connected") toast.success(`${name} connected for your organisation`);
-    else toast.error(`${name} connect did not complete${params.get("detail") ? `: ${params.get("detail")}` : ""}`);
+    else
+      toast.error(
+        `${name} connect did not complete${params.get("detail") ? `: ${params.get("detail")}` : ""}`,
+      );
     window.history.replaceState({}, "", window.location.pathname);
     qc.invalidateQueries({ queryKey: ["source_integrations"] });
   }, []);
@@ -1454,11 +1460,11 @@ function Integrations() {
                 job posts publish from a requisition and applicants arrive through your apply link.
               </li>
               <li>
-                <strong className="text-foreground">ATSIQ Capture (Chrome extension)</strong> — while
-                you browse LinkedIn Recruiter, capture the CV or job description you are looking at or
-                run a guided sweep of an applicant list; everything lands in your talent pool,
-                deduplicated and ready to score. Pair it with this organisation using the capture
-                token shown above.
+                <strong className="text-foreground">ATSIQ Capture (Chrome extension)</strong> —
+                while you browse LinkedIn Recruiter, capture the CV or job description you are
+                looking at or run a guided sweep of an applicant list; everything lands in your
+                talent pool, deduplicated and ready to score. Pair it with this organisation using
+                the capture token shown above.
               </li>
               <li>
                 <strong className="text-foreground">Public apply link</strong> — every requisition

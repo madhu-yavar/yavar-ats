@@ -262,7 +262,13 @@ export function OntologyGraph({
                 >
                   <title>{`${n.name} — ${n.supply} in pool, ${n.demand} weighted demand`}</title>
                   {selected === n.slug ? (
-                    <circle className="graph-ring" r={n.r + 7} fill="none" stroke={tone} strokeWidth="1.2" />
+                    <circle
+                      className="graph-ring"
+                      r={n.r + 7}
+                      fill="none"
+                      stroke={tone}
+                      strokeWidth="1.2"
+                    />
                   ) : null}
                   <circle r={n.r + 5} fill={tone} opacity={isFocus ? 0.2 : 0.11} />
                   <circle

@@ -1111,7 +1111,9 @@ export const contentTemplates = pgTable(
     kind: text("kind").notNull(),
     name: text("name").notNull(),
     isDefault: boolean("is_default").notNull().default(false),
-    config: jsonb("config").notNull().default(sql`'{}'::jsonb`),
+    config: jsonb("config")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     instructions: text("instructions"),
     /** job_card only — stored object key under `${orgId}/branding/`. */
     logoPath: text("logo_path"),
@@ -1235,7 +1237,9 @@ export const hrIncentiveSchemes = pgTable("hr_incentive_schemes", {
   payoutPerClosure: numeric("payout_per_closure").notNull().default("10000"),
   qualityBands: jsonb("quality_bands")
     .notNull()
-    .default(sql`'[{"min_score":85,"multiplier":1.2},{"min_score":70,"multiplier":1},{"min_score":0,"multiplier":0.8}]'::jsonb`),
+    .default(
+      sql`'[{"min_score":85,"multiplier":1.2},{"min_score":70,"multiplier":1},{"min_score":0,"multiplier":0.8}]'::jsonb`,
+    ),
   monthlyCap: numeric("monthly_cap"),
   notes: text("notes"),
   updatedBy: uuid("updated_by"),

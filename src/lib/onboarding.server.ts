@@ -95,7 +95,13 @@ export const DOC_TYPES: DocTypeDef[] = [
     hint: "Signed consent and declaration.",
     expects: ["holder name", "signature date"],
   },
-  { key: "other", label: "Other document", required: false, hint: "Anything else HR asked for.", expects: ["summary"] },
+  {
+    key: "other",
+    label: "Other document",
+    required: false,
+    hint: "Anything else HR asked for.",
+    expects: ["summary"],
+  },
 ];
 
 export const DOC_TYPE_KEYS = DOC_TYPES.map((d) => d.key) as [string, ...string[]];
@@ -230,7 +236,8 @@ function imageTypeOf(fileName: string): AiImage["contentType"] | null {
 async function pdfPageText(bytes: Uint8Array): Promise<string> {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   // pdf.js detaches the buffer it is handed — give it a copy.
-  const doc = await pdfjs.getDocument({ data: new Uint8Array(bytes), useSystemFonts: false }).promise;
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(bytes), useSystemFonts: false })
+    .promise;
   const limit = Math.min(doc.numPages, 60);
   const out: string[] = [];
   for (let i = 1; i <= limit; i++) {
@@ -354,7 +361,7 @@ export async function extractDocument(input: {
     "on page 2, or the same document repeated. Read the WHOLE file. When it carries more than one " +
     "document or more than one pay period, set contains_multiple_documents true and return one entry " +
     "in parts for EACH document or pay period, each with its own dates, figures and pay_components, " +
-    "a part_label naming it (\"Payslip Mar 2026\", \"Revision letter effective Apr 2026\") and pages " +
+    'a part_label naming it ("Payslip Mar 2026", "Revision letter effective Apr 2026") and pages ' +
     "giving the page range it occupies. Put the most recent or most significant document at the top " +
     "level as well, so a reader that ignores parts still gets the current position. Never average, " +
     "merge or total figures across different documents or months.\n\n" +
@@ -379,8 +386,10 @@ export async function extractDocument(input: {
       text = read.trim() ? read.slice(0, 120_000) : null;
       // A scan, a photographed slip printed to PDF, or a breakup table that is
       // an image: hand the whole PDF to the model so it reads the pages itself.
-      if ((!text || text.replace(/--- page[^\n]*\n/g, "").trim().length < 400) &&
-          input.bytes.byteLength < 18_000_000) {
+      if (
+        (!text || text.replace(/--- page[^\n]*\n/g, "").trim().length < 400) &&
+        input.bytes.byteLength < 18_000_000
+      ) {
         docs.push({
           base64: Buffer.from(input.bytes).toString("base64"),
           contentType: "application/pdf",
@@ -559,7 +568,15 @@ export async function offerContextForEmail(
     .orderBy(desc(applications.appliedAt))
     .limit(1);
   if (!row) return null;
-  const OFFERING = ["l3", "offer", "offer_pending", "offer_released", "offer_accepted", "hired", "joined"];
+  const OFFERING = [
+    "l3",
+    "offer",
+    "offer_pending",
+    "offer_released",
+    "offer_accepted",
+    "hired",
+    "joined",
+  ];
   if (!OFFERING.includes(row.stage)) return null;
   const [offer] = await db
     .select({ id: offers.id })
@@ -632,9 +649,7 @@ function isoDay(value: unknown): string | null {
 function monthsBetween(fromIso: string, toIso: string): number {
   const a = new Date(`${fromIso}T00:00:00Z`);
   const b = new Date(`${toIso}T00:00:00Z`);
-  return (
-    (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth())
-  );
+  return (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth());
 }
 
 function sameEmployer(a: string | null, b: string | null): boolean {
@@ -642,7 +657,10 @@ function sameEmployer(a: string | null, b: string | null): boolean {
   const norm = (s: string) =>
     s
       .toLowerCase()
-      .replace(/\b(private|pvt|limited|ltd|llp|inc|corp|corporation|technologies|technology|solutions|services|india)\b/g, "")
+      .replace(
+        /\b(private|pvt|limited|ltd|llp|inc|corp|corporation|technologies|technology|solutions|services|india)\b/g,
+        "",
+      )
       .replace(/[^a-z0-9]/g, "");
   const x = norm(a);
   const y = norm(b);
@@ -695,7 +713,8 @@ export async function compensationReading(
     if (isoDay(facts.period_iso)) return "payslip";
     if (isoDay(facts.effective_from_iso) && (facts.annual_ctc || facts.annual_fixed))
       return "salary_revision";
-    if (isoDay(facts.employed_from_iso) || isoDay(facts.employed_to_iso)) return "experience_letter";
+    if (isoDay(facts.employed_from_iso) || isoDay(facts.employed_to_iso))
+      return "experience_letter";
     return fallback;
   };
 
@@ -744,7 +763,9 @@ export async function compensationReading(
 
   const dated = payslips.filter((s) => s.on);
   if (payslips.length && !dated.length) {
-    conflicts.push("No payslip carries a readable pay period, so none of them can be ordered in time.");
+    conflicts.push(
+      "No payslip carries a readable pay period, so none of them can be ordered in time.",
+    );
   }
   const undatedSlips = payslips.length - dated.length;
   if (dated.length && undatedSlips > 0) {
@@ -762,7 +783,9 @@ export async function compensationReading(
     }
   }
   if (dated.length < 3) {
-    gaps.push(`${dated.length} dated payslip(s) on file; three consecutive months make the reading reliable.`);
+    gaps.push(
+      `${dated.length} dated payslip(s) on file; three consecutive months make the reading reliable.`,
+    );
   }
   // Consecutive-month check across the three most recent slips.
   for (let i = 0; i < Math.min(dated.length, 3) - 1; i++) {
@@ -897,9 +920,7 @@ export async function compensationReading(
   const payslipAnnual = latest?.recurring ? latest.recurring * 12 : null;
   // A revision letter only governs the pay actually being drawn when it took
   // effect on or before the latest payslip month.
-  const governing = revisions.find(
-    (r) => r.annual && r.on && (!latest?.on || r.on <= latest.on),
-  );
+  const governing = revisions.find((r) => r.annual && r.on && (!latest?.on || r.on <= latest.on));
   const futureRevision = revisions.find((r) => r.annual && r.on && latest?.on && r.on > latest.on);
   if (futureRevision) {
     gaps.push(
@@ -935,7 +956,9 @@ export async function compensationReading(
       ? Math.round(((offeredAnnual - lastDrawnAnnual) / lastDrawnAnnual) * 1000) / 10
       : null;
   if (hikePct !== null && hikePct < 0) {
-    gaps.push(`The offer is ${Math.abs(hikePct)}% below the last drawn figure — confirm this is intended.`);
+    gaps.push(
+      `The offer is ${Math.abs(hikePct)}% below the last drawn figure — confirm this is intended.`,
+    );
   }
 
   const evidenceDocs = parsed.filter((p) =>

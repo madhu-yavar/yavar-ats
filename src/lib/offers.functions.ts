@@ -28,7 +28,9 @@ const OfferStatus = z.enum([
  * Offer approval chain (HR → CBO → release), enforced server-side: each target
  * status names the legal source statuses and the role that may make the hop.
  */
-const OFFER_TRANSITIONS: Partial<Record<(typeof OfferStatus.options)[number], { from: string[]; role?: AppRole | AppRole[] }>> = {
+const OFFER_TRANSITIONS: Partial<
+  Record<(typeof OfferStatus.options)[number], { from: string[]; role?: AppRole | AppRole[] }>
+> = {
   draft: { from: ["draft", "declined", "revoked"] },
   pending_hr: { from: ["draft"] },
   pending_cbo: { from: ["pending_hr"], role: "hr_head" },

@@ -79,9 +79,13 @@ export function logisticsCheck(c: LogisticsCandidate, r: LogisticsRequisition): 
   /* ---- location */
   const reqLocations = (r.locations ?? []).filter(Boolean).map(norm);
   if (reqLocations.length > 0) {
-    const candidateLocations = [c.location ?? "", ...(c.preferredLocations ?? [])].filter(Boolean).map(norm);
+    const candidateLocations = [c.location ?? "", ...(c.preferredLocations ?? [])]
+      .filter(Boolean)
+      .map(norm);
     const remote = reqLocations.some((l) => l.includes("remote"));
-    const overlap = candidateLocations.some((l) => reqLocations.some((rl) => rl.includes(l) || l.includes(rl)));
+    const overlap = candidateLocations.some((l) =>
+      reqLocations.some((rl) => rl.includes(l) || l.includes(rl)),
+    );
     if (!remote && !overlap && candidateLocations.length > 0) {
       if (c.willingToRelocate === true) flags.push("Relocation needed — candidate is open to it");
       else if (c.willingToRelocate === false) {
@@ -102,13 +106,21 @@ export function logisticsCheck(c: LogisticsCandidate, r: LogisticsRequisition): 
       missing.push("work authorisation");
       risk += 1;
     } else if (norm(c.workAuthorization) !== norm(r.workAuthorizationRequired)) {
-      blockers.push(`Work authorisation "${c.workAuthorization}" does not meet "${r.workAuthorizationRequired}"`);
+      blockers.push(
+        `Work authorisation "${c.workAuthorization}" does not meet "${r.workAuthorizationRequired}"`,
+      );
       risk += 3;
     }
   }
 
   const join_risk: LogisticsCheck["join_risk"] =
-    missing.length >= 3 && risk === 0 ? "unknown" : risk >= 4 ? "high" : risk >= 2 ? "medium" : "low";
+    missing.length >= 3 && risk === 0
+      ? "unknown"
+      : risk >= 4
+        ? "high"
+        : risk >= 2
+          ? "medium"
+          : "low";
 
   return { flags, blockers, join_risk, missing };
 }

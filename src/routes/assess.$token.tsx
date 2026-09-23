@@ -22,7 +22,8 @@ export const Route = createFileRoute("/assess/$token")({
       { property: "og:title", content: "Ways-of-working questionnaire" },
       {
         property: "og:description",
-        content: "Six situational questions about ownership, learning and collaboration. Takes about 15 minutes.",
+        content:
+          "Six situational questions about ownership, learning and collaboration. Takes about 15 minutes.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -81,7 +82,9 @@ function AssessmentPage() {
     );
   }
 
-  const unanswered = data.questions.filter((qq) => (answers[qq.id] ?? "").trim().length < 40).length;
+  const unanswered = data.questions.filter(
+    (qq) => (answers[qq.id] ?? "").trim().length < 40,
+  ).length;
 
   async function onSubmit() {
     setSending(true);
@@ -89,7 +92,10 @@ function AssessmentPage() {
       await submit({
         data: {
           token,
-          answers: data.questions.map((qq) => ({ id: qq.id, answer: (answers[qq.id] ?? "").trim() })),
+          answers: data.questions.map((qq) => ({
+            id: qq.id,
+            answer: (answers[qq.id] ?? "").trim(),
+          })),
         },
       });
       setDone(true);
@@ -104,15 +110,18 @@ function AssessmentPage() {
     <main className="mx-auto max-w-3xl px-6 py-12">
       <h1 className="text-2xl font-semibold">How you work</h1>
       <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-        {data.candidateName ? `${data.candidateName}, ` : ""}these are situational questions, not a test of knowledge.
-        Answer with something you have actually done: the situation, what you decided, and how it turned out. A few
-        sentences each is plenty, and you can only submit once.
+        {data.candidateName ? `${data.candidateName}, ` : ""}these are situational questions, not a
+        test of knowledge. Answer with something you have actually done: the situation, what you
+        decided, and how it turned out. A few sentences each is plenty, and you can only submit
+        once.
       </p>
 
       <div className="mt-8 space-y-6">
         {data.questions.map((qq, i) => (
           <section key={qq.id} className="panel p-5">
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground">{qq.dimension}</Label>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+              {qq.dimension}
+            </Label>
             <p className="mt-1 font-medium">
               {i + 1}. {qq.prompt}
             </p>

@@ -18,7 +18,9 @@ export function signActionToken(
   purpose: ActionTokenPurpose,
   ttlMs: number,
 ): string {
-  const payload = b64u(Buffer.from(JSON.stringify({ u: userId, p: purpose, e: Date.now() + ttlMs })));
+  const payload = b64u(
+    Buffer.from(JSON.stringify({ u: userId, p: purpose, e: Date.now() + ttlMs })),
+  );
   return `${payload}.${signature(payload)}`;
 }
 

@@ -63,7 +63,10 @@ export const Route = createFileRoute("/api/auth/login")({
 
           return new Response(JSON.stringify({ ok: true, email: user.email }), {
             status: 200,
-            headers: { "content-type": "application/json", "set-cookie": sessionCookie(token, request) },
+            headers: {
+              "content-type": "application/json",
+              "set-cookie": sessionCookie(token, request),
+            },
           });
         } catch (err) {
           console.error("Password sign-in failed", err);

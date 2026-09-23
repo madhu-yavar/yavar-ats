@@ -23,6 +23,7 @@ Requisition form: replace the single education dropdown with a pick-or-create mu
 ## 2. Fix bulk CV upload in the Talent pool
 
 Current flow: read file in browser → extract text (pdf.js / mammoth) → AI parse → insert candidate. Failure points to fix:
+
 - pdf.js worker URL fails to load in the built app → pin the worker from the installed package and fall back to a no-worker path.
 - Files with no extractable text (scanned/image PDFs) fail silently per-file → surface a clear per-file reason.
 - Whole batch stops feeling responsive on 20+ files → process with bounded concurrency (3 at a time) and a live per-file status list.
@@ -36,7 +37,7 @@ I'll reproduce with a real PDF and DOCX in the browser before calling it fixed.
 New panel on the requisition page (and mirrored on the Matching page):
 
 - **From talent pool** — searchable, filterable list (skill overlap with the JD must-haves, experience band, location, internal/external) with a suggested set pre-ticked. Ticking adds applications in one click.
-- **New CVs for this requisition** — the same bulk uploader, but it creates the candidate *and* the application against this requisition in one pass.
+- **New CVs for this requisition** — the same bulk uploader, but it creates the candidate _and_ the application against this requisition in one pass.
 - **Auto-shortlist** — one button: rank the whole pool by cheap deterministic overlap (must-have skill hits + experience band), take the top N, create applications, then run the AI scoring pipeline on them.
 
 After sourcing, "Score pipeline" produces the ranked table you already have — skills / experience / education / social breakdown per candidate, with rationale and risk flags.

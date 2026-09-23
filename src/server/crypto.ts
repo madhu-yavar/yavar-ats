@@ -22,9 +22,7 @@ function key(): Buffer | null {
     cachedKey = null;
     return null;
   }
-  const buf = /^[0-9a-f]{64}$/i.test(raw)
-    ? Buffer.from(raw, "hex")
-    : Buffer.from(raw, "base64");
+  const buf = /^[0-9a-f]{64}$/i.test(raw) ? Buffer.from(raw, "hex") : Buffer.from(raw, "base64");
   if (buf.length !== 32) {
     throw new Error(
       "SECRET_ENCRYPTION_KEY must be 32 bytes (base64 or hex) — generate one with `openssl rand -base64 32`.",
@@ -69,9 +67,10 @@ export function decryptSecret(stored: string | null | undefined): string {
     if (!ivB64 || !ctB64 || !tagB64) return "";
     const decipher = createDecipheriv("aes-256-gcm", k, Buffer.from(ivB64, "base64"));
     decipher.setAuthTag(Buffer.from(tagB64, "base64"));
-    return Buffer.concat([decipher.update(Buffer.from(ctB64, "base64")), decipher.final()]).toString(
-      "utf8",
-    );
+    return Buffer.concat([
+      decipher.update(Buffer.from(ctB64, "base64")),
+      decipher.final(),
+    ]).toString("utf8");
   } catch {
     return ""; // wrong key or tampered value — never surface partial plaintext
   }

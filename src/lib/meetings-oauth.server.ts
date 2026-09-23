@@ -171,13 +171,16 @@ export async function exchangeCode(
   }
 
   // Zoom
-  const res = await fetch(`https://zoom.us/oauth/token?grant_type=authorization_code&code=${encodeURIComponent(code)}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+  const res = await fetch(
+    `https://zoom.us/oauth/token?grant_type=authorization_code&code=${encodeURIComponent(code)}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+      },
     },
-  });
+  );
   if (!res.ok) throw new Error(`Zoom token exchange failed (${res.status}).`);
   const body = (await res.json()) as OAuthTokenResponse;
   let connectedEmail = "";
@@ -237,7 +240,11 @@ export async function finishProviderConnect(
 
   const code = url.searchParams.get("code");
   if (!code)
-    return back({ meetings: "error", provider: oauthProvider, detail: "No authorisation code returned." });
+    return back({
+      meetings: "error",
+      provider: oauthProvider,
+      detail: "No authorisation code returned.",
+    });
 
   try {
     const secretsPatch = await exchangeCode(oauthProvider, code, state.origin);
@@ -247,7 +254,10 @@ export async function finishProviderConnect(
       .select({ id: sourceIntegrations.id, config: sourceIntegrations.config })
       .from(sourceIntegrations)
       .where(
-        and(eq(sourceIntegrations.orgId, state.orgId), eq(sourceIntegrations.provider, rowProvider)),
+        and(
+          eq(sourceIntegrations.orgId, state.orgId),
+          eq(sourceIntegrations.provider, rowProvider),
+        ),
       )
       .limit(1);
     if (!row)

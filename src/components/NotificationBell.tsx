@@ -31,7 +31,9 @@ export function NotificationBell() {
           {items.length ? (
             <span
               className={`absolute -right-0.5 -top-0.5 flex min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold ${
-                urgent ? "bg-destructive text-destructive-foreground" : "bg-primary text-primary-foreground"
+                urgent
+                  ? "bg-destructive text-destructive-foreground"
+                  : "bg-primary text-primary-foreground"
               }`}
             >
               {items.length > 9 ? "9+" : items.length}

@@ -94,7 +94,13 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-type Component = { label?: string; amount?: number; cadence?: string; kind?: string; recurring?: boolean };
+type Component = {
+  label?: string;
+  amount?: number;
+  cadence?: string;
+  kind?: string;
+  recurring?: boolean;
+};
 
 /**
  * The employer's own breakup, line by line and unrenamed. Two employers paying
@@ -102,7 +108,9 @@ type Component = { label?: string; amount?: number; cadence?: string; kind?: str
  * has to judge — so nothing is re-bucketed into a house template here.
  */
 function Breakup({ facts, title }: { facts: Record<string, unknown>; title?: string }) {
-  const all = Array.isArray(facts["pay_components"]) ? (facts["pay_components"] as Component[]) : [];
+  const all = Array.isArray(facts["pay_components"])
+    ? (facts["pay_components"] as Component[])
+    : [];
   const lines = all.filter((c) => c?.label && typeof c.amount === "number");
   if (!lines.length) return null;
   const group = (kind: string) =>
@@ -130,7 +138,9 @@ function Breakup({ facts, title }: { facts: Record<string, unknown>; title?: str
         .filter(([, g]) => g.length)
         .map(([heading, g]) => (
           <div key={heading}>
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{heading}</div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              {heading}
+            </div>
             <ul className="divide-y divide-border">
               {g.map((c, i) => (
                 <li key={`${c.label}-${i}`} className="flex items-baseline gap-2 py-1 text-sm">
@@ -145,7 +155,9 @@ function Breakup({ facts, title }: { facts: Record<string, unknown>; title?: str
                       {String(c.cadence).replace(/_/g, " ")}
                     </span>
                   ) : null}
-                  <span className="num font-medium">{Math.round(Number(c.amount)).toLocaleString()}</span>
+                  <span className="num font-medium">
+                    {Math.round(Number(c.amount)).toLocaleString()}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -180,7 +192,9 @@ function Extraction({ doc }: { doc: OnboardingDocWire }) {
     <div className="space-y-3">
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>Read by the agent — check each value against the document.</span>
-        {confidence !== null ? <span className="num">confidence {Math.round(confidence)}%</span> : null}
+        {confidence !== null ? (
+          <span className="num">confidence {Math.round(confidence)}%</span>
+        ) : null}
       </div>
       <dl className="divide-y divide-border rounded-lg border border-border">
         {rows.map(([label, value]) => (
@@ -205,8 +219,8 @@ function Extraction({ doc }: { doc: OnboardingDocWire }) {
       {Array.isArray(e["parts"]) && (e["parts"] as unknown[]).length ? (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">
-            This file holds {(e["parts"] as unknown[]).length} separate document(s) — each one is read,
-            dated and reconciled on its own.
+            This file holds {(e["parts"] as unknown[]).length} separate document(s) — each one is
+            read, dated and reconciled on its own.
           </p>
           {(e["parts"] as Record<string, unknown>[]).map((part, i) => (
             <details key={i} className="rounded-lg border border-border p-3 text-sm">
@@ -215,7 +229,9 @@ function Extraction({ doc }: { doc: OnboardingDocWire }) {
                   ? String(part["part_label"])
                   : `Document ${i + 1}`}
                 {typeof part["pages"] === "string" && part["pages"] ? (
-                  <span className="ml-2 text-xs text-muted-foreground">p. {String(part["pages"])}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    p. {String(part["pages"])}
+                  </span>
                 ) : null}
               </summary>
               <div className="mt-2 space-y-2">
@@ -327,7 +343,11 @@ function PayReading({ applicationId }: { applicationId: string }) {
   const r = q.data;
   if (!r) return null;
   const amount = (n: number | null) =>
-    n === null ? "not established" : r.currency === "INR" ? inr(n) : `${r.currency} ${n.toLocaleString()}`;
+    n === null
+      ? "not established"
+      : r.currency === "INR"
+        ? inr(n)
+        : `${r.currency} ${n.toLocaleString()}`;
 
   return (
     <section className="space-y-3 rounded-lg border border-border p-4">
@@ -464,7 +484,8 @@ export function PreOnboardingDialog({
       refresh();
       qc.invalidateQueries({ queryKey: ["onboarding_readiness"] });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "The document could not be filed."),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "The document could not be filed."),
   });
 
   const review = useMutation({
@@ -475,13 +496,16 @@ export function PreOnboardingDialog({
       refresh();
       qc.invalidateQueries({ queryKey: ["onboarding_readiness"] });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "The decision could not be saved."),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "The decision could not be saved."),
   });
 
   const reextract = useMutation({
     mutationFn: () => reextractOnboardingDoc({ data: { id: selected!.id } }),
     onSuccess: (res) => {
-      toast.success(res.status === "extracted" ? "Read again." : (res.note ?? "It could not be read."));
+      toast.success(
+        res.status === "extracted" ? "Read again." : (res.note ?? "It could not be read."),
+      );
       refresh();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "It could not be read again."),
@@ -581,7 +605,9 @@ export function PreOnboardingDialog({
                   <button
                     onClick={() => setSelectedId(d.id)}
                     className={`w-full rounded-lg border p-3 text-left text-sm transition ${
-                      selected?.id === d.id ? "border-foreground" : "border-border hover:bg-muted/50"
+                      selected?.id === d.id
+                        ? "border-foreground"
+                        : "border-border hover:bg-muted/50"
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">

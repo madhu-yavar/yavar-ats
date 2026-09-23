@@ -168,16 +168,15 @@ function categorise(slug: string) {
  * canonical slugs found in the text. Bounded — only known tokens count, so free
  * prose cannot invent nodes.
  */
-function mineSkills(
-  text: string | null | undefined,
-  tokens: Map<string, string>,
-): string[] {
+function mineSkills(text: string | null | undefined, tokens: Map<string, string>): string[] {
   if (!text) return [];
   const hay = text.toLowerCase();
   const found = new Set<string>();
   for (const [token, slug] of tokens) {
     if (token.length < 2) continue;
-    const re = new RegExp(`(^|[^a-z0-9+#])${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9+#]|$)`);
+    const re = new RegExp(
+      `(^|[^a-z0-9+#])${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9+#]|$)`,
+    );
     if (re.test(hay)) found.add(slug);
   }
   return [...found];

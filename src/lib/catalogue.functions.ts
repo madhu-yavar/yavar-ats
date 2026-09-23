@@ -49,9 +49,9 @@ export const readCatalogue = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<CatalogueResult> => {
     await requireSuperUser(context);
     const saved = new Map(
-      (
-        await db.select({ row: productCatalogueCommercials }).from(productCatalogueCommercials)
-      ).map(({ row }) => [row.moduleId, row]),
+      (await db.select({ row: productCatalogueCommercials }).from(productCatalogueCommercials)).map(
+        ({ row }) => [row.moduleId, row],
+      ),
     );
     return {
       generatedAt: new Date().toISOString(),

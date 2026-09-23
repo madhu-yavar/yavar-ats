@@ -169,8 +169,8 @@ export function MarketBenchmarkPanel(props: Props) {
         <div>
           <p className="text-sm font-semibold">Market pay benchmark</p>
           <p className="text-xs text-muted-foreground">
-            Searches the web live across vetted salary publishers and recruiting salary guides, reads
-            each page, and blends in what your organisation has already decided to pay.
+            Searches the web live across vetted salary publishers and recruiting salary guides,
+            reads each page, and blends in what your organisation has already decided to pay.
           </p>
         </div>
         <Button type="button" size="sm" variant="outline" onClick={research} disabled={loading}>

@@ -72,7 +72,11 @@ export function verifyOAuthState(
  * crafted state could 302 our users anywhere.
  */
 export function assertAllowedOrigin(origin: string): string {
-  const allowed = new Set<string>([env.PUBLIC_SITE_URL.replace(/\/$/, ""), "http://localhost:8080", "http://localhost:8081"]);
+  const allowed = new Set<string>([
+    env.PUBLIC_SITE_URL.replace(/\/$/, ""),
+    "http://localhost:8080",
+    "http://localhost:8081",
+  ]);
   const cleaned = origin.replace(/\/$/, "");
   if (!allowed.has(cleaned)) throw new Error("Unrecognised application origin.");
   return cleaned;

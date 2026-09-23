@@ -9,10 +9,7 @@ import { requisitions } from "@db/schema";
  * an attacker org can attach applications to another org's requisition and
  * leak its JD/budget metadata through the scoring pipeline.
  */
-export async function assertRequisitionInOrg(
-  requisitionId: string,
-  orgId: string,
-): Promise<void> {
+export async function assertRequisitionInOrg(requisitionId: string, orgId: string): Promise<void> {
   const [row] = await db
     .select({ id: requisitions.id })
     .from(requisitions)

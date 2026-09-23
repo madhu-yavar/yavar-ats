@@ -12,17 +12,26 @@ const USERS = [
   { id: "6a6a0000-0000-4000-8000-00000000d004", email: "dh@demo.com", password: "demo1234" },
   { id: "6a6a0000-0000-4000-8000-00000000d005", email: "hm@demo.com", password: "demo1234" },
   { id: "6a6a0000-0000-4000-8000-00000000d006", email: "owner@newdemo.com", password: "demo1234" },
-  { id: "5e2e0000-0000-4000-8000-00000000e2e1", email: "e2e-owner@atsiq-e2e.local", password: "E2e-Test-Passw0rd!" },
+  {
+    id: "5e2e0000-0000-4000-8000-00000000e2e1",
+    email: "e2e-owner@atsiq-e2e.local",
+    password: "E2e-Test-Passw0rd!",
+  },
 ];
 
 const b64u = (data: Uint8Array | string) =>
-  Buffer.from(data)
-    .toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  Buffer.from(data).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 
 async function hs256jwt(payload: Record<string, unknown>): Promise<string> {
   const head = b64u(JSON.stringify({ alg: "HS256", typ: "JWT" }));
   const body = b64u(JSON.stringify(payload));
-  const key = await crypto.subtle.importKey("raw", SECRET, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const key = await crypto.subtle.importKey(
+    "raw",
+    SECRET,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
   const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${head}.${body}`));
   return `${head}.${body}.${b64u(new Uint8Array(sig))}`;
 }
@@ -30,10 +39,18 @@ async function hs256jwt(payload: Record<string, unknown>): Promise<string> {
 function userJson(u: (typeof USERS)[number]) {
   const now = new Date().toISOString();
   return {
-    id: u.id, aud: "authenticated", role: "authenticated", email: u.email,
-    email_confirmed_at: now, confirmed_at: now, phone: "",
+    id: u.id,
+    aud: "authenticated",
+    role: "authenticated",
+    email: u.email,
+    email_confirmed_at: now,
+    confirmed_at: now,
+    phone: "",
     app_metadata: { provider: "email", providers: ["email"] },
-    user_metadata: {}, identities: [], created_at: now, updated_at: now,
+    user_metadata: {},
+    identities: [],
+    created_at: now,
+    updated_at: now,
   };
 }
 
@@ -52,21 +69,36 @@ Bun.serve({
 
     if (url.pathname === "/auth/v1/token" && url.searchParams.get("grant_type") === "password") {
       const body = (await req.json()) as { email?: string; password?: string };
-      const u = USERS.find((x) => x.email.toLowerCase() === body.email?.toLowerCase() && x.password === body.password);
+      const u = USERS.find(
+        (x) => x.email.toLowerCase() === body.email?.toLowerCase() && x.password === body.password,
+      );
       if (!u) {
-        return cors(Response.json(
-          { error: "invalid_grant", error_description: "Invalid login credentials" },
-          { status: 400 },
-        ));
+        return cors(
+          Response.json(
+            { error: "invalid_grant", error_description: "Invalid login credentials" },
+            { status: 400 },
+          ),
+        );
       }
       const now = Math.floor(Date.now() / 1000);
       const access_token = await hs256jwt({
-        sub: u.id, email: u.email, role: "authenticated", aud: "authenticated", iat: now, exp: now + 3600,
+        sub: u.id,
+        email: u.email,
+        role: "authenticated",
+        aud: "authenticated",
+        iat: now,
+        exp: now + 3600,
       });
-      return cors(Response.json({
-        access_token, token_type: "bearer", expires_in: 3600, expires_at: now + 3600,
-        refresh_token: "e2e-refresh-token", user: userJson(u),
-      }));
+      return cors(
+        Response.json({
+          access_token,
+          token_type: "bearer",
+          expires_in: 3600,
+          expires_at: now + 3600,
+          refresh_token: "e2e-refresh-token",
+          user: userJson(u),
+        }),
+      );
     }
 
     if (url.pathname === "/auth/v1/user") {
@@ -74,8 +106,18 @@ Bun.serve({
       const now = Math.floor(Date.now() / 1000);
       try {
         const [h, p, s] = token.split(".");
-        const key = await crypto.subtle.importKey("raw", SECRET, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-        const expected = b64u(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${h}.${p}`))));
+        const key = await crypto.subtle.importKey(
+          "raw",
+          SECRET,
+          { name: "HMAC", hash: "SHA-256" },
+          false,
+          ["sign"],
+        );
+        const expected = b64u(
+          new Uint8Array(
+            await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${h}.${p}`)),
+          ),
+        );
         const payload = JSON.parse(atob(p.replace(/-/g, "+").replace(/_/g, "/")));
         const u = USERS.find((x) => x.id === payload.sub);
         if (s !== expected || payload.exp <= now || !u) {
@@ -88,7 +130,10 @@ Bun.serve({
     }
 
     if (url.pathname === "/auth/v1/logout") return cors(new Response(null, { status: 204 }));
-    if (url.pathname === "/auth/v1/token" && url.searchParams.get("grant_type") === "refresh_token") {
+    if (
+      url.pathname === "/auth/v1/token" &&
+      url.searchParams.get("grant_type") === "refresh_token"
+    ) {
       return cors(Response.json({ error: "unsupported_grant_type" }, { status: 400 }));
     }
     return cors(Response.json({ message: "not found" }, { status: 404 }));

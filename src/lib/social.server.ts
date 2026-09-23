@@ -5,11 +5,36 @@ export type SocialSignal = {
   profile_url: string | null;
   handle: string | null;
   score: number;
-  signals: Record<string, any>;
+  /** Serialisable sub-scores/details; kept concrete so SocialSignal can cross server-fn boundaries. */
+  signals: Record<string, string | number | null | string[] | Record<string, number>>;
   rationale: string;
   status: "ok" | "unavailable" | "error";
-  raw?: any;
+  raw?: {
+    login?: string | undefined;
+    name?: string | null | undefined;
+    bio?: string | null | undefined;
+    company?: string | null | undefined;
+    blog?: string | null | undefined;
+  };
 };
+
+/** Fields read off the public GitHub REST API responses (all optional). */
+type GithubUser = {
+  login?: string;
+  name?: string | null;
+  bio?: string | null;
+  company?: string | null;
+  blog?: string | null;
+  followers?: number;
+  updated_at?: string;
+};
+type GithubRepo = {
+  fork?: boolean;
+  stargazers_count?: number;
+  language?: string | null;
+  pushed_at?: string;
+};
+type GithubEvent = { created_at?: string };
 
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 
@@ -66,9 +91,9 @@ export async function fetchGithubSignal(
       return fail("GitHub rate limit reached — add a GitHub token to raise it.", "unavailable");
     if (!userRes.ok) return fail(`GitHub returned ${userRes.status}.`);
 
-    const user = (await userRes.json()) as any;
-    const repos: any[] = reposRes.ok ? await reposRes.json() : [];
-    const events: any[] = eventsRes.ok ? await eventsRes.json() : [];
+    const user = (await userRes.json()) as GithubUser;
+    const repos: GithubRepo[] = reposRes.ok ? await reposRes.json() : [];
+    const events: GithubEvent[] = eventsRes.ok ? await eventsRes.json() : [];
 
     const owned = repos.filter((r) => !r.fork);
     const stars = owned.reduce((sum, r) => sum + (r.stargazers_count ?? 0), 0);

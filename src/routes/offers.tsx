@@ -279,24 +279,24 @@ function Offers() {
         </section>
       </div>
 
-      {docsAppId ? (
-        (() => {
-          const app = (apps.data ?? []).find((a) => a.id === docsAppId);
-          const c = (cands.data ?? []).find((x) => x.id === app?.candidate_id);
-          const r = (reqs.data ?? []).find((x) => x.id === app?.requisition_id);
-          return (
-            <PreOnboardingDialog
-              applicationId={docsAppId}
-              candidateName={c?.full_name ?? "Candidate"}
-              roleTitle={r?.title ?? "Requisition"}
-              open
-              onOpenChange={(v) => {
-                if (!v) setDocsAppId(null);
-              }}
-            />
-          );
-        })()
-      ) : null}
+      {docsAppId
+        ? (() => {
+            const app = (apps.data ?? []).find((a) => a.id === docsAppId);
+            const c = (cands.data ?? []).find((x) => x.id === app?.candidate_id);
+            const r = (reqs.data ?? []).find((x) => x.id === app?.requisition_id);
+            return (
+              <PreOnboardingDialog
+                applicationId={docsAppId}
+                candidateName={c?.full_name ?? "Candidate"}
+                roleTitle={r?.title ?? "Requisition"}
+                open
+                onOpenChange={(v) => {
+                  if (!v) setDocsAppId(null);
+                }}
+              />
+            );
+          })()
+        : null}
 
       {letterOffer ? (
         <OfferLetterDialog

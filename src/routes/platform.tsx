@@ -44,7 +44,8 @@ export const Route = createFileRoute("/platform")({
       { property: "og:title", content: "Platform console" },
       {
         property: "og:description",
-        content: "Cross-tenant statistics, archiving and super-user administration for the ATS platform.",
+        content:
+          "Cross-tenant statistics, archiving and super-user administration for the ATS platform.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -72,7 +73,14 @@ function Platform() {
   const [q, setQ] = useState("");
   const [showArchived, setShowArchived] = useState(true);
   const [adminEmail, setAdminEmail] = useState("");
-  const [editOrg, setEditOrg] = useState<{ id: string; name: string; industry: string; hqCity: string; hqCountry: string; currency: string } | null>(null);
+  const [editOrg, setEditOrg] = useState<{
+    id: string;
+    name: string;
+    industry: string;
+    hqCity: string;
+    hqCountry: string;
+    currency: string;
+  } | null>(null);
   const [usersOf, setUsersOf] = useState<{ id: string; name: string } | null>(null);
   const [deleteOrg, setDeleteOrg] = useState<{ id: string; name: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState("");
@@ -137,7 +145,11 @@ function Platform() {
   if (!isSuperUser) {
     return (
       <>
-        <PageHeader eyebrow="Platform" title="Product owner console" description="Cross-organisation visibility." />
+        <PageHeader
+          eyebrow="Platform"
+          title="Product owner console"
+          description="Cross-organisation visibility."
+        />
         <section className="panel max-w-lg space-y-3 p-5">
           {claimable ? (
             <>
@@ -145,10 +157,22 @@ function Platform() {
                 <KeyRound className="size-4 text-muted-foreground" /> Claim super-user access
               </h2>
               <p className="text-sm text-muted-foreground">
-                No super user exists yet. Claiming adds <span className="num">{email}</span> to the platform
-                allowlist — you can then add or remove other super users by email.
+                No super user exists yet. Claiming adds <span className="num">{email}</span> to the
+                platform allowlist — you can then add or remove other super users by email.
               </p>
-              <Button disabled={busy === "claim"} onClick={() => run("claim", async () => { await claim({}); await refetch(); }, "You are now the platform super user")}>
+              <Button
+                disabled={busy === "claim"}
+                onClick={() =>
+                  run(
+                    "claim",
+                    async () => {
+                      await claim({});
+                      await refetch();
+                    },
+                    "You are now the platform super user",
+                  )
+                }
+              >
                 Claim super-user access
               </Button>
             </>
@@ -196,10 +220,19 @@ function Platform() {
         <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
           <div className="relative min-w-[220px] flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search organisation" className="pl-8" />
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search organisation"
+              className="pl-8"
+            />
           </div>
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
-            <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+            />
             Show archived
           </label>
         </div>
@@ -208,7 +241,10 @@ function Platform() {
           <p className="p-4 text-sm text-muted-foreground">Loading organisations…</p>
         ) : rows.length === 0 ? (
           <div className="p-4">
-            <EmptyState title="No organisations" hint="Tenants appear here as soon as they register." />
+            <EmptyState
+              title="No organisations"
+              hint="Tenants appear here as soon as they register."
+            />
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -276,7 +312,11 @@ function Platform() {
                         >
                           Edit
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => setUsersOf({ id: o.id, name: o.name })}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setUsersOf({ id: o.id, name: o.name })}
+                        >
                           Users
                         </Button>
                         <Button
@@ -294,7 +334,9 @@ function Platform() {
                                     reason: "",
                                   },
                                 }),
-                              o.status === "archived" ? "Organisation restored" : "Organisation archived",
+                              o.status === "archived"
+                                ? "Organisation restored"
+                                : "Organisation archived",
                             )
                           }
                         >
@@ -362,7 +404,9 @@ function Platform() {
                 size="sm"
                 variant="ghost"
                 disabled={busy === `da:${a.id}`}
-                onClick={() => run(`da:${a.id}`, () => dropAdmin({ data: { id: a.id } }), "Super user removed")}
+                onClick={() =>
+                  run(`da:${a.id}`, () => dropAdmin({ data: { id: a.id } }), "Super user removed")
+                }
               >
                 <Trash2 className="size-4" />
               </Button>
@@ -379,12 +423,32 @@ function Platform() {
           </DialogHeader>
           {editOrg ? (
             <div className="space-y-2">
-              <Input value={editOrg.name} onChange={(e) => setEditOrg({ ...editOrg, name: e.target.value })} placeholder="Name" />
-              <Input value={editOrg.industry} onChange={(e) => setEditOrg({ ...editOrg, industry: e.target.value })} placeholder="Industry" />
+              <Input
+                value={editOrg.name}
+                onChange={(e) => setEditOrg({ ...editOrg, name: e.target.value })}
+                placeholder="Name"
+              />
+              <Input
+                value={editOrg.industry}
+                onChange={(e) => setEditOrg({ ...editOrg, industry: e.target.value })}
+                placeholder="Industry"
+              />
               <div className="grid gap-2 sm:grid-cols-3">
-                <Input value={editOrg.hqCity} onChange={(e) => setEditOrg({ ...editOrg, hqCity: e.target.value })} placeholder="HQ city" />
-                <Input value={editOrg.hqCountry} onChange={(e) => setEditOrg({ ...editOrg, hqCountry: e.target.value })} placeholder="HQ country" />
-                <Input value={editOrg.currency} onChange={(e) => setEditOrg({ ...editOrg, currency: e.target.value })} placeholder="Currency" />
+                <Input
+                  value={editOrg.hqCity}
+                  onChange={(e) => setEditOrg({ ...editOrg, hqCity: e.target.value })}
+                  placeholder="HQ city"
+                />
+                <Input
+                  value={editOrg.hqCountry}
+                  onChange={(e) => setEditOrg({ ...editOrg, hqCountry: e.target.value })}
+                  placeholder="HQ country"
+                />
+                <Input
+                  value={editOrg.currency}
+                  onChange={(e) => setEditOrg({ ...editOrg, currency: e.target.value })}
+                  placeholder="Currency"
+                />
               </div>
             </div>
           ) : null}
@@ -438,7 +502,11 @@ function Platform() {
                         variant="ghost"
                         disabled={busy === `du:${u.id}`}
                         onClick={() =>
-                          run(`du:${u.id}`, () => deleteUser({ data: { memberId: u.id } }), "User deleted")
+                          run(
+                            `du:${u.id}`,
+                            () => deleteUser({ data: { memberId: u.id } }),
+                            "User deleted",
+                          )
                         }
                       >
                         <UserMinus className="size-4" />
@@ -448,7 +516,9 @@ function Platform() {
                 ))}
               </tbody>
             </table>
-            {orgUsers.isLoading ? <p className="py-2 text-sm text-muted-foreground">Loading users…</p> : null}
+            {orgUsers.isLoading ? (
+              <p className="py-2 text-sm text-muted-foreground">Loading users…</p>
+            ) : null}
           </div>
         </DialogContent>
       </Dialog>
@@ -466,8 +536,9 @@ function Platform() {
           <DialogHeader>
             <DialogTitle>Delete {deleteOrg?.name}?</DialogTitle>
             <DialogDescription>
-              This permanently removes the organisation and every requisition, candidate, interview, offer and user
-              record inside it. This cannot be undone — archive instead if you may need the data later.
+              This permanently removes the organisation and every requisition, candidate, interview,
+              offer and user record inside it. This cannot be undone — archive instead if you may
+              need the data later.
             </DialogDescription>
           </DialogHeader>
           <Input
@@ -481,7 +552,11 @@ function Platform() {
             </Button>
             <Button
               variant="destructive"
-              disabled={!deleteOrg || deleteConfirm.trim().toLowerCase() !== deleteOrg.name.trim().toLowerCase() || busy === "del-org"}
+              disabled={
+                !deleteOrg ||
+                deleteConfirm.trim().toLowerCase() !== deleteOrg.name.trim().toLowerCase() ||
+                busy === "del-org"
+              }
               onClick={() =>
                 run(
                   "del-org",
@@ -509,7 +584,16 @@ function PendingQueue({
   busy,
   onDecide,
 }: {
-  orgs: { id: string; name: string; slug: string; industry: string | null; hqCity: string | null; hqCountry: string | null; createdAt: string; members: number }[];
+  orgs: {
+    id: string;
+    name: string;
+    slug: string;
+    industry: string | null;
+    hqCity: string | null;
+    hqCountry: string | null;
+    createdAt: string;
+    members: number;
+  }[];
   busy: string | null;
   onDecide: (orgId: string, decision: "approve" | "reject", reason: string) => void;
 }) {
@@ -520,12 +604,16 @@ function PendingQueue({
       <div>
         <h2 className="text-sm font-semibold">Pending registrations ({orgs.length})</h2>
         <p className="text-xs text-muted-foreground">
-          A registered organisation stays locked until it is approved. Only then can its owner create internal users.
+          A registered organisation stays locked until it is approved. Only then can its owner
+          create internal users.
         </p>
       </div>
       <div className="space-y-2">
         {orgs.map((o) => (
-          <div key={o.id} className="flex flex-wrap items-center gap-2 rounded-md border border-border p-2.5">
+          <div
+            key={o.id}
+            className="flex flex-wrap items-center gap-2 rounded-md border border-border p-2.5"
+          >
             <div className="min-w-[200px] flex-1">
               <div className="text-sm font-medium">{o.name}</div>
               <div className="num text-xs text-muted-foreground">
@@ -539,7 +627,11 @@ function PendingQueue({
               placeholder="Rejection reason (optional)"
               className="w-56"
             />
-            <Button size="sm" disabled={busy === `rev:${o.id}`} onClick={() => onDecide(o.id, "approve", "")}>
+            <Button
+              size="sm"
+              disabled={busy === `rev:${o.id}`}
+              onClick={() => onDecide(o.id, "approve", "")}
+            >
               Approve
             </Button>
             <Button

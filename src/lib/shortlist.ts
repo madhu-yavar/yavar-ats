@@ -46,7 +46,11 @@ export function rankPool(
 
       const years = Number(c.experience_years) || 0;
       const experienceOk = years >= req.experience_min && years <= req.experience_max;
-      const expPart = experienceOk ? 15 : years < req.experience_min ? Math.max(0, 15 - (req.experience_min - years) * 4) : 8;
+      const expPart = experienceOk
+        ? 15
+        : years < req.experience_min
+          ? Math.max(0, 15 - (req.experience_min - years) * 4)
+          : 8;
 
       const locationOk =
         reqLocations.length === 0 ||

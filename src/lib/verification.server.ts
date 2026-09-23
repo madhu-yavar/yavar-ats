@@ -29,12 +29,33 @@ export type VerificationResult = {
   red_flags: string[];
   summary: string;
   evidence: {
-    github: Record<string, any> | null;
+    /** githubEvidence shape — concrete (serialisable) for server-fn boundaries. */
+    github: Awaited<ReturnType<typeof githubEvidence>>;
     pages: { url: string; excerpt: string }[];
     links: Record<string, string | null>;
     linkedin_text: string | null;
   };
   model: string;
+};
+
+/** Fields read off the public GitHub REST API responses (all optional). */
+type GithubUser = {
+  name?: string | null;
+  bio?: string | null;
+  company?: string | null;
+  created_at?: string;
+  public_repos?: number;
+  followers?: number;
+};
+type GithubRepo = {
+  name?: string | undefined;
+  fork?: boolean;
+  description?: string | null;
+  language?: string | null;
+  topics?: string[];
+  stargazers_count?: number;
+  created_at?: string | undefined;
+  pushed_at?: string | undefined;
 };
 
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
@@ -45,7 +66,17 @@ function githubHandle(url: string | null | undefined) {
 }
 
 /** Repo-level GitHub evidence: names, descriptions, topics, languages, recency. */
-async function githubEvidence(url: string | null) {
+async function githubEvidence(url: string | null): Promise<{
+  handle: string | null;
+  name?: string | null;
+  bio?: string | null;
+  company?: string | null;
+  account_created_at?: string | null;
+  public_repos?: number;
+  followers?: number;
+  error?: string;
+  repos: GithubRepo[];
+} | null> {
   const handle = githubHandle(url);
   if (!handle) return null;
 
@@ -62,10 +93,10 @@ async function githubEvidence(url: string | null) {
       fetch(`https://api.github.com/users/${handle}/repos?per_page=100&sort=pushed`, { headers }),
     ]);
     if (!userRes.ok) {
-      return { handle, error: `GitHub returned ${userRes.status}`, repos: [] as unknown[] };
+      return { handle, error: `GitHub returned ${userRes.status}`, repos: [] as GithubRepo[] };
     }
-    const user = (await userRes.json()) as any;
-    const repos: any[] = reposRes.ok ? await reposRes.json() : [];
+    const user = (await userRes.json()) as GithubUser;
+    const repos: GithubRepo[] = reposRes.ok ? await reposRes.json() : [];
     return {
       handle,
       name: user.name ?? null,
@@ -89,7 +120,7 @@ async function githubEvidence(url: string | null) {
     return {
       handle,
       error: `GitHub fetch failed: ${(e as Error).message}`,
-      repos: [] as unknown[],
+      repos: [] as GithubRepo[],
     };
   }
 }
@@ -184,8 +215,7 @@ export async function verifyClaims(opts: {
 
   const redFlags = [...(ai.data.red_flags ?? [])];
   if (!github) redFlags.push("No GitHub profile on file — technical claims cannot be corroborated");
-  else if ((github as any).error)
-    redFlags.push(`GitHub evidence unavailable: ${(github as any).error}`);
+  else if ("error" in github) redFlags.push(`GitHub evidence unavailable: ${github.error}`);
   if (pages.some((p) => p.excerpt.startsWith("UNREACHABLE")))
     redFlags.push("A portfolio/writing link on the CV could not be opened");
   if (!links.linkedinUrl) redFlags.push("No professional profile link on file");
@@ -202,7 +232,7 @@ export async function verifyClaims(opts: {
     red_flags: [...new Set(redFlags)],
     summary: ai.data.summary,
     evidence: {
-      github: (github as Record<string, any> | null) ?? null,
+      github: github ?? null,
       pages,
       links,
       linkedin_text: opts.linkedinProfileText ?? null,

@@ -117,7 +117,11 @@ export function OntologyGraph3D({
   const height = 520;
 
   return (
-    <div ref={wrapRef} className="relative overflow-hidden rounded-lg border bg-card" style={{ height }}>
+    <div
+      ref={wrapRef}
+      className="relative overflow-hidden rounded-lg border bg-card"
+      style={{ height }}
+    >
       {ready ? (
         <Suspense
           fallback={
@@ -153,16 +157,23 @@ export function OntologyGraph3D({
 
       <div className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
         <span className="flex items-center gap-1.5">
-          <i className="inline-block size-2.5 rounded-full" style={{ background: COLOR.healthy }} /> healthy supply
+          <i className="inline-block size-2.5 rounded-full" style={{ background: COLOR.healthy }} />{" "}
+          healthy supply
         </span>
         <span className="flex items-center gap-1.5">
-          <i className="inline-block size-2.5 rounded-full" style={{ background: COLOR.tightening }} /> tightening
+          <i
+            className="inline-block size-2.5 rounded-full"
+            style={{ background: COLOR.tightening }}
+          />{" "}
+          tightening
         </span>
         <span className="flex items-center gap-1.5">
-          <i className="inline-block size-2.5 rounded-full" style={{ background: COLOR.scarce }} /> scarce
+          <i className="inline-block size-2.5 rounded-full" style={{ background: COLOR.scarce }} />{" "}
+          scarce
         </span>
         <span className="flex items-center gap-1.5">
-          <i className="inline-block size-2.5 rounded-full" style={{ background: COLOR.dormant }} /> dormant
+          <i className="inline-block size-2.5 rounded-full" style={{ background: COLOR.dormant }} />{" "}
+          dormant
         </span>
         <span>drag to rotate · scroll to zoom · click a skill</span>
       </div>

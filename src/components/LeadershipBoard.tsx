@@ -42,21 +42,28 @@ export function LeadershipBoard({ scope }: { scope: "CHRO" | "HR head" }) {
     const open = requisitions.filter((r) => OPEN_REQ.has(r.status));
     const openings = open.reduce((s, r) => s + (r.openings ?? 0), 0);
     const awaitingApproval = requisitions.filter((r) => r.status.startsWith("pending")).length;
-    const committedCtc = open.reduce((s, r) => s + Number(r.budget_ctc ?? 0) * (r.openings ?? 0), 0);
+    const committedCtc = open.reduce(
+      (s, r) => s + Number(r.budget_ctc ?? 0) * (r.openings ?? 0),
+      0,
+    );
     const budgetedCost = departments.reduce((s, d) => s + Number(d.budgeted_cost ?? 0), 0);
 
     const stages = applications.map((a) => canonical(a.stage));
     const joined = stages.filter((s) => s === "joined").length;
     const inPlay = stages.filter((s) => !["joined", "rejected", "withdrawn"].includes(s)).length;
 
-    const released = offerRows.filter((o) => ["released", "accepted", "declined"].includes(o.status));
+    const released = offerRows.filter((o) =>
+      ["released", "accepted", "declined"].includes(o.status),
+    );
     const accepted = offerRows.filter((o) => o.status === "accepted").length;
     const acceptRate = released.length ? Math.round((accepted / released.length) * 100) : null;
 
     const cycle = applications
       .map((a) => (canonical(a.stage) === "joined" ? days(a.applied_at, a.last_activity_at) : null))
       .filter((d): d is number => d !== null);
-    const timeToHire = cycle.length ? Math.round(cycle.reduce((s, d) => s + d, 0) / cycle.length) : null;
+    const timeToHire = cycle.length
+      ? Math.round(cycle.reduce((s, d) => s + d, 0) / cycle.length)
+      : null;
 
     const coverage = openings ? Math.round((inPlay / openings) * 10) / 10 : null;
 
@@ -75,7 +82,9 @@ export function LeadershipBoard({ scope }: { scope: "CHRO" | "HR head" }) {
       .sort((a, b) => b.openings - a.openings)
       .slice(0, 6);
 
-    const pendingIvs = interviews.filter((i) => i.status !== "completed" && i.status !== "cancelled").length;
+    const pendingIvs = interviews.filter(
+      (i) => i.status !== "completed" && i.status !== "cancelled",
+    ).length;
 
     return {
       openReqs: open.length,
@@ -110,7 +119,11 @@ export function LeadershipBoard({ scope }: { scope: "CHRO" | "HR head" }) {
         <StatCard
           label="Salary commitment"
           value={inr(m.committedCtc)}
-          hint={m.budgetedCost ? `Departmental budget ${inr(m.budgetedCost)}` : "No departmental budget set"}
+          hint={
+            m.budgetedCost
+              ? `Departmental budget ${inr(m.budgetedCost)}`
+              : "No departmental budget set"
+          }
           tone={m.budgetedCost && m.committedCtc > m.budgetedCost ? "destructive" : "default"}
         />
         <StatCard
@@ -131,7 +144,9 @@ export function LeadershipBoard({ scope }: { scope: "CHRO" | "HR head" }) {
         <div className="flex items-baseline justify-between">
           <h2 className="text-sm font-semibold">Demand & supply by department</h2>
           <span className="num text-xs text-muted-foreground">
-            {m.timeToHire === null ? "Time to hire: no hires yet" : `Avg time to hire ${m.timeToHire} days`}
+            {m.timeToHire === null
+              ? "Time to hire: no hires yet"
+              : `Avg time to hire ${m.timeToHire} days`}
           </span>
         </div>
         {m.byDept.length ? (

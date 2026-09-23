@@ -48,7 +48,8 @@ export function titleLevel(title: string) {
 }
 
 function toDate(value: string | null | undefined, fallbackToNow = false) {
-  if (!value || /present|current|till date|to date|now/i.test(value)) return fallbackToNow ? new Date() : null;
+  if (!value || /present|current|till date|to date|now/i.test(value))
+    return fallbackToNow ? new Date() : null;
   const m = value.match(/(\d{4})(?:[-/](\d{1,2}))?/);
   if (!m) return null;
   const year = Number(m[1]);
@@ -69,7 +70,12 @@ export function computeCareerMetrics(
       const start = toDate(r.start);
       const end = toDate(r.end, true);
       if (!start || !end || end < start) return null;
-      return { start, end, ongoing: !r.end || /present|current/i.test(r.end), title: r.title ?? "" };
+      return {
+        start,
+        end,
+        ongoing: !r.end || /present|current/i.test(r.end),
+        title: r.title ?? "",
+      };
     })
     .filter((s): s is NonNullable<typeof s> => s !== null)
     .sort((a, b) => a.start.getTime() - b.start.getTime());
@@ -105,7 +111,9 @@ export function computeCareerMetrics(
     total_years: round1(totalYears),
     avg_tenure_years: spans.length ? round1(totalYears / spans.length) : 0,
     shortest_stint_years: tenures.length ? round1(Math.min(...tenures)) : null,
-    current_tenure_years: ongoing ? round1((ongoing.end.getTime() - ongoing.start.getTime()) / YEAR_MS) : null,
+    current_tenure_years: ongoing
+      ? round1((ongoing.end.getTime() - ongoing.start.getTime()) / YEAR_MS)
+      : null,
     jobs_last_5y: jobsLast5y,
     longest_gap_months: Math.round(longestGap),
     total_gap_months: Math.round(totalGap),
@@ -144,7 +152,9 @@ export function careerScore(m: CareerMetrics): CareerAssessment {
 
   if (m.avg_tenure_years < 1.5) {
     cut(25, `average tenure ${m.avg_tenure_years} yrs`);
-    flags.push(`Short average tenure (${m.avg_tenure_years} yrs across ${m.dated_employers} employers)`);
+    flags.push(
+      `Short average tenure (${m.avg_tenure_years} yrs across ${m.dated_employers} employers)`,
+    );
   } else if (m.avg_tenure_years < 2.5) {
     cut(10, `average tenure ${m.avg_tenure_years} yrs`);
   } else {

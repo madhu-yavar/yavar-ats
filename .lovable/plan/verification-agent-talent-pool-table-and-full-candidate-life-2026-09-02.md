@@ -5,7 +5,7 @@
 Today, for each candidate we harvest links from the CV text (LinkedIn, GitHub, X, portfolio), then:
 
 - **GitHub** — real API read: original repos, stars, followers, active months, last push, language overlap with the JD. Fully deterministic and explainable.
-- **LinkedIn** — third-party profiles are not readable via any API, so the agent scores the *career narrative* from the CV plus any recruiter-pasted profile text.
+- **LinkedIn** — third-party profiles are not readable via any API, so the agent scores the _career narrative_ from the CV plus any recruiter-pasted profile text.
 - **Portfolio / X / blog** — the page is fetched live, stripped to text, and scored by AI for depth and relevance.
 - These blend into one social score (GitHub 45 / LinkedIn 40 / writing 15) worth 15 points of the match.
 

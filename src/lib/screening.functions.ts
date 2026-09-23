@@ -82,10 +82,7 @@ async function loadPairing(orgId: string, candidateId: string, requisitionId: st
       })
       .from(jobDescriptions)
       .where(
-        and(
-          eq(jobDescriptions.requisitionId, requisitionId),
-          eq(jobDescriptions.orgId, orgId),
-        ),
+        and(eq(jobDescriptions.requisitionId, requisitionId), eq(jobDescriptions.orgId, orgId)),
       )
       .orderBy(desc(jobDescriptions.version))
       .limit(1);
@@ -100,9 +97,7 @@ async function loadPairing(orgId: string, candidateId: string, requisitionId: st
       requisition.responsibilities ?? "",
       `Must-have: ${(requisition.mustHaveSkills ?? []).join(", ")}`,
       `Good to have: ${(requisition.goodToHaveSkills ?? []).join(", ")}`,
-      requisition.educationRequirement
-        ? `Qualification: ${requisition.educationRequirement}`
-        : "",
+      requisition.educationRequirement ? `Qualification: ${requisition.educationRequirement}` : "",
     ]
       .filter(Boolean)
       .join("\n");
@@ -268,7 +263,8 @@ export const gradeScreeningAnswers = createServerFn({ method: "POST" })
       if (bytes.byteLength > 25 * 1024 * 1024) {
         throw new Error("The recording is too large (25 MB maximum).");
       }
-      const safe = data.audio.filename.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "screening.webm";
+      const safe =
+        data.audio.filename.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "screening.webm";
       // The vault key is derived from the verified caller org — never from a fetched row.
       audioPath = `${context.orgId}/${kit.candidateId}/${Date.now()}-${safe}`;
       await putObject(audioPath, bytes, data.audio.contentType || "audio/webm");

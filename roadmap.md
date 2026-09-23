@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Landing film + visual polish
+
 - [x] Remove the landing-film explainer sentence and add an animated Talent Brain graph sequence
 - [x] Render enterprise brand film and place it on the landing page
 - [x] Remove the "Who pays for AI" note from integrations
@@ -11,6 +12,7 @@
 - [x] Review the dashboard and Talent Brain in the signed-in application
 
 ## Return on Individual (RoI) semantic layer — CHRO
+
 - [x] RoI model: capability per hire from match evidence, scarcity, impact, innovation, trajectory, breadth
 - [x] Cost anchor with honest fallback (offer where released, requisition budget otherwise)
 - [x] RoI index normalised against the organisation's own median hire cost
@@ -27,6 +29,7 @@
 - [x] Add an explicitly labelled 50-person accepted-offer test cohort
 
 ## Pre-onboarding document validation
+
 - [x] onboarding_documents table, private storage and org-scoped access
 - [x] Extraction agent for ID, experience letters, payslips and certificates on the org's own AI key
 - [x] Careers-inbox routing of offer-stage candidate documents
@@ -35,6 +38,7 @@
 - [x] User manual and repository documentation updated
 
 ## Release validation and documentation
+
 - [ ] Restore the database to immediately before 2026-09-22 22:13 UTC and reconcile all business-record counts (blocked: provider point-in-time recovery required)
 - [ ] Run authenticated and public end-to-end workflow tests (blocked until database recovery)
 - [x] Refresh repository product, deployment, security and verification documents

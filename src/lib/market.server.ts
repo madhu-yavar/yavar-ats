@@ -179,7 +179,10 @@ function directSources(role: string, location: string, currency: string) {
     list.push(
       { title: `Talent.com India — ${role}`, url: `https://in.talent.com/salary?job=${q}` },
       { title: `6figr — ${role} salary`, url: `https://6figr.com/in/salary/${r}--t` },
-      { title: `AmbitionBox — ${role} salary`, url: `https://www.ambitionbox.com/profile/${r}-salary` },
+      {
+        title: `AmbitionBox — ${role} salary`,
+        url: `https://www.ambitionbox.com/profile/${r}-salary`,
+      },
       { title: `Jobted India — ${role} salary`, url: `https://www.jobted.in/salary/${r}` },
       {
         title: `Naukri — ${role}${location ? ` in ${location}` : ""}`,
@@ -193,7 +196,10 @@ function directSources(role: string, location: string, currency: string) {
         title: `Payscale — ${role}`,
         url: `https://www.payscale.com/research/US/Job=${encodeURIComponent(role)}/Salary`,
       },
-      { title: `Salary.com — ${role}`, url: `https://www.salary.com/research/salary/alternate/${r}-salary` },
+      {
+        title: `Salary.com — ${role}`,
+        url: `https://www.salary.com/research/salary/alternate/${r}-salary`,
+      },
       { title: `Jobted — ${role} salary`, url: `https://www.jobted.com/salary/${r}` },
       { title: `Built In — ${role}`, url: `https://builtin.com/salaries/dev-engineer/${r}` },
     );
@@ -320,7 +326,10 @@ export async function benchmarkMarket(input: {
     })
     .slice(0, 14);
 
-  const fetched = await mapPool(shortlist, 6, async (s) => ({ ...s, text: await readSource(s.url) }));
+  const fetched = await mapPool(shortlist, 6, async (s) => ({
+    ...s,
+    text: await readSource(s.url),
+  }));
 
   const sources: MarketSource[] = fetched.map((s) => ({
     title: s.title,
@@ -339,16 +348,16 @@ export async function benchmarkMarket(input: {
   const result = await aiResearchJson<MarketBenchmark>({
     orgId: input.orgId,
     system:
-      "You are a compensation market-research analyst with live web search. Run the supplied search queries now, "+
+      "You are a compensation market-research analyst with live web search. Run the supplied search queries now, " +
       "open the best results, and combine them with the supplied live page extracts to derive annual total " +
       "compensation bands for the role in the given location and currency, broken down by career level. " +
       "Use these levels, each mapped to an experience band: Intern (0-1 yrs), Junior (0-2), Mid (3-5), " +
       "Senior (6-9), Lead (10-15), Manager (10-15), Director (15+), VP/Head (15+). " +
       "Figures are absolute annual amounts in the requested currency (not lakhs, not abbreviated). " +
-      "Search and cite only credible compensation publishers — Levels.fyi, AmbitionBox, 6figr, Glassdoor, Payscale, "+
-      "Salary.com, Talent.com, Naukri/Indeed pay ranges, and the annual salary guides from Michael Page, Randstad, "+
-      "Robert Half, Robert Walters, Hays, Korn Ferry, Mercer, Aon and TeamLease. Ignore blogs, aggregated listicles "+
-      "and any page that does not state a figure. "+
+      "Search and cite only credible compensation publishers — Levels.fyi, AmbitionBox, 6figr, Glassdoor, Payscale, " +
+      "Salary.com, Talent.com, Naukri/Indeed pay ranges, and the annual salary guides from Michael Page, Randstad, " +
+      "Robert Half, Robert Walters, Hays, Korn Ferry, Mercer, Aon and TeamLease. Ignore blogs, aggregated listicles " +
+      "and any page that does not state a figure. " +
       "Weigh sources by quality: crowd-sourced aggregators and recruiting-firm salary guides first, single job " +
       "postings last; prefer figures published in the last 12-18 months and say so in the caveats when the " +
       "freshest evidence is older. Where the extracts disagree, take the mid-point of the credible ones and " +

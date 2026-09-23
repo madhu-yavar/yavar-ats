@@ -15,7 +15,13 @@ import {
 import { EmptyState, PageHeader } from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/inbox")({
   head: () => ({
@@ -29,7 +35,8 @@ export const Route = createFileRoute("/inbox")({
       { property: "og:title", content: "Careers Inbox — Automatic CV Intake" },
       {
         property: "og:description",
-        content: "One address per organisation. Applicant mail becomes a scored candidate with nothing to download.",
+        content:
+          "One address per organisation. Applicant mail becomes a scored candidate with nothing to download.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -130,13 +137,15 @@ function InboxPage() {
       <div className="panel p-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Your applications address</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              Your applications address
+            </p>
             <p className="mt-1 font-mono text-lg font-semibold text-foreground">
               {address ?? "Being prepared…"}
             </p>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              Put this address on your job adverts, or forward your existing careers mailbox to it. Every
-              application that arrives shows up in the list below within moments.
+              Put this address on your job adverts, or forward your existing careers mailbox to it.
+              Every application that arrives shows up in the list below within moments.
             </p>
           </div>
           {address ? (
@@ -164,7 +173,10 @@ function InboxPage() {
               ["Without a CV", counts.skipped],
               ["Need a look", counts.errors],
             ].map(([label, value]) => (
-              <div key={String(label)} className="rounded-[10px] border border-border bg-card px-3 py-2">
+              <div
+                key={String(label)}
+                className="rounded-[10px] border border-border bg-card px-3 py-2"
+              >
                 <p className="text-xs text-muted-foreground">{label}</p>
                 <p className="text-xl font-semibold text-foreground">{value as number}</p>
               </div>
@@ -174,11 +186,14 @@ function InboxPage() {
       </div>
 
       <div className="panel p-5">
-        <p className="text-xs uppercase tracking-wide text-muted-foreground">Your own careers address</p>
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+          Your own careers address
+        </p>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          If you already advertise an address like <span className="font-mono">careers@yourcompany.com</span>,
-          register it here and set it to forward to the address above. Applications keep arriving at your own
-          address and still file themselves here — candidates never see a different address.
+          If you already advertise an address like{" "}
+          <span className="font-mono">careers@yourcompany.com</span>, register it here and set it to
+          forward to the address above. Applications keep arriving at your own address and still
+          file themselves here — candidates never see a different address.
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Input
@@ -199,12 +214,11 @@ function InboxPage() {
         </div>
         {inbox.data?.careersEmail ? (
           <p className="mt-2 text-sm text-muted-foreground">
-            Registered: <span className="font-mono text-foreground">{inbox.data.careersEmail}</span> — forward
-            it to {address ?? "your ATSIQ address"}.
+            Registered: <span className="font-mono text-foreground">{inbox.data.careersEmail}</span>{" "}
+            — forward it to {address ?? "your ATSIQ address"}.
           </p>
         ) : null}
       </div>
-
 
       <div className="panel p-5">
         <div className="flex flex-wrap items-center gap-3">
@@ -263,7 +277,9 @@ function InboxPage() {
                       {new Date(m.received_at).toLocaleString()}
                     </td>
                     <td className="py-2 pr-3">
-                      <span className="block font-medium text-foreground">{m.from_name ?? m.from_email}</span>
+                      <span className="block font-medium text-foreground">
+                        {m.from_name ?? m.from_email}
+                      </span>
                       {m.from_name ? (
                         <span className="block text-xs text-muted-foreground">{m.from_email}</span>
                       ) : null}

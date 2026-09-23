@@ -77,7 +77,8 @@ export const Route = createFileRoute("/team")({
       { property: "og:title", content: "Users, roles & access control" },
       {
         property: "og:description",
-        content: "Searchable, filterable roster with bulk role, access and deletion controls for the approval chain.",
+        content:
+          "Searchable, filterable roster with bulk role, access and deletion controls for the approval chain.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -87,11 +88,31 @@ export const Route = createFileRoute("/team")({
 });
 
 const ROLE_LABELS: { role: AppRole; label: string; short: string; hint: string }[] = [
-  { role: "recruiter", label: "Recruiter", short: "REC", hint: "Raises requisitions, sources and scores candidates" },
-  { role: "hiring_manager", label: "Hiring manager", short: "HM", hint: "Runs interviews and evaluations" },
-  { role: "department_head", label: "Department head", short: "DH", hint: "First approval hop on a requisition" },
+  {
+    role: "recruiter",
+    label: "Recruiter",
+    short: "REC",
+    hint: "Raises requisitions, sources and scores candidates",
+  },
+  {
+    role: "hiring_manager",
+    label: "Hiring manager",
+    short: "HM",
+    hint: "Runs interviews and evaluations",
+  },
+  {
+    role: "department_head",
+    label: "Department head",
+    short: "DH",
+    hint: "First approval hop on a requisition",
+  },
   { role: "hr_head", label: "HR head", short: "HRH", hint: "Second approval hop; offer approval" },
-  { role: "president_cbo", label: "President / CBO", short: "CBO", hint: "Final approval; manages roles" },
+  {
+    role: "president_cbo",
+    label: "President / CBO",
+    short: "CBO",
+    hint: "Final approval; manages roles",
+  },
 ];
 
 const PAGE_SIZES = [25, 50, 100, 250];
@@ -119,7 +140,9 @@ function Team() {
   const [title, setTitle] = useState("");
 
   const [q, setQ] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "invited" | "disabled">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "invited" | "disabled">(
+    "all",
+  );
   const [roleFilter, setRoleFilter] = useState<"all" | AppRole | "none">("all");
   const [pageSize, setPageSize] = useState(50);
   const [page, setPage] = useState(0);
@@ -222,7 +245,9 @@ function Team() {
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)
         .join(","),
     );
-    const url = URL.createObjectURL(new Blob([[head.join(","), ...lines].join("\n")], { type: "text/csv" }));
+    const url = URL.createObjectURL(
+      new Blob([[head.join(","), ...lines].join("\n")], { type: "text/csv" }),
+    );
     const a = document.createElement("a");
     a.href = url;
     a.download = "users.csv";
@@ -276,7 +301,8 @@ function Team() {
             <Mail className="size-4 text-muted-foreground" /> Invite a colleague
           </h2>
           <p className="text-xs text-muted-foreground">
-            They join this organisation with the role you pick, the first time they sign in with this email address.
+            They join this organisation with the role you pick, the first time they sign in with
+            this email address.
           </p>
           <form
             className="grid gap-2 sm:grid-cols-[1.5fr_1fr_1fr_auto]"
@@ -311,7 +337,11 @@ function Team() {
                 </option>
               ))}
             </select>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional)" />
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Title (optional)"
+            />
             <Button type="submit" disabled={busy === "invite"}>
               <Plus className="size-4" /> Invite
             </Button>
@@ -398,7 +428,11 @@ function Team() {
           <div className="p-5">
             <EmptyState
               title={all.length ? "No users match these filters" : "No members yet"}
-              hint={all.length ? "Clear the search or filters." : "Invite your HR colleagues by work email."}
+              hint={
+                all.length
+                  ? "Clear the search or filters."
+                  : "Invite your HR colleagues by work email."
+              }
             />
           </div>
         ) : (
@@ -432,7 +466,10 @@ function Team() {
                 {rows.map((m) => {
                   const rs = rolesOf(m);
                   return (
-                    <tr key={m.id} className="border-t border-border align-middle hover:bg-muted/30">
+                    <tr
+                      key={m.id}
+                      className="border-t border-border align-middle hover:bg-muted/30"
+                    >
                       <td className="p-3">
                         <Checkbox
                           checked={Boolean(selected[m.id])}
@@ -457,7 +494,9 @@ function Team() {
                           <div className="min-w-0">
                             <div className="truncate font-medium">{m.fullName || m.email}</div>
                             {m.fullName ? (
-                              <div className="num truncate text-xs text-muted-foreground">{m.email}</div>
+                              <div className="num truncate text-xs text-muted-foreground">
+                                {m.email}
+                              </div>
                             ) : null}
                           </div>
                         </div>
@@ -478,9 +517,22 @@ function Team() {
                       <td className="p-3">
                         <Popover>
                           <PopoverTrigger asChild>
-                            <Button variant="outline" size="sm" disabled={!canAdmin} title={canAdmin ? "Click to grant or revoke roles" : "Only the owner or a President/CBO admin can change roles"}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={!canAdmin}
+                              title={
+                                canAdmin
+                                  ? "Click to grant or revoke roles"
+                                  : "Only the owner or a President/CBO admin can change roles"
+                              }
+                            >
                               <Pencil className="size-3.5 opacity-60" />
-                              {rs.length ? rs.map((r) => ROLE_LABELS.find((x) => x.role === r)?.short ?? r).join(" · ") : "No role"}
+                              {rs.length
+                                ? rs
+                                    .map((r) => ROLE_LABELS.find((x) => x.role === r)?.short ?? r)
+                                    .join(" · ")
+                                : "No role"}
                             </Button>
                           </PopoverTrigger>
                           <PopoverContent className="w-80 space-y-2" align="start">
@@ -502,7 +554,8 @@ function Team() {
                                     onClick={() =>
                                       run(
                                         `${m.id}:${r}`,
-                                        () => grant({ data: { memberId: m.id, role: r, grant: !has } }),
+                                        () =>
+                                          grant({ data: { memberId: m.id, role: r, grant: !has } }),
                                         has ? "Role revoked" : "Role granted",
                                       )
                                     }
@@ -520,72 +573,80 @@ function Team() {
                       </td>
                       <td className="p-3">
                         <div className="flex items-center justify-end gap-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          title={m.isOwner ? "Transfer ownership before deleting the owner" : "Delete user"}
-                          disabled={!isOwner || m.isOwner}
-                          onClick={() => setConfirmDelete({ ids: [m.id], label: m.fullName || m.email })}
-                        >
-                          <Trash2 className="size-4 text-destructive" />
-                        </Button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" disabled={!canAdmin || m.isOwner}>
-                              <MoreHorizontal className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-52">
-                            <DropdownMenuLabel className="text-xs">Manage user</DropdownMenuLabel>
-                            <DropdownMenuItem
-                              onClick={() =>
-                                setEdit({
-                                  id: m.id,
-                                  fullName: m.fullName ?? "",
-                                  title: m.title ?? "",
-                                  email: m.email,
-                                  claimed: Boolean(m.userId),
-                                })
-                              }
-                            >
-                              <Pencil className="size-4" /> Edit details
-                            </DropdownMenuItem>
-                            {m.userId ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title={
+                              m.isOwner
+                                ? "Transfer ownership before deleting the owner"
+                                : "Delete user"
+                            }
+                            disabled={!isOwner || m.isOwner}
+                            onClick={() =>
+                              setConfirmDelete({ ids: [m.id], label: m.fullName || m.email })
+                            }
+                          >
+                            <Trash2 className="size-4 text-destructive" />
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" disabled={!canAdmin || m.isOwner}>
+                                <MoreHorizontal className="size-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-52">
+                              <DropdownMenuLabel className="text-xs">Manage user</DropdownMenuLabel>
                               <DropdownMenuItem
                                 onClick={() =>
-                                  run(
-                                    `st:${m.id}`,
-                                    () =>
-                                      status({
-                                        data: {
-                                          memberId: m.id,
-                                          status: m.status === "disabled" ? "active" : "disabled",
-                                        },
-                                      }),
-                                    m.status === "disabled" ? "Access restored" : "Access paused",
-                                  )
+                                  setEdit({
+                                    id: m.id,
+                                    fullName: m.fullName ?? "",
+                                    title: m.title ?? "",
+                                    email: m.email,
+                                    claimed: Boolean(m.userId),
+                                  })
                                 }
                               >
-                                {m.status === "disabled" ? (
-                                  <>
-                                    <Play className="size-4" /> Restore access
-                                  </>
-                                ) : (
-                                  <>
-                                    <Pause className="size-4" /> Pause access
-                                  </>
-                                )}
+                                <Pencil className="size-4" /> Edit details
                               </DropdownMenuItem>
-                            ) : null}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-destructive"
-                              onClick={() => setConfirmDelete({ ids: [m.id], label: m.fullName || m.email })}
-                            >
-                              <Trash2 className="size-4" /> Delete user
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                              {m.userId ? (
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    run(
+                                      `st:${m.id}`,
+                                      () =>
+                                        status({
+                                          data: {
+                                            memberId: m.id,
+                                            status: m.status === "disabled" ? "active" : "disabled",
+                                          },
+                                        }),
+                                      m.status === "disabled" ? "Access restored" : "Access paused",
+                                    )
+                                  }
+                                >
+                                  {m.status === "disabled" ? (
+                                    <>
+                                      <Play className="size-4" /> Restore access
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Pause className="size-4" /> Pause access
+                                    </>
+                                  )}
+                                </DropdownMenuItem>
+                              ) : null}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={() =>
+                                  setConfirmDelete({ ids: [m.id], label: m.fullName || m.email })
+                                }
+                              >
+                                <Trash2 className="size-4" /> Delete user
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </td>
                     </tr>
@@ -599,11 +660,17 @@ function Team() {
         {filtered.length > 0 ? (
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border p-3 text-xs text-muted-foreground">
             <span className="num">
-              {current * pageSize + 1}–{Math.min(filtered.length, (current + 1) * pageSize)} of {filtered.length}
+              {current * pageSize + 1}–{Math.min(filtered.length, (current + 1) * pageSize)} of{" "}
+              {filtered.length}
               {selectedIds.length ? ` · ${selectedIds.length} selected` : ""}
             </span>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled={current === 0} onClick={() => setPage(current - 1)}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={current === 0}
+                onClick={() => setPage(current - 1)}
+              >
                 <ChevronLeft className="size-4" /> Prev
               </Button>
               <span className="num">
@@ -636,11 +703,17 @@ function Team() {
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Full name</Label>
-                <Input value={edit.fullName} onChange={(e) => setEdit({ ...edit, fullName: e.target.value })} />
+                <Input
+                  value={edit.fullName}
+                  onChange={(e) => setEdit({ ...edit, fullName: e.target.value })}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Title</Label>
-                <Input value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} />
+                <Input
+                  value={edit.title}
+                  onChange={(e) => setEdit({ ...edit, title: e.target.value })}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Email</Label>
@@ -689,8 +762,9 @@ function Team() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {confirmDelete?.label}?</AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently removes their membership and every granted role in this organisation. Requisitions,
-              interviews and evaluation history stay intact. Pause access instead if the person may return.
+              This permanently removes their membership and every granted role in this organisation.
+              Requisitions, interviews and evaluation history stay intact. Pause access instead if
+              the person may return.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

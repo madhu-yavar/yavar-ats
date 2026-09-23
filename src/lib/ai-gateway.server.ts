@@ -254,7 +254,9 @@ export type AiDoc = { base64: string; contentType: "application/pdf"; fileName: 
  */
 /** Structural shape of a zod schema — avoids variance friction on transforms. */
 type SchemaLike<T> = {
-  safeParse(data: unknown):
+  safeParse(
+    data: unknown,
+  ):
     | { success: true; data: T }
     | { success: false; error: { issues: { path: PropertyKey[]; message: string }[] } };
 };
@@ -388,7 +390,10 @@ async function aiJsonOnce<T>(opts: {
       for (const doc of docs) {
         userContent.push({
           type: "file",
-          file: { filename: doc.fileName, file_data: `data:${doc.contentType};base64,${doc.base64}` },
+          file: {
+            filename: doc.fileName,
+            file_data: `data:${doc.contentType};base64,${doc.base64}`,
+          },
         });
       }
       const body = {

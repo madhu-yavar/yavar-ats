@@ -1020,14 +1020,30 @@ function RoiBand() {
   if (q.isLoading || q.error || !d) return null;
 
   const cells = [
-    { label: "Return on Individual", value: `${d.totals.portfolioRoi}`, note: "100 = your median hire", accent: true },
-    { label: "Capability returned", value: `${d.totals.avgCapability}`, note: `${d.totals.hires} hires read` },
+    {
+      label: "Return on Individual",
+      value: `${d.totals.portfolioRoi}`,
+      note: "100 = your median hire",
+      accent: true,
+    },
+    {
+      label: "Capability returned",
+      value: `${d.totals.avgCapability}`,
+      note: `${d.totals.hires} hires read`,
+    },
     {
       label: "Cost per capability point",
       value: d.totals.costPerCapabilityPoint ? inr(d.totals.costPerCapabilityPoint) : "—",
-      note: d.totals.costBasis === "offer" ? "Committed offers" : "Offer where released, budget elsewhere",
+      note:
+        d.totals.costBasis === "offer"
+          ? "Committed offers"
+          : "Offer where released, budget elsewhere",
     },
-    { label: "Programmes staffable now", value: `${d.totals.goalsReady}`, note: `${d.totals.goalsPartial} need one lead hire` },
+    {
+      label: "Programmes staffable now",
+      value: `${d.totals.goalsReady}`,
+      note: `${d.totals.goalsPartial} need one lead hire`,
+    },
     {
       label: "Succession exposure",
       value: `${d.totals.soleSource}`,

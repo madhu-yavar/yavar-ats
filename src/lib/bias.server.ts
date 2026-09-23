@@ -24,7 +24,13 @@ const ADVANCED_STAGES = new Set([
   "joined",
 ]);
 
-export type ParityRow = { source: string; advanced: number; total: number; rate: number; parity: number };
+export type ParityRow = {
+  source: string;
+  advanced: number;
+  total: number;
+  rate: number;
+  parity: number;
+};
 
 export async function selectionParity(orgId: string): Promise<{
   rows: ParityRow[];

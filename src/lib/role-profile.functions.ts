@@ -20,4 +20,5 @@ export const suggestRoleProfile = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((data: unknown) => Input.parse(data))
   .handler(async ({ data, context }): Promise<RoleProfile> =>
-    draftRoleProfile({ ...data, orgId: context.orgId }));
+    draftRoleProfile({ ...data, orgId: context.orgId }),
+  );

@@ -13,7 +13,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/interviews/mine")({
   head: () => ({
@@ -27,7 +33,8 @@ export const Route = createFileRoute("/interviews/mine")({
       { property: "og:title", content: "My Interviews & Scorecards" },
       {
         property: "og:description",
-        content: "Submit competency ratings and a select/hold/reject verdict — the pipeline moves itself, fully audited.",
+        content:
+          "Submit competency ratings and a select/hold/reject verdict — the pipeline moves itself, fully audited.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -158,9 +165,12 @@ function MyInterviewsPage() {
                     </div>
                     <p className="text-xs text-muted-foreground">
                       L{round.level} · {round.requisition_title} ·{" "}
-                      {when ? when.toLocaleString() : "not scheduled yet"} · {round.duration_mins} min · {round.mode}
+                      {when ? when.toLocaleString() : "not scheduled yet"} · {round.duration_mins}{" "}
+                      min · {round.mode}
                     </p>
-                    {round.agenda ? <p className="mt-1 text-xs text-muted-foreground">{round.agenda}</p> : null}
+                    {round.agenda ? (
+                      <p className="mt-1 text-xs text-muted-foreground">{round.agenda}</p>
+                    ) : null}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {round.teams_link ? (
@@ -196,7 +206,10 @@ function MyInterviewsPage() {
                         <Lock className="size-3.5" /> Scored
                       </span>
                     ) : (
-                      <Button size="sm" onClick={() => (isOpen ? setOpenId(null) : openScorecard(round))}>
+                      <Button
+                        size="sm"
+                        onClick={() => (isOpen ? setOpenId(null) : openScorecard(round))}
+                      >
                         {isOpen ? "Close" : "Submit scorecard"}
                       </Button>
                     )}
@@ -228,7 +241,9 @@ function MyInterviewsPage() {
                         </div>
                       ))}
                       <div>
-                        <Label className="mb-1.5 block text-xs text-muted-foreground">Focus area covered</Label>
+                        <Label className="mb-1.5 block text-xs text-muted-foreground">
+                          Focus area covered
+                        </Label>
                         <Input
                           value={form.focus}
                           onChange={(e) => setForm((f) => ({ ...f, focus: e.target.value }))}
@@ -239,17 +254,22 @@ function MyInterviewsPage() {
 
                     <div className="space-y-3">
                       <div>
-                        <Label className="mb-1.5 block text-xs text-muted-foreground">Verdict</Label>
+                        <Label className="mb-1.5 block text-xs text-muted-foreground">
+                          Verdict
+                        </Label>
                         <Select
                           value={form.verdict}
-                          onValueChange={(v) => setForm((f) => ({ ...f, verdict: v as typeof f.verdict }))}
+                          onValueChange={(v) =>
+                            setForm((f) => ({ ...f, verdict: v as typeof f.verdict }))
+                          }
                         >
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="select">
-                              Select — {round.level >= 3 ? "raise offer" : `move to L${round.level + 1}`}
+                              Select —{" "}
+                              {round.level >= 3 ? "raise offer" : `move to L${round.level + 1}`}
                             </SelectItem>
                             <SelectItem value="hold">Hold — park on hold</SelectItem>
                             <SelectItem value="reject">Reject — close the candidate</SelectItem>
@@ -258,7 +278,9 @@ function MyInterviewsPage() {
                       </div>
                       {form.verdict !== "select" && (
                         <div>
-                          <Label className="mb-1.5 block text-xs text-muted-foreground">Reason (required)</Label>
+                          <Label className="mb-1.5 block text-xs text-muted-foreground">
+                            Reason (required)
+                          </Label>
                           <Input
                             value={form.reason}
                             onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}
@@ -267,7 +289,9 @@ function MyInterviewsPage() {
                         </div>
                       )}
                       <div>
-                        <Label className="mb-1.5 block text-xs text-muted-foreground">Evidence & comments</Label>
+                        <Label className="mb-1.5 block text-xs text-muted-foreground">
+                          Evidence & comments
+                        </Label>
                         <Textarea
                           rows={5}
                           value={form.comments}
@@ -276,7 +300,8 @@ function MyInterviewsPage() {
                         />
                       </div>
                       <Button className="w-full" onClick={() => send(round)} disabled={busy}>
-                        {busy ? <Loader2 className="size-4 animate-spin" /> : null} Submit & lock scorecard
+                        {busy ? <Loader2 className="size-4 animate-spin" /> : null} Submit & lock
+                        scorecard
                       </Button>
                     </div>
                   </div>

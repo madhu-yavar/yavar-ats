@@ -12,7 +12,10 @@ async function signIn(email: string, password: string) {
     await page.waitForSelector("text=People Excellence", { timeout: 45000 });
   } catch {
     console.log(`FAIL at ${email}: url=${page.url()}`);
-    console.log("BODY:", ((await page.textContent("body")) ?? "").replace(/\s+/g, " ").slice(0, 200));
+    console.log(
+      "BODY:",
+      ((await page.textContent("body")) ?? "").replace(/\s+/g, " ").slice(0, 200),
+    );
     await page.screenshot({ path: `shots/fail-${email.replace(/[^a-z0-9]/gi, "_")}.png` });
     throw new Error("workspace never rendered");
   }
@@ -25,9 +28,16 @@ await page.click('a:has-text("Talent pool")');
 await page.waitForSelector("text=Priya Sharma", { timeout: 30000 });
 await page.waitForTimeout(1200);
 const demoBody = (await page.textContent("body")) ?? "";
-console.log("MADHU/DEMO  — org candidate visible:", demoBody.includes("Priya Sharma") ? "YES" : "NO",
-  "| yavar candidate leaked:", demoBody.includes("Kavya Nair") ? "LEAK!" : "no");
-console.log("MADHU/DEMO  — platform console nav:", demoBody.includes("Platform console") ? "YES" : "NO");
+console.log(
+  "MADHU/DEMO  — org candidate visible:",
+  demoBody.includes("Priya Sharma") ? "YES" : "NO",
+  "| yavar candidate leaked:",
+  demoBody.includes("Kavya Nair") ? "LEAK!" : "no",
+);
+console.log(
+  "MADHU/DEMO  — platform console nav:",
+  demoBody.includes("Platform console") ? "YES" : "NO",
+);
 await page.screenshot({ path: "shots/demo-org-madhu.png" });
 
 // sign out (upstream moved it into the header account menu)
@@ -41,9 +51,16 @@ await page.click('a:has-text("Talent pool")');
 await page.waitForSelector("text=Kavya Nair", { timeout: 30000 });
 await page.waitForTimeout(1200);
 const yavarBody = (await page.textContent("body")) ?? "";
-console.log("HR/YAVAR    — org candidate visible:", yavarBody.includes("Kavya Nair") ? "YES" : "NO",
-  "| demo candidate leaked:", yavarBody.includes("Priya Sharma") ? "LEAK!" : "no");
-console.log("HR/YAVAR    — platform console nav:", yavarBody.includes("Platform console") ? "YES (unexpected)" : "no (correct)");
+console.log(
+  "HR/YAVAR    — org candidate visible:",
+  yavarBody.includes("Kavya Nair") ? "YES" : "NO",
+  "| demo candidate leaked:",
+  yavarBody.includes("Priya Sharma") ? "LEAK!" : "no",
+);
+console.log(
+  "HR/YAVAR    — platform console nav:",
+  yavarBody.includes("Platform console") ? "YES (unexpected)" : "no (correct)",
+);
 await page.screenshot({ path: "shots/yavar-org-hr.png" });
 
 await browser.close();

@@ -67,7 +67,6 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
   const canContinue =
     step === 0 ? step0Missing.length === 0 : step === 1 ? step1Ok : step === 2 ? step2Ok : true;
 
-
   async function finish() {
     setBusy(true);
     try {
@@ -106,16 +105,21 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
           </div>
           <button
             className="text-xs text-muted-foreground underline-offset-4 hover:underline"
-            onClick={async () => { await signOutApp(); window.location.assign("/"); }}
+            onClick={async () => {
+              await signOutApp();
+              window.location.assign("/");
+            }}
           >
             Sign out
           </button>
         </div>
 
-        <h1 className="mt-3 text-2xl font-semibold">Let's set up your talent acquisition workspace</h1>
+        <h1 className="mt-3 text-2xl font-semibold">
+          Let's set up your talent acquisition workspace
+        </h1>
         <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-          Everything you create — requisitions, candidates, scores, offers — lives inside this organisation and is
-          visible only to the people you invite.
+          Everything you create — requisitions, candidates, scores, offers — lives inside this
+          organisation and is visible only to the people you invite.
         </p>
 
         <ol className="mt-8 flex flex-wrap gap-2">
@@ -128,7 +132,11 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
                   : "flex items-center gap-2 rounded-md px-3 py-1.5 text-xs text-muted-foreground"
               }
             >
-              {i < step ? <Check className="size-3 text-success" /> : <span className="num">{i + 1}</span>}
+              {i < step ? (
+                <Check className="size-3 text-success" />
+              ) : (
+                <span className="num">{i + 1}</span>
+              )}
               {label}
             </li>
           ))}
@@ -138,7 +146,11 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
           {step === 0 ? (
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Organisation name" required>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Technologies" />
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Acme Technologies"
+                />
               </Field>
               <Field label="Registered legal name" required>
                 <Input
@@ -148,7 +160,11 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
                 />
               </Field>
               <Field label="Industry" required>
-                <Input value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="IT services" />
+                <Input
+                  value={industry}
+                  onChange={(e) => setIndustry(e.target.value)}
+                  placeholder="IT services"
+                />
               </Field>
               <Field label="Headcount band">
                 <select
@@ -167,10 +183,17 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
                 <Input value={hqCountry} onChange={(e) => setHqCountry(e.target.value)} />
               </Field>
               <Field label="HQ city" required>
-                <Input value={hqCity} onChange={(e) => setHqCity(e.target.value)} placeholder="Chennai" />
+                <Input
+                  value={hqCity}
+                  onChange={(e) => setHqCity(e.target.value)}
+                  placeholder="Chennai"
+                />
               </Field>
               <Field label="Reporting currency" required>
-                <Input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} />
+                <Input
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value.toUpperCase())}
+                />
               </Field>
               <Field label="Financial year starts in">
                 <select
@@ -198,7 +221,8 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
           {step === 1 ? (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                Departments own requisitions, headcount budgets and the first approval hop. You can add more later.
+                Departments own requisitions, headcount budgets and the first approval hop. You can
+                add more later.
               </p>
               {departments.map((d, i) => (
                 <div key={i} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
@@ -206,14 +230,18 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
                     value={d.name}
                     placeholder="Department name"
                     onChange={(e) =>
-                      setDepartments((prev) => prev.map((x, j) => (i === j ? { ...x, name: e.target.value } : x)))
+                      setDepartments((prev) =>
+                        prev.map((x, j) => (i === j ? { ...x, name: e.target.value } : x)),
+                      )
                     }
                   />
                   <Input
                     value={d.headName}
                     placeholder="Department head (optional)"
                     onChange={(e) =>
-                      setDepartments((prev) => prev.map((x, j) => (i === j ? { ...x, headName: e.target.value } : x)))
+                      setDepartments((prev) =>
+                        prev.map((x, j) => (i === j ? { ...x, headName: e.target.value } : x)),
+                      )
                     }
                   />
                   <Button
@@ -242,7 +270,10 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
               </p>
               <div className="flex flex-wrap gap-2">
                 {locations.map((l) => (
-                  <span key={l} className="flex items-center gap-2 rounded-md bg-secondary px-3 py-1.5 text-sm">
+                  <span
+                    key={l}
+                    className="flex items-center gap-2 rounded-md bg-secondary px-3 py-1.5 text-sm"
+                  >
                     {l}
                     <button
                       className="text-muted-foreground"
@@ -277,8 +308,8 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
           {step === 3 ? (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Invite your HR team by work email. They join this organisation with the role you pick the first time
-                they sign in. You keep CHRO admin rights as the creator.
+                Invite your HR team by work email. They join this organisation with the role you
+                pick the first time they sign in. You keep CHRO admin rights as the creator.
               </p>
               <form
                 className="grid gap-2 sm:grid-cols-[1.4fr_1fr_1fr_auto]"
@@ -346,17 +377,25 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
                   ))}
                 </ul>
               ) : (
-                <p className="text-xs text-muted-foreground">No invites yet — you can add colleagues later too.</p>
+                <p className="text-xs text-muted-foreground">
+                  No invites yet — you can add colleagues later too.
+                </p>
               )}
             </div>
           ) : null}
 
           <div className="flex items-center justify-between border-t border-border pt-4">
-            <Button variant="ghost" disabled={step === 0 || busy} onClick={() => setStep((s) => s - 1)}>
+            <Button
+              variant="ghost"
+              disabled={step === 0 || busy}
+              onClick={() => setStep((s) => s - 1)}
+            >
               Back
             </Button>
             {step === 0 && step0Missing.length ? (
-              <p className="text-xs text-muted-foreground">Still needed: {step0Missing.join(", ")}</p>
+              <p className="text-xs text-muted-foreground">
+                Still needed: {step0Missing.join(", ")}
+              </p>
             ) : null}
             {step === 1 && !step1Ok ? (
               <p className="text-xs text-muted-foreground">Add at least one department.</p>
@@ -369,7 +408,10 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
                 Continue
               </Button>
             ) : (
-              <Button disabled={busy || step0Missing.length > 0 || !step1Ok || !step2Ok} onClick={finish}>
+              <Button
+                disabled={busy || step0Missing.length > 0 || !step1Ok || !step2Ok}
+                onClick={finish}
+              >
                 {busy ? "Creating…" : "Create organisation"}
               </Button>
             )}

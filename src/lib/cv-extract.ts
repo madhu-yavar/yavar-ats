@@ -53,7 +53,6 @@ export async function extractResumeText(file: File): Promise<string> {
   return plain;
 }
 
-
 /** Proportionally rescale weights so they total exactly 100. */
 export function balanceWeights<T extends Record<string, number>>(w: T): T {
   const keys = Object.keys(w) as (keyof T)[];

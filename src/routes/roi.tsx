@@ -396,7 +396,9 @@ function RoiPage() {
                         <span className="rounded bg-accent px-2 py-0.5 text-[11px] text-muted-foreground">
                           {h.cohort === "joined" ? "Joined" : "Offer committed"}
                         </span>
-                        <span className={`rounded px-2 py-0.5 text-[11px] ${verdictTone(h.verdict)}`}>
+                        <span
+                          className={`rounded px-2 py-0.5 text-[11px] ${verdictTone(h.verdict)}`}
+                        >
                           {h.verdict === "compounding"
                             ? "Compounding"
                             : h.verdict === "solid"
@@ -513,9 +515,7 @@ function Metric({ label, value, accent }: { label: string; value: string; accent
       <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
         {label}
       </p>
-      <p
-        className={`num text-xl font-semibold leading-none ${accent ? "text-primary" : ""}`}
-      >
+      <p className={`num text-xl font-semibold leading-none ${accent ? "text-primary" : ""}`}>
         {value}
       </p>
     </div>

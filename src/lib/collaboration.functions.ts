@@ -61,7 +61,13 @@ export const poolTeam = createServerFn({ method: "GET" })
         isOwner: orgMembers.isOwner,
       })
       .from(orgMembers)
-      .where(and(eq(orgMembers.orgId, me.orgId), eq(orgMembers.status, "active"), isNotNull(orgMembers.userId)))
+      .where(
+        and(
+          eq(orgMembers.orgId, me.orgId),
+          eq(orgMembers.status, "active"),
+          isNotNull(orgMembers.userId),
+        ),
+      )
       .orderBy(orgMembers.fullName);
     return rows.map((m) => ({
       userId: m.userId as string,
@@ -152,7 +158,11 @@ export const referCandidate = createServerFn({ method: "POST" })
       .select({ id: orgMembers.id })
       .from(orgMembers)
       .where(
-        and(eq(orgMembers.orgId, me.orgId), eq(orgMembers.userId, data.toUser), eq(orgMembers.status, "active")),
+        and(
+          eq(orgMembers.orgId, me.orgId),
+          eq(orgMembers.userId, data.toUser),
+          eq(orgMembers.status, "active"),
+        ),
       )
       .limit(1);
     if (!peer) throw new Error("That colleague is not an active member of your organisation.");
@@ -202,7 +212,8 @@ export const respondReferral = createServerFn({ method: "POST" })
       .where(eq(candidateReferrals.id, data.referralId))
       .limit(1);
     if (!ref) throw new Error("That referral no longer exists.");
-    if (ref.toUser !== context.userId) throw new Error("Only the recruiter it was sent to can respond.");
+    if (ref.toUser !== context.userId)
+      throw new Error("Only the recruiter it was sent to can respond.");
     if (ref.status !== "pending") throw new Error("This referral has already been answered.");
 
     await db
@@ -220,7 +231,10 @@ export const respondReferral = createServerFn({ method: "POST" })
         .from(candidates)
         .where(eq(candidates.id, ref.candidateId))
         .limit(1);
-      await db.update(candidates).set({ ownerId: context.userId }).where(eq(candidates.id, ref.candidateId));
+      await db
+        .update(candidates)
+        .set({ ownerId: context.userId })
+        .where(eq(candidates.id, ref.candidateId));
       await db.insert(candidateOwnershipEvents).values({
         orgId: ref.orgId,
         candidateId: ref.candidateId,
@@ -234,7 +248,12 @@ export const respondReferral = createServerFn({ method: "POST" })
         const [existing] = await db
           .select({ id: applications.id })
           .from(applications)
-          .where(and(eq(applications.candidateId, ref.candidateId), eq(applications.requisitionId, ref.requisitionId)))
+          .where(
+            and(
+              eq(applications.candidateId, ref.candidateId),
+              eq(applications.requisitionId, ref.requisitionId),
+            ),
+          )
           .limit(1);
         if (!existing)
           await db.insert(applications).values({
@@ -277,7 +296,13 @@ export const addCandidateNote = createServerFn({ method: "POST" })
       const peers = await db
         .select({ userId: orgMembers.userId })
         .from(orgMembers)
-        .where(and(eq(orgMembers.orgId, me.orgId), eq(orgMembers.status, "active"), inArray(orgMembers.userId, data.mentions)));
+        .where(
+          and(
+            eq(orgMembers.orgId, me.orgId),
+            eq(orgMembers.status, "active"),
+            inArray(orgMembers.userId, data.mentions),
+          ),
+        );
       mentions = peers.map((p) => p.userId).filter((id): id is string => id !== null);
     }
 
@@ -341,7 +366,8 @@ export const suggestToRequest = createServerFn({ method: "POST" })
       .from(talentRequests)
       .where(eq(talentRequests.id, data.requestId))
       .limit(1);
-    if (!req || req.orgId !== me.orgId) throw new Error("That request is not open in your organisation.");
+    if (!req || req.orgId !== me.orgId)
+      throw new Error("That request is not open in your organisation.");
     if (req.status !== "open") throw new Error("This request has already been closed.");
 
     const [cand] = await db
@@ -374,7 +400,11 @@ export const closeTalentRequest = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const me = await membership(context.userId);
     const [req] = await db
-      .select({ id: talentRequests.id, orgId: talentRequests.orgId, requesterId: talentRequests.requesterId })
+      .select({
+        id: talentRequests.id,
+        orgId: talentRequests.orgId,
+        requesterId: talentRequests.requesterId,
+      })
       .from(talentRequests)
       .where(eq(talentRequests.id, data.requestId))
       .limit(1);
@@ -458,7 +488,8 @@ export const offerPoolShare = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const me = await membership(context.userId);
-    if (!me.isOwner) throw new Error("Only an organisation owner can agree to share the talent pool.");
+    if (!me.isOwner)
+      throw new Error("Only an organisation owner can agree to share the talent pool.");
 
     const matches = await db
       .select({ id: organizations.id, name: organizations.name })

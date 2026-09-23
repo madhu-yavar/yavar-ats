@@ -88,7 +88,10 @@ function toWire(row: typeof onboardingDocuments.$inferSelect): OnboardingDocWire
 }
 
 function base64ToBytes(data: string): Uint8Array {
-  const b64 = data.replace(/^data:[^;]+;base64,/, "").replace(/-/g, "+").replace(/_/g, "/");
+  const b64 = data
+    .replace(/^data:[^;]+;base64,/, "")
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
   const bin = atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, "="));
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
@@ -99,22 +102,24 @@ function base64ToBytes(data: string): Uint8Array {
 export const listOnboardingDocs = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((data: unknown) => z.object({ applicationId: z.string().uuid() }).parse(data))
-  .handler(async ({ data, context }): Promise<{ docs: OnboardingDocWire[]; readiness: Readiness }> => {
-    const rows = await db
-      .select()
-      .from(onboardingDocuments)
-      .where(
-        and(
-          eq(onboardingDocuments.orgId, context.orgId),
-          eq(onboardingDocuments.applicationId, data.applicationId),
-        ),
-      )
-      .orderBy(desc(onboardingDocuments.createdAt));
-    return {
-      docs: rows.map(toWire),
-      readiness: await readinessFor(context.orgId, data.applicationId),
-    };
-  });
+  .handler(
+    async ({ data, context }): Promise<{ docs: OnboardingDocWire[]; readiness: Readiness }> => {
+      const rows = await db
+        .select()
+        .from(onboardingDocuments)
+        .where(
+          and(
+            eq(onboardingDocuments.orgId, context.orgId),
+            eq(onboardingDocuments.applicationId, data.applicationId),
+          ),
+        )
+        .orderBy(desc(onboardingDocuments.createdAt));
+      return {
+        docs: rows.map(toWire),
+        readiness: await readinessFor(context.orgId, data.applicationId),
+      };
+    },
+  );
 
 /** Pre-onboarding progress for every live offer, for the offers register. */
 export const listOnboardingReadiness = createServerFn({ method: "GET" })
@@ -142,7 +147,9 @@ export const listOnboardingReadiness = createServerFn({ method: "GET" })
     const { REQUIRED_DOC_TYPES } = await import("./onboarding.server");
     return ids.map((applicationId) => {
       const mine = rows.filter((r) => r.applicationId === applicationId);
-      const verifiedTypes = new Set(mine.filter((r) => r.status === "verified").map((r) => r.docType));
+      const verifiedTypes = new Set(
+        mine.filter((r) => r.status === "verified").map((r) => r.docType),
+      );
       const missing = REQUIRED_DOC_TYPES.filter((t) => !verifiedTypes.has(t));
       return {
         applicationId,
@@ -165,7 +172,10 @@ export const uploadOnboardingDoc = createServerFn({ method: "POST" })
         applicationId: z.string().uuid(),
         docType: z.enum(DOC_TYPE_KEYS),
         fileName: z.string().min(1).max(300),
-        base64: z.string().min(16).refine((v) => v.length * 0.75 <= MAX_ARCHIVE_BYTES, "File too large"),
+        base64: z
+          .string()
+          .min(16)
+          .refine((v) => v.length * 0.75 <= MAX_ARCHIVE_BYTES, "File too large"),
       })
       .parse(data),
   )
@@ -173,9 +183,7 @@ export const uploadOnboardingDoc = createServerFn({ method: "POST" })
     const [app] = await db
       .select({ id: applications.id, candidateId: applications.candidateId })
       .from(applications)
-      .where(
-        and(eq(applications.id, data.applicationId), eq(applications.orgId, context.orgId)),
-      )
+      .where(and(eq(applications.id, data.applicationId), eq(applications.orgId, context.orgId)))
       .limit(1);
     if (!app) throw new Error("Application not found");
 
@@ -299,7 +307,9 @@ export const reviewOnboardingDoc = createServerFn({ method: "POST" })
       .limit(1);
     if (!row) throw new Error("That document is no longer here.");
     if (data.decision === "rejected" && !(data.note ?? "").trim()) {
-      throw new Error("Say why the document is rejected — the candidate has to be told what to resend.");
+      throw new Error(
+        "Say why the document is rejected — the candidate has to be told what to resend.",
+      );
     }
 
     await db

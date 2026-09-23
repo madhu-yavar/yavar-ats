@@ -106,7 +106,12 @@ export const REASON_REQUIRED: Stage[] = [
  * can never be attached to a "Shortlisted" move.
  */
 export const STAGE_REASONS: Partial<Record<Stage, string[]>> = {
-  shortlisted: ["Strong JD match", "Recruiter recommendation", "Referral", "Internal applicant priority"],
+  shortlisted: [
+    "Strong JD match",
+    "Recruiter recommendation",
+    "Referral",
+    "Internal applicant priority",
+  ],
   l1: ["Cleared screening", "Panel availability confirmed"],
   l2: ["Cleared L1", "Panel availability confirmed"],
   l3: ["Cleared L2", "Leadership round required"],
@@ -121,10 +126,28 @@ export const STAGE_REASONS: Partial<Record<Stage, string[]>> = {
     "Role expectation mismatch",
   ],
   joined: ["Joined on agreed date", "Joined after deferral"],
-  no_show: ["Did not report on joining date", "Unreachable after acceptance", "Absconded post acceptance"],
-  joining_deferred: ["Notice period extended", "Personal reasons", "Requisition start date moved", "Relocation delay"],
-  on_hold: ["Requisition on hold", "Budget freeze", "Panel unavailable", "Awaiting candidate response"],
-  reserve: ["Good fit, no open role", "Runner-up for this requisition", "Keep warm for next quarter"],
+  no_show: [
+    "Did not report on joining date",
+    "Unreachable after acceptance",
+    "Absconded post acceptance",
+  ],
+  joining_deferred: [
+    "Notice period extended",
+    "Personal reasons",
+    "Requisition start date moved",
+    "Relocation delay",
+  ],
+  on_hold: [
+    "Requisition on hold",
+    "Budget freeze",
+    "Panel unavailable",
+    "Awaiting candidate response",
+  ],
+  reserve: [
+    "Good fit, no open role",
+    "Runner-up for this requisition",
+    "Keep warm for next quarter",
+  ],
   withdrawn: [
     "Candidate withdrew",
     "Accepted another offer",
@@ -146,7 +169,6 @@ export const STAGE_REASONS: Partial<Record<Stage, string[]>> = {
 export function reasonsForStage(stage: Stage): string[] {
   return STAGE_REASONS[canonical(stage)] ?? [];
 }
-
 
 export function isTerminal(stage: Stage) {
   return ["joined", "hired", "rejected", "withdrawn", "offer_declined", "no_show"].includes(stage);
@@ -224,7 +246,10 @@ const SLA_DAYS: Partial<Record<Stage, number>> = {
   offer_accepted: 30,
 };
 
-export function stalledDays(stage: Stage, lastActivityAt: string | null | undefined): number | null {
+export function stalledDays(
+  stage: Stage,
+  lastActivityAt: string | null | undefined,
+): number | null {
   const sla = SLA_DAYS[canonical(stage)];
   if (!sla || !lastActivityAt) return null;
   const days = Math.floor((Date.now() - new Date(lastActivityAt).getTime()) / 86_400_000);

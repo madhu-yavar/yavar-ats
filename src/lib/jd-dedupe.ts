@@ -8,9 +8,31 @@
  */
 
 const STOP = new Set([
-  "a", "an", "the", "and", "or", "of", "for", "to", "in", "at", "with",
-  "senior", "sr", "junior", "jr", "lead", "principal", "staff", "i", "ii", "iii",
-  "engineer2", "specialist", "executive", "officer",
+  "a",
+  "an",
+  "the",
+  "and",
+  "or",
+  "of",
+  "for",
+  "to",
+  "in",
+  "at",
+  "with",
+  "senior",
+  "sr",
+  "junior",
+  "jr",
+  "lead",
+  "principal",
+  "staff",
+  "i",
+  "ii",
+  "iii",
+  "engineer2",
+  "specialist",
+  "executive",
+  "officer",
 ]);
 
 const LIVE_STATUSES = new Set([
@@ -88,7 +110,9 @@ export function findDuplicateRequisitions(
     const reasons: string[] = [];
     let score = titleSim;
     reasons.push(
-      titleSim >= 0.99 ? "Identical role title" : `Very similar role title (${Math.round(titleSim * 100)}% match)`,
+      titleSim >= 0.99
+        ? "Identical role title"
+        : `Very similar role title (${Math.round(titleSim * 100)}% match)`,
     );
 
     if (draft.department_id && r.department_id && draft.department_id === r.department_id) {

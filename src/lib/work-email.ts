@@ -103,10 +103,49 @@ export function sameDomain(a: string, b: string) {
  * both reduce to `as.co.in` instead of the useless `co.in`.
  */
 const MULTI_SUFFIXES = new Set([
-  "co.in","net.in","org.in","gen.in","firm.in","ind.in","co.uk","org.uk","me.uk","ltd.uk","plc.uk",
-  "ac.uk","gov.uk","com.au","net.au","org.au","edu.au","co.nz","com.br","com.mx","com.sg","com.my",
-  "com.hk","co.jp","or.jp","ne.jp","co.kr","com.cn","net.cn","org.cn","co.za","com.tr","com.ar",
-  "com.ph","co.id","com.sa","com.eg","co.il","com.tw","com.vn","com.pk","com.bd","com.ng",
+  "co.in",
+  "net.in",
+  "org.in",
+  "gen.in",
+  "firm.in",
+  "ind.in",
+  "co.uk",
+  "org.uk",
+  "me.uk",
+  "ltd.uk",
+  "plc.uk",
+  "ac.uk",
+  "gov.uk",
+  "com.au",
+  "net.au",
+  "org.au",
+  "edu.au",
+  "co.nz",
+  "com.br",
+  "com.mx",
+  "com.sg",
+  "com.my",
+  "com.hk",
+  "co.jp",
+  "or.jp",
+  "ne.jp",
+  "co.kr",
+  "com.cn",
+  "net.cn",
+  "org.cn",
+  "co.za",
+  "com.tr",
+  "com.ar",
+  "com.ph",
+  "co.id",
+  "com.sa",
+  "com.eg",
+  "co.il",
+  "com.tw",
+  "com.vn",
+  "com.pk",
+  "com.bd",
+  "com.ng",
 ]);
 
 /**
@@ -114,8 +153,9 @@ const MULTI_SUFFIXES = new Set([
  * the same company collapses to one identity, which is what a tenant claims.
  */
 export function registrableDomain(emailOrDomain: string) {
-  const host = (emailOrDomain.includes("@") ? emailDomain(emailOrDomain) : emailOrDomain.trim().toLowerCase())
-    .replace(/^\.+|\.+$/g, "");
+  const host = (
+    emailOrDomain.includes("@") ? emailDomain(emailOrDomain) : emailOrDomain.trim().toLowerCase()
+  ).replace(/^\.+|\.+$/g, "");
   const parts = host.split(".").filter(Boolean);
   if (parts.length <= 2) return parts.join(".");
   const lastTwo = parts.slice(-2).join(".");

@@ -138,7 +138,11 @@ async function loadSources(orgId: string | null) {
         .where(eq(ontologySnapshots.orgId, orgId))
         .orderBy(desc(ontologySnapshots.createdAt))
         .limit(12)
-    : await db.select().from(ontologySnapshots).orderBy(desc(ontologySnapshots.createdAt)).limit(12);
+    : await db
+        .select()
+        .from(ontologySnapshots)
+        .orderBy(desc(ontologySnapshots.createdAt))
+        .limit(12);
 
   const hired = new Set(
     apps
@@ -206,7 +210,7 @@ export const readTalentBrain = createServerFn({ method: "POST" })
     z.object({ scope: z.enum(["org", "platform"]).default("org") }).parse(input ?? {}),
   )
   .handler(async ({ data, context }): Promise<TalentBrain> => {
-    const email = (context.claims as any)?.email ?? null;
+    const email = context.claims?.email ?? null;
     const access = await requireBrainAccess(context.userId, email);
     const platform = data.scope === "platform" && access.superUser;
     if (data.scope === "platform" && !access.superUser) {
@@ -243,7 +247,7 @@ export const rebuildTalentBrain = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({}).parse(input ?? {}))
   .handler(async ({ context }): Promise<TalentBrain> => {
-    const email = (context.claims as any)?.email ?? null;
+    const email = context.claims?.email ?? null;
     const access = await requireBrainAccess(context.userId, email);
     const orgId = access.orgId;
     if (!orgId) throw new Error("Choose an organisation before rebuilding its Talent Brain.");

@@ -104,9 +104,10 @@ function ApplyPage() {
               </h1>
             </div>
             <p className="mt-3 text-sm text-muted-foreground">
-              Thank you{done.name ? `, ${done.name.split(" ")[0]}` : ""}. Your CV has been read and shared with the
-              hiring team for <span className="font-medium text-foreground">{j.title}</span>. If your profile fits, a
-              recruiter will contact you by email.
+              Thank you{done.name ? `, ${done.name.split(" ")[0]}` : ""}. Your CV has been read and
+              shared with the hiring team for{" "}
+              <span className="font-medium text-foreground">{j.title}</span>. If your profile fits,
+              a recruiter will contact you by email.
             </p>
           </div>
         ) : (
@@ -132,12 +133,18 @@ function ApplyPage() {
             {j.mustHave.length ? (
               <div className="mt-5 flex flex-wrap gap-2">
                 {j.mustHave.map((s) => (
-                  <span key={s} className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                  <span
+                    key={s}
+                    className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary"
+                  >
                     {s}
                   </span>
                 ))}
                 {j.goodToHave.map((s) => (
-                  <span key={s} className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                  <span
+                    key={s}
+                    className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground"
+                  >
                     {s}
                   </span>
                 ))}
@@ -161,8 +168,8 @@ function ApplyPage() {
               <section className="panel mt-8 p-6">
                 <h2 className="font-semibold">Apply with your CV</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Attach a PDF or Word CV — your name, contact details, skills and experience are read automatically,
-                  so there is no long form to fill in.
+                  Attach a PDF or Word CV — your name, contact details, skills and experience are
+                  read automatically, so there is no long form to fill in.
                 </p>
 
                 <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -211,7 +218,12 @@ function ApplyPage() {
                   </div>
                   <div>
                     <Label htmlFor="phone">Phone (optional)</Label>
-                    <Input id="phone" className="mt-1.5" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                    <Input
+                      id="phone"
+                      className="mt-1.5"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                    />
                   </div>
                 </div>
 

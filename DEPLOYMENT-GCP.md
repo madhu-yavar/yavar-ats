@@ -4,30 +4,30 @@ Instructions for DevOps to deploy the ATSIQ ATS to a GCP cluster under the domai
 
 ## 1. Source
 
-| | |
-|---|---|
-| Git repo | https://github.com/madhu-yavar/yavar-ats.git |
-| Branch | `main` (deploy latest commit) |
-| App type | TanStack Start (React 19) SSR app on Nitro → plain **Node server** (`.output/server/index.mjs`) |
-| Package manager | Bun (lockfile `bun.lock`); runtime image needs only Node |
-| Database | Plain **PostgreSQL** (Drizzle ORM, SQL migrations in `drizzle/pg-migrations/`) — no Supabase DB |
-| Auth | First-party password authentication and PostgreSQL-backed cookie sessions |
-| Files (CV vault, templates) | S3-compatible object storage |
+|                             |                                                                                                 |
+| --------------------------- | ----------------------------------------------------------------------------------------------- |
+| Git repo                    | https://github.com/madhu-yavar/yavar-ats.git                                                    |
+| Branch                      | `main` (deploy latest commit)                                                                   |
+| App type                    | TanStack Start (React 19) SSR app on Nitro → plain **Node server** (`.output/server/index.mjs`) |
+| Package manager             | Bun (lockfile `bun.lock`); runtime image needs only Node                                        |
+| Database                    | Plain **PostgreSQL** (Drizzle ORM, SQL migrations in `drizzle/pg-migrations/`) — no Supabase DB |
+| Auth                        | First-party password authentication and PostgreSQL-backed cookie sessions                       |
+| Files (CV vault, templates) | S3-compatible object storage                                                                    |
 
 A production `Dockerfile` is at the repo root. `vite build` produces a Node server (nitro `node-server` preset, already configured in `vite.config.ts`). Verified locally: `node .output/server/index.mjs` serves `/` and `/privacy` with HTTP 200.
 
 ## 2. GCP infrastructure to provision
 
-| Component | Suggestion |
-|---|---|
-| Cluster | GKE (Autopilot is fine) |
-| Database | Cloud SQL for PostgreSQL (14+), **private IP**, database `atsiq` |
-| Object storage | GCS bucket `resumes` used in **S3-compatible mode** (enable HMAC key for a service account; endpoint `https://storage.googleapis.com`) — or in-cluster MinIO / any S3-compatible store |
-| Secrets | GCP Secret Manager → mounted as K8s Secrets |
-| DNS | Cloud DNS record `z-atsiq.yavar.ai` → load-balancer IP |
-| TLS | GCLB Ingress + `ManagedCertificate` (or cert-manager) |
-| Cron | Cloud Scheduler (2 jobs, see §6) |
-| Container registry | Artifact Registry |
+| Component          | Suggestion                                                                                                                                                                             |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cluster            | GKE (Autopilot is fine)                                                                                                                                                                |
+| Database           | Cloud SQL for PostgreSQL (14+), **private IP**, database `atsiq`                                                                                                                       |
+| Object storage     | GCS bucket `resumes` used in **S3-compatible mode** (enable HMAC key for a service account; endpoint `https://storage.googleapis.com`) — or in-cluster MinIO / any S3-compatible store |
+| Secrets            | GCP Secret Manager → mounted as K8s Secrets                                                                                                                                            |
+| DNS                | Cloud DNS record `z-atsiq.yavar.ai` → load-balancer IP                                                                                                                                 |
+| TLS                | GCLB Ingress + `ManagedCertificate` (or cert-manager)                                                                                                                                  |
+| Cron               | Cloud Scheduler (2 jobs, see §6)                                                                                                                                                       |
+| Container registry | Artifact Registry                                                                                                                                                                      |
 
 ## 3. Build & run
 
@@ -50,36 +50,36 @@ DATABASE_URL="postgresql://USER:PASS@PRIVATE_IP:5432/atsiq" bunx drizzle-kit mig
 
 ### Required — app will not boot without these
 
-| Variable | Value / how to generate |
-|---|---|
-| `DATABASE_URL` | `postgresql://…` Cloud SQL private IP |
-| `SESSION_SECRET` | `openssl rand -hex 32` (must be ≥ 32 chars) |
-| `PUBLIC_SITE_URL` | `https://z-atsiq.yavar.ai` (used in capture links, OAuth redirects, emails) |
+| Variable                | Value / how to generate                                                                |
+| ----------------------- | -------------------------------------------------------------------------------------- |
+| `DATABASE_URL`          | `postgresql://…` Cloud SQL private IP                                                  |
+| `SESSION_SECRET`        | `openssl rand -hex 32` (must be ≥ 32 chars)                                            |
+| `PUBLIC_SITE_URL`       | `https://z-atsiq.yavar.ai` (used in capture links, OAuth redirects, emails)            |
 | `SECRET_ENCRYPTION_KEY` | Random 32-byte key used to encrypt organisation AI and integration credentials at rest |
 
 ### Object storage (required for CV upload / templates / brand assets)
 
-| Variable | Value |
-|---|---|
-| `S3_ENDPOINT` | `https://storage.googleapis.com` (or MinIO/R2 endpoint) |
-| `S3_BUCKET` | `resumes` |
-| `S3_REGION` | any (default `us-east-1` works with GCS) |
-| `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | GCS HMAC key pair |
+| Variable                                    | Value                                                   |
+| ------------------------------------------- | ------------------------------------------------------- |
+| `S3_ENDPOINT`                               | `https://storage.googleapis.com` (or MinIO/R2 endpoint) |
+| `S3_BUCKET`                                 | `resumes`                                               |
+| `S3_REGION`                                 | any (default `us-east-1` works with GCS)                |
+| `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | GCS HMAC key pair                                       |
 
 ### Optional feature flags — the app boots without them; the feature stays dark
 
-| Feature | Variables |
-|---|---|
-| Social-profile public API allowance | `GITHUB_TOKEN` (optional; raises GitHub API limits) |
-| LinkedIn org-level connect | `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET`, `LINKEDIN_REDIRECT_URI=https://z-atsiq.yavar.ai/api/public/linkedin/callback`, `LINKEDIN_SCOPES`, `LINKEDIN_STATE_SECRET` (random 32+) |
-| Google Calendar / Meet 1-click | `GOOGLE_CALENDAR_OAUTH_CLIENT_ID`, `GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET` |
-| Microsoft Teams meeting | `MICROSOFT_OAUTH_CLIENT_ID`, `MICROSOFT_OAUTH_CLIENT_SECRET` |
-| Zoom meeting | `ZOOM_OAUTH_CLIENT_ID`, `ZOOM_OAUTH_CLIENT_SECRET` |
-| OAuth state signing (required if any meeting OAuth above is enabled) | `OAUTH_STATE_SECRET` (random 32+) |
-| Google sign-in button | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` |
-| Careers-inbox email webhook | `INBOUND_EMAIL_SECRET` (random 32+), `INBOUND_EMAIL_DOMAIN` |
-| Scheduler/cron routes | `LOVABLE_CRON_SECRET` (random 32+; optional `LOVABLE_CRON_SECRET_PREVIOUS` for rotation) |
-| Transactional email | `SMTP_URL` (e.g. `smtps://user:pass@smtp.example.com:465`), `EMAIL_FROM` |
+| Feature                                                              | Variables                                                                                                                                                                              |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Social-profile public API allowance                                  | `GITHUB_TOKEN` (optional; raises GitHub API limits)                                                                                                                                    |
+| LinkedIn org-level connect                                           | `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET`, `LINKEDIN_REDIRECT_URI=https://z-atsiq.yavar.ai/api/public/linkedin/callback`, `LINKEDIN_SCOPES`, `LINKEDIN_STATE_SECRET` (random 32+) |
+| Google Calendar / Meet 1-click                                       | `GOOGLE_CALENDAR_OAUTH_CLIENT_ID`, `GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET`                                                                                                               |
+| Microsoft Teams meeting                                              | `MICROSOFT_OAUTH_CLIENT_ID`, `MICROSOFT_OAUTH_CLIENT_SECRET`                                                                                                                           |
+| Zoom meeting                                                         | `ZOOM_OAUTH_CLIENT_ID`, `ZOOM_OAUTH_CLIENT_SECRET`                                                                                                                                     |
+| OAuth state signing (required if any meeting OAuth above is enabled) | `OAUTH_STATE_SECRET` (random 32+)                                                                                                                                                      |
+| Google sign-in button                                                | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`                                                                                                                                 |
+| Careers-inbox email webhook                                          | `INBOUND_EMAIL_SECRET` (random 32+), `INBOUND_EMAIL_DOMAIN`                                                                                                                            |
+| Scheduler/cron routes                                                | `LOVABLE_CRON_SECRET` (random 32+; optional `LOVABLE_CRON_SECRET_PREVIOUS` for rotation)                                                                                               |
+| Transactional email                                                  | `SMTP_URL` (e.g. `smtps://user:pass@smtp.example.com:465`), `EMAIL_FROM`                                                                                                               |
 
 **Secrets to generate:** `SESSION_SECRET`, `SECRET_ENCRYPTION_KEY` (AES-256 key for credentials at rest; `openssl rand -base64 32`), `OAUTH_STATE_SECRET`, `LINKEDIN_STATE_SECRET`, `INBOUND_EMAIL_SECRET`, `LOVABLE_CRON_SECRET` — stored in Secret Manager. `SECRET_ENCRYPTION_KEY` is mandatory before saving OAuth or AI credentials. Rotating it requires re-encrypting stored values.
 
@@ -113,10 +113,10 @@ All under the new domain:
 
 Both endpoints expect `Authorization: Bearer $LOVABLE_CRON_SECRET`:
 
-| Job | Target | Typical cadence |
-|---|---|---|
-| Careers-inbox sync | `https://z-atsiq.yavar.ai/api/public/inbox-sync` | every 5–15 min |
-| Candidate re-sync/scoring | `https://z-atsiq.yavar.ai/api/public/sync-candidates` | hourly |
+| Job                       | Target                                                | Typical cadence |
+| ------------------------- | ----------------------------------------------------- | --------------- |
+| Careers-inbox sync        | `https://z-atsiq.yavar.ai/api/public/inbox-sync`      | every 5–15 min  |
+| Candidate re-sync/scoring | `https://z-atsiq.yavar.ai/api/public/sync-candidates` | hourly          |
 
 ## 7. Example Kubernetes objects (sketch)
 
@@ -137,7 +137,7 @@ spec:
           image: REGION-docker.pkg.dev/PROJECT/REGISTRY/atsiq:TAG
           ports: [{ containerPort: 3000 }]
           envFrom:
-            - secretRef: { name: atsiq-env }   # all vars from §4
+            - secretRef: { name: atsiq-env } # all vars from §4
           readinessProbe:
             httpGet: { path: /, port: 3000 }
             initialDelaySeconds: 5
