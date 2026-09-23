@@ -36,7 +36,7 @@ jobs:
       - name: Lint
         run: bun run lint
       - name: Dependency audit (high+ blocks)
-        run: bun audit --level high
+        run: bun audit --audit-level=high
         continue-on-error: false
       - name: Secrets scan
         uses: gitleaks/gitleaks-action@v2
