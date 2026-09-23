@@ -556,7 +556,7 @@ export function PreOnboardingDialog({
                 ref={fileInput}
                 type="file"
                 className="hidden"
-                accept=".pdf,.docx,.doc,.txt,.png,.jpg,.jpeg,.webp"
+                accept=".pdf,.docx,.doc,.txt,.png,.jpg,.jpeg,.webp,.zip"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) upload.mutate(file);
