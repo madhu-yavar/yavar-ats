@@ -44,9 +44,33 @@ function snakeRow(row: Record<string, unknown>): Record<string, Json> {
  * returned in the same snake_case wire shape the browser used to read via
  * PostgREST, ordered by label.
  */
+
+/**
+ * Fresh organisations have no integration rows at all — the global templates
+ * (org_id IS NULL) define every provider with its docs and credential fields.
+ * Copy them into the org on first read so the Integrations page is never empty.
+ * No-op when the org already has rows.
+ */
+async function ensureOrgIntegrations(orgId: string): Promise<void> {
+  const [existing] = await db
+    .select({ id: sourceIntegrations.id })
+    .from(sourceIntegrations)
+    .where(eq(sourceIntegrations.orgId, orgId))
+    .limit(1);
+  if (existing) return;
+  await db.execute(sql`
+    insert into source_integrations
+      (provider, label, enabled, config, credential_fields, has_credentials, last_test_status, category, org_id)
+    select provider, label, enabled, config, credential_fields, has_credentials, last_test_status, category, ${orgId}
+    from source_integrations
+    where org_id is null
+  `);
+}
+
 export const listSourceIntegrations = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .handler(async ({ context }) => {
+    await ensureOrgIntegrations(context.orgId);
     const rows = await db
       .select()
       .from(sourceIntegrations)
