@@ -2,27 +2,27 @@
 
 **Goal:** deploy ATSIQ (the ATS web app) to Google Cloud Run under **https://atsiq.yavar.ai**, backed by Cloud SQL PostgreSQL, and retire the current Lovable.dev hosting. The application is fully portable — a plain Node server + ordinary PostgreSQL + S3-compatible storage + SMTP. It has **no runtime dependency on Lovable or Supabase** (verified: the production build boots with only `DATABASE_URL` and `SESSION_SECRET` set).
 
-| | |
-|---|---|
-| Source repo | https://github.com/madhu-yavar/yavar-ats — branch `main` (deploy latest commit) |
-| App type | TanStack Start (React 19 SSR on Nitro) → plain **Node server** (`.output/server/index.mjs`) |
-| Container | `Dockerfile` at repo root — multi-stage, final image `node:22-slim`, listens on **port 3000**, `HOST=0.0.0.0` |
-| Database | Ordinary **PostgreSQL 14+** (drizzle ORM). Schema source of truth: `drizzle/pg-migrations/` applied by `scripts/migrate-pg.mjs` (idempotent). **Do NOT use `drizzle-kit migrate`** — the old `drizzle/migrations` journal is incomplete and cannot build a fresh database. |
-| Auth | First-party: scrypt password hashes in the `users` table, httpOnly `atsiq_session` cookie, DB-backed `sessions` table. No external identity provider. |
-| Object storage (CV vault, template sources, brand logos) | Any S3-compatible store. Recommended: **GCS bucket with HMAC keys**. |
-| Email | Any SMTP relay (`SMTP_URL`). Used for: registration confirmation, invitations, password reset, org approval notices. |
-| Health probe | **`GET /`** (HTTP 200). There is no `/health` endpoint. |
-| Environment variables | **Copy-ready template: `infra/env.production.example`** — the annotated production `.env`. Only `DATABASE_URL` + `SESSION_SECRET` are required to boot; `SMTP_URL` is required for email delivery. |
+|                                                          |                                                                                                                                                                                                                                                                            |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Source repo                                              | https://github.com/madhu-yavar/yavar-ats — branch `main` (deploy latest commit)                                                                                                                                                                                            |
+| App type                                                 | TanStack Start (React 19 SSR on Nitro) → plain **Node server** (`.output/server/index.mjs`)                                                                                                                                                                                |
+| Container                                                | `Dockerfile` at repo root — multi-stage, final image `node:22-slim`, listens on **port 3000**, `HOST=0.0.0.0`                                                                                                                                                              |
+| Database                                                 | Ordinary **PostgreSQL 14+** (drizzle ORM). Schema source of truth: `drizzle/pg-migrations/` applied by `scripts/migrate-pg.mjs` (idempotent). **Do NOT use `drizzle-kit migrate`** — the old `drizzle/migrations` journal is incomplete and cannot build a fresh database. |
+| Auth                                                     | First-party: scrypt password hashes in the `users` table, httpOnly `atsiq_session` cookie, DB-backed `sessions` table. No external identity provider.                                                                                                                      |
+| Object storage (CV vault, template sources, brand logos) | Any S3-compatible store. Recommended: **GCS bucket with HMAC keys**.                                                                                                                                                                                                       |
+| Email                                                    | Any SMTP relay (`SMTP_URL`). Used for: registration confirmation, invitations, password reset, org approval notices.                                                                                                                                                       |
+| Health probe                                             | **`GET /`** (HTTP 200). There is no `/health` endpoint.                                                                                                                                                                                                                    |
+| Environment variables                                    | **Copy-ready template: `infra/env.production.example`** — the annotated production `.env`. Only `DATABASE_URL` + `SESSION_SECRET` are required to boot; `SMTP_URL` is required for email delivery.                                                                         |
 
 ---
 
 ## 0. Inputs DevOps needs from the product owner
 
-| Input | Notes |
-|---|---|
-| GCP project ID + region | e.g. `yavar-studio`, region `asia-south1` |
-| DNS control for `atsiq.yavar.ai` | Currently proxied through **Cloudflare**; origin must be repointed at the Cloud Run URL at cut-over |
-| SMTP credentials | Host/port/user/pass (or an existing corporate relay). Password-reset and invitation emails depend on this |
+| Input                                                    | Notes                                                                                                                                                  |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| GCP project ID + region                                  | e.g. `yavar-studio`, region `asia-south1`                                                                                                              |
+| DNS control for `atsiq.yavar.ai`                         | Currently proxied through **Cloudflare**; origin must be repointed at the Cloud Run URL at cut-over                                                    |
+| SMTP credentials                                         | Host/port/user/pass (or an existing corporate relay). Password-reset and invitation emails depend on this                                              |
 | Confirmation that Lovable's DB backup/restore is settled | The production data (users, organisations, candidates) currently lives in Lovable's managed database; a `pg_dump` must be exported from there — see §3 |
 
 ---
@@ -126,13 +126,13 @@ Known rows: user `madhu.r@yavar.ai` (platform super admin), organisation
 
 Add to the GitHub repo (Settings → Secrets and variables → Actions):
 
-| Type | Name | Value |
-|---|---|---|
-| Secret | `GCP_PROJECT` | project id |
-| Secret | `GCP_SA_KEY` | JSON key of a service account with roles: Cloud Run Admin, Artifact Registry Writer, Cloud SQL Client, Secret Manager Secret Accessor |
-| Variable | `GCP_REGION` | e.g. `asia-south1` |
-| Variable | `GCP_REPOSITORY` | `atsiq` |
-| Variable | `DEPLOY_ENABLED` | `true` |
+| Type     | Name             | Value                                                                                                                                 |
+| -------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Secret   | `GCP_PROJECT`    | project id                                                                                                                            |
+| Secret   | `GCP_SA_KEY`     | JSON key of a service account with roles: Cloud Run Admin, Artifact Registry Writer, Cloud SQL Client, Secret Manager Secret Accessor |
+| Variable | `GCP_REGION`     | e.g. `asia-south1`                                                                                                                    |
+| Variable | `GCP_REPOSITORY` | `atsiq`                                                                                                                               |
+| Variable | `DEPLOY_ENABLED` | `true`                                                                                                                                |
 
 Every push to `main` then: migrates the database (`scripts/migrate-pg.mjs`), builds the Dockerfile, pushes to Artifact Registry, deploys the Cloud Run service with the secrets from §2.
 
@@ -180,10 +180,10 @@ On the Cloud Run URL:
 
 Cloud Scheduler (both call the app with `Authorization: Bearer <value of atsiq-cron-secret>`):
 
-| Schedule | Target |
-|---|---|
-| every 5–15 min | `https://atsiq.yavar.ai/api/public/inbox-sync` |
-| hourly | `https://atsiq.yavar.ai/api/public/sync-candidates` |
+| Schedule       | Target                                              |
+| -------------- | --------------------------------------------------- |
+| every 5–15 min | `https://atsiq.yavar.ai/api/public/inbox-sync`      |
+| hourly         | `https://atsiq.yavar.ai/api/public/sync-candidates` |
 
 ## 8. Notes & gotchas
 

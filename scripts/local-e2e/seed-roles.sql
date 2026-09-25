@@ -43,3 +43,31 @@ on conflict do nothing;
 
 -- Give the seeded interview an assignee email so it lands in dh@demo.com's queue
 update interviews set interviewer_email = 'dh@demo.com' where interviewer = 'Ananya Rao';
+
+-- First-party login (self-hosting cut) verifies scrypt hashes in
+-- users.password_hash. The fixture predates first-party auth: it leaves the
+-- hash null and its e2e-mirror rows squat on the d001/d002 primary keys, so
+-- the real accounts get surrogate ids (e201/e202 — e201 matches preon-seed in
+-- /tmp/atsiq-e2e). Shared password: demo1234.
+-- Hash: scrypt via src/server/password.ts hashPassword("demo1234")
+insert into users (id, email, email_confirmed_at, password_hash) values
+  ('a0000000-0000-4000-8000-00000000e201', 'madhu@demo.com', now(),
+   'scrypt$16384$8$1$XdqR7jzwilBTu0rR2a7MVg$rGF6w7ClW3hSVcRrCJGvMA3-RLXsYoc0-JmrQdKbT1KyC01edbspjueeCs9oFkQ7WkHaNQgk2fEzjPiGJjzveA'),
+  ('a0000000-0000-4000-8000-00000000e202', 'hr@yavar.ai', now(),
+   'scrypt$16384$8$1$XdqR7jzwilBTu0rR2a7MVg$rGF6w7ClW3hSVcRrCJGvMA3-RLXsYoc0-JmrQdKbT1KyC01edbspjueeCs9oFkQ7WkHaNQgk2fEzjPiGJjzveA')
+-- conflict on email: login resolves by email, and other e2e seeds may have
+-- created the account under a different surrogate id
+on conflict (email) do update set password_hash = excluded.password_hash,
+                                  email_confirmed_at = now();
+
+-- the fixture's org_members rows point at the squatted d001/d002 ids; repoint
+-- them at the surrogate ids (madhu's is also done by preon-seed)
+update org_members set user_id = 'a0000000-0000-4000-8000-00000000e201', status = 'active', is_owner = true
+where org_id = '6a6a0000-0000-4000-8000-00000000d011' and lower(email) = 'madhu@demo.com';
+update org_members set user_id = 'a0000000-0000-4000-8000-00000000e202', status = 'active', is_owner = true
+where org_id = '6a6a0000-0000-4000-8000-00000000d012' and lower(email) = 'hr@yavar.ai';
+
+update users set password_hash =
+  'scrypt$16384$8$1$XdqR7jzwilBTu0rR2a7MVg$rGF6w7ClW3hSVcRrCJGvMA3-RLXsYoc0-JmrQdKbT1KyC01edbspjueeCs9oFkQ7WkHaNQgk2fEzjPiGJjzveA'
+where email in ('recruiter@demo.com', 'dh@demo.com', 'hm@demo.com', 'owner@newdemo.com')
+  and (password_hash is null or password_hash = '');

@@ -42,9 +42,10 @@ else
     psql -q -c "create role anon nologin; create role authenticated nologin; create role service_role nologin;" || true
     psql -q -f scripts/local-e2e/fixture.sql
     psql -q -f scripts/local-e2e/seed-roles.sql
-    # schema drift: fixture.sql predates some drizzle columns/migrations — apply
-    # the incremental pg-migrations plus known compatibility deltas
-    psql -q -f drizzle/pg-migrations/0009_capture_token_hash.sql 2>/dev/null || true
+    # schema drift: fixture.sql predates the drizzle pg-migrations — apply every
+    # migration tolerantly (the fixture already covers the baseline schema, so
+    # duplicates no-op; later files add the columns/tables the fixture lacks)
+    for f in drizzle/pg-migrations/*.sql; do psql -q -f "$f" >/dev/null 2>&1 || true; done
     psql -q -c "alter table requisitions add column if not exists job_card_overrides jsonb not null default '{}'::jsonb" || true
     psql -q -c "alter table organizations add column if not exists capture_token_hash text" || true
   else

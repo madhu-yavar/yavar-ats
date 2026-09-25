@@ -11,12 +11,12 @@ so this is a **data-only** move: no DDL is executed on the target.
 
 ## 0. Prerequisites
 
-| Need | Where |
-|---|---|
-| Source connection string | Lovable project → database settings (or Lovable support). Lovable databases are Supabase projects: host is `db.<project-ref>.supabase.co` (or the pooler), db `postgres` |
-| `pg_dump` / `psql` client | Version **14 or newer** (match the source engine) |
-| Target connection string | The `atsiq-database-url` Secret Manager value (see `infra/DEPLOYMENT-HANDOFF.md` §2) |
-| Approval to pause writes on Lovable | For the final export — a few minutes is enough. Anything written on Lovable *after* the dump will NOT exist on GCP until you re-export |
+| Need                                | Where                                                                                                                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Source connection string            | Lovable project → database settings (or Lovable support). Lovable databases are Supabase projects: host is `db.<project-ref>.supabase.co` (or the pooler), db `postgres` |
+| `pg_dump` / `psql` client           | Version **14 or newer** (match the source engine)                                                                                                                        |
+| Target connection string            | The `atsiq-database-url` Secret Manager value (see `infra/DEPLOYMENT-HANDOFF.md` §2)                                                                                     |
+| Approval to pause writes on Lovable | For the final export — a few minutes is enough. Anything written on Lovable _after_ the dump will NOT exist on GCP until you re-export                                   |
 
 **Known blockers to clear first**
 
