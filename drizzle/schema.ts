@@ -463,6 +463,8 @@ export const candidates = pgTable(
     currentEmployer: text("current_employer"),
     workAuthorization: text("work_authorization"),
     willingToRelocate: boolean("willing_to_relocate"),
+    /** Self-stated or ID-evidenced (male | female | other) — identity cross-check only. */
+    gender: text("gender"),
     preferredLocations: text("preferred_locations")
       .array()
       .notNull()

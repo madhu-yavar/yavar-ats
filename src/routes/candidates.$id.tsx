@@ -22,6 +22,7 @@ import {
   stageEventsQuery,
 } from "@/lib/data";
 import { runAiScreening } from "@/lib/matching.functions";
+import { updateCandidateGender } from "@/lib/candidates.functions";
 import { saveAiInterview } from "@/lib/interviews.functions";
 import { verifyCandidate } from "@/lib/verification.functions";
 import { createAssessment } from "@/lib/assessment.functions";
@@ -41,6 +42,13 @@ import {
 } from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/candidates/$id")({
   head: () => ({
@@ -77,6 +85,7 @@ function CandidateDetail() {
   const verify = useServerFn(verifyCandidate);
   const makeAssessment = useServerFn(createAssessment);
   const getResumeUrl = useServerFn(getResumeDownloadUrl);
+  const setGender = useServerFn(updateCandidateGender);
   const [downloading, setDownloading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -191,6 +200,38 @@ function CandidateDetail() {
         title={c.full_name}
         description={[c.email, c.location, educationLabel(c.education)].filter(Boolean).join(" · ")}
       />
+
+      <div className="-mt-2 flex items-center gap-2 text-sm">
+        <Label className="text-xs text-muted-foreground">Gender</Label>
+        <Select
+          value={c.gender ?? "unset"}
+          onValueChange={async (v) => {
+            try {
+              await setGender({
+                data: {
+                  candidateId: c.id,
+                  gender: v === "unset" ? null : (v as "male" | "female" | "other"),
+                },
+              });
+              toast.success("Gender updated");
+              qc.invalidateQueries({ queryKey: ["candidate", id] });
+              qc.invalidateQueries({ queryKey: ["candidates"] });
+            } catch (e) {
+              toast.error(e instanceof Error ? e.message : "Could not update gender");
+            }
+          }}
+        >
+          <SelectTrigger className="h-8 w-36">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="unset">Not stated</SelectItem>
+            <SelectItem value="female">Female</SelectItem>
+            <SelectItem value="male">Male</SelectItem>
+            <SelectItem value="other">Other</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       {c.resume_file_path ? (
         <div className="-mt-2">

@@ -44,7 +44,7 @@ export const DOC_TYPES: DocTypeDef[] = [
     label: "Government photo ID",
     required: true,
     hint: "Aadhaar, passport, driving licence or PAN — name and date of birth must match the offer.",
-    expects: ["holder name", "ID number", "date of birth", "issuing authority"],
+    expects: ["holder name", "gender", "ID number", "date of birth", "issuing authority"],
   },
   {
     key: "experience_letter",
@@ -105,7 +105,6 @@ export const DOC_TYPES: DocTypeDef[] = [
 ];
 
 export const DOC_TYPE_KEYS = DOC_TYPES.map((d) => d.key) as [string, ...string[]];
-export const REQUIRED_DOC_TYPES = DOC_TYPES.filter((d) => d.required).map((d) => d.key);
 
 export function docTypeLabel(key: string): string {
   return DOC_TYPES.find((d) => d.key === key)?.label ?? key;
@@ -153,6 +152,8 @@ export type PayComponent = z.infer<typeof PayComponent>;
 const DocFacts = z.object({
   document_kind: z.string().max(120).nullish(),
   holder_name: z.string().max(200).nullish(),
+  /** Only when the document itself states it (IDs do) — never inferred. */
+  gender: z.string().max(20).nullish(),
   id_number: z.string().max(80).nullish(),
   date_of_birth: z.string().max(40).nullish(),
   employer: z.string().max(200).nullish(),
@@ -309,7 +310,8 @@ export async function extractDocument(input: {
     `\n\nYou read HR pre-onboarding documents. The document supplied is a "${docTypeLabel(input.docType)}".\n` +
     `Read out only what the document itself states. Fields to look for: ${wanted}.\n` +
     "Return ONLY a JSON object with these keys (use null for anything the document does not state): " +
-    "document_kind, holder_name, id_number, date_of_birth, employer, designation, employed_from, " +
+    "document_kind, holder_name, gender (only when printed on the document, never inferred), " +
+    "id_number, date_of_birth, employer, designation, employed_from, " +
     "employed_to, payslip_month, gross_pay, net_pay, annual_ctc, currency, document_date_iso, " +
     "period_iso, effective_from_iso, employed_from_iso, employed_to_iso, monthly_fixed_gross, " +
     "monthly_one_off, annual_fixed, annual_variable, is_arrears_month, institution, " +
@@ -514,29 +516,104 @@ export async function readOnboardingFile(
 
 /* --------------------------------------------------------------- readiness */
 
+export type CategoryReadiness = {
+  key: string;
+  label: string;
+  required: boolean;
+  satisfied: boolean;
+  /** Human verdict, e.g. "2 of 3 months verified — need 1 more (2026-06)". */
+  detail: string;
+  verifiedDocs: number;
+  /** Distinct verified YYYY-MM pay periods (payslip category only, parts included). */
+  monthsCovered: string[];
+  /** 3 for payslips, 1 for every other required category, null for optional ones. */
+  monthsNeeded: number | null;
+};
+
 export type Readiness = {
   applicationId: string;
   total: number;
   verified: number;
   pending: number;
   rejected: number;
+  /** Keys of required categories not yet satisfied. */
   missing: string[];
   ready: boolean;
+  satisfiedRequired: number;
+  requiredTotal: number;
+  categories: CategoryReadiness[];
 };
 
-/** Pre-onboarding is complete when every required document type has a verified row. */
-export async function readinessFor(orgId: string, applicationId: string): Promise<Readiness> {
-  const rows = await db
-    .select({ docType: onboardingDocuments.docType, status: onboardingDocuments.status })
-    .from(onboardingDocuments)
-    .where(
-      and(
-        eq(onboardingDocuments.orgId, orgId),
-        eq(onboardingDocuments.applicationId, applicationId),
-      ),
-    );
-  const verifiedTypes = new Set(rows.filter((r) => r.status === "verified").map((r) => r.docType));
-  const missing = REQUIRED_DOC_TYPES.filter((t) => !verifiedTypes.has(t));
+/**
+ * Single source of truth for the pre-onboarding checklist, computed from raw
+ * rows so the dialog, the offers register and the release gate all reach the
+ * same verdict. Payslips are the one category where volume matters: three
+ * distinct months must be verified, and a merged multi-month PDF counts the
+ * same as three separate files.
+ */
+export function readinessFromRows(
+  applicationId: string,
+  rows: { docType: string; status: string; extracted: unknown }[],
+): Readiness {
+  const verifiedMonths = new Set<string>();
+  for (const r of rows) {
+    if (r.docType === "payslip" && r.status === "verified") {
+      for (const m of payslipMonthsOf(r.extracted)) verifiedMonths.add(m);
+    }
+  }
+  const months = [...verifiedMonths].sort();
+
+  const categories: CategoryReadiness[] = DOC_TYPES.map((def) => {
+    const mine = rows.filter((r) => r.docType === def.key);
+    const verifiedDocs = mine.filter((r) => r.status === "verified").length;
+    const rejected = mine.filter((r) => r.status === "rejected").length;
+    const covered = def.key === "payslip" ? months : [];
+    const monthsNeeded = def.required ? (def.key === "payslip" ? 3 : 1) : null;
+    const satisfied =
+      monthsNeeded === 3 ? covered.length >= 3 : verifiedDocs >= (monthsNeeded ?? 1);
+
+    let detail: string;
+    if (monthsNeeded === 3) {
+      if (covered.length >= 3) {
+        detail = `3 of 3 months verified (${covered.slice(-3).join(", ")})`;
+      } else if (covered.length) {
+        const suggested: string[] = [];
+        let [y, mo] = covered[covered.length - 1]!.split("-").map(Number) as [number, number];
+        while (suggested.length < 3 - covered.length) {
+          mo -= 1;
+          if (mo === 0) {
+            mo = 12;
+            y -= 1;
+          }
+          const c = `${y}-${String(mo).padStart(2, "0")}`;
+          if (!covered.includes(c)) suggested.push(c);
+        }
+        detail = `${covered.length} of 3 months verified — need ${3 - covered.length} more (${suggested.join(", ")})`;
+      } else {
+        detail = shortVerdict(mine.length, rejected, verifiedDocs);
+      }
+    } else if (def.required) {
+      detail = satisfied ? "Validated" : shortVerdict(mine.length, rejected, verifiedDocs);
+    } else {
+      detail = verifiedDocs
+        ? "Validated"
+        : mine.length
+          ? "Uploaded, not yet validated"
+          : "Not collected";
+    }
+    return {
+      key: def.key,
+      label: def.label,
+      required: def.required,
+      satisfied,
+      detail,
+      verifiedDocs,
+      monthsCovered: covered,
+      monthsNeeded,
+    };
+  });
+
+  const missing = categories.filter((c) => c.required && !c.satisfied).map((c) => c.key);
   return {
     applicationId,
     total: rows.length,
@@ -545,7 +622,36 @@ export async function readinessFor(orgId: string, applicationId: string): Promis
     rejected: rows.filter((r) => r.status === "rejected").length,
     missing,
     ready: missing.length === 0,
+    satisfiedRequired: categories.filter((c) => c.required && c.satisfied).length,
+    requiredTotal: categories.filter((c) => c.required).length,
+    categories,
   };
+}
+
+function shortVerdict(uploaded: number, rejected: number, verified: number): string {
+  if (!uploaded) return "Nothing uploaded yet";
+  if (verified) return "Validated";
+  return rejected
+    ? `${rejected} rejected — a fresh copy is needed`
+    : `${uploaded} awaiting validation`;
+}
+
+/** Pre-onboarding is complete when every required category is satisfied. */
+export async function readinessFor(orgId: string, applicationId: string): Promise<Readiness> {
+  const rows = await db
+    .select({
+      docType: onboardingDocuments.docType,
+      status: onboardingDocuments.status,
+      extracted: onboardingDocuments.extracted,
+    })
+    .from(onboardingDocuments)
+    .where(
+      and(
+        eq(onboardingDocuments.orgId, orgId),
+        eq(onboardingDocuments.applicationId, applicationId),
+      ),
+    );
+  return readinessFromRows(applicationId, rows);
 }
 
 /**
@@ -672,6 +778,54 @@ function money(n: number | null | undefined): number | null {
   return typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.round(n) : null;
 }
 
+/** Re-classify one extracted reading by the dates and figures it itself carries. */
+function classifyPart(facts: ExtractedDoc, fallback: string): string {
+  if (isoDay(facts.period_iso)) return "payslip";
+  if (isoDay(facts.effective_from_iso) && (facts.annual_ctc || facts.annual_fixed))
+    return "salary_revision";
+  if (isoDay(facts.employed_from_iso) || isoDay(facts.employed_to_iso)) return "experience_letter";
+  return fallback;
+}
+
+/**
+ * A merged upload — three payslips and a revision letter in one PDF — was read
+ * as several documents. Each one is reconciled in its own right, otherwise the
+ * timeline would show one file and the months inside it would be lost. The top
+ * level repeats the newest part, so when parts exist only the parts are used.
+ */
+export function expandExtractedParts<
+  T extends { docType: string; fileName: string; extracted: unknown },
+>(rows: T[]): (T & { e: ExtractedDoc })[] {
+  return rows
+    .filter((r) => r.extracted)
+    .flatMap((r) => {
+      const e = r.extracted as unknown as ExtractedDoc;
+      const parts = (e.parts ?? []).filter(Boolean);
+      if (!parts.length) return [{ ...r, e }];
+      return parts.map((part, i) => ({
+        ...r,
+        docType: classifyPart(part as ExtractedDoc, r.docType),
+        fileName: part.part_label
+          ? `${r.fileName} — ${part.part_label}`
+          : `${r.fileName} (part ${i + 1}${part.pages ? `, p. ${part.pages}` : ""})`,
+        e: part as ExtractedDoc,
+      }));
+    });
+}
+
+/** Distinct YYYY-MM pay periods one stored reading covers, its parts included. */
+export function payslipMonthsOf(extracted: unknown): string[] {
+  if (!extracted) return [];
+  const e = extracted as ExtractedDoc;
+  const readings: ExtractedDoc[] = [e, ...((e.parts ?? []).filter(Boolean) as ExtractedDoc[])];
+  const months = new Set<string>();
+  for (const r of readings) {
+    const on = isoDay(r.period_iso) ?? isoDay(r.document_date_iso);
+    if (on) months.add(on.slice(0, 7));
+  }
+  return [...months].sort();
+}
+
 export async function compensationReading(
   orgId: string,
   applicationId: string,
@@ -701,38 +855,7 @@ export async function compensationReading(
     .limit(1);
   const offeredAnnual = offer ? money(Number(offer.offeredCtc)) : null;
 
-  type Parsed = (typeof rows)[number] & { e: ExtractedDoc };
-
-  /**
-   * A merged upload — three payslips and a revision letter in one PDF — was read
-   * as several documents. Each one is reconciled in its own right, otherwise the
-   * timeline would show one file and the months inside it would be lost. The top
-   * level repeats the newest part, so when parts exist only the parts are used.
-   */
-  const classify = (facts: ExtractedDoc, fallback: string): string => {
-    if (isoDay(facts.period_iso)) return "payslip";
-    if (isoDay(facts.effective_from_iso) && (facts.annual_ctc || facts.annual_fixed))
-      return "salary_revision";
-    if (isoDay(facts.employed_from_iso) || isoDay(facts.employed_to_iso))
-      return "experience_letter";
-    return fallback;
-  };
-
-  const parsed: Parsed[] = rows
-    .filter((r) => r.extracted)
-    .flatMap((r) => {
-      const e = r.extracted as unknown as ExtractedDoc;
-      const parts = (e.parts ?? []).filter(Boolean);
-      if (!parts.length) return [{ ...r, e }];
-      return parts.map((part, i) => ({
-        ...r,
-        docType: classify(part as ExtractedDoc, r.docType),
-        fileName: part.part_label
-          ? `${r.fileName} — ${part.part_label}`
-          : `${r.fileName} (part ${i + 1}${part.pages ? `, p. ${part.pages}` : ""})`,
-        e: part as ExtractedDoc,
-      }));
-    });
+  const parsed = expandExtractedParts(rows);
 
   const conflicts: string[] = [];
   const gaps: string[] = [];

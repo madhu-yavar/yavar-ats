@@ -356,6 +356,7 @@ function Candidates() {
     source: "direct",
   });
   const [willingToRelocate, setWillingToRelocate] = useState<"yes" | "no" | "unknown">("unknown");
+  const [gender, setGender] = useState<"male" | "female" | "other" | null>(null);
 
   /** Bulk CV intake: read each file locally, AI-parse it, then upsert the candidate. */
   async function bulkUpload(files: FileList | null) {
@@ -686,6 +687,7 @@ function Candidates() {
           expectedCtc: form.expected_ctc,
           workAuthorization: form.work_authorization,
           willingToRelocate,
+          gender,
           resumeText: resume,
           requisitionId: reqId || null,
         },
@@ -698,6 +700,7 @@ function Candidates() {
     setBusy(false);
     setOpen(false);
     setResume("");
+    setGender(null);
     toast.success("Candidate added to the talent pool");
     qc.invalidateQueries({ queryKey: ["candidates"] });
     qc.invalidateQueries({ queryKey: ["applications"] });
@@ -969,6 +972,25 @@ function Candidates() {
                             {s}
                           </SelectItem>
                         ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="mb-1.5 block text-xs text-muted-foreground">Gender</Label>
+                    <Select
+                      value={gender ?? "unset"}
+                      onValueChange={(v) =>
+                        setGender(v === "unset" ? null : (v as "male" | "female" | "other"))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unset">Not stated</SelectItem>
+                        <SelectItem value="female">Female</SelectItem>
+                        <SelectItem value="male">Male</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

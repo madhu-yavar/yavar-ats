@@ -1,13 +1,17 @@
 /**
  * Pre-onboarding document collection and validation for one offer.
  *
- * The left column is the checklist of documents — uploaded by TA or arrived on
- * the careers inbox. The right column shows the original document beside what
- * the extraction agent read out of it, so HR validates a figure against the
- * page it came from and never against the agent alone. Approving every required
- * document is what unlocks release of the offer letter.
+ * The checklist at the top is the contract: which document categories are
+ * satisfied and what is still owed (payslips need three distinct verified
+ * months). The validation stage puts everything the reviewer needs in one
+ * place — the original file, the agent's reading, the identity cross-check
+ * against the candidate, and what the document contributes to the salary
+ * evidence. The full salary reconciliation stays available below, collapsed.
+ * Approving every required document is what unlocks release of the offer.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { Check } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -17,11 +21,20 @@ import {
   getOnboardingDocFile,
   listOnboardingDocs,
   reextractOnboardingDoc,
+  refileOnboardingDoc,
   reviewOnboardingDoc,
   uploadOnboardingDoc,
+  type OnboardingCandidate,
   type OnboardingDocWire,
 } from "@/lib/onboarding.functions";
-import { DOC_TYPES } from "@/lib/onboarding.catalogue";
+import {
+  DOC_TYPES,
+  docKindMismatch,
+  docTypeLabel,
+  genderNorm,
+  nameCheck,
+} from "@/lib/onboarding.catalogue";
+import type { Readiness } from "@/lib/onboarding.server";
 import { inr } from "@/components/ats";
 
 import { Button } from "@/components/ui/button";
@@ -66,6 +79,7 @@ const STATUS_LABEL: Record<string, string> = {
 const FIELD_LABELS: Record<string, string> = {
   document_kind: "Document",
   holder_name: "Name on document",
+  gender: "Gender",
   id_number: "ID number",
   date_of_birth: "Date of birth",
   employer: "Employer",
@@ -331,6 +345,178 @@ function FileViewer({ docId }: { docId: string }) {
 }
 
 /**
+ * The checklist is the contract with the reviewer: one row per required
+ * category, with what is still owed. Rows open that category's first document —
+ * or preselect it for upload when nothing is filed yet.
+ */
+function CategoryChecklist({
+  readiness,
+  onPick,
+}: {
+  readiness: Readiness;
+  onPick: (key: string) => void;
+}) {
+  const required = readiness.categories.filter((c) => c.required);
+  const optional = readiness.categories.filter((c) => !c.required);
+  const row = (c: (typeof required)[number]) => (
+    <li key={c.key}>
+      <button
+        onClick={() => onPick(c.key)}
+        className="flex w-full items-center gap-2.5 rounded-md px-1.5 py-1 text-left text-sm transition hover:bg-muted/50"
+      >
+        {c.satisfied ? (
+          <Check className="size-4 shrink-0 text-emerald-600" />
+        ) : (
+          <span className="size-4 shrink-0 rounded-full border-2 border-amber-400" />
+        )}
+        <span className="min-w-0 flex-1">
+          <span className={c.satisfied ? "text-muted-foreground" : "font-medium"}>{c.label}</span>
+          <span className="ml-2 text-xs text-muted-foreground">{c.detail}</span>
+        </span>
+        <span
+          className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${
+            c.satisfied ? STATUS_TONE["verified"] : STATUS_TONE["pending"]
+          }`}
+        >
+          {c.satisfied ? "Done" : "Needed"}
+        </span>
+      </button>
+    </li>
+  );
+  return (
+    <section className="space-y-2 rounded-lg border border-border p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-sm font-medium">Document checklist</span>
+        <span className="num text-xs text-muted-foreground">
+          {readiness.verified} validated · {readiness.pending} awaiting · {readiness.rejected}{" "}
+          rejected
+        </span>
+      </div>
+      <ul className="space-y-0.5">{required.map(row)}</ul>
+      {optional.length ? (
+        <details className="text-sm">
+          <summary className="cursor-pointer text-xs text-muted-foreground">
+            Optional documents ({optional.length})
+          </summary>
+          <ul className="mt-1.5 space-y-0.5">{optional.map(row)}</ul>
+        </details>
+      ) : null}
+      {readiness.ready ? (
+        <p className="rounded-lg border border-emerald-300 bg-emerald-50 p-2 text-xs text-emerald-800">
+          All mandatory documents validated — this offer can be released.
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * Identity cross-check: what the document says about the person against the
+ * candidate record. A mismatch does not block validation by itself, but the
+ * server refuses a verified decision without a written justification.
+ */
+function IdentityBanner({
+  doc,
+  candidate,
+}: {
+  doc: OnboardingDocWire;
+  candidate: OnboardingCandidate | null;
+}) {
+  const e = (doc.extracted ?? null) as Record<string, unknown> | null;
+  const docName = typeof e?.["holder_name"] === "string" ? e["holder_name"] : null;
+  const docGenderRaw = typeof e?.["gender"] === "string" ? e["gender"] : null;
+  const name = nameCheck(candidate?.fullName ?? null, docName);
+  const gDoc = genderNorm(docGenderRaw);
+  const gCand = genderNorm(candidate?.gender ?? null);
+
+  return (
+    <section className="space-y-1 rounded-lg border border-border p-3 text-sm">
+      <div className="text-xs text-muted-foreground">Identity cross-check</div>
+      {name === "unknown" ? (
+        <p className="text-muted-foreground">
+          No name was read from this document — check it by eye against{" "}
+          {candidate?.fullName ?? "the candidate"}.
+        </p>
+      ) : name === "match" ? (
+        <p className="flex items-center gap-1.5 text-emerald-700">
+          <Check className="size-3.5 shrink-0" />
+          Name on document matches the candidate{docName ? ` — ${docName}` : ""}.
+        </p>
+      ) : (
+        <p className="text-red-700">
+          Name on document “{docName}” does not match the candidate ({candidate?.fullName}). A
+          justification note is required to validate.
+        </p>
+      )}
+      {gDoc && gCand ? (
+        gDoc === gCand ? (
+          <p className="flex items-center gap-1.5 text-emerald-700">
+            <Check className="size-3.5 shrink-0" />
+            Gender on document ({gDoc}) matches the profile.
+          </p>
+        ) : (
+          <p className="text-red-700">
+            Gender on document ({gDoc}) differs from the candidate profile ({gCand}). A
+            justification note is required to validate.
+          </p>
+        )
+      ) : !gDoc && !gCand ? null : !gCand && candidate ? (
+        <p className="text-amber-700">
+          The candidate profile has no gender on record —{" "}
+          <Link
+            to="/candidates/$id"
+            params={{ id: candidate.id }}
+            className="underline hover:no-underline"
+          >
+            set it on the candidate page
+          </Link>{" "}
+          so ID documents can be cross-checked.
+        </p>
+      ) : (
+        <p className="text-muted-foreground">Gender is not stated on this document.</p>
+      )}
+    </section>
+  );
+}
+
+/**
+ * What this one document adds to the salary evidence — the reading, the
+ * annualised figure and any one-off pay — right where the decision happens.
+ * A merged file yields one entry per document inside it.
+ */
+function EvidenceCard({ applicationId, docId }: { applicationId: string; docId: string }) {
+  const q = useQuery({
+    queryKey: ["onboarding_pay", applicationId],
+    queryFn: () => getCompensationReading({ data: { applicationId } }),
+  });
+  const entries = (q.data?.timeline ?? []).filter((t) => t.docId === docId);
+  if (!q.data) return null;
+  return (
+    <section className="space-y-1.5 rounded-lg border border-border p-3">
+      <div className="text-xs text-muted-foreground">Pay evidence from this document</div>
+      {entries.length ? (
+        <ul className="space-y-1.5">
+          {entries.map((t, i) => (
+            <li key={`${t.docId}-${i}`} className="text-sm">
+              {t.reads}
+              {t.annualised ? (
+                <span className="num ml-2 text-xs text-muted-foreground">
+                  annualised {inr(t.annualised)}
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          No pay evidence has been read from this document.
+        </p>
+      )}
+    </section>
+  );
+}
+
+/**
  * The reconciled pay reading: one dated conclusion, the basis it rests on, the
  * document timeline behind it and every disagreement left open. The reviewer
  * approves a conclusion, never a bare number.
@@ -459,6 +645,7 @@ export function PreOnboardingDialog({
 
   const docs = list.data?.docs ?? [];
   const readiness = list.data?.readiness;
+  const candidate = list.data?.candidate ?? null;
   const selected = docs.find((d) => d.id === selectedId) ?? docs[0] ?? null;
 
   useEffect(() => {
@@ -468,6 +655,7 @@ export function PreOnboardingDialog({
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["onboarding_docs", applicationId] });
     qc.invalidateQueries({ queryKey: ["onboarding_pay", applicationId] });
+    qc.invalidateQueries({ queryKey: ["onboarding_readiness"] });
   };
 
   const upload = useMutation({
@@ -482,7 +670,6 @@ export function PreOnboardingDialog({
           : `Document filed. ${res.note ?? "It could not be read automatically."}`,
       );
       refresh();
-      qc.invalidateQueries({ queryKey: ["onboarding_readiness"] });
     },
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "The document could not be filed."),
@@ -494,7 +681,6 @@ export function PreOnboardingDialog({
     onSuccess: () => {
       toast.success("Decision recorded.");
       refresh();
-      qc.invalidateQueries({ queryKey: ["onboarding_readiness"] });
     },
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "The decision could not be saved."),
@@ -511,16 +697,39 @@ export function PreOnboardingDialog({
     onError: (e) => toast.error(e instanceof Error ? e.message : "It could not be read again."),
   });
 
+  const refile = useMutation({
+    mutationFn: (input: { id: string; docType: string }) => refileOnboardingDoc({ data: input }),
+    onSuccess: (res) => {
+      toast.success(
+        res.status === "extracted"
+          ? "Re-filed and read under the right category — validate the fresh reading."
+          : (res.note ?? "Re-filed, but it could not be read."),
+      );
+      refresh();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "It could not be re-filed."),
+  });
+
   const remove = useMutation({
     mutationFn: () => deleteOnboardingDoc({ data: { id: selected!.id } }),
     onSuccess: () => {
       toast.success("Document removed.");
       setSelectedId(null);
       refresh();
-      qc.invalidateQueries({ queryKey: ["onboarding_readiness"] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "It could not be removed."),
   });
+
+  const groups = DOC_TYPES.map((def) => ({
+    def,
+    items: docs.filter((d) => d.doc_type === def.key),
+  })).filter((g) => g.items.length);
+
+  const pickCategory = (key: string) => {
+    const first = docs.find((d) => d.doc_type === key);
+    if (first) setSelectedId(first.id);
+    else setDocType(key);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -534,27 +743,7 @@ export function PreOnboardingDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {readiness ? (
-          <div
-            className={`rounded-lg border p-3 text-sm ${
-              readiness.ready
-                ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                : "border-amber-300 bg-amber-50 text-amber-800"
-            }`}
-          >
-            {readiness.ready
-              ? "All mandatory documents validated — this offer can be released."
-              : `Still needed: ${readiness.missing
-                  .map((m) => DOC_TYPES.find((d) => d.key === m)?.label ?? m)
-                  .join(", ")}.`}{" "}
-            <span className="num">
-              {readiness.verified} validated · {readiness.pending} awaiting · {readiness.rejected}{" "}
-              rejected
-            </span>
-          </div>
-        ) : null}
-
-        <PayReading applicationId={applicationId} />
+        {readiness ? <CategoryChecklist readiness={readiness} onPick={pickCategory} /> : null}
 
         <div className="grid gap-5 lg:grid-cols-[19rem_1fr]">
           <div className="space-y-4">
@@ -596,34 +785,47 @@ export function PreOnboardingDialog({
               </Button>
               <p className="text-xs text-muted-foreground">
                 Documents the candidate mails to your careers address are filed here automatically.
+                Payslips: three distinct months are needed — one merged PDF or separate files.
               </p>
             </div>
 
-            <ul className="space-y-2">
-              {docs.map((d) => (
-                <li key={d.id}>
-                  <button
-                    onClick={() => setSelectedId(d.id)}
-                    className={`w-full rounded-lg border p-3 text-left text-sm transition ${
-                      selected?.id === d.id
-                        ? "border-foreground"
-                        : "border-border hover:bg-muted/50"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium">{d.doc_type_label}</span>
-                      <span
-                        className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_TONE[d.status] ?? ""}`}
-                      >
-                        {STATUS_LABEL[d.status] ?? d.status}
-                      </span>
-                    </div>
-                    <div className="mt-1 truncate text-xs text-muted-foreground">{d.file_name}</div>
-                    <div className="text-[11px] text-muted-foreground">
-                      {d.source === "careers_inbox" ? "Received by mail" : "Uploaded"} ·{" "}
-                      {new Date(d.created_at).toLocaleDateString()}
-                    </div>
-                  </button>
+            <ul className="space-y-3">
+              {groups.map(({ def, items }) => (
+                <li key={def.key}>
+                  <div className="mb-1 flex items-center justify-between px-0.5">
+                    <span className="text-xs font-medium text-muted-foreground">{def.label}</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {items.filter((d) => d.status === "verified").length}
+                      {def.key === "payslip" ? " mo validated" : " validated"}
+                    </span>
+                  </div>
+                  <ul className="space-y-2">
+                    {items.map((d) => (
+                      <li key={d.id}>
+                        <button
+                          onClick={() => setSelectedId(d.id)}
+                          className={`w-full rounded-lg border p-3 text-left text-sm transition ${
+                            selected?.id === d.id
+                              ? "border-foreground"
+                              : "border-border hover:bg-muted/50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate font-medium">{d.file_name}</span>
+                            <span
+                              className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${STATUS_TONE[d.status] ?? ""}`}
+                            >
+                              {STATUS_LABEL[d.status] ?? d.status}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {d.source === "careers_inbox" ? "Received by mail" : "Uploaded"} ·{" "}
+                            {new Date(d.created_at).toLocaleDateString()}
+                          </div>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 </li>
               ))}
               {docs.length === 0 ? (
@@ -636,65 +838,92 @@ export function PreOnboardingDialog({
           </div>
 
           {selected ? (
-            <div className="grid gap-4 xl:grid-cols-2">
-              <div className="overflow-hidden rounded-lg border border-border">
-                <div className="border-b border-border p-2.5 text-xs text-muted-foreground">
-                  Original document · {selected.file_name}
-                </div>
-                <FileViewer docId={selected.id} />
-              </div>
-
-              <div className="space-y-4">
-                <Extraction doc={selected} />
-
-                <div className="space-y-2 rounded-lg border border-border p-3">
-                  <Label className="text-xs text-muted-foreground">
-                    Validation note (mandatory when rejecting)
-                  </Label>
-                  <Textarea
-                    rows={3}
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    placeholder="Name matches the ID, CTC matches the payslip…"
-                  />
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      disabled={review.isPending}
-                      onClick={() => review.mutate("verified")}
-                    >
-                      Validate
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      disabled={review.isPending}
-                      onClick={() => review.mutate("rejected")}
-                    >
-                      Reject
-                    </Button>
+            <div className="space-y-4">
+              <IdentityBanner doc={selected} candidate={candidate} />
+              {(() => {
+                const e = (selected.extracted ?? null) as Record<string, unknown> | null;
+                const kind = typeof e?.["document_kind"] === "string" ? e["document_kind"] : null;
+                const target = docKindMismatch(selected.doc_type, kind);
+                return target ? (
+                  <div className="flex flex-wrap items-center gap-3 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+                    <span className="min-w-0 flex-1">
+                      The agent read this file as a {docTypeLabel(target)}, but it is filed as{" "}
+                      {selected.doc_type_label}. Re-filing reads the whole file again under the
+                      right category.
+                    </span>
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={reextract.isPending}
-                      onClick={() => reextract.mutate()}
+                      disabled={refile.isPending}
+                      onClick={() => refile.mutate({ id: selected.id, docType: target })}
                     >
-                      {reextract.isPending ? "Reading…" : "Read again"}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={remove.isPending}
-                      onClick={() => remove.mutate()}
-                    >
-                      Remove
+                      {refile.isPending ? "Re-filing…" : `Re-file as ${docTypeLabel(target)}`}
                     </Button>
                   </div>
-                  {selected.reviewed_at ? (
-                    <p className="text-xs text-muted-foreground">
-                      Last decision {new Date(selected.reviewed_at).toLocaleString()}.
-                    </p>
-                  ) : null}
+                ) : null;
+              })()}
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                <div className="overflow-hidden rounded-lg border border-border">
+                  <div className="border-b border-border p-2.5 text-xs text-muted-foreground">
+                    Original document · {selected.file_name}
+                  </div>
+                  <FileViewer docId={selected.id} />
+                </div>
+
+                <div className="space-y-4">
+                  <Extraction doc={selected} />
+                  <EvidenceCard applicationId={applicationId} docId={selected.id} />
+
+                  <div className="space-y-2 rounded-lg border border-border p-3">
+                    <Label className="text-xs text-muted-foreground">
+                      Validation note (mandatory when rejecting, or when a check above conflicts)
+                    </Label>
+                    <Textarea
+                      rows={3}
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                      placeholder="Name matches the ID, CTC matches the payslip…"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        disabled={review.isPending}
+                        onClick={() => review.mutate("verified")}
+                      >
+                        Validate
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        disabled={review.isPending}
+                        onClick={() => review.mutate("rejected")}
+                      >
+                        Reject
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={reextract.isPending}
+                        onClick={() => reextract.mutate()}
+                      >
+                        {reextract.isPending ? "Reading…" : "Read again"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={remove.isPending}
+                        onClick={() => remove.mutate()}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                    {selected.reviewed_at ? (
+                      <p className="text-xs text-muted-foreground">
+                        Last decision {new Date(selected.reviewed_at).toLocaleString()}.
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             </div>
@@ -704,6 +933,15 @@ export function PreOnboardingDialog({
             </div>
           )}
         </div>
+
+        <details className="text-sm">
+          <summary className="cursor-pointer font-medium text-muted-foreground">
+            Salary insight &amp; evidence
+          </summary>
+          <div className="mt-3">
+            <PayReading applicationId={applicationId} />
+          </div>
+        </details>
       </DialogContent>
     </Dialog>
   );

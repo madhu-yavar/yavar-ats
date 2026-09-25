@@ -12,6 +12,9 @@
  */
 import { mergeCandidatesFn } from "./dedupe.functions";
 import type { Candidate } from "@/lib/data";
+import { normName } from "./name";
+
+export { normName };
 
 export const normEmail = (v: string | null | undefined) => {
   const raw = (v ?? "").trim().toLowerCase();
@@ -28,16 +31,6 @@ export const normPhone = (v: string | null | undefined) => {
   const digits = (v ?? "").replace(/\D/g, "");
   return digits.length >= 10 ? digits.slice(-10) : "";
 };
-
-export const normName = (v: string | null | undefined) =>
-  (v ?? "")
-    .toLowerCase()
-    .replace(/\b(mr|mrs|ms|dr|prof)\.?\b/g, "")
-    .replace(/[^a-z\s]/g, " ")
-    .split(/\s+/)
-    .filter(Boolean)
-    .sort()
-    .join(" ");
 
 const normUrl = (v: string | null | undefined) =>
   (v ?? "")

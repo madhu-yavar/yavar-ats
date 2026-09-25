@@ -98,12 +98,25 @@ function base64ToBytes(data: string): Uint8Array {
   return out;
 }
 
+export type OnboardingCandidate = {
+  id: string;
+  fullName: string;
+  gender: string | null;
+};
+
 /** Every document filed against one application, newest first, with readiness. */
 export const listOnboardingDocs = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((data: unknown) => z.object({ applicationId: z.string().uuid() }).parse(data))
   .handler(
-    async ({ data, context }): Promise<{ docs: OnboardingDocWire[]; readiness: Readiness }> => {
+    async ({
+      data,
+      context,
+    }): Promise<{
+      docs: OnboardingDocWire[];
+      readiness: Readiness;
+      candidate: OnboardingCandidate | null;
+    }> => {
       const rows = await db
         .select()
         .from(onboardingDocuments)
@@ -114,9 +127,24 @@ export const listOnboardingDocs = createServerFn({ method: "POST" })
           ),
         )
         .orderBy(desc(onboardingDocuments.createdAt));
+      const [app] = await db
+        .select({ candidateId: applications.candidateId })
+        .from(applications)
+        .where(and(eq(applications.id, data.applicationId), eq(applications.orgId, context.orgId)))
+        .limit(1);
+      const [cand] = app
+        ? await db
+            .select({ id: candidates.id, fullName: candidates.fullName, gender: candidates.gender })
+            .from(candidates)
+            .where(eq(candidates.id, app.candidateId))
+            .limit(1)
+        : [];
       return {
         docs: rows.map(toWire),
         readiness: await readinessFor(context.orgId, data.applicationId),
+        candidate: cand
+          ? { id: cand.id, fullName: cand.fullName, gender: cand.gender ?? null }
+          : null,
       };
     },
   );
@@ -136,6 +164,7 @@ export const listOnboardingReadiness = createServerFn({ method: "GET" })
         applicationId: onboardingDocuments.applicationId,
         docType: onboardingDocuments.docType,
         status: onboardingDocuments.status,
+        extracted: onboardingDocuments.extracted,
       })
       .from(onboardingDocuments)
       .where(
@@ -144,23 +173,13 @@ export const listOnboardingReadiness = createServerFn({ method: "GET" })
           inArray(onboardingDocuments.applicationId, ids),
         ),
       );
-    const { REQUIRED_DOC_TYPES } = await import("./onboarding.server");
-    return ids.map((applicationId) => {
-      const mine = rows.filter((r) => r.applicationId === applicationId);
-      const verifiedTypes = new Set(
-        mine.filter((r) => r.status === "verified").map((r) => r.docType),
-      );
-      const missing = REQUIRED_DOC_TYPES.filter((t) => !verifiedTypes.has(t));
-      return {
+    const { readinessFromRows } = await import("./onboarding.server");
+    return ids.map((applicationId) =>
+      readinessFromRows(
         applicationId,
-        total: mine.length,
-        verified: mine.filter((r) => r.status === "verified").length,
-        pending: mine.filter((r) => r.status === "pending").length,
-        rejected: mine.filter((r) => r.status === "rejected").length,
-        missing,
-        ready: missing.length === 0,
-      };
-    });
+        rows.filter((r) => r.applicationId === applicationId),
+      ),
+    );
   });
 
 /** Upload one document and read it with the organisation's own AI key. */
@@ -240,6 +259,39 @@ export const uploadOnboardingDoc = createServerFn({ method: "POST" })
     return { ...first, filed: results.length };
   });
 
+/** Re-run the extraction agent on a stored row under a (possibly new) doc type. */
+async function reExtractRow(
+  row: { id: string; docType: string; fileName: string; filePath: string | null },
+  orgId: string,
+  docType: string,
+) {
+  const file = await readOnboardingFile(orgId, row.filePath);
+  if (!file) throw new Error("The stored file could not be opened.");
+  const read = await extractDocument({
+    orgId,
+    docType,
+    fileName: row.fileName,
+    bytes: file.bytes,
+  });
+  await db
+    .update(onboardingDocuments)
+    .set({
+      docType,
+      extracted: (read.extracted ?? null) as never,
+      extractedText: read.text ? read.text.slice(0, 20_000) : null,
+      extractionStatus: read.status,
+      extractionNote: read.note,
+      model: read.model,
+      // A fresh reading must be validated again.
+      status: "pending",
+      reviewNote: null,
+      reviewedBy: null,
+      reviewedAt: null,
+    })
+    .where(and(eq(onboardingDocuments.id, row.id), eq(onboardingDocuments.orgId, orgId)));
+  return { status: read.status, note: read.note };
+}
+
 /** Re-run the extraction agent on a stored document (after a clearer copy, or a key change). */
 export const reextractOnboardingDoc = createServerFn({ method: "POST" })
   .middleware([requireOrg])
@@ -251,31 +303,47 @@ export const reextractOnboardingDoc = createServerFn({ method: "POST" })
       .where(and(eq(onboardingDocuments.id, data.id), eq(onboardingDocuments.orgId, context.orgId)))
       .limit(1);
     if (!row) throw new Error("That document is no longer here.");
-    const file = await readOnboardingFile(context.orgId, row.filePath);
-    if (!file) throw new Error("The stored file could not be opened.");
+    return reExtractRow(row, context.orgId, row.docType);
+  });
 
-    const read = await extractDocument({
+/**
+ * File a document under the category it actually belongs to — when the agent's
+ * reading clearly contradicts the category it was uploaded under. The file is
+ * re-read under the new type (its extraction prompt differs per category) and
+ * the fresh reading waits for validation again.
+ */
+export const refileOnboardingDoc = createServerFn({ method: "POST" })
+  .middleware([requireOrg])
+  .inputValidator((data: unknown) =>
+    z.object({ id: z.string().uuid(), docType: z.enum(DOC_TYPE_KEYS) }).parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    await assertRole(
+      context.userId,
+      context.orgId,
+      ["recruiter", "hr_head"],
+      "Only TA or HR can re-file pre-onboarding documents.",
+    );
+    const [row] = await db
+      .select()
+      .from(onboardingDocuments)
+      .where(and(eq(onboardingDocuments.id, data.id), eq(onboardingDocuments.orgId, context.orgId)))
+      .limit(1);
+    if (!row) throw new Error("That document is no longer here.");
+    if (data.docType === row.docType) {
+      return { status: row.extractionStatus, note: row.extractionNote };
+    }
+    const out = await reExtractRow(row, context.orgId, data.docType);
+    await writeAudit({
+      actor: context.memberEmail,
+      actorUserId: context.userId,
       orgId: context.orgId,
-      docType: row.docType,
-      fileName: row.fileName,
-      bytes: file.bytes,
+      action: "onboarding_document_refiled",
+      entityType: "onboarding_document",
+      entityId: row.id,
+      detail: { from: row.docType, to: data.docType },
     });
-    await db
-      .update(onboardingDocuments)
-      .set({
-        extracted: (read.extracted ?? null) as never,
-        extractedText: read.text ? read.text.slice(0, 20_000) : null,
-        extractionStatus: read.status,
-        extractionNote: read.note,
-        model: read.model,
-        // A fresh reading must be validated again.
-        status: "pending",
-        reviewNote: null,
-        reviewedBy: null,
-        reviewedAt: null,
-      })
-      .where(and(eq(onboardingDocuments.id, row.id), eq(onboardingDocuments.orgId, context.orgId)));
-    return { status: read.status, note: read.note };
+    return out;
   });
 
 /**
@@ -301,7 +369,12 @@ export const reviewOnboardingDoc = createServerFn({ method: "POST" })
       "Only TA or HR can validate pre-onboarding documents.",
     );
     const [row] = await db
-      .select({ id: onboardingDocuments.id, docType: onboardingDocuments.docType })
+      .select({
+        id: onboardingDocuments.id,
+        docType: onboardingDocuments.docType,
+        candidateId: onboardingDocuments.candidateId,
+        extracted: onboardingDocuments.extracted,
+      })
       .from(onboardingDocuments)
       .where(and(eq(onboardingDocuments.id, data.id), eq(onboardingDocuments.orgId, context.orgId)))
       .limit(1);
@@ -310,6 +383,56 @@ export const reviewOnboardingDoc = createServerFn({ method: "POST" })
       throw new Error(
         "Say why the document is rejected — the candidate has to be told what to resend.",
       );
+    }
+
+    // Identity cross-check, enforced where the decision is recorded: a verified
+    // decision that contradicts the candidate record needs a written
+    // justification. The candidate is looked up server-side — never trusted
+    // from the client.
+    let nameCheckResult: string | null = null;
+    let genderConflict = false;
+    let kindConflict = false;
+    if (data.decision === "verified") {
+      const { docKindMismatch, nameCheck, genderNorm } = await import("./onboarding.catalogue");
+      const e = (row.extracted ?? null) as {
+        document_kind?: unknown;
+        holder_name?: unknown;
+        gender?: unknown;
+      } | null;
+      const docName = typeof e?.holder_name === "string" ? e.holder_name : null;
+      const docGender = typeof e?.gender === "string" ? e.gender : null;
+      const docKind = typeof e?.document_kind === "string" ? e.document_kind : null;
+      const [cand] = await db
+        .select({ fullName: candidates.fullName, gender: candidates.gender })
+        .from(candidates)
+        .where(eq(candidates.id, row.candidateId))
+        .limit(1);
+      if (cand) {
+        nameCheckResult = nameCheck(cand.fullName, docName);
+        const gDoc = genderNorm(docGender);
+        const gCand = genderNorm(cand.gender);
+        genderConflict = Boolean(gDoc && gCand && gDoc !== gCand);
+      }
+      kindConflict = docKindMismatch(row.docType, docKind) !== null;
+
+      const conflicts: string[] = [];
+      if (nameCheckResult === "mismatch") {
+        conflicts.push(
+          `the name on the document (${docName}) does not match the candidate (${cand?.fullName})`,
+        );
+      }
+      if (genderConflict) conflicts.push("the gender on the document differs from the profile");
+      if (kindConflict) {
+        const target = docKindMismatch(row.docType, docKind);
+        conflicts.push(
+          `the document reads as a ${docTypeLabel(target ?? "")} but is filed as ${docTypeLabel(row.docType)}`,
+        );
+      }
+      if (conflicts.length && !(data.note ?? "").trim()) {
+        throw new Error(
+          `This document conflicts with the candidate record — ${conflicts.join("; ")}. Add a justification note to validate it anyway.`,
+        );
+      }
     }
 
     await db
@@ -329,7 +452,13 @@ export const reviewOnboardingDoc = createServerFn({ method: "POST" })
       action: `onboarding_document_${data.decision}`,
       entityType: "onboarding_document",
       entityId: row.id,
-      detail: { docType: row.docType, note: data.note?.trim() || null },
+      detail: {
+        docType: row.docType,
+        note: data.note?.trim() || null,
+        ...(data.decision === "verified"
+          ? { checks: { name: nameCheckResult, genderConflict, kindConflict } }
+          : {}),
+      },
     });
     return { ok: true as const };
   });

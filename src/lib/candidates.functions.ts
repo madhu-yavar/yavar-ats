@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { db } from "../server/db";
 import { candidates, captureEvents, applications, requisitions } from "@db/schema";
-import { requireOrg } from "./auth.middleware";
+import { assertRole, requireOrg } from "./auth.middleware";
 import { deleteObject } from "../server/storage";
 
 /**
@@ -110,6 +110,7 @@ const CreateCandidateInput = z.object({
   expectedCtc: z.string(),
   workAuthorization: z.string(),
   willingToRelocate: z.enum(["yes", "no", "unknown"]),
+  gender: z.enum(["male", "female", "other"]).nullish(),
   resumeText: z.string(),
   requisitionId: z.string().uuid().nullish(),
 });
@@ -149,6 +150,7 @@ export const createCandidate = createServerFn({ method: "POST" })
         workAuthorization: data.workAuthorization || null,
         willingToRelocate:
           data.willingToRelocate === "unknown" ? null : data.willingToRelocate === "yes",
+        gender: data.gender ?? null,
         resumeText: data.resumeText || null,
       })
       .returning({ id: candidates.id });
@@ -170,4 +172,45 @@ export const createCandidate = createServerFn({ method: "POST" })
       }
     }
     return { id: row.id };
+  });
+
+/**
+ * Set the candidate's gender — one of the inputs the pre-onboarding identity
+ * cross-check validates a government ID against. Optional on purpose: an unset
+ * value surfaces as a prompt in the validation dialog, never as a hard block.
+ */
+export const updateCandidateGender = createServerFn({ method: "POST" })
+  .middleware([requireOrg])
+  .inputValidator((data: unknown) =>
+    z
+      .object({
+        candidateId: z.string().uuid(),
+        gender: z.enum(["male", "female", "other"]).nullable(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    await assertRole(
+      context.userId,
+      context.orgId,
+      ["recruiter", "hr_head"],
+      "Only TA or HR can edit candidate details.",
+    );
+    const updated = await db
+      .update(candidates)
+      .set({ gender: data.gender })
+      .where(and(eq(candidates.id, data.candidateId), eq(candidates.orgId, context.orgId)))
+      .returning({ id: candidates.id });
+    if (!updated.length) throw new Error("Candidate not found");
+    const { writeAudit } = await import("../server/audit");
+    await writeAudit({
+      actor: context.memberEmail,
+      actorUserId: context.userId,
+      orgId: context.orgId,
+      action: "candidate_gender_updated",
+      entityType: "candidate",
+      entityId: data.candidateId,
+      detail: { gender: data.gender },
+    });
+    return { ok: true as const };
   });

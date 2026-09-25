@@ -134,13 +134,12 @@ export const advanceOffer = createServerFn({ method: "POST" })
         .where(and(eq(offers.id, data.id), eq(offers.orgId, context.orgId)))
         .limit(1);
       if (target) {
-        const { readinessFor, docTypeLabel } = await import("./onboarding.server");
+        const { readinessFor } = await import("./onboarding.server");
         const readiness = await readinessFor(context.orgId, target.applicationId);
         if (!readiness.ready) {
+          const lacking = readiness.categories.filter((c) => c.required && !c.satisfied);
           throw new Error(
-            `Pre-onboarding is incomplete — validate these documents first: ${readiness.missing
-              .map((m) => docTypeLabel(m))
-              .join(", ")}.`,
+            `Pre-onboarding is incomplete — ${lacking.map((c) => `${c.label} (${c.detail})`).join("; ")}.`,
           );
         }
       }
