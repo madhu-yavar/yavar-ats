@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowUp, BookOpen, ChevronRight, Compass, RotateCcw, Sparkle, X } from "lucide-react";
+import { ArrowUp, BookOpen, BrainCircuit, ChevronRight, Compass, RotateCcw, X } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 
@@ -99,7 +99,7 @@ export function Copilot() {
         className="group fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-full bg-foreground/90 px-4 py-3 text-sm font-medium text-background shadow-[0_10px_30px_-12px_color-mix(in_oklab,var(--foreground)_60%,transparent)] backdrop-blur-xl transition-all hover:bg-foreground hover:shadow-[0_16px_40px_-14px_color-mix(in_oklab,var(--primary)_55%,transparent)]"
       >
         <span className="relative flex size-5 items-center justify-center rounded-full bg-primary/90">
-          <Sparkle className="size-3 text-primary-foreground" />
+          <BrainCircuit className="size-3 text-primary-foreground" />
         </span>
         Copilot
       </Button>
@@ -117,7 +117,7 @@ export function Copilot() {
       <header className="relative flex items-center justify-between border-b border-border/50 px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="flex size-6 items-center justify-center rounded-full bg-primary/90 shadow-[inset_0_1px_0_color-mix(in_oklab,white_45%,transparent)]">
-            <Sparkle className="size-3.5 text-primary-foreground" />
+            <BrainCircuit className="size-3.5 text-primary-foreground" />
           </span>
           <span className="text-sm font-semibold tracking-tight">HR copilot</span>
         </div>

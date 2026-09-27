@@ -44,3 +44,4 @@
 ## Product guidance
 
 - Keep the first-login journey and manual in `src/lib/user-manual.ts` as one source so the copilot walkthrough and help page cannot drift.
+- Keep the guided overlay within the existing database-backed HR copilot rather than replacing its transcript and composer with AI Elements; its current request/response transport is not AI SDK streaming, and a transport rewrite is outside onboarding guidance scope.
