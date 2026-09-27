@@ -205,7 +205,7 @@ function Offers() {
                       {ready
                         ? ready.ready
                           ? " ✓"
-                          : ` ${ready.satisfiedRequired}/${ready.requiredTotal}`
+                          : ` ${ready.verified}/${ready.verified + ready.missing.length}`
                         : ""}
                     </Button>
                     {!LETTER_HIDDEN.includes(o.status) || o.letter ? (
