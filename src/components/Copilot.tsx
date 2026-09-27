@@ -14,6 +14,7 @@ import {
 import { FIRST_RUN_JOURNEY } from "@/lib/user-manual";
 import { useMe } from "@/hooks/useMe";
 import { useNavCtx } from "@/hooks/useNavCtx";
+import { useOrg } from "@/hooks/useOrg";
 import { Button } from "@/components/ui/button";
 
 const PROMPTS = [
@@ -36,18 +37,19 @@ export function Copilot() {
   const [draft, setDraft] = useState("");
   const { userId } = useMe();
   const nav = useNavCtx();
+  const { isLoading: orgLoading } = useOrg();
   const boxRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (!userId || !nav.inOrg) return;
+    if (!userId || orgLoading || (!nav.inOrg && !nav.isSuperUser)) return;
     const key = `atsiq.first-journey.v1.${userId}`;
     if (localStorage.getItem(key)) return;
     localStorage.setItem(key, "seen");
     setOpen(true);
     setGuideOpen(true);
     setShowWelcome(true);
-  }, [userId, nav.inOrg]);
+  }, [userId, orgLoading, nav.inOrg, nav.isSuperUser]);
 
   const history = useQuery({
     queryKey: ["copilot"],
