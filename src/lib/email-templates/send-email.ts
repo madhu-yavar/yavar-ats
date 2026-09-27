@@ -19,11 +19,26 @@ const FROM_DOMAIN = "atsiq.yavar.ai";
 export type SendTemplateEmailResult =
   { sent: true } | { sent: false; reason: "recipient_suppressed" };
 
+export interface EmailAttachment {
+  filename: string;
+  contentBase64: string;
+  contentType: string;
+}
+
+/** Thrown when attachments are requested but the active transport cannot carry them. */
+export class EmailAttachmentsUnsupportedError extends Error {
+  constructor() {
+    super("Attachments are only supported over SMTP — configure SMTP_URL to send them");
+    this.name = "EmailAttachmentsUnsupportedError";
+  }
+}
+
 export interface SendTemplateEmailOptions {
   templateData?: TemplateData;
   /** Dedupes retries of the same logical send; defaults to a random UUID (no dedupe). */
   idempotencyKey?: string;
   replyTo?: string;
+  attachments?: EmailAttachment[];
 }
 
 /**
@@ -72,9 +87,22 @@ export async function sendTemplateEmail(
       html,
       text,
       ...(options.replyTo ? { replyTo: options.replyTo } : {}),
+      ...(options.attachments?.length
+        ? {
+            attachments: options.attachments.map((a) => ({
+              filename: a.filename,
+              content: Buffer.from(a.contentBase64, "base64"),
+              contentType: a.contentType,
+            })),
+          }
+        : {}),
       headers: { "X-ATSIQ-Idempotency-Key": options.idempotencyKey || crypto.randomUUID() },
     });
     return { sent: true };
+  }
+
+  if (options.attachments?.length) {
+    throw new EmailAttachmentsUnsupportedError();
   }
 
   const apiKey = process.env["LOVABLE_API_KEY"];

@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { db } from "../server/db";
-import { applications, stageEvents } from "@db/schema";
+import { applications } from "@db/schema";
 import { assertRole, requireOrg } from "./auth.middleware";
 import { canMove, REASON_REQUIRED, STAGE_LABEL, type Stage } from "./lifecycle";
 
@@ -76,9 +76,10 @@ export const moveStage = createServerFn({ method: "POST" })
       .where(eq(applications.id, app.id));
 
     const actor = (context.claims as Record<string, unknown> | undefined)?.["email"];
-    await db.insert(stageEvents).values({
-      applicationId: app.id,
+    const { recordStageTransition } = await import("./stage-events.server");
+    await recordStageTransition({
       orgId: context.orgId,
+      applicationId: app.id,
       fromStage: from,
       toStage: data.toStage,
       actor: typeof actor === "string" ? actor : context.userId,
@@ -153,10 +154,11 @@ export const moveStages = createServerFn({ method: "POST" })
             moved.map((m) => m.id),
           ),
         );
-      await db.insert(stageEvents).values(
+      const { recordStageTransitions } = await import("./stage-events.server");
+      await recordStageTransitions(
         moved.map((m) => ({
-          applicationId: m.id,
           orgId: context.orgId,
+          applicationId: m.id,
           fromStage: m.from,
           toStage: data.toStage,
           actor,

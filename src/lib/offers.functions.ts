@@ -189,6 +189,56 @@ export const advanceOffer = createServerFn({ method: "POST" })
         }
       }
     }
+
+    /* The released offer goes to the candidate with the letter attached.
+     * Best-effort: release must not fail because the email could not be queued. */
+    if (data.status === "released") {
+      try {
+        const [offerRow] = await db
+          .select({
+            applicationId: offers.applicationId,
+            letter: offers.letter,
+            candidateEmail: candidates.email,
+            candidateName: candidates.fullName,
+            jobTitle: requisitions.title,
+            orgName: organizations.name,
+          })
+          .from(offers)
+          .innerJoin(applications, eq(offers.applicationId, applications.id))
+          .innerJoin(candidates, eq(applications.candidateId, candidates.id))
+          .innerJoin(requisitions, eq(applications.requisitionId, requisitions.id))
+          .innerJoin(organizations, eq(applications.orgId, organizations.id))
+          .where(and(eq(offers.id, data.id), eq(offers.orgId, context.orgId)))
+          .limit(1);
+        if (offerRow?.candidateEmail && offerRow.letter) {
+          const { enqueueEmail } = await import("./email-outbox.server");
+          const { buildOfferLetterPdf } = await import("./offer-letter-pdf");
+          const pdf = buildOfferLetterPdf(offerRow.letter as OfferLetterPayload);
+          await enqueueEmail({
+            orgId: context.orgId,
+            kind: "offer_released",
+            templateName: "offer_released",
+            toEmail: offerRow.candidateEmail,
+            applicationId: offerRow.applicationId,
+            templateData: {
+              candidateName: offerRow.candidateName,
+              orgName: offerRow.orgName,
+              jobTitle: offerRow.jobTitle,
+            },
+            attachments: [
+              {
+                filename: `offer-letter-${data.id.slice(0, 8)}.pdf`,
+                contentBase64: Buffer.from(pdf.output("arraybuffer")).toString("base64"),
+                contentType: "application/pdf",
+              },
+            ],
+            idempotencyKey: `offer-released:${data.id}`,
+          });
+        }
+      } catch {
+        /* best-effort, exactly like the stage bump above */
+      }
+    }
     return { ok: true as const };
   });
 

@@ -6,6 +6,10 @@ import { RecoveryEmail } from "./recovery";
 import { template as memberInvitedTemplate } from "./member-invited";
 import { template as orgApprovedTemplate } from "./org-approved";
 import { template as orgRejectedTemplate } from "./org-rejected";
+import { template as applicationAckTemplate } from "./application-ack";
+import { template as stageUpdateTemplate } from "./stage-update";
+import { template as interviewInviteTemplate } from "./interview-invite";
+import { template as offerReleasedTemplate } from "./offer-released";
 
 /**
  * Dynamic template-data bag passed to every template renderer and subject
@@ -49,4 +53,8 @@ export const TEMPLATES: Record<string, TemplateEntry> = {
   "member-invited": memberInvitedTemplate,
   "org-approved": orgApprovedTemplate,
   "org-rejected": orgRejectedTemplate,
+  application_ack: applicationAckTemplate,
+  stage_update: stageUpdateTemplate,
+  interview_invite: interviewInviteTemplate,
+  offer_released: offerReleasedTemplate,
 };

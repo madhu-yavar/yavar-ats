@@ -111,7 +111,12 @@ export async function submitApplicationImpl(
 ): Promise<{ ok: true; alreadyApplied: boolean; merged: boolean; name: string }> {
   {
     const [r] = await db
-      .select({ id: requisitions.id, status: requisitions.status, orgId: requisitions.orgId })
+      .select({
+        id: requisitions.id,
+        status: requisitions.status,
+        orgId: requisitions.orgId,
+        title: requisitions.title,
+      })
       .from(requisitions)
       .where(eq(requisitions.id, data.requisitionId))
       .limit(1);
@@ -187,12 +192,37 @@ export async function submitApplicationImpl(
       .limit(1);
 
     if (!app) {
-      await db.insert(applications).values({
-        candidateId,
-        requisitionId: r.id,
-        source: data.source,
-        orgId: r.orgId,
-      });
+      const [createdApp] = await db
+        .insert(applications)
+        .values({
+          candidateId,
+          requisitionId: r.id,
+          source: data.source,
+          orgId: r.orgId,
+        })
+        .returning({ id: applications.id });
+
+      if (createdApp && r.orgId) {
+        const { enqueueEmail } = await import("./email-outbox.server");
+        const [org] = await db
+          .select({ name: organizations.name })
+          .from(organizations)
+          .where(eq(organizations.id, r.orgId))
+          .limit(1);
+        await enqueueEmail({
+          orgId: r.orgId,
+          kind: "ack",
+          templateName: "application_ack",
+          toEmail: email,
+          applicationId: createdApp.id,
+          templateData: {
+            candidateName: fullName,
+            orgName: org?.name,
+            jobTitle: r.title,
+          },
+          idempotencyKey: `ack:${createdApp.id}`,
+        });
+      }
     }
 
     return {

@@ -11,6 +11,7 @@ import {
   Inbox,
   KeyRound,
   Loader2,
+  Mail,
   Plug,
   Sparkles,
   Video,
@@ -30,6 +31,7 @@ import {
   saveAiSettings,
   testAiModel,
 } from "@/lib/ai-settings.functions";
+import { getEmailSettings, saveEmailSettings } from "@/lib/email-settings.functions";
 import {
   disconnectLinkedIn,
   linkedinCapabilities,
@@ -1439,6 +1441,7 @@ function Integrations() {
         <TabsList>
           <TabsTrigger value="sourcing">Candidate sources</TabsTrigger>
           <TabsTrigger value="meetings">Interview meetings</TabsTrigger>
+          <TabsTrigger value="emails">Candidate emails</TabsTrigger>
           <TabsTrigger value="ai">AI model</TabsTrigger>
         </TabsList>
 
@@ -1507,10 +1510,189 @@ function Integrations() {
           )}
         </TabsContent>
 
+        <TabsContent value="emails">
+          <EmailNotificationsCard />
+        </TabsContent>
+
         <TabsContent value="ai">
           <AiModelCard />
         </TabsContent>
       </Tabs>
     </>
+  );
+}
+
+type EmailSettingsForm = {
+  enabled: boolean;
+  ackEnabled: boolean;
+  stageEnabled: boolean;
+  interviewEnabled: boolean;
+  offerEnabled: boolean;
+  replyTo: string;
+  timezone: string;
+};
+
+function EmailNotificationsCard() {
+  const settings = useQuery({
+    queryKey: ["email_settings"],
+    queryFn: () => getEmailSettings({ data: undefined }),
+  });
+  const qc = useQueryClient();
+  const save = useServerFn(saveEmailSettings);
+
+  const [form, setForm] = useState<EmailSettingsForm | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const s = settings.data;
+  const v: EmailSettingsForm | null =
+    form ??
+    (s
+      ? {
+          enabled: s.enabled,
+          ackEnabled: s.ackEnabled,
+          stageEnabled: s.stageEnabled,
+          interviewEnabled: s.interviewEnabled,
+          offerEnabled: s.offerEnabled,
+          replyTo: s.replyTo ?? "",
+          timezone: s.timezone,
+        }
+      : null);
+
+  async function onSave() {
+    if (!v) return;
+    setBusy(true);
+    try {
+      await save({
+        data: {
+          enabled: v.enabled,
+          ackEnabled: v.ackEnabled,
+          stageEnabled: v.stageEnabled,
+          interviewEnabled: v.interviewEnabled,
+          offerEnabled: v.offerEnabled,
+          replyTo: v.replyTo.trim() || null,
+          timezone: v.timezone,
+        },
+      });
+      toast.success("Candidate email preferences saved");
+      setForm(null);
+      qc.invalidateQueries({ queryKey: ["email_settings"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const toggles: {
+    key: "ackEnabled" | "stageEnabled" | "interviewEnabled" | "offerEnabled";
+    label: string;
+    hint: string;
+  }[] = [
+    {
+      key: "ackEnabled",
+      label: "Application acknowledgment",
+      hint: "Sent the moment a candidate applies through your apply page.",
+    },
+    {
+      key: "stageEnabled",
+      label: "Stage updates",
+      hint: "Shortlist and interview-round progress notes as candidates advance.",
+    },
+    {
+      key: "interviewEnabled",
+      label: "Interview invitations",
+      hint: "Invite with a calendar attachment whenever a round is scheduled or moved.",
+    },
+    {
+      key: "offerEnabled",
+      label: "Offer letters",
+      hint: "The released offer letter, as a PDF attachment.",
+    },
+  ];
+
+  return (
+    <article className="panel p-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <Mail className="size-4 text-primary" />
+        <h3 className="font-semibold">Candidate emails</h3>
+      </div>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Automatic emails to candidates at each step of their application. Every email is queued,
+        retried and deduplicated on our side; replies go to your careers inbox unless you set a
+        different address below.
+      </p>
+
+      {!v ? (
+        <p className="mt-4 text-sm text-muted-foreground">Loading…</p>
+      ) : (
+        <div className="mt-4 space-y-4">
+          <div className="flex items-center justify-between gap-4 rounded-md border p-3">
+            <div>
+              <p className="text-sm font-medium">Candidate emails enabled</p>
+              <p className="text-xs text-muted-foreground">
+                Master switch — turns everything below off without losing your preferences.
+              </p>
+            </div>
+            <Switch
+              checked={v.enabled}
+              onCheckedChange={(checked) => setForm({ ...v, enabled: checked })}
+            />
+          </div>
+
+          <div className="grid gap-2">
+            {toggles.map((t) => (
+              <div
+                key={t.key}
+                className="flex items-center justify-between gap-4 rounded-md border p-3"
+              >
+                <div>
+                  <p className="text-sm font-medium">{t.label}</p>
+                  <p className="text-xs text-muted-foreground">{t.hint}</p>
+                </div>
+                <Switch
+                  checked={v[t.key]}
+                  disabled={!v.enabled}
+                  onCheckedChange={(checked) => setForm({ ...v, [t.key]: checked })}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="email-reply-to">Replies go to</Label>
+              <Input
+                id="email-reply-to"
+                type="email"
+                placeholder="careers@yourcompany.com"
+                value={v.replyTo}
+                onChange={(e) => setForm({ ...v, replyTo: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Defaults to your careers inbox address when left blank.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="email-timezone">Timezone for dates</Label>
+              <Input
+                id="email-timezone"
+                placeholder="Asia/Kolkata"
+                value={v.timezone}
+                onChange={(e) => setForm({ ...v, timezone: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                IANA timezone used to format interview times in emails.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button onClick={onSave} disabled={busy}>
+              {busy ? "Saving…" : "Save email preferences"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </article>
   );
 }

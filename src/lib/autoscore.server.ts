@@ -16,9 +16,9 @@ import {
   matchScores,
   requisitions,
   socialProfiles,
-  stageEvents,
 } from "@db/schema";
 import { DEFAULT_WEIGHTS, harvestProfileLinks, scoreCandidate } from "./matching.server";
+import { recordStageTransition } from "./stage-events.server";
 
 export type AutoScoreOutcome = {
   candidate: string;
@@ -218,13 +218,14 @@ export async function scoreUnscored(opts: {
           .set({ stage: nextStage, lastActivityAt: now })
           .where(eq(applications.id, app.id));
         // Journal the AI transition so the pipeline history stays complete.
-        await db.insert(stageEvents).values({
-          applicationId: app.id,
+        await recordStageTransition({
           orgId: opts.orgId,
+          applicationId: app.id,
           fromStage: app.stage,
           toStage: nextStage,
           actor: AUTO_STAGE_ACTOR,
           reason: `Auto-${nextStage === "shortlisted" ? "shortlisted" : "screened"} by matching score ${result.overall_score}/100 (${result.model})${cand.suspectedPromptInjection ? " — prompt-injection flag held at ai_screened" : ""}`,
+          source: "ai",
         });
       }
 

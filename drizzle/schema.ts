@@ -824,6 +824,70 @@ export const aiProviderCredentials = pgTable(
   (t) => [uniqueIndex("ai_provider_credentials_org_provider_key").on(t.orgId, t.provider)],
 );
 
+export type EmailOutboxKind = "ack" | "stage_update" | "interview_invite" | "offer_released";
+export type EmailOutboxStatus = "queued" | "sent" | "failed" | "suppressed";
+export type EmailOutboxAttachment = {
+  filename: string;
+  contentBase64: string;
+  contentType: string;
+};
+
+export const emailOutbox = pgTable(
+  "email_outbox",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    applicationId: uuid("application_id").references(() => applications.id, {
+      onDelete: "cascade",
+    }),
+    kind: text("kind").$type<EmailOutboxKind>().notNull(),
+    templateName: text("template_name").notNull(),
+    toEmail: text("to_email").notNull(),
+    replyTo: text("reply_to"),
+    templateData: jsonb("template_data")
+      .$type<Record<string, string | undefined>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    attachments: jsonb("attachments")
+      .$type<EmailOutboxAttachment[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    idempotencyKey: text("idempotency_key").notNull(),
+    status: text("status").$type<EmailOutboxStatus>().notNull().default("queued"),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    availableAt: timestamp("available_at", { withTimezone: true }).notNull().defaultNow(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("email_outbox_idempotency_key").on(t.idempotencyKey),
+    index("email_outbox_queue_idx").on(t.status, t.availableAt),
+    index("email_outbox_application_kind_status_idx").on(t.applicationId, t.kind, t.status),
+    index("email_outbox_org_kind_created_idx").on(t.orgId, t.kind, t.createdAt),
+  ],
+);
+
+export const emailSettings = pgTable(
+  "email_settings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    singleton: boolean("singleton").notNull().default(true),
+    orgId: uuid("org_id").references(() => organizations.id, { onDelete: "cascade" }),
+    enabled: boolean("enabled").notNull().default(true),
+    ackEnabled: boolean("ack_enabled").notNull().default(true),
+    stageEnabled: boolean("stage_enabled").notNull().default(true),
+    interviewEnabled: boolean("interview_enabled").notNull().default(true),
+    offerEnabled: boolean("offer_enabled").notNull().default(true),
+    replyTo: text("reply_to"),
+    timezone: text("timezone").notNull().default("Asia/Kolkata"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("email_settings_org_key").on(t.orgId)],
+);
+
 export const copilotMessages = pgTable("copilot_messages", {
   id: uuid("id").primaryKey().defaultRandom(),
   orgId: uuid("org_id").references(() => organizations.id, { onDelete: "cascade" }),

@@ -9,11 +9,12 @@ import {
   candidates,
   evaluations,
   interviews,
+  organizations,
   requisitions,
-  stageEvents,
 } from "@db/schema";
 import { assertRole, requireOrg } from "./auth.middleware";
 import { canMove, REASON_REQUIRED, STAGE_LABEL, type Stage } from "./lifecycle";
+import { buildIcs } from "./ics";
 
 /* --------------------------------------------------------------- helpers */
 
@@ -256,9 +257,10 @@ export const submitScorecard = createServerFn({ method: "POST" })
           lastActivityAt: now,
         })
         .where(and(eq(applications.orgId, context.orgId), eq(applications.id, app.id)));
-      await db.insert(stageEvents).values({
-        applicationId: app.id,
+      const { recordStageTransition } = await import("./stage-events.server");
+      await recordStageTransition({
         orgId: context.orgId,
+        applicationId: app.id,
         fromStage: from,
         toStage: target,
         actor,
@@ -347,6 +349,8 @@ export const scheduleInterview = createServerFn({ method: "POST" })
       status: "scheduled",
     };
 
+    const { recordStageTransition } = await import("./stage-events.server");
+
     const [app] = await db
       .select({
         id: applications.id,
@@ -360,13 +364,15 @@ export const scheduleInterview = createServerFn({ method: "POST" })
 
     /* Candidate email is the invite address: confirm it before the round exists. */
     let candidateEmail: string | null = null;
+    let candidateName: string | null = null;
     {
       const [cand] = await db
-        .select({ id: candidates.id, email: candidates.email })
+        .select({ id: candidates.id, email: candidates.email, fullName: candidates.fullName })
         .from(candidates)
         .where(and(eq(candidates.orgId, context.orgId), eq(candidates.id, app.candidateId)))
         .limit(1);
       candidateEmail = cand?.email ?? null;
+      candidateName = cand?.fullName ?? null;
       const typed = data.candidateEmail?.trim().toLowerCase() || null;
       if (typed && typed !== (candidateEmail ?? "").toLowerCase()) {
         await db
@@ -383,6 +389,7 @@ export const scheduleInterview = createServerFn({ method: "POST" })
     }
 
     let rescheduled = false;
+    let interviewId: string | null = data.interviewId ?? null;
     if (data.interviewId) {
       const reason = data.rescheduleReason?.trim();
       if (!reason)
@@ -400,18 +407,23 @@ export const scheduleInterview = createServerFn({ method: "POST" })
 
       {
         const wasAt = previous?.scheduledAt ? previous.scheduledAt.toISOString() : "unscheduled";
-        await db.insert(stageEvents).values({
-          applicationId: app.id,
+        await recordStageTransition({
           orgId: context.orgId,
-          fromStage: app.stage,
-          toStage: app.stage,
+          applicationId: app.id,
+          fromStage: app.stage as Stage,
+          toStage: app.stage as Stage,
           actor,
           reason: `L${data.level} re-scheduled: ${reason}`,
           note: `${wasAt} → ${scheduledAt.toISOString()}`,
+          cause: "interview_scheduled",
         });
       }
     } else {
-      await db.insert(interviews).values({ ...row, orgId: context.orgId });
+      const [created] = await db
+        .insert(interviews)
+        .values({ ...row, orgId: context.orgId })
+        .returning({ id: interviews.id });
+      interviewId = created?.id ?? null;
     }
 
     const target = `l${data.level}` as Stage;
@@ -420,13 +432,14 @@ export const scheduleInterview = createServerFn({ method: "POST" })
         .update(applications)
         .set({ stage: target, stageReason: `L${data.level} scheduled`, lastActivityAt: now })
         .where(and(eq(applications.orgId, context.orgId), eq(applications.id, app.id)));
-      await db.insert(stageEvents).values({
-        applicationId: app.id,
+      await recordStageTransition({
         orgId: context.orgId,
-        fromStage: app.stage,
+        applicationId: app.id,
+        fromStage: app.stage as Stage,
         toStage: target,
         actor,
         reason: `L${data.level} interview scheduled`,
+        cause: "interview_scheduled",
       });
     } else {
       await db
@@ -434,16 +447,88 @@ export const scheduleInterview = createServerFn({ method: "POST" })
         .set({ lastActivityAt: now })
         .where(and(eq(applications.orgId, context.orgId), eq(applications.id, app.id)));
       if (!rescheduled) {
-        await db.insert(stageEvents).values({
-          applicationId: app.id,
+        await recordStageTransition({
           orgId: context.orgId,
-          fromStage: app.stage,
-          toStage: app.stage,
+          applicationId: app.id,
+          fromStage: app.stage as Stage,
+          toStage: app.stage as Stage,
           actor,
           reason: `L${data.level} interview scheduled`,
           note: scheduledAt.toISOString(),
+          cause: "interview_scheduled",
         });
       }
+    }
+
+    /* Invite email with calendar attachment — best-effort, both create and
+     * reschedule. The .ics UID is the interview id so reschedules update the
+     * same calendar entry. */
+    try {
+      const { enqueueEmail, formatInOrgTZ, getOrgEmailSettings } =
+        await import("./email-outbox.server");
+      const [ctxRow] = await db
+        .select({ jobTitle: requisitions.title, orgName: organizations.name })
+        .from(applications)
+        .innerJoin(requisitions, eq(applications.requisitionId, requisitions.id))
+        .innerJoin(organizations, eq(applications.orgId, organizations.id))
+        .where(eq(applications.id, app.id))
+        .limit(1);
+      if (interviewId) {
+        const roundLabel = `L${data.level} interview`;
+        const whereText = data.meetingLink?.trim() || null;
+        const modeLabel =
+          data.mode === "online" ? "Online" : data.mode === "onsite" ? "Onsite" : "Phone";
+        const ics = buildIcs({
+          uid: `interview-${interviewId}@atsiq`,
+          title: `${roundLabel}: ${ctxRow?.jobTitle ?? "Role"}${
+            ctxRow?.orgName ? ` (${ctxRow.orgName})` : ""
+          }`,
+          description:
+            [
+              data.interviewer?.trim() ? `Interviewer: ${data.interviewer.trim()}` : null,
+              data.agenda?.trim() || null,
+            ]
+              .filter(Boolean)
+              .join("\n") || null,
+          location: whereText ?? (data.mode === "onsite" ? (ctxRow?.orgName ?? null) : null),
+          startsAt: scheduledAt.toISOString(),
+          durationMins: data.durationMins,
+          attendees: [candidateEmail],
+        });
+        const templateData: Record<string, string | undefined> = {
+          candidateName: candidateName ?? undefined,
+          orgName: ctxRow?.orgName,
+          jobTitle: ctxRow?.jobTitle,
+          roundLabel,
+          scheduledAtText: formatInOrgTZ(
+            scheduledAt,
+            (await getOrgEmailSettings(context.orgId)).timezone,
+          ),
+          durationMins: String(data.durationMins),
+          modeLabel,
+        };
+        if (whereText) templateData["whereText"] = whereText;
+        if (data.interviewer?.trim()) templateData["interviewerName"] = data.interviewer.trim();
+        if (data.agenda?.trim()) templateData["agenda"] = data.agenda.trim();
+        await enqueueEmail({
+          orgId: context.orgId,
+          kind: "interview_invite",
+          templateName: "interview_invite",
+          toEmail: candidateEmail,
+          applicationId: app.id,
+          templateData,
+          attachments: [
+            {
+              filename: `interview-l${data.level}.ics`,
+              contentBase64: Buffer.from(ics, "utf8").toString("base64"),
+              contentType: "text/calendar",
+            },
+          ],
+          idempotencyKey: `interview-invite:${interviewId}:${scheduledAt.toISOString()}`,
+        });
+      }
+    } catch {
+      /* best-effort: scheduling must succeed even if the invite cannot be queued */
     }
 
     return { ok: true as const, rescheduled, candidateEmail };
@@ -496,9 +581,10 @@ export const saveAiInterview = createServerFn({ method: "POST" })
         .update(applications)
         .set({ stage: "ai_screened", lastActivityAt: now, stageReason: "AI screening completed" })
         .where(and(eq(applications.orgId, context.orgId), eq(applications.id, data.applicationId)));
-      await db.insert(stageEvents).values({
-        applicationId: application.id,
+      const { recordStageTransition } = await import("./stage-events.server");
+      await recordStageTransition({
         orgId: context.orgId,
+        applicationId: application.id,
         fromStage: from,
         toStage: "ai_screened",
         actor: actorOf(context),
