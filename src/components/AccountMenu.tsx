@@ -1,9 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
 import { KeyRound, LogOut, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { changePasswordRequest, fetchMe, signOutApp } from "@/lib/auth-client";
+import { changePasswordRequest, signOutApp } from "@/lib/auth-client";
+import { useMe } from "@/hooks/useMe";
 import { useOrg } from "@/hooks/useOrg";
 import { usePlatform } from "@/hooks/usePlatform";
 import { Button } from "@/components/ui/button";
@@ -42,17 +42,11 @@ export function AccountMenu() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changing, setChanging] = useState(false);
 
-  const session = useQuery({
-    queryKey: ["auth_identity"],
-    queryFn: async () => {
-      const email = await fetchMe();
-      return email ? { email, fullName: email } : null;
-    },
-    staleTime: 300_000,
-  });
+  // One shared identity query — a second queryFn on this key used to win the
+  // cache race with useMe() and strip userId for every consumer.
+  const { email } = useMe();
 
-  const email = session.data?.email ?? null;
-  const name = session.data?.fullName ?? email ?? "You";
+  const name = email ?? "You";
   const initials = String(name)
     .split(" ")
     .filter(Boolean)
