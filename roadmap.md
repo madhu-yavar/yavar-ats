@@ -1,5 +1,9 @@
 # Roadmap
 
+## First-login guidance
+
+- [x] Add a first-login, replayable integration-to-offer journey in the HR copilot and share its steps with the user manual
+
 ## Landing film + visual polish
 
 - [x] Remove the landing-film explainer sentence and add an animated Talent Brain graph sequence
