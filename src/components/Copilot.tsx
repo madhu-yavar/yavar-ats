@@ -78,8 +78,11 @@ export function Copilot() {
   const messages = history.data ?? [];
 
   useEffect(() => {
-    boxRef.current?.scrollTo({ top: boxRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages.length, send.isPending]);
+    boxRef.current?.scrollTo({
+      top: guideOpen ? 0 : boxRef.current.scrollHeight,
+      behavior: guideOpen ? "instant" : "smooth",
+    });
+  }, [messages.length, send.isPending, guideOpen]);
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
