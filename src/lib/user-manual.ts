@@ -15,21 +15,70 @@ export type ManualSection = {
 
 /** Shared first-run journey for the help page and the HR copilot. */
 export const FIRST_RUN_JOURNEY = [
-  { title: "Connect your workspace", to: "/integrations", detail: "An owner or HR head connects the organisation's own AI key, candidate sources, careers inbox and meeting provider. Save and test each connection before relying on it.", access: "governance" },
-  { title: "Set up your hiring foundations", to: "/masters", detail: "Add departments, locations and skills, then invite colleagues and assign their approval roles in Users & roles.", access: "governance" },
-  { title: "Open an approved role", to: "/requisitions", detail: "Create the requisition and JD, check the live market range, set JD↔CV scoring weights, and complete the department, HR and executive approvals required for your organisation.", access: "org" },
-  { title: "Bring candidates in", to: "/candidates", detail: "Import CVs, collect applications from the careers inbox or capture LinkedIn Recruiter profiles. Publish approved roles internally through Internal postings when relevant.", access: "recruiter" },
-  { title: "Review evidence and shortlist", to: "/matching", detail: "Match the JD to people in the talent pool. Review skills, experience, career history and verified social evidence; record a reason for any recruiter override.", access: "recruiter" },
-  { title: "Screen and interview", to: "/screening", detail: "Generate JD-and-CV-specific screening questions, review answers, then schedule interviews and collect interviewer scorecards before progressing the candidate.", access: "recruiter" },
-  { title: "Approve, validate and release", to: "/offers", detail: "Prepare the offer and letter, obtain approvals, collect pre-onboarding ID, employment, pay and education documents, and validate each extraction beside its original. Release stays locked until mandatory documents are validated.", access: "recruiter" },
-  { title: "Measure the outcome", to: "/reports", detail: "Record acceptance and joining, then review funnel reports; leadership can examine Talent Brain and Return on Individual for capability strengths and programme readiness.", access: "approver" },
+  {
+    title: "Connect your workspace",
+    to: "/integrations",
+    detail:
+      "An owner or HR head connects the organisation's own AI key, candidate sources, careers inbox and meeting provider. Save and test each connection before relying on it.",
+    access: "governance",
+  },
+  {
+    title: "Set up your hiring foundations",
+    to: "/masters",
+    detail:
+      "Add departments, locations and skills, then invite colleagues and assign their approval roles in Users & roles.",
+    access: "governance",
+  },
+  {
+    title: "Open an approved role",
+    to: "/requisitions",
+    detail:
+      "Create the requisition and JD, check the live market range, set JD↔CV scoring weights, and complete the department, HR and executive approvals required for your organisation.",
+    access: "org",
+  },
+  {
+    title: "Bring candidates in",
+    to: "/candidates",
+    detail:
+      "Import CVs, collect applications from the careers inbox or capture LinkedIn Recruiter profiles. Publish approved roles internally through Internal postings when relevant.",
+    access: "recruiter",
+  },
+  {
+    title: "Review evidence and shortlist",
+    to: "/matching",
+    detail:
+      "Match the JD to people in the talent pool. Review skills, experience, career history and verified social evidence; record a reason for any recruiter override.",
+    access: "recruiter",
+  },
+  {
+    title: "Screen and interview",
+    to: "/screening",
+    detail:
+      "Generate JD-and-CV-specific screening questions, review answers, then schedule interviews and collect interviewer scorecards before progressing the candidate.",
+    access: "recruiter",
+  },
+  {
+    title: "Approve, validate and release",
+    to: "/offers",
+    detail:
+      "Prepare the offer and letter, obtain approvals, collect pre-onboarding ID, employment, pay and education documents, and validate each extraction beside its original. Release stays locked until mandatory documents are validated.",
+    access: "recruiter",
+  },
+  {
+    title: "Measure the outcome",
+    to: "/reports",
+    detail:
+      "Record acceptance and joining, then review funnel reports; leadership can examine Talent Brain and Return on Individual for capability strengths and programme readiness.",
+    access: "approver",
+  },
 ] as const;
 
 export const MANUAL_SECTIONS: ManualSection[] = [
   {
     id: "first-run-journey",
     title: "Start here: from integration to offer release",
-    summary: "A first-time hiring journey. Your role determines which pages you can open; ask an organisation owner or HR head to complete setup and approvals you cannot perform.",
+    summary:
+      "A first-time hiring journey. Your role determines which pages you can open; ask an organisation owner or HR head to complete setup and approvals you cannot perform.",
     steps: FIRST_RUN_JOURNEY.map((step) => `${step.title} (${step.to}): ${step.detail}`),
   },
   {

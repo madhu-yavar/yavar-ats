@@ -161,33 +161,67 @@ export function Copilot() {
 
       <div ref={boxRef} className="relative flex-1 space-y-4 overflow-y-auto px-4 py-4 text-sm">
         {guideOpen ? (
-          <section aria-label="First-time journey" className="space-y-3 border-b border-border pb-4">
+          <section
+            aria-label="First-time journey"
+            className="space-y-3 border-b border-border pb-4"
+          >
             <div>
-              <div className="flex items-center gap-2 font-semibold"><Compass className="size-4 text-primary" />Your hiring journey</div>
+              <div className="flex items-center gap-2 font-semibold">
+                <Compass className="size-4 text-primary" />
+                Your hiring journey
+              </div>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                {showWelcome ? "Welcome to ATSIQ. Follow the story from first setup to an offer ready to release." : "From first setup to an offer ready to release."} Each decision stays with the right person.
+                {showWelcome
+                  ? "Welcome to ATSIQ. Follow the story from first setup to an offer ready to release."
+                  : "From first setup to an offer ready to release."}{" "}
+                Each decision stays with the right person.
               </p>
             </div>
             <ol className="space-y-0.5">
               {FIRST_RUN_JOURNEY.map((step, index) => {
-                const allowed = step.access === "org" ? nav.inOrg : step.access === "governance" ? nav.governance : step.access === "approver" ? nav.approver : nav.recruiterView;
+                const allowed =
+                  step.access === "org"
+                    ? nav.inOrg
+                    : step.access === "governance"
+                      ? nav.governance
+                      : step.access === "approver"
+                        ? nav.approver
+                        : nav.recruiterView;
                 return (
                   <li key={step.to} className="flex gap-2 border-l border-border py-1.5 pl-3">
                     <span className="w-4 shrink-0 font-mono text-xs text-primary">{index + 1}</span>
                     <div className="min-w-0">
                       {allowed ? (
-                        <Link to={step.to} onClick={() => setOpen(false)} className="inline-flex items-center gap-1 font-medium text-foreground hover:text-primary">
-                          {step.title}<ChevronRight className="size-3" />
+                        <Link
+                          to={step.to}
+                          onClick={() => setOpen(false)}
+                          className="inline-flex items-center gap-1 font-medium text-foreground hover:text-primary"
+                        >
+                          {step.title}
+                          <ChevronRight className="size-3" />
                         </Link>
-                      ) : <span className="font-medium text-foreground">{step.title}</span>}
+                      ) : (
+                        <span className="font-medium text-foreground">{step.title}</span>
+                      )}
                       <p className="text-xs leading-relaxed text-muted-foreground">{step.detail}</p>
-                      {!allowed && <p className="text-xs text-primary">Ask someone with access to complete this step.</p>}
+                      {!allowed && (
+                        <p className="text-xs text-primary">
+                          Ask someone with access to complete this step.
+                        </p>
+                      )}
                     </div>
                   </li>
                 );
               })}
             </ol>
-            <Link to="/help" onClick={() => setOpen(false)} className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"><BookOpen className="size-3.5" />Read the full user manual</Link>
+            <Link
+              to="/help"
+              onClick={() => setOpen(false)}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+            >
+              <BookOpen className="size-3.5" />
+              Read the full user manual
+            </Link>
           </section>
         ) : null}
         {messages.length === 0 ? (
