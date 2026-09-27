@@ -40,3 +40,7 @@
   them while the repository is public.
 
 <!-- SECURITY:END -->
+
+## Product guidance
+
+- Keep the first-login journey and manual in `src/lib/user-manual.ts` as one source so the copilot walkthrough and help page cannot drift.
