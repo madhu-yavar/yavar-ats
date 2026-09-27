@@ -42,14 +42,14 @@ export function Copilot() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (!userId || orgLoading || (!nav.inOrg && !nav.isSuperUser)) return;
+    if (!userId || orgLoading || !nav.inOrg) return;
     const key = `atsiq.first-journey.v1.${userId}`;
     if (localStorage.getItem(key)) return;
     localStorage.setItem(key, "seen");
     setOpen(true);
     setGuideOpen(true);
     setShowWelcome(true);
-  }, [userId, orgLoading, nav.inOrg, nav.isSuperUser]);
+  }, [userId, orgLoading, nav.inOrg]);
 
   const history = useQuery({
     queryKey: ["copilot"],
