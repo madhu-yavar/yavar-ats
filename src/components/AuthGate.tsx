@@ -395,8 +395,7 @@ function PlatformFilm() {
         <figure className="mt-8 overflow-hidden rounded-xl border border-border bg-card shadow-[0_24px_60px_-30px_rgba(17,17,19,0.35)]">
           <video
             className="block h-auto w-full"
-            src="/atsiq-platform.mp4"
-            poster="/atsiq-platform-poster.jpg"
+            src="/atsiq-landing-film-60s.mp4"
             autoPlay
             muted
             loop
