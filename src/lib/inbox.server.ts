@@ -297,7 +297,7 @@ export async function syncCareersInbox(opts?: {
           continue;
         }
 
-        const parsed = await parseCv(text);
+        const parsed = await parseCv(text, target?.orgId ?? null);
         // Boards hide the applicant address; fall back to the sender address.
         const fromEmail = /<([^>]+)>/.exec(msg.from)?.[1] ?? msg.from.trim();
         const result = await ingestCandidate({

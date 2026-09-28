@@ -12,7 +12,13 @@
  *     screening score and a recommendation with its rationale.
  */
 
-import { aiJson, INJECTION_RULES, untrusted, resolveAiConfig } from "./ai-gateway.server";
+import {
+  aiJson,
+  INJECTION_RULES,
+  untrusted,
+  resolveAiConfig,
+  type AiUsage,
+} from "./ai-gateway.server";
 
 export const FOCUS_AREAS = [
   "must_have_skill",
@@ -42,6 +48,7 @@ export type ScreeningQuestion = {
 export type ScreeningKit = {
   questions: ScreeningQuestion[];
   focus_summary: string;
+  /** Server-internal: persisted for the audit trail, never sent to a client. */
   engine: { provider: string; model: string };
 };
 
@@ -61,6 +68,7 @@ export type ScreeningGrade = {
   red_flags: string[];
   recommendation: "advance" | "hold" | "reject";
   recommendation_reason: string;
+  /** Server-internal: persisted for the audit trail, never sent to a client. */
   engine: { provider: string; model: string };
 };
 
@@ -154,6 +162,7 @@ export async function buildScreeningKit(input: {
       }),
     ),
     orgId: input.orgId,
+    feature: "screening_kit",
   });
   if (!result.ok) throw new Error(result.message);
 
@@ -234,6 +243,7 @@ export async function gradeScreening(input: {
       }),
     ),
     orgId: input.orgId,
+    feature: "screening_grade",
   });
   if (!result.ok) throw new Error(result.message);
 
@@ -312,6 +322,21 @@ export async function transcribeScreeningAudio(input: {
   const gemini = cfg.provider === "google";
   const endpoint = OPENAI_TRANSCRIBE;
   const model = gemini ? "gemini-2.5-flash" : "gpt-4o-mini-transcribe";
+  const startedAt = Date.now();
+  const { recordAiUsage } = await import("../server/ai-usage");
+  const log = (status: "ok" | "error", usage: AiUsage | null, message?: string) =>
+    recordAiUsage({
+      orgId: input.orgId ?? null,
+      feature: "audio_transcribe",
+      provider: cfg.provider,
+      model,
+      status,
+      promptTokens: usage?.promptTokens ?? 0,
+      completionTokens: usage?.completionTokens ?? 0,
+      totalTokens: usage?.totalTokens ?? 0,
+      durationMs: Date.now() - startedAt,
+      errorMessage: message ?? null,
+    }).catch(() => undefined);
 
   if (gemini) {
     const base64 = Buffer.from(input.bytes).toString("base64");
@@ -337,16 +362,31 @@ export async function transcribeScreeningAudio(input: {
     );
     if (!res.ok) {
       const raw = await res.text().catch(() => "");
+      await log("error", null, `Gemini transcription failed (${res.status}): ${raw.slice(0, 300)}`);
       throw new Error(`Gemini transcription failed (${res.status}): ${raw.slice(0, 300)}`);
     }
     const json = (await res.json()) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
+      usageMetadata?: { promptTokenCount?: number; totalTokenCount?: number };
     };
+    const usage: AiUsage | null = json.usageMetadata
+      ? {
+          promptTokens: json.usageMetadata.promptTokenCount ?? 0,
+          completionTokens: 0,
+          totalTokens:
+            json.usageMetadata.totalTokenCount ?? json.usageMetadata.promptTokenCount ?? 0,
+        }
+      : null;
+    if (usage) usage.completionTokens = Math.max(0, usage.totalTokens - usage.promptTokens);
     const transcript = (json.candidates?.[0]?.content?.parts ?? [])
       .map((p) => p.text ?? "")
       .join("")
       .trim();
-    if (!transcript) throw new Error("The recording produced no transcript.");
+    if (!transcript) {
+      await log("error", usage, "The recording produced no transcript.");
+      throw new Error("The recording produced no transcript.");
+    }
+    await log("ok", usage);
     return { transcript, engine: `gemini · ${model}` };
   }
 
@@ -373,10 +413,27 @@ export async function transcribeScreeningAudio(input: {
     }
     if (res.status === 402)
       message = `${message} — check this organisation's provider billing and API-key quota.`;
+    await log("error", null, `${cfg.provider}: ${message}`);
     throw new Error(`${cfg.provider}: ${message}`);
   }
-  const json = (await res.json()) as { text?: string };
+  const json = (await res.json()) as {
+    text?: string;
+    usage?: { input_tokens?: number; output_tokens?: number; total_tokens?: number };
+  };
+  const usage: AiUsage | null = json.usage
+    ? {
+        promptTokens: json.usage.input_tokens ?? 0,
+        completionTokens: json.usage.output_tokens ?? 0,
+        totalTokens:
+          json.usage.total_tokens ??
+          (json.usage.input_tokens ?? 0) + (json.usage.output_tokens ?? 0),
+      }
+    : null;
   const transcript = (json.text ?? "").trim();
-  if (!transcript) throw new Error("The recording produced no transcript.");
+  if (!transcript) {
+    await log("error", usage, "The recording produced no transcript.");
+    throw new Error("The recording produced no transcript.");
+  }
+  await log("ok", usage);
   return { transcript, engine: `${cfg.provider} · ${model}` };
 }

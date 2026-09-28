@@ -268,9 +268,10 @@ function Extraction({ doc }: { doc: OnboardingDocWire }) {
           document yourself before validating.
         </p>
       ) : null}
-      {doc.model ? (
+      {doc.extraction_status === "extracted" ? (
         <p className="text-xs text-muted-foreground">
-          Read with {doc.model} using your organisation's own AI key.
+          Read automatically using your organisation's own AI key — please validate before
+          submitting.
         </p>
       ) : null}
     </div>

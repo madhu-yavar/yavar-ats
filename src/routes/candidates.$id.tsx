@@ -493,8 +493,7 @@ function CandidateDetail() {
                   </ul>
                 </div>
                 <p className="num text-xs text-muted-foreground">
-                  Last run {new Date(verification.created_at).toLocaleString()} ·{" "}
-                  {verification.model}
+                  Last run {new Date(verification.created_at).toLocaleString()}
                 </p>
               </div>
             ) : (

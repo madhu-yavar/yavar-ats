@@ -19,7 +19,8 @@ const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 type BenchRow = typeof salaryBenchmarks.$inferSelect;
 
-/** PostgREST-style snake_case wire row, matching the shapes routes read. */
+/** PostgREST-style snake_case wire row, matching the shapes routes read.
+ *  provider/model stay server-internal (persisted on the row, logged in ai_usage_events). */
 function toWire(row: BenchRow) {
   return {
     id: row.id,
@@ -33,8 +34,6 @@ function toWire(row: BenchRow) {
     grounded: row.grounded,
     confidence: row.confidence,
     payload: row.payload as BenchmarkPayload,
-    provider: row.provider,
-    model: row.model,
     created_at: new Date(row.createdAt).toISOString(),
   };
 }

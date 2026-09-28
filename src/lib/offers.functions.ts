@@ -530,6 +530,7 @@ export const generateOfferLetter = createServerFn({ method: "POST" })
     const result = await aiJson<unknown>({
       orgId: context.orgId,
       config: cfg,
+      feature: "offer_letter",
       system,
       prompt: JSON.stringify({
         candidate: {

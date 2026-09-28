@@ -189,7 +189,8 @@ export const createScreeningKit = createServerFn({ method: "POST" })
       .returning({ id: screeningKits.id });
     if (!row) throw new Error("Could not save the screening kit");
 
-    return { kitId: row.id, ...kit };
+    // `engine` stays server-internal (persisted above, logged in ai_usage_events).
+    return { kitId: row.id, questions: kit.questions, focus_summary: kit.focus_summary };
   });
 
 /* ------------------------------------------------------------- edit a kit */
@@ -329,13 +330,18 @@ export const gradeScreeningAnswers = createServerFn({ method: "POST" })
       .returning({ id: screeningRuns.id });
     if (!run) throw new Error("Could not save the screening run");
 
+    // `engine`/`audio_engine` stay server-internal (persisted above).
     return {
       runId: run.id,
-      ...grade,
+      screening_score: grade.screening_score,
+      verdicts: grade.verdicts,
+      rationale: grade.rationale,
+      red_flags: grade.red_flags,
+      recommendation: grade.recommendation,
+      recommendation_reason: grade.recommendation_reason,
       match_score: matchScore,
       combined_score: combined,
       audio_stored: Boolean(audioPath),
-      audio_engine: audioEngine,
     };
   });
 

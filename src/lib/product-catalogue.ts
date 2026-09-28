@@ -298,13 +298,13 @@ export const CATALOGUE_MODULES: CatalogueModule[] = [
     category: "Platform",
     audience: "Organisation owner",
     summary:
-      "Each organisation can run all intelligence features on its own Gemini, OpenAI or Claude key.",
+      "Each organisation can run all intelligence features on its own API key, with its choice of provider and model.",
     outcome: "Clients own and control their AI spend.",
     capabilities: [
       "Per-organisation provider, model and key configuration",
       "Key validation and a Test model action against the exact configuration on screen",
-      "Latest Gemini, OpenAI and Claude model choices",
-      "Clear statement of which engine produced each result",
+      "Current model choices across supported providers",
+      "Usage of every AI call tracked per organisation",
     ],
     defaultTier: "Included",
   },

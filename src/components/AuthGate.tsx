@@ -247,7 +247,7 @@ const GOVERNANCE = [
   {
     icon: Database,
     title: "Your data, your keys",
-    body: "Bring your own Gemini, OpenAI or Claude key for scoring.",
+    body: "Every intelligence feature runs on your organisation's own API key — your data and your AI spend stay yours.",
   },
 ] as const;
 
@@ -263,8 +263,8 @@ const FAQ = [
     a: "There are no standalone users. A company registers, a platform super admin approves it, and only then can the organisation invite internal users on the same verified work-email domain.",
   },
   {
-    q: "Which AI models can we use?",
-    a: "Matching and scoring run through Gemini, OpenAI or Claude using your own API key, selected per organisation and testable from the integrations page.",
+    q: "How does the AI work?",
+    a: "Matching, scoring and drafting run on frontier large language models using your organisation's own API key. Your admin picks and tests the configuration per organisation on the integrations page.",
   },
   {
     q: "Do we have to type candidate details?",
@@ -543,7 +543,7 @@ function ScoringModel() {
           <ul className="space-y-2.5 text-sm text-muted-foreground">
             <li className="flex items-start gap-2.5">
               <BrainCircuit className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-              Gemini, OpenAI or Claude, using your organisation&rsquo;s own API key.
+              Frontier large language models, powered by your organisation&rsquo;s own API key.
             </li>
             <li className="flex items-start gap-2.5">
               <Globe2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />

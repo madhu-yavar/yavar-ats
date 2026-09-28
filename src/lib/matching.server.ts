@@ -102,8 +102,12 @@ export type MatchResult = {
   };
   logistics: LogisticsCheck | null;
   contributions: { label: string; raw: number; weight: number; weighted: number }[];
+  /** Server-internal — stripped from every wire return, resolved server-side on persist. */
   model: string;
 };
+
+/** The client-facing shape: everything but the engine id. */
+export type MatchWire = Omit<MatchResult, "model">;
 
 /**
  * Harvest public profile links straight out of the raw CV text.
@@ -164,6 +168,7 @@ export async function scoreCandidate(opts: {
     innovation_signals: string[];
     impact_rationale: string;
   }>({
+    feature: "candidate_score",
     system:
       INJECTION_RULES +
       "\nYou are a rigorous technical recruiter mapping a CV against a job description. " +

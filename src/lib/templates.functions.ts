@@ -120,6 +120,7 @@ export const analyzeTemplateFile = createServerFn({ method: "POST" })
       }>({
         orgId: context.orgId,
         config: cfg,
+        feature: "template_import",
         ...(images ? { images } : {}),
         system: systemPrompt,
         prompt: strict
@@ -208,6 +209,7 @@ export const validateJobCard = createServerFn({ method: "POST" })
     }>({
       orgId: context.orgId,
       config: cfg,
+      feature: "jobcard_qa",
       images: [
         {
           base64: Buffer.from(file.bytes).toString("base64"),

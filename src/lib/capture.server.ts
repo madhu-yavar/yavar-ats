@@ -75,6 +75,7 @@ async function parseJd(text: string, orgId?: string | null | undefined): Promise
       "and never a browser tab or page heading. Include seniority when the description states it.",
     prompt: text.slice(0, 20000),
     orgId,
+    feature: "jd_parse",
   });
   return parsed.ok ? parsed.data : null;
 }

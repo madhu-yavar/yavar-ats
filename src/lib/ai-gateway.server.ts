@@ -52,9 +52,51 @@ export const DEFAULT_MODEL: Record<AiProvider, string> = {
 
 export type AiConfig = { provider: AiProvider; model: string; apiKey: string | null };
 
+/** Token usage as reported by the provider — null when no usage frame arrived. */
+export type AiUsage = { promptTokens: number; completionTokens: number; totalTokens: number };
+
 export type AiJsonResult<T> =
-  | { ok: true; data: T; model: string; provider: AiProvider }
+  | { ok: true; data: T; model: string; provider: AiProvider; usage: AiUsage | null }
   | { ok: false; status: number; message: string };
+
+/**
+ * Append one provider request to the AI spend ledger (src/server/ai-usage.ts).
+ * Fire-and-forget: a logging failure must never break the call it measures.
+ * The dynamic import keeps src/server/** out of client-reachable module graphs.
+ */
+async function logUsage(
+  feature: string,
+  cfg: AiConfig,
+  orgId: string | null | undefined,
+  data: {
+    status: "ok" | "error";
+    attempt: number;
+    startedAt: number;
+    usage: AiUsage | null;
+    grounded?: boolean;
+    message?: string | null;
+  },
+) {
+  try {
+    const { recordAiUsage } = await import("../server/ai-usage");
+    await recordAiUsage({
+      orgId: orgId ?? null,
+      feature,
+      provider: cfg.provider,
+      model: cfg.model,
+      status: data.status,
+      promptTokens: data.usage?.promptTokens ?? 0,
+      completionTokens: data.usage?.completionTokens ?? 0,
+      totalTokens: data.usage?.totalTokens ?? 0,
+      attempt: data.attempt,
+      durationMs: Date.now() - data.startedAt,
+      grounded: data.grounded ?? null,
+      errorMessage: data.status === "error" ? (data.message ?? null) : null,
+    });
+  } catch (e) {
+    console.error("[ai-usage] logging failed", feature, e);
+  }
+}
 
 /** Read the saved provider/model plus its stored key (service-role only). */
 export async function resolveAiConfig(orgId?: string | null): Promise<AiConfig> {
@@ -151,12 +193,17 @@ export async function readProviderKey(orgId: string, provider: AiProvider): Prom
 
 /* ------------------------------------------------------------- streaming */
 
-/** Read an OpenAI-style SSE stream and concatenate the text deltas. */
+/**
+ * Read an OpenAI-style SSE stream: concatenate the text deltas and capture the
+ * trailing usage frame (only sent when the request sets
+ * `stream_options.include_usage`; that frame carries an empty `choices` array).
+ */
 async function readOpenAiStream(body: ReadableStream<Uint8Array>) {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let text = "";
+  let usage: AiUsage | null = null;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -172,20 +219,37 @@ async function readOpenAiStream(body: ReadableStream<Uint8Array>) {
         const chunk = JSON.parse(payload);
         const delta = chunk?.choices?.[0]?.delta?.content;
         if (typeof delta === "string") text += delta;
+        const u = chunk?.usage;
+        if (u && typeof u === "object") {
+          const promptTokens = typeof u.prompt_tokens === "number" ? u.prompt_tokens : 0;
+          const completionTokens =
+            typeof u.completion_tokens === "number" ? u.completion_tokens : 0;
+          usage = {
+            promptTokens,
+            completionTokens,
+            totalTokens:
+              typeof u.total_tokens === "number" ? u.total_tokens : promptTokens + completionTokens,
+          };
+        }
       } catch {
         /* partial frame */
       }
     }
   }
-  return text;
+  return { text, usage };
 }
 
-/** Read an Anthropic SSE stream and concatenate the text deltas. */
+/**
+ * Read an Anthropic SSE stream: concatenate the text deltas and harvest usage
+ * (`input_tokens` arrives on `message_start`, `output_tokens` on `message_delta`).
+ */
 async function readAnthropicStream(body: ReadableStream<Uint8Array>) {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let text = "";
+  let promptTokens: number | null = null;
+  let completionTokens: number | null = null;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -199,13 +263,27 @@ async function readAnthropicStream(body: ReadableStream<Uint8Array>) {
         const chunk = JSON.parse(trimmed.slice(5).trim());
         if (chunk?.type === "content_block_delta" && typeof chunk?.delta?.text === "string") {
           text += chunk.delta.text;
+        } else if (chunk?.type === "message_start") {
+          const t = chunk?.message?.usage?.input_tokens;
+          if (typeof t === "number") promptTokens = t;
+        } else if (chunk?.type === "message_delta") {
+          const t = chunk?.usage?.output_tokens;
+          if (typeof t === "number") completionTokens = t;
         }
       } catch {
         /* partial frame */
       }
     }
   }
-  return text;
+  const usage: AiUsage | null =
+    promptTokens == null && completionTokens == null
+      ? null
+      : {
+          promptTokens: promptTokens ?? 0,
+          completionTokens: completionTokens ?? 0,
+          totalTokens: (promptTokens ?? 0) + (completionTokens ?? 0),
+        };
+  return { text, usage };
 }
 
 function parseJsonish<T>(text: string): T | null {
@@ -269,10 +347,12 @@ export async function aiJson<T>(opts: {
   orgId?: string | null | undefined;
   config?: AiConfig;
   schema?: SchemaLike<T>;
+  /** Ledger slug for the AI spend log — see AI_FEATURES in src/server/ai-usage.ts. */
+  feature: string;
 }): Promise<AiJsonResult<T>> {
-  if (!opts.schema) return aiJsonOnce(opts);
+  if (!opts.schema) return aiJsonOnce(opts, 1);
 
-  const first = await aiJsonOnce(opts);
+  const first = await aiJsonOnce(opts, 1);
   if (!first.ok) return first;
 
   const check = opts.schema.safeParse(first.data);
@@ -282,10 +362,13 @@ export async function aiJson<T>(opts: {
     .slice(0, 5)
     .map((i) => `${String(i.path.join(".") || "(root)")}: ${i.message}`)
     .join("; ");
-  const retry = await aiJsonOnce({
-    ...opts,
-    prompt: `${opts.prompt}\n\nYour previous response did not match the required JSON schema (${issues}). Return the corrected JSON object and nothing else.`,
-  });
+  const retry = await aiJsonOnce(
+    {
+      ...opts,
+      prompt: `${opts.prompt}\n\nYour previous response did not match the required JSON schema (${issues}). Return the corrected JSON object and nothing else.`,
+    },
+    2,
+  );
   if (!retry.ok) return retry;
   const recheck = opts.schema.safeParse(retry.data);
   if (!recheck.success) {
@@ -294,16 +377,20 @@ export async function aiJson<T>(opts: {
   return { ...retry, data: recheck.data };
 }
 
-async function aiJsonOnce<T>(opts: {
-  system: string;
-  prompt: string;
-  images?: AiImage[];
-  docs?: AiDoc[];
-  /** Org context for credential resolution — pass whenever the caller has one. */
-  orgId?: string | null | undefined;
-  /** Force a provider/model instead of the saved setting (used by "Test model"). */
-  config?: AiConfig;
-}): Promise<AiJsonResult<T>> {
+async function aiJsonOnce<T>(
+  opts: {
+    system: string;
+    prompt: string;
+    images?: AiImage[];
+    docs?: AiDoc[];
+    /** Org context for credential resolution — pass whenever the caller has one. */
+    orgId?: string | null | undefined;
+    /** Force a provider/model instead of the saved setting (used by "Test model"). */
+    config?: AiConfig;
+    feature: string;
+  },
+  attempt: number,
+): Promise<AiJsonResult<T>> {
   const cfg = opts.config ?? (await resolveAiConfig(opts.orgId));
 
   if (!cfg.apiKey) {
@@ -316,6 +403,7 @@ async function aiJsonOnce<T>(opts: {
 
   const images = (opts.images ?? []).slice(0, 8);
   const docs = (opts.docs ?? []).slice(0, 2);
+  const startedAt = Date.now();
 
   if (cfg.provider === "google") {
     let res: Response;
@@ -327,21 +415,53 @@ async function aiJsonOnce<T>(opts: {
         docs,
       });
     } catch (e) {
-      return { ok: false, status: 502, message: `AI request failed: ${(e as Error).message}` };
+      const message = `AI request failed: ${(e as Error).message}`;
+      await logUsage(opts.feature, cfg, opts.orgId, {
+        status: "error",
+        attempt,
+        startedAt,
+        usage: null,
+        message,
+      });
+      return { ok: false, status: 502, message };
     }
     if (!res.ok || !res.body) {
-      return providerError(cfg, res.status, await res.text().catch(() => ""));
+      const out = providerError(cfg, res.status, await res.text().catch(() => ""));
+      await logUsage(opts.feature, cfg, opts.orgId, {
+        status: "error",
+        attempt,
+        startedAt,
+        usage: null,
+        message: out.message,
+      });
+      return out;
     }
     const stream = await readGoogleStream(res.body);
     const parsed = parseJsonish<T>(stream.text);
     if (!parsed) {
-      return {
-        ok: false,
-        status: 502,
-        message: "AI returned a response that could not be parsed.",
-      };
+      const message = "AI returned a response that could not be parsed.";
+      await logUsage(opts.feature, cfg, opts.orgId, {
+        status: "error",
+        attempt,
+        startedAt,
+        usage: stream.usage,
+        message,
+      });
+      return { ok: false, status: 502, message };
     }
-    return { ok: true, data: parsed, model: cfg.model, provider: cfg.provider };
+    await logUsage(opts.feature, cfg, opts.orgId, {
+      status: "ok",
+      attempt,
+      startedAt,
+      usage: stream.usage,
+    });
+    return {
+      ok: true,
+      data: parsed,
+      model: cfg.model,
+      provider: cfg.provider,
+      usage: stream.usage,
+    };
   }
 
   const isAnthropic = cfg.provider === "anthropic";
@@ -400,6 +520,8 @@ async function aiJsonOnce<T>(opts: {
         model: cfg.model,
         stream: true,
         response_format: { type: "json_object" },
+        // Without this the SSE stream carries no usage frame at all.
+        stream_options: { include_usage: true },
         messages: [
           { role: "system", content: opts.system },
           { role: "user", content: userContent },
@@ -408,7 +530,15 @@ async function aiJsonOnce<T>(opts: {
       res = await fetch(endpoint, { method: "POST", headers, body: JSON.stringify(body) });
     }
   } catch (e) {
-    return { ok: false, status: 502, message: `AI request failed: ${(e as Error).message}` };
+    const message = `AI request failed: ${(e as Error).message}`;
+    await logUsage(opts.feature, cfg, opts.orgId, {
+      status: "error",
+      attempt,
+      startedAt,
+      usage: null,
+      message,
+    });
+    return { ok: false, status: 502, message };
   }
 
   if (!res.ok || !res.body) {
@@ -423,15 +553,40 @@ async function aiJsonOnce<T>(opts: {
     if (res.status === 402)
       message = `${message} — check this organisation's provider billing and API-key quota.`;
     if (res.status === 429) message = `${message} — rate limited, retry shortly.`;
-    return { ok: false, status: res.status, message: `${cfg.provider}: ${message}` };
+    const out = { ok: false as const, status: res.status, message: `${cfg.provider}: ${message}` };
+    await logUsage(opts.feature, cfg, opts.orgId, {
+      status: "error",
+      attempt,
+      startedAt,
+      usage: null,
+      message: out.message,
+    });
+    return out;
   }
 
-  const text = isAnthropic ? await readAnthropicStream(res.body) : await readOpenAiStream(res.body);
-  const parsed = parseJsonish<T>(text);
-  if (!parsed)
-    return { ok: false, status: 502, message: "AI returned a response that could not be parsed." };
+  const stream = isAnthropic
+    ? await readAnthropicStream(res.body)
+    : await readOpenAiStream(res.body);
+  const parsed = parseJsonish<T>(stream.text);
+  if (!parsed) {
+    const message = "AI returned a response that could not be parsed.";
+    await logUsage(opts.feature, cfg, opts.orgId, {
+      status: "error",
+      attempt,
+      startedAt,
+      usage: stream.usage,
+      message,
+    });
+    return { ok: false, status: 502, message };
+  }
 
-  return { ok: true, data: parsed, model: cfg.model, provider: cfg.provider };
+  await logUsage(opts.feature, cfg, opts.orgId, {
+    status: "ok",
+    attempt,
+    startedAt,
+    usage: stream.usage,
+  });
+  return { ok: true, data: parsed, model: cfg.model, provider: cfg.provider, usage: stream.usage };
 }
 
 /* --------------------------------------------------- research (web search) */
@@ -478,13 +633,19 @@ async function callGoogleStream(
   );
 }
 
-/** Read Gemini's SSE stream: concatenate text parts and spot search grounding. */
+/**
+ * Read Gemini's SSE stream: concatenate text parts, spot search grounding, and
+ * harvest `usageMetadata` (sent on every chunk; totals grow monotonically).
+ * Thought tokens are billed output: prefer `totalTokenCount − promptTokenCount`
+ * and fall back to `candidatesTokenCount + thoughtsTokenCount`.
+ */
 async function readGoogleStream(body: ReadableStream<Uint8Array>) {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let text = "";
   let grounded = false;
+  let usage: AiUsage | null = null;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -501,12 +662,26 @@ async function readGoogleStream(body: ReadableStream<Uint8Array>) {
           if (typeof part?.text === "string") text += part.text;
         }
         if (cand?.groundingMetadata?.groundingChunks?.length) grounded = true;
+        const u = chunk?.usageMetadata;
+        if (u && typeof u === "object") {
+          const prompt = typeof u.promptTokenCount === "number" ? u.promptTokenCount : 0;
+          const total = typeof u.totalTokenCount === "number" ? u.totalTokenCount : null;
+          const candidates =
+            typeof u.candidatesTokenCount === "number" ? u.candidatesTokenCount : 0;
+          const thoughts = typeof u.thoughtsTokenCount === "number" ? u.thoughtsTokenCount : 0;
+          // Gemini reports cumulative totals on every chunk — the last frame wins.
+          usage = {
+            promptTokens: prompt,
+            completionTokens: total != null ? Math.max(0, total - prompt) : candidates + thoughts,
+            totalTokens: total ?? prompt + candidates + thoughts,
+          };
+        }
       } catch {
         /* partial frame */
       }
     }
   }
-  return { text, grounded };
+  return { text, grounded, usage };
 }
 
 export type AiResearchResult<T> =
@@ -517,6 +692,7 @@ export type AiResearchResult<T> =
       provider: AiProvider;
       /** False when the model answered without live web access — an estimate. */
       grounded: boolean;
+      usage: AiUsage | null;
     }
   | { ok: false; status: number; message: string };
 
@@ -535,7 +711,12 @@ function providerError(cfg: AiConfig, status: number, raw: string) {
   return { ok: false as const, status, message: `${cfg.provider}: ${message}` };
 }
 
-type AnthropicResearch = { text: string; grounded: boolean; paused: boolean };
+type AnthropicResearch = {
+  text: string;
+  grounded: boolean;
+  paused: boolean;
+  usage: AiUsage | null;
+};
 
 /**
  * Anthropic stream reader that additionally harvests server-side web-search
@@ -547,7 +728,9 @@ async function readAnthropicResearchStream(body: ReadableStream<Uint8Array>) {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  const out: AnthropicResearch = { text: "", grounded: false, paused: false };
+  const out: AnthropicResearch = { text: "", grounded: false, paused: false, usage: null };
+  let promptTokens: number | null = null;
+  let completionTokens: number | null = null;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -566,13 +749,27 @@ async function readAnthropicResearchStream(body: ReadableStream<Uint8Array>) {
           if (block?.type === "web_search_tool_result" && Array.isArray(block.content)) {
             out.grounded = true;
           }
-        } else if (chunk?.type === "message_delta" && chunk?.delta?.stop_reason === "pause_turn") {
-          out.paused = true;
+        } else if (chunk?.type === "message_start") {
+          const t = chunk?.message?.usage?.input_tokens;
+          if (typeof t === "number") promptTokens = t;
+        } else if (chunk?.type === "message_delta") {
+          const t = chunk?.usage?.output_tokens;
+          if (typeof t === "number") completionTokens = t;
+          if (chunk?.delta?.stop_reason === "pause_turn") {
+            out.paused = true;
+          }
         }
       } catch {
         /* partial frame */
       }
     }
+  }
+  if (promptTokens != null || completionTokens != null) {
+    out.usage = {
+      promptTokens: promptTokens ?? 0,
+      completionTokens: completionTokens ?? 0,
+      totalTokens: (promptTokens ?? 0) + (completionTokens ?? 0),
+    };
   }
   return out;
 }
@@ -597,35 +794,54 @@ export async function aiResearchJson<T>(opts: {
   prompt: string;
   orgId?: string | null | undefined;
   config?: AiConfig;
+  /** Ledger slug for the AI spend log — see AI_FEATURES in src/server/ai-usage.ts. */
+  feature: string;
 }): Promise<AiResearchResult<T>> {
   const cfg = opts.config ?? (await resolveAiConfig(opts.orgId));
   if (!cfg.apiKey) return resolveNoKeyError(cfg);
+
+  const startedAt = Date.now();
+  const fail = async (attempt: number, usage: AiUsage | null, message: string, status = 502) => {
+    await logUsage(opts.feature, cfg, opts.orgId, {
+      status: "error",
+      attempt,
+      startedAt,
+      usage,
+      message,
+    });
+    return { ok: false as const, status, message };
+  };
 
   if (cfg.provider === "google") {
     let res: Response;
     try {
       res = await callGoogleStream(cfg, opts.system, opts.prompt, { json: true, search: true });
     } catch (e) {
-      return { ok: false, status: 502, message: `AI request failed: ${(e as Error).message}` };
+      return fail(1, null, `AI request failed: ${(e as Error).message}`);
     }
     if (!res.ok || !res.body) {
-      return providerError(cfg, res.status, await res.text().catch(() => ""));
+      const out = providerError(cfg, res.status, await res.text().catch(() => ""));
+      return fail(1, null, out.message, out.status);
     }
     const stream = await readGoogleStream(res.body);
     const parsed = parseJsonish<T>(stream.text);
     if (!parsed) {
-      return {
-        ok: false,
-        status: 502,
-        message: "AI returned a response that could not be parsed.",
-      };
+      return fail(1, stream.usage, "AI returned a response that could not be parsed.");
     }
+    await logUsage(opts.feature, cfg, opts.orgId, {
+      status: "ok",
+      attempt: 1,
+      startedAt,
+      usage: stream.usage,
+      grounded: stream.grounded,
+    });
     return {
       ok: true,
       data: parsed,
       model: cfg.model,
       provider: cfg.provider,
       grounded: stream.grounded,
+      usage: stream.usage,
     };
   }
 
@@ -655,33 +871,33 @@ export async function aiResearchJson<T>(opts: {
         signal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
       });
     } catch (e) {
-      return { ok: false, status: 502, message: `AI request failed: ${(e as Error).message}` };
+      return fail(1, null, `AI request failed: ${(e as Error).message}`);
     }
     if (!res.ok || !res.body) {
-      return providerError(cfg, res.status, await res.text().catch(() => ""));
+      const out = providerError(cfg, res.status, await res.text().catch(() => ""));
+      return fail(1, null, out.message, out.status);
     }
 
     const stream = await readAnthropicResearchStream(res.body);
     if (stream.paused) {
-      return {
-        ok: false,
-        status: 502,
-        message: "The research turn was paused mid-flight — try again.",
-      };
+      return fail(1, stream.usage, "The research turn was paused mid-flight — try again.");
     }
     const parsed = parseJsonish<T>(stream.text);
-    if (!parsed)
-      return {
-        ok: false,
-        status: 502,
-        message: "AI returned a response that could not be parsed.",
-      };
+    if (!parsed) return fail(1, stream.usage, "AI returned a response that could not be parsed.");
+    await logUsage(opts.feature, cfg, opts.orgId, {
+      status: "ok",
+      attempt: 1,
+      startedAt,
+      usage: stream.usage,
+      grounded: stream.grounded,
+    });
     return {
       ok: true,
       data: parsed,
       model: cfg.model,
       provider: cfg.provider,
       grounded: stream.grounded,
+      usage: stream.usage,
     };
   }
 
@@ -692,6 +908,8 @@ export async function aiResearchJson<T>(opts: {
       model: cfg.model,
       stream: true,
       response_format: { type: "json_object" },
+      // Without this the SSE stream carries no usage frame at all.
+      stream_options: { include_usage: true },
       messages: [
         { role: "system", content: opts.system },
         { role: "user", content: opts.prompt },
@@ -713,22 +931,46 @@ export async function aiResearchJson<T>(opts: {
   try {
     res = await call(true);
   } catch (e) {
-    return { ok: false, status: 502, message: `AI request failed: ${(e as Error).message}` };
+    return fail(1, null, `AI request failed: ${(e as Error).message}`);
   }
   let grounded = true;
   if (res.status === 400) {
-    res = await call(false).catch((e: Error) => {
-      throw new Error(`AI request failed: ${e.message}`);
+    await logUsage(opts.feature, cfg, opts.orgId, {
+      status: "error",
+      attempt: 1,
+      startedAt,
+      usage: null,
+      message: "Model rejected web_search_options — retrying without live search.",
     });
+    try {
+      res = await call(false);
+    } catch (e) {
+      return fail(2, null, `AI request failed: ${(e as Error).message}`);
+    }
     grounded = false;
   }
   if (!res.ok || !res.body) {
-    return providerError(cfg, res.status, await res.text().catch(() => ""));
+    const out = providerError(cfg, res.status, await res.text().catch(() => ""));
+    return fail(grounded ? 1 : 2, null, out.message, out.status);
   }
 
-  const text = await readOpenAiStream(res.body);
-  const parsed = parseJsonish<T>(text);
+  const stream = await readOpenAiStream(res.body);
+  const parsed = parseJsonish<T>(stream.text);
   if (!parsed)
-    return { ok: false, status: 502, message: "AI returned a response that could not be parsed." };
-  return { ok: true, data: parsed, model: cfg.model, provider: cfg.provider, grounded };
+    return fail(grounded ? 1 : 2, stream.usage, "AI returned a response that could not be parsed.");
+  await logUsage(opts.feature, cfg, opts.orgId, {
+    status: "ok",
+    attempt: grounded ? 1 : 2,
+    startedAt,
+    usage: stream.usage,
+    grounded,
+  });
+  return {
+    ok: true,
+    data: parsed,
+    model: cfg.model,
+    provider: cfg.provider,
+    grounded,
+    usage: stream.usage,
+  };
 }

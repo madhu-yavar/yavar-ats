@@ -50,6 +50,7 @@ export async function generateQuestions(opts: {
   const count = Math.max(4, Math.min(10, opts.count ?? 6));
   const ai = await aiJson<{ questions: AssessmentQuestion[] }>({
     orgId: opts.orgId,
+    feature: "assessment_generate",
     system:
       `You design a short situational-judgement questionnaire for one specific role. Write exactly ${count} ` +
       "open questions, each targeting ONE of these dimensions: " +
@@ -79,6 +80,7 @@ export async function scoreAnswers(opts: {
 }): Promise<MindsetResult> {
   const ai = await aiJson<Omit<MindsetResult, "model">>({
     orgId: opts.orgId,
+    feature: "assessment_score",
     system:
       "You are an assessment psychologist scoring written situational answers for a hiring team. Score ONLY " +
       "what the candidate wrote. Reward specific lived examples with a decision, an action and an outcome; " +

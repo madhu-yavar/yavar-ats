@@ -64,7 +64,9 @@ export const verifyCandidate = createServerFn({ method: "POST" })
       .set({ lastSyncedAt: new Date(), syncStatus: "ok" })
       .where(eq(candidates.id, candidate.id));
 
-    return result;
+    // `model` is persisted above and logged in ai_usage_events — not sent on.
+    const { model: _model, ...wire } = result;
+    return wire;
   });
 
 /** Bulk re-verification from the talent pool table. */

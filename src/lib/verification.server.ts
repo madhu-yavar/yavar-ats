@@ -177,6 +177,7 @@ export async function verifyClaims(opts: {
     red_flags: string[];
     summary: string;
   }>({
+    feature: "claim_verify",
     system:
       INJECTION_RULES +
       "\nYou are a hiring-integrity analyst. Extract the concrete claims from a candidate's CV " +

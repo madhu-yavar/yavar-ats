@@ -427,6 +427,7 @@ export async function extractDocument(input: {
   const result = await aiJson<ExtractedDoc>({
     orgId: input.orgId,
     config: cfg,
+    feature: "doc_extract",
     schema: ExtractedDoc,
     system,
     ...(images.length ? { images } : {}),

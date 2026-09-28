@@ -824,6 +824,36 @@ export const aiProviderCredentials = pgTable(
   (t) => [uniqueIndex("ai_provider_credentials_org_provider_key").on(t.orgId, t.provider)],
 );
 
+export type AiUsageStatus = "ok" | "error";
+
+/** One row per provider request — the R&D ledger behind the platform console. */
+export const aiUsageEvents = pgTable(
+  "ai_usage_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").references(() => organizations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    feature: text("feature").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    status: text("status").$type<AiUsageStatus>().notNull(),
+    promptTokens: integer("prompt_tokens").notNull().default(0),
+    completionTokens: integer("completion_tokens").notNull().default(0),
+    totalTokens: integer("total_tokens").notNull().default(0),
+    attempt: integer("attempt").notNull().default(1),
+    durationMs: integer("duration_ms"),
+    grounded: boolean("grounded"),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("ai_usage_events_org_created_idx").on(t.orgId, t.createdAt),
+    index("ai_usage_events_feature_created_idx").on(t.feature, t.createdAt),
+    index("ai_usage_events_model_idx").on(t.model),
+    index("ai_usage_events_created_idx").on(t.createdAt),
+  ],
+);
+
 export type EmailOutboxKind = "ack" | "stage_update" | "interview_invite" | "offer_released";
 export type EmailOutboxStatus = "queued" | "sent" | "failed" | "suppressed";
 export type EmailOutboxAttachment = {

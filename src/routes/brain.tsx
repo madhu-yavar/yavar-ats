@@ -176,7 +176,7 @@ function TalentBrainPage() {
       {data?.narrative ? (
         <section className="panel-lift border-l-2 border-l-primary p-4">
           <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
-            Executive reading {data.engine ? `· ${data.engine}` : ""}
+            Executive reading
           </p>
           <p className="mt-2 text-sm leading-relaxed">{data.narrative}</p>
         </section>

@@ -38,7 +38,6 @@ export type TalentBrain = OntologyBuild & {
     retired: number;
   }>;
   narrative: string | null;
-  engine: string | null;
 };
 
 /** The Talent Brain is a governance view: CHRO, HR head, owner or the product super admin. */
@@ -235,7 +234,6 @@ export const readTalentBrain = createServerFn({ method: "POST" })
       builtAt: src.snapshots[0]?.createdAt.toISOString() ?? null,
       history: history(src.snapshots),
       narrative: null,
-      engine: null,
     };
   });
 
@@ -272,6 +270,8 @@ export const rebuildTalentBrain = createServerFn({ method: "POST" })
         skills?: Array<{ slug: string; category?: string; aliases?: string[] }>;
         narrative?: string;
       }>({
+        orgId: access.orgId,
+        feature: "talent_brain",
         system:
           "You curate an enterprise talent ontology. Group skills into consistent capability families, " +
           "merge obvious synonyms, and write a short executive reading of supply vs demand. " +
@@ -409,7 +409,6 @@ export const rebuildTalentBrain = createServerFn({ method: "POST" })
       builtAt: now.toISOString(),
       history: history(snaps),
       narrative,
-      engine,
     };
   });
 

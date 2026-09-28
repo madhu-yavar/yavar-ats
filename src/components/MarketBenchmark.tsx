@@ -32,13 +32,6 @@ const confidenceTone: Record<string, string> = {
   low: "text-muted-foreground",
 };
 
-const engineLabel: Record<string, string> = {
-  openai: "Your OpenAI key",
-  anthropic: "Your Claude key",
-  google: "Your Google Gemini key",
-  gemini: "Your Google Gemini key",
-};
-
 type Draft = { level: string; low: string; median: string; high: string };
 
 export function MarketBenchmarkPanel(props: Props) {
@@ -200,9 +193,6 @@ export function MarketBenchmarkPanel(props: Props) {
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>
               {data.role} · {data.location || "Location not set"} · as of {data.as_of}
-            </span>
-            <span className="rounded-full border px-2 py-0.5">
-              {engineLabel[data.engine.provider] ?? data.engine.provider} · {data.engine.model}
             </span>
             <span className="rounded-full border px-2 py-0.5">
               {data.research.grounded ? "Live web search on" : "Live web search off"} ·{" "}

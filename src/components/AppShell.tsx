@@ -6,6 +6,7 @@ import {
   Briefcase,
   Building2,
   CalendarClock,
+  Coins,
   Database,
   Globe2,
   Handshake,
@@ -98,6 +99,12 @@ const NAV_GROUPS: NavGroup[] = [
         label: "Platform console",
         icon: Globe2,
         show: (c) => c.isSuperUser || c.claimable,
+      },
+      {
+        to: "/platform-ai-usage",
+        label: "AI usage",
+        icon: Coins,
+        show: (c) => c.isSuperUser,
       },
       {
         to: "/catalogue",

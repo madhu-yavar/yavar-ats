@@ -246,7 +246,7 @@ export function MarketBenchmark({
             </Collapsible>
           )}
           <p className="num text-[10px] text-muted-foreground">
-            {shown.provider} · {shown.model} · {new Date(shown.created_at).toLocaleString()}
+            {new Date(shown.created_at).toLocaleString()}
           </p>
         </div>
       )}

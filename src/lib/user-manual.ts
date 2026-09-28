@@ -119,7 +119,7 @@ export const MANUAL_SECTIONS: ManualSection[] = [
       "Integrations (/integrations) is split into three tabs: Candidate sources, Interview meetings and AI model. Each row is closed until you click it, so the page stays short; open a row to paste credentials, press Save and then Test.",
       "Credentials are stored on the server and are never sent back to the browser. 'What each source can do' at the bottom of the sources tab explains what every channel needs: the LinkedIn company sign-in, the ATSIQ Capture browser extension (pair it with the org's capture token), public apply links, the careers inbox, Naukri/Indeed keys, and GitHub for public-signal verification.",
       "Organisation (/organisation): keep the organisation profile, currency and careers inbox current. The owner can also archive the organisation here — archiving locks everyone out but deletes nothing.",
-      "AI provider: choose Gemini, OpenAI or Claude and the model used for matching, scoring, verification and the copilot. Every organisation must supply its own key; ATSIQ never substitutes a shared platform key. Test the connection before running batches.",
+      "AI provider: choose the provider and model used for matching, scoring, verification and the copilot on the Integrations page. Every organisation must supply its own key; ATSIQ never substitutes a shared platform key. Test the connection before running batches.",
     ],
   },
   {

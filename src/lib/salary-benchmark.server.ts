@@ -147,6 +147,7 @@ export async function researchSalaryBenchmark(
   orgId?: string | null,
 ): Promise<BenchmarkResult> {
   const ai = await aiResearchJson<unknown>({
+    feature: "salary_research",
     system: SYSTEM,
     prompt: buildPrompt(input),
     ...(orgId ? { orgId } : {}),

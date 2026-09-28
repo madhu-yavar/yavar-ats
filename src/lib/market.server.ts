@@ -65,8 +65,6 @@ export type MarketBenchmark = {
     /** True when the model's live web search was armed for this run. */
     grounded: boolean;
   };
-  /** Which model actually did the reasoning, so nobody has to guess. */
-  engine: { provider: string; model: string };
 };
 
 /**
@@ -347,6 +345,7 @@ export async function benchmarkMarket(input: {
 
   const result = await aiResearchJson<MarketBenchmark>({
     orgId: input.orgId,
+    feature: "market_benchmark",
     system:
       "You are a compensation market-research analyst with live web search. Run the supplied search queries now, " +
       "open the best results, and combine them with the supplied live page extracts to derive annual total " +
@@ -448,6 +447,5 @@ export async function benchmarkMarket(input: {
       domains: Array.from(new Set(sources.filter((s) => s.read).map((s) => s.domain))),
       grounded: result.grounded,
     },
-    engine: { provider: result.provider, model: result.model },
   };
 }

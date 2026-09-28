@@ -207,6 +207,7 @@ export const askCopilot = createServerFn({ method: "POST" })
 
     const result = await aiJson<{ answer?: string }>({
       orgId: context.orgId,
+      feature: "copilot",
       system: SYSTEM,
       prompt: `DATA SNAPSHOT (live, this organisation only):\n${JSON.stringify(facts).slice(0, 24000)}\n\nCONVERSATION SO FAR:\n${transcript}\n\nAnswer the latest HR message.`,
     });

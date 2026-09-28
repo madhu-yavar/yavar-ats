@@ -100,6 +100,7 @@ export async function parseCv(
       "Use null when a field is genuinely absent. Never invent values. URLs must be real URLs read from the resume — never fabricate one.",
     prompt: untrusted("resume", resumeText.slice(0, 20000)),
     orgId,
+    feature: "resume_parse",
     schema: ParsedCvSchema,
   });
   return parsed.ok ? parsed.data : null;

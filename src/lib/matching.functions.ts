@@ -12,10 +12,15 @@ import {
   resolveTemplate,
   stripUnreplacedPlaceholders,
 } from "./templates.server";
-import { mapWithConcurrency, scoreCandidate, type MatchResult } from "./matching.server";
+import {
+  mapWithConcurrency,
+  scoreCandidate,
+  type MatchResult,
+  type MatchWire,
+} from "./matching.server";
 import { type SocialSignal } from "./social.server";
 
-export type { MatchResult } from "./matching.server";
+export type { MatchWire };
 
 /* ------------------------------------------------------------------ JD gen */
 
@@ -66,6 +71,7 @@ export const generateJd = createServerFn({ method: "POST" })
     const template = await resolveTemplate(context.orgId, "jd", data.templateId);
     const result = await aiJson<GeneratedJd>({
       orgId: context.orgId,
+      feature: "jd_generate",
       system: buildTemplateSystemPrompt({ base: BASE_JD_SYSTEM, template }),
       prompt: JSON.stringify(data),
     });
@@ -92,6 +98,7 @@ export const importJd = createServerFn({ method: "POST" })
       GeneratedJd & { experience_min: number; experience_max: number; detected_title: string }
     >({
       orgId: context.orgId,
+      feature: "jd_import",
       system:
         "You are parsing an EXISTING job description supplied by a recruiter. Extract, never invent. " +
         "Keep the original wording where possible; only normalise structure. " +
@@ -139,6 +146,7 @@ export const suggestWeights = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<WeightAdvice> => {
     const result = await aiJson<WeightAdvice>({
       orgId: context.orgId,
+      feature: "weight_suggest",
       system:
         "You tune the scoring model for one specific job description. Distribute exactly 100 points across " +
         "six dimensions: skills, experience (years vs band), career (tenure stability, progression, gaps), " +
@@ -216,6 +224,7 @@ export const draftLinkedinPost = createServerFn({ method: "POST" })
     const template = await resolveTemplate(context.orgId, "linkedin_post", data.templateId);
     const result = await aiJson<SocialJobPost>({
       orgId: context.orgId,
+      feature: "linkedin_post",
       system: buildTemplateSystemPrompt({
         base: BASE_POST_SYSTEM,
         template,
@@ -291,15 +300,16 @@ const MatchInput = z.object({
 export const matchJdToCv = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((data: unknown) => MatchInput.parse(data))
-  .handler(async ({ data, context }): Promise<MatchResult> =>
-    scoreCandidate({
+  .handler(async ({ data, context }) => {
+    const { model: _model, ...wire } = await scoreCandidate({
       orgId: context.orgId,
       jd: data.jd,
       candidate: data.candidate as never,
       weights: data.weights,
       includeSocial: data.includeSocial,
-    }),
-  );
+    });
+    return wire;
+  });
 
 /* ------------------------------------------- one JD vs many CVs (bulk run) */
 
@@ -321,7 +331,7 @@ const PipelineInput = z.object({
 });
 
 export type PipelineRowResult =
-  | { applicationId: string; ok: true; result: MatchResult }
+  | { applicationId: string; ok: true; result: Omit<MatchResult, "model"> }
   | { applicationId: string; ok: false; message: string };
 
 /**
@@ -335,14 +345,14 @@ export const matchPipeline = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<PipelineRowResult[]> =>
     mapWithConcurrency(data.rows, data.concurrency, async (row) => {
       try {
-        const result = await scoreCandidate({
+        const { model: _model, ...wire } = await scoreCandidate({
           orgId: context.orgId,
           jd: data.jd,
           candidate: row.candidate as never,
           weights: data.weights,
           includeSocial: data.includeSocial,
         });
-        return { applicationId: row.applicationId, ok: true as const, result };
+        return { applicationId: row.applicationId, ok: true as const, result: wire };
       } catch (e) {
         return {
           applicationId: row.applicationId,
@@ -374,6 +384,7 @@ export const parseResume = createServerFn({ method: "POST" })
       website_url: string | null;
     }>({
       orgId: context.orgId,
+      feature: "resume_parse",
       system:
         "Extract structured candidate data from a resume. Return ONLY JSON with keys: full_name, email, phone, " +
         "location, experience_years (number), education, skills (string array), linkedin_url, github_url, website_url. " +
@@ -405,6 +416,7 @@ export const runAiScreening = createServerFn({ method: "POST" })
       transcript: { question: string; expected_signal: string }[];
     }>({
       orgId: context.orgId,
+      feature: "candidate_score",
       system:
         "You design and evaluate an AI first-round screening interview. Produce 6 role-specific questions with the " +
         "signal each one probes, and score the candidate on jd_match_score and skillset_score (0-100 each) based " +
@@ -471,7 +483,6 @@ const PersistInput = z.object({
     rationale: z.string().nullish(),
     riskFlags: z.array(z.string()),
     recommendation: z.enum(["select", "reject", "hold"]).nullish(),
-    model: z.string().nullish(),
     careerMetrics: z.unknown(),
     careerFlags: z.array(z.string()),
     logisticsFlags: z.array(z.string()),
@@ -502,6 +513,10 @@ export const persistMatchResult = createServerFn({ method: "POST" })
     if (!application) throw new Error("Application not found");
 
     const s = data.score;
+    // The model id never travels through the client; resolve it here so the
+    // score row still records which engine produced the result.
+    const { resolveAiConfig } = await import("./ai-gateway.server");
+    const cfg = await resolveAiConfig(context.orgId);
     await db.insert(matchScores).values({
       applicationId: application.id,
       orgId: context.orgId,
@@ -524,7 +539,7 @@ export const persistMatchResult = createServerFn({ method: "POST" })
       rationale: s.rationale ?? null,
       riskFlags: s.riskFlags,
       recommendation: s.recommendation ?? null,
-      model: s.model ?? null,
+      model: cfg.model,
     });
 
     if (data.socialSignals?.length) {

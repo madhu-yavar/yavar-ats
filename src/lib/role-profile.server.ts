@@ -14,7 +14,6 @@ export type RoleProfile = {
   good_to_have_skills: string[];
   qualifications: string[];
   responsibilities: string;
-  engine: { provider: string; model: string };
 };
 
 const clean = (v: unknown, max: number) =>
@@ -36,6 +35,7 @@ export async function draftRoleProfile(input: {
 }): Promise<RoleProfile> {
   const result = await aiJson<RoleProfile>({
     orgId: input.orgId,
+    feature: "role_profile",
     system:
       "You are a senior talent-acquisition partner writing a hiring specification. For the given role title and " +
       "experience range, list the skills and qualifications a strong candidate must have. Use the exact, " +
@@ -63,6 +63,5 @@ export async function draftRoleProfile(input: {
     responsibilities: String(result.data.responsibilities ?? "")
       .trim()
       .slice(0, 2000),
-    engine: { provider: result.provider, model: result.model },
   };
 }

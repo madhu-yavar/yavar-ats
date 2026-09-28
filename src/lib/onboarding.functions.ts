@@ -51,7 +51,6 @@ export type OnboardingDocWire = {
   extraction_note: string | null;
   extracted: ExtractedDoc | null;
   extracted_text: string | null;
-  model: string | null;
   status: string;
   review_note: string | null;
   reviewed_at: string | null;
@@ -79,7 +78,6 @@ function toWire(row: typeof onboardingDocuments.$inferSelect): OnboardingDocWire
     extraction_note: row.extractionNote,
     extracted: (row.extracted ?? null) as ExtractedDoc | null,
     extracted_text: row.extractedText ? row.extractedText.slice(0, 6000) : null,
-    model: row.model,
     status: row.status,
     review_note: row.reviewNote,
     reviewed_at: row.reviewedAt ? row.reviewedAt.toISOString() : null,

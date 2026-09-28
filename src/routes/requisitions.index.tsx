@@ -199,9 +199,7 @@ function Requisitions() {
         await addMasterItem("education", name).catch(() => {});
       }
       await qc.invalidateQueries({ queryKey: ["master_items"] });
-      toast.success(
-        `Drafted by ${out.engine.provider} · ${out.engine.model} — review and edit as needed.`,
-      );
+      toast.success("Role profile drafted — review and edit as needed.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not draft the role profile.");
     } finally {

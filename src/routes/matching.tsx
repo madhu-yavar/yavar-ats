@@ -24,7 +24,7 @@ import {
   matchPipeline,
   persistMatchResult,
   saveRecruiterOverride,
-  type MatchResult,
+  type MatchWire,
 } from "@/lib/matching.functions";
 import { addApplicationsToRequisition } from "@/lib/requisitions.functions";
 import { importCandidates } from "@/lib/integrations.functions";
@@ -97,7 +97,7 @@ const WEIGHT_LABELS: Record<keyof Weights, string> = {
 const SOCIAL_TTL_DAYS = 14;
 
 /** Map a live MatchResult onto the match_scores columns the server fn writes. */
-function scoreInput(result: MatchResult) {
+function scoreInput(result: MatchWire) {
   return {
     skillsScore: result.skills_score,
     experienceScore: result.experience_score,
@@ -113,7 +113,6 @@ function scoreInput(result: MatchResult) {
     rationale: result.rationale,
     riskFlags: result.risk_flags,
     recommendation: result.recommendation,
-    model: result.model,
     careerMetrics: result.career.metrics,
     careerFlags: result.career.assessment.flags,
     logisticsFlags: [...(result.logistics?.flags ?? []), ...(result.logistics?.blockers ?? [])],
@@ -123,7 +122,7 @@ function scoreInput(result: MatchResult) {
 }
 
 /** Fresh social signals from a result, in the shape the upsert expects. */
-function socialInput(result: MatchResult) {
+function socialInput(result: MatchWire) {
   return result.social.signals.map((s) => ({
     provider: s.provider,
     profileUrl: s.profile_url,
@@ -164,7 +163,7 @@ function Matching() {
   const [includeSocial, setIncludeSocial] = useState(true);
   const [running, setRunning] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [results, setResults] = useState<Record<string, MatchResult>>({});
+  const [results, setResults] = useState<Record<string, MatchWire>>({});
   const [overrideReason, setOverrideReason] = useState("");
   const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
   const [rescoreAll, setRescoreAll] = useState(false);
@@ -403,7 +402,7 @@ function Matching() {
       }));
   }
 
-  async function persistResult(applicationId: string, stage: string, result: MatchResult) {
+  async function persistResult(applicationId: string, stage: string, result: MatchWire) {
     await persistMatchResult({
       data: {
         applicationId,

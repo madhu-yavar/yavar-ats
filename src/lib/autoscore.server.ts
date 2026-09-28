@@ -224,7 +224,7 @@ export async function scoreUnscored(opts: {
           fromStage: app.stage,
           toStage: nextStage,
           actor: AUTO_STAGE_ACTOR,
-          reason: `Auto-${nextStage === "shortlisted" ? "shortlisted" : "screened"} by matching score ${result.overall_score}/100 (${result.model})${cand.suspectedPromptInjection ? " — prompt-injection flag held at ai_screened" : ""}`,
+          reason: `Auto-${nextStage === "shortlisted" ? "shortlisted" : "screened"} by matching score ${result.overall_score}/100${cand.suspectedPromptInjection ? " — prompt-injection flag held at ai_screened" : ""}`,
           source: "ai",
         });
       }

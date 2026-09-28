@@ -141,6 +141,7 @@ export async function submitApplicationImpl(
         "Use null when a field is genuinely absent. Never invent values.",
       prompt: data.resumeText.slice(0, 20000),
       orgId: r.orgId,
+      feature: "resume_parse",
     });
 
     const p = parsed.ok ? parsed.data : null;

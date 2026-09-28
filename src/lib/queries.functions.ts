@@ -55,6 +55,15 @@ function snakeRows(rows: Record<string, unknown>[]): Record<string, Json>[] {
   return rows.map((r) => snakeRow(r));
 }
 
+/** snakeRows, minus server-internal columns (engine/model ids never reach a client). */
+function snakeRowsWithout(rows: Record<string, unknown>[], drop: string[]): Record<string, Json>[] {
+  return rows.map((r) => {
+    const copy = { ...r };
+    for (const key of drop) delete copy[key];
+    return snakeRow(copy);
+  });
+}
+
 export const listDepartments = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .handler(async ({ context }) => {
@@ -302,7 +311,7 @@ export const listCandidateVerifications = createServerFn({ method: "POST" })
         ),
       )
       .orderBy(desc(candidateVerifications.createdAt));
-    return snakeRows(rows);
+    return snakeRowsWithout(rows, ["model"]);
   });
 
 export const listCandidateAssessments = createServerFn({ method: "POST" })
@@ -319,7 +328,7 @@ export const listCandidateAssessments = createServerFn({ method: "POST" })
         ),
       )
       .orderBy(desc(candidateAssessments.createdAt));
-    return snakeRows(rows);
+    return snakeRowsWithout(rows, ["model"]);
   });
 
 /** Every graded screening call in the organisation, newest first (PostgREST wire shape). */
@@ -331,7 +340,7 @@ export const listAllScreeningRuns = createServerFn({ method: "POST" })
       .from(screeningRuns)
       .where(eq(screeningRuns.orgId, context.orgId))
       .orderBy(desc(screeningRuns.createdAt));
-    return snakeRows(rows);
+    return snakeRowsWithout(rows, ["engine", "audio_engine"]);
   });
 
 /* ------------------------------------------------- team & sharing (0030) */
@@ -394,7 +403,7 @@ export const listScreeningKits = createServerFn({ method: "POST" })
       .from(screeningKits)
       .where(eq(screeningKits.orgId, context.orgId))
       .orderBy(desc(screeningKits.createdAt));
-    return snakeRows(rows);
+    return snakeRowsWithout(rows, ["engine"]);
   });
 
 export const listCandidateScreeningKits = createServerFn({ method: "POST" })
@@ -411,7 +420,7 @@ export const listCandidateScreeningKits = createServerFn({ method: "POST" })
         ),
       )
       .orderBy(desc(screeningKits.createdAt));
-    return snakeRows(rows);
+    return snakeRowsWithout(rows, ["engine"]);
   });
 
 export const listCandidateScreeningRuns = createServerFn({ method: "POST" })
@@ -428,7 +437,7 @@ export const listCandidateScreeningRuns = createServerFn({ method: "POST" })
         ),
       )
       .orderBy(desc(screeningRuns.createdAt));
-    return snakeRows(rows);
+    return snakeRowsWithout(rows, ["engine", "audio_engine"]);
   });
 
 export const listOwnershipEvents = createServerFn({ method: "POST" })

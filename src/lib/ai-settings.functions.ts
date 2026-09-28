@@ -126,6 +126,8 @@ export const testAiModel = createServerFn({ method: "POST" })
       system: 'Reply with exactly {"ok": true} and nothing else.',
       prompt: "connection test",
       config: cfg,
+      orgId: context.orgId,
+      feature: "model_test",
     });
 
     const outcome = res.ok

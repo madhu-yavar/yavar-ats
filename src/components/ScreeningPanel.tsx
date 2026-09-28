@@ -59,11 +59,6 @@ const VERDICT_TONE: Record<string, string> = {
   not_answered: "text-muted-foreground",
 };
 
-function engineLabel(engine: unknown) {
-  const e = engine as { provider?: string; model?: string } | null;
-  return e?.provider ? `${e.provider} · ${e.model ?? ""}`.trim() : null;
-}
-
 export function ScreeningPanel(props: {
   candidateId: string;
   candidateName: string;
@@ -118,9 +113,7 @@ export function ScreeningPanel(props: {
       });
       setAnswers({});
       await qc.invalidateQueries({ queryKey: ["screening_kits", props.candidateId] });
-      toast.success(
-        `${out.questions.length} questions ready — drafted by ${out.engine.provider} · ${out.engine.model}`,
-      );
+      toast.success(`${out.questions.length} questions ready — review and edit as needed.`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not prepare the questions.");
     } finally {
@@ -187,9 +180,7 @@ export function ScreeningPanel(props: {
       });
       setAudio(null);
       await qc.invalidateQueries({ queryKey: ["screening_runs", props.candidateId] });
-      toast.success(
-        `Screening ${out.screening_score}/100 · ${out.recommendation} — graded by ${out.engine.provider} · ${out.engine.model}`,
-      );
+      toast.success(`Screening ${out.screening_score}/100 · ${out.recommendation}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not score the answers.");
     } finally {
@@ -264,7 +255,6 @@ export function ScreeningPanel(props: {
             <p className="mt-3 rounded-md border bg-muted/40 p-2.5 text-sm">{kit.focus_summary}</p>
           ) : null}
           <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-            {engineLabel(kit.engine) ? <span>Drafted by {engineLabel(kit.engine)}</span> : null}
             <button type="button" className="hover:text-foreground" onClick={copyAll}>
               Copy all
             </button>
@@ -446,9 +436,7 @@ export function ScreeningPanel(props: {
             </ul>
           ) : null}
           <p className="mt-2 text-xs text-muted-foreground">
-            {engineLabel(latest.engine) ? `Graded by ${engineLabel(latest.engine)}` : ""}
-            {latest.audio_engine ? ` · transcribed by ${latest.audio_engine}` : ""}
-            {` · ${new Date(latest.created_at).toLocaleString()}`}
+            {`Graded ${new Date(latest.created_at).toLocaleString()}`}
           </p>
           {latest.audio_path ? (
             <button

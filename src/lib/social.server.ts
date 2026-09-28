@@ -186,6 +186,7 @@ export async function fetchLinkedinSignal(opts: {
     headline_alignment: string;
     rationale: string;
   }>({
+    feature: "linkedin_signal",
     system:
       INJECTION_RULES +
       "\nYou are a talent-intelligence analyst scoring a candidate's professional/LinkedIn narrative against a job description. " +
@@ -272,6 +273,7 @@ export async function fetchWritingSignal(opts: {
   }
 
   const result = await aiJson<{ score: number; themes: string[]; rationale: string }>({
+    feature: "writing_signal",
     system:
       INJECTION_RULES +
       "\nYou score a candidate's public writing/portfolio for domain relevance, depth and communication quality against a role. " +
