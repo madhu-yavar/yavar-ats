@@ -10,7 +10,7 @@
 | Database | Ordinary **PostgreSQL 14+** (drizzle ORM). Schema source of truth: `drizzle/pg-migrations/` applied by `scripts/migrate-pg.mjs` (idempotent). **Do NOT use `drizzle-kit migrate`** — the old `drizzle/migrations` journal is incomplete and cannot build a fresh database. |
 | Auth | First-party: scrypt password hashes in the `users` table, httpOnly `atsiq_session` cookie, DB-backed `sessions` table. No external identity provider. |
 | Object storage (CV vault, template sources, brand logos) | Any S3-compatible store. Recommended: **GCS bucket with HMAC keys**. |
-| Email | Any SMTP relay (`SMTP_URL`). Used for: registration confirmation, invitations, password reset, org approval notices. |
+| Email | Any SMTP relay (`SMTP_URL`). Used for: registration confirmation, invitations, password reset, org approval notices, and the queued candidate emails (acknowledgment, stage update, interview invitation, offer) drained by the `process-email-outbox` cron. |
 | Health probe | **`GET /`** (HTTP 200). There is no `/health` endpoint. |
 | Environment variables | **Copy-ready template: `infra/env.production.example`** — the annotated production `.env`. Only `DATABASE_URL` + `SESSION_SECRET` are required to boot; `SMTP_URL` is required for email delivery. |
 
@@ -178,12 +178,13 @@ On the Cloud Run URL:
 
 ## 7. Scheduled jobs (optional, previously on Lovable cron)
 
-Cloud Scheduler (both call the app with `Authorization: Bearer <value of atsiq-cron-secret>`):
+Cloud Scheduler (all call the app with `Authorization: Bearer <value of atsiq-cron-secret>`):
 
 | Schedule | Target |
 |---|---|
 | every 5–15 min | `https://atsiq.yavar.ai/api/public/inbox-sync` |
 | hourly | `https://atsiq.yavar.ai/api/public/sync-candidates` |
+| every 5 min | `https://atsiq.yavar.ai/api/public/process-email-outbox` (drains the candidate email queue) |
 
 ## 8. Notes & gotchas
 

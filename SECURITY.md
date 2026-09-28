@@ -22,7 +22,8 @@ We credit reporters in release notes on request.
 
 - Authentication: first-party credentials and database-backed sessions are delivered in Secure,
   HttpOnly cookies with a bounded seven-day sliding lifetime. Password hashes use scrypt; legacy
-  bcrypt hashes are upgraded after a successful sign-in.
+  bcrypt hashes are upgraded after a successful sign-in. One password policy (8–128 characters with
+  upper, lower and digit) is enforced server-side on registration, reset and change.
 - Authorization contract: every tenant-scoped server function uses `requireOrg`, `requireRole`,
   `requireOrgOwner` or `requirePlatformAdmin`, and every query carries an explicit `orgId`
   predicate. There is no database row-level-security fallback; server middleware and query scope
@@ -37,6 +38,11 @@ We credit reporters in release notes on request.
 - Auditing: privileged actions append to `audit_log` (`src/server/audit.ts`).
 - AI safety: untrusted CV, JD, profile and mail text is delimited before prompting; structured model
   responses are schema-validated before use. AI decisions retain evidence and permit audited human override.
+- AI usage ledger: every provider request is recorded in `ai_usage_events`
+  (organisation, feature, provider, model, token counts, attempt, latency, outcome) directly from
+  the gateway. The ledger is read-only to platform super admins via `/platform-ai-usage` and gives
+  per-tenant AI visibility without exposing model identities to tenant users — vendor and model
+  names stay inside the organisation's own integrations settings.
 - Files: CVs and screening recordings remain private in S3-compatible storage and are served through
   authorised application paths rather than public object URLs.
 - CI: typecheck, lint, `bun audit --level high`, gitleaks, integration tests (`.github/workflows/ci.yml`).

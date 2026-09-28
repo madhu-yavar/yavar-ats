@@ -94,3 +94,26 @@
 ## Historical migration evidence
 
 The checks above sections A–F are retained as the migration baseline from 2026-09-12. References there to pending P2–P6 work describe that historical test round and are superseded by the current architecture confirmation in this report.
+
+---
+
+## Addendum — 2026-09-28 verification round (AI usage ledger, vendor abstraction, candidate emails, password policy)
+
+Scope: the 2026-09-27/28 feature set — candidate email outbox (11c13e7), enterprise password policy (6ff14c4), AI usage ledger + platform AI-usage console + vendor/model abstraction (df1139c). This round was run against the disposable local stack (`scripts/local-e2e/local-dev.sh`: PostgreSQL on 127.0.0.1:54333, dev server on 127.0.0.1:8080) and does not lift the release-blocked status above, which remains tied to the 2026-09-22 production-data incident.
+
+| #   | Check                                                                                                                                                                              | Result |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| A1  | `bun run typecheck` (strict, whole project)                                                                                                                                        | ✅ PASS |
+| A2  | `bun run build` (production build; regenerates route tree incl. `/platform-ai-usage`)                                                                                              | ✅ PASS |
+| A3  | `node scripts/migrate-pg.mjs` applies `0015_ai_usage_events.sql` + `0016_scrub_model_ids.sql`; second run reports "database is up to date" (idempotency)                            | ✅ PASS |
+| A4  | `ai_usage_events` shape verified in psql: columns, four indexes, FKs to organizations (cascade) and users (set null)                                                               | ✅ PASS |
+| A5  | Migration `0016` scrub tested transactionally: `"Auto-shortlisted … 87/100 (gemini-2.5-flash) — prompt-injection flag held"` → model id removed, suffix intact, double-space avoided; idempotent (0 rows on re-run); rolled back, no residue | ✅ PASS |
+| A6  | Dashboard aggregate SQL exercised with seeded rows in a rolled-back transaction: totals/errors/avg-latency/org counts, per-feature, per-org, per-model, `date_trunc` daily series   | ✅ PASS |
+| B1  | Browser round (`/tmp/atsiq-e2e/abstraction-usage-e2e.mjs`, playwright-core headless Chrome) — **10/10 PASS**: landing (logged out) has zero vendor-name hits and shows the neutral copy; /catalogue (super admin) zero hits with neutral BYO wording; /help zero hits; `/platform-ai-usage` renders totals/charts/tables/log for the super admin with the "AI usage" nav entry; nav entry hidden and page locked ("Super-user access only") for an org owner; response-payload scan on /matching + /candidates as org owner found no `model`/`engine` strings outside integrations/auth calls | ✅ PASS |
+| B2  | Populated-data visual check: seeded 63 ledger rows, screenshotted `/platform-ai-usage` (stat tiles, stacked daily tokens, tokens-by-module bars, org/model tables, error badges, pagination), then deleted the synthetic rows | ✅ PASS |
+| C1  | In-app manual refreshed: Integrations described as four tabs (Candidate sources, Interview meetings, Candidate emails, AI model) with a candidate-email toggles step; password-policy step added to sign-in/recovery | ✅ PASS |
+
+Known limits of this round:
+
+- Live token harvesting (`include_usage` for OpenAI, Anthropic `message_start`/`message_delta` frames, Gemini `usageMetadata`) was not exercised against real provider keys — the local fixture has none. The code paths are typed, unit of truth is the gateway, and the no-key path correctly logs nothing. First production run with a valid organisation key should confirm non-zero token counts per provider in `/platform-ai-usage`.
+- Candidate email delivery was verified in the earlier e2e round (see `/tmp/atsiq-e2e/email-e2e-*.mjs` history); this round only re-verified documentation and settings surfaces.

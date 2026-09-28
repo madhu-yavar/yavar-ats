@@ -40,11 +40,13 @@ gcloud builds submit \
 
 Container: port **3000**, `HOST=0.0.0.0`. No `/health` endpoint exists — use `GET /` (HTTP 200) as readiness/liveness probe. One DB migration **Job per release** (below) must complete before rolling the Deployment.
 
-**Migrations** (run from a checkout with Bun, once per release, before deploy):
+**Migrations** (run once per release, before deploy). The schema source of truth is `drizzle/pg-migrations/` applied by `scripts/migrate-pg.mjs` (idempotent — safe to re-run; records applied files in `pg_migrations`). **Do NOT use `bunx drizzle-kit migrate`** — the legacy `drizzle/migrations` journal is incomplete and cannot build a fresh database:
 
 ```bash
-DATABASE_URL="postgresql://USER:PASS@PRIVATE_IP:5432/atsiq" bunx drizzle-kit migrate
+DATABASE_URL="postgresql://USER:PASS@PRIVATE_IP:5432/atsiq" node scripts/migrate-pg.mjs
 ```
+
+Recent additions to note per release: `0015_ai_usage_events.sql` (AI usage ledger backing the platform console) and `0016_scrub_model_ids.sql` (one-time vendor-name scrub of stage-event reasons). The ledger grows with AI traffic; if size ever matters, prune `ai_usage_events` older than your retention window — aggregates read it live.
 
 ## 4. Environment variables
 

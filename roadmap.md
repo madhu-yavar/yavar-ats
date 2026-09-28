@@ -1,5 +1,22 @@
 # Roadmap
 
+## AI governance and spend visibility (2026-09-28)
+
+- [x] AI usage ledger (`ai_usage_events`): one row per provider request — organisation, module, provider, model, prompt/completion/total tokens, retry attempt, latency, outcome — written fire-and-forget from the gateway; OpenAI/Anthropic/Gemini usage frames harvested, transcription included, missing frames recorded as zero (never estimated)
+- [x] Platform super-admin AI usage console (`/platform-ai-usage`): totals, daily stacked tokens, spend per module/organisation/model, filterable request log with pagination, CSV export
+- [x] Vendor/model abstraction: AI provider and model names removed from the landing page, product catalogue (page and PDF/XLSX export), user manual, toasts/cards and all server-to-client payloads; a one-time migration (`0016`) scrubbed model ids already persisted in candidate activity trails. The organisation's own Integrations → AI model settings keeps provider and model choice (BYO keys)
+- [x] Usage attribution fixes: careers-inbox CV parsing and Talent Brain AI now carry the organisation id so every ledger row resolves to a tenant
+
+## Candidate communications (2026-09-27)
+
+- [x] Candidate email outbox with queued delivery, retries and suppression
+- [x] Four automatic email types: application acknowledgment, stage update, interview invitation and offer notification
+- [x] Per-organisation toggles, reply-to address and timezone on Integrations → Candidate emails; platform SMTP relay does delivery
+
+## Account security (2026-09-28)
+
+- [x] One password policy everywhere (8–128 characters with upper, lower and digit) enforced server-side on registration, reset and change; new password must differ from current; show/hide toggles and a visible policy hint on every password field
+
 ## First-login guidance
 
 - [x] Add a first-login, replayable integration-to-offer journey in the HR copilot and share its steps with the user manual

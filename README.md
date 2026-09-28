@@ -10,24 +10,35 @@ ATSIQ by Yavar AI is an enterprise recruiting intelligence platform. It combines
 - Requisition, JD and offer approval workflows with immutable decision trails
 - Pre-onboarding document collection, agent extraction and HR validation gating offer release
 - Public applications, careers-inbox intake, bulk CV parsing and ATSIQ Capture for deep LinkedIn Recruiter collection
+- Candidate email notifications (acknowledgment, stage update, interview invitation, offer) with per-organisation toggles
 - Explainable JD↔CV scoring, social-claim verification and recruiter overrides
 - Contextual screening kits, private audio transcription, grading and interview scorecards
 - Google Meet, Microsoft Teams and Zoom meeting integrations
 - Talent pool ownership, referrals, deduplication, internal job postings and reusable organisation knowledge
 - Live compensation research with cited evidence and saved organisation corrections
 - CHRO dashboard, reports, Talent Brain ontology and Return on Individual capability-to-goal planning
-- Product catalogue and organisation oversight for the platform super admin
+- Guided first-login journey in the HR copilot, mirrored by the in-app manual
+- Product catalogue and organisation oversight for the platform super admin, including an AI usage console (every AI request logged per organisation, module and model with token counts and latency)
 
 ## Architecture
 
 - TanStack Start, React 19 and Vite
 - PostgreSQL as the system of record, accessed with Drizzle ORM
-- First-party password authentication and database-backed HttpOnly cookie sessions
+- First-party password authentication with a shared password policy, database-backed HttpOnly cookie sessions
 - S3-compatible private object storage for CVs and screening recordings
-- Organisation-owned Gemini, OpenAI or Claude credentials encrypted at rest; there is no shared AI-key fallback
+- Organisation-supplied AI provider credentials encrypted at rest; there is no shared AI-key fallback, and vendor/model names are never exposed outside the organisation's own integrations settings
+- Every AI provider request is recorded in the `ai_usage_events` ledger (feature, provider, model, tokens, attempt, latency) and aggregated in the platform super admin's `/platform-ai-usage` console
 - Tenant authorization enforced in server middleware and repeated in every tenant query with an explicit organisation predicate
 
-See `DEPLOYMENT-GCP.md`, `SECURITY.md` and `VERIFICATION_REPORT.md` for operating, security and release evidence.
+## Documentation
+
+- `docs/er-diagram.md` — entity-relationship diagram for all tables, generated from `drizzle/schema.ts` (`node scripts/gen-er-diagram.mjs`)
+- `DEPLOYMENT-GCP.md` and `infra/DEPLOYMENT-HANDOFF.md` — deployment runbooks
+- `SECURITY.md` — security policy and secure-development baseline
+- `VERIFICATION_REPORT.md` — release validation evidence
+- `roadmap.md` — shipped work and open items
+
+See also `SECURITY.md` and `VERIFICATION_REPORT.md` for operating, security and release evidence.
 
 ## Local development
 
