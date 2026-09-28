@@ -26,7 +26,7 @@ A production `Dockerfile` is at the repo root. `vite build` produces a Node serv
 | Secrets            | GCP Secret Manager → mounted as K8s Secrets                                                                                                                                            |
 | DNS                | Cloud DNS record `z-atsiq.yavar.ai` → load-balancer IP                                                                                                                                 |
 | TLS                | GCLB Ingress + `ManagedCertificate` (or cert-manager)                                                                                                                                  |
-| Cron               | Cloud Scheduler (2 jobs, see §6)                                                                                                                                                       |
+| Cron               | Cloud Scheduler (3 jobs, see §6)                                                                                                                                                       |
 | Container registry | Artifact Registry                                                                                                                                                                      |
 
 ## 3. Build & run

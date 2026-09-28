@@ -42,3 +42,6 @@ public/*.zip
 
 # Local dev object-storage fallback (src/server/storage.ts)
 .local-storage/
+
+# Security audit reports — never commit while repo is public
+SECURITY_AUDIT_REPORT*.md
