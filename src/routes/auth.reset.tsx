@@ -3,8 +3,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { applyResetRequest } from "@/lib/auth-client";
+import { PASSWORD_POLICY_HINT, passwordProblem } from "@/lib/password-policy";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/PasswordInput";
 import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/auth/reset")({
@@ -39,6 +40,11 @@ function ResetPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    const problem = passwordProblem(password);
+    if (problem) {
+      toast.error(problem);
+      return;
+    }
     if (password !== confirm) {
       toast.error("The two passwords do not match.");
       return;
@@ -73,22 +79,21 @@ function ResetPage() {
 
         <div className="space-y-2">
           <Label htmlFor="new-password">New password</Label>
-          <Input
+          <PasswordInput
             id="new-password"
-            type="password"
             required
-            minLength={8}
+            autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
+          <p className="text-xs text-muted-foreground">{PASSWORD_POLICY_HINT}</p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="confirm-password">Repeat password</Label>
-          <Input
+          <PasswordInput
             id="confirm-password"
-            type="password"
             required
-            minLength={8}
+            autoComplete="new-password"
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
           />

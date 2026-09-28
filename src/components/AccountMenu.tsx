@@ -3,12 +3,13 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { changePasswordRequest, signOutApp } from "@/lib/auth-client";
+import { PASSWORD_POLICY_HINT, passwordProblem } from "@/lib/password-policy";
 import { useMe } from "@/hooks/useMe";
 import { useOrg } from "@/hooks/useOrg";
 import { usePlatform } from "@/hooks/usePlatform";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/PasswordInput";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -76,8 +77,9 @@ export function AccountMenu() {
   }, [changeOpen]);
 
   async function changePassword() {
-    if (newPassword.length < 8) {
-      toast.error("New password must be at least 8 characters.");
+    const problem = passwordProblem(newPassword);
+    if (problem) {
+      toast.error(problem);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -197,9 +199,8 @@ export function AccountMenu() {
           >
             <div className="space-y-2">
               <Label htmlFor="current-password">Current password</Label>
-              <Input
+              <PasswordInput
                 id="current-password"
-                type="password"
                 required
                 autoComplete="current-password"
                 value={currentPassword}
@@ -208,23 +209,20 @@ export function AccountMenu() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="new-account-password">New password</Label>
-              <Input
+              <PasswordInput
                 id="new-account-password"
-                type="password"
                 required
-                minLength={8}
                 autoComplete="new-password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
               />
+              <p className="text-xs text-muted-foreground">{PASSWORD_POLICY_HINT}</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirm-account-password">Repeat new password</Label>
-              <Input
+              <PasswordInput
                 id="confirm-account-password"
-                type="password"
                 required
-                minLength={8}
                 autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}

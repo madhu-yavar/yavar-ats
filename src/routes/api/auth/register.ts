@@ -12,6 +12,7 @@ import { hashPassword } from "../../../server/password";
 import { signActionToken } from "../../../server/action-token";
 import { sendTemplateEmail } from "../../../lib/email-templates/send-email";
 import { workEmailProblem } from "../../../lib/work-email";
+import { passwordProblem } from "../../../lib/password-policy";
 
 export const Route = createFileRoute("/api/auth/register")({
   server: {
@@ -29,11 +30,9 @@ export const Route = createFileRoute("/api/auth/register")({
 
           const problem = workEmailProblem(email);
           if (problem) return Response.json({ error: problem }, { status: 400 });
-          if (password.length < 8) {
-            return Response.json(
-              { error: "Password must be at least 8 characters." },
-              { status: 400 },
-            );
+          const policyProblem = passwordProblem(password);
+          if (policyProblem) {
+            return Response.json({ error: policyProblem }, { status: 400 });
           }
 
           const [existing] = await db

@@ -9,6 +9,7 @@ import { db } from "../../../server/db";
 import { sessions, users } from "@db/schema";
 import { verifyActionToken } from "../../../server/action-token";
 import { hashPassword } from "../../../server/password";
+import { passwordProblem } from "../../../lib/password-policy";
 
 export const Route = createFileRoute("/api/auth/reset")({
   server: {
@@ -20,11 +21,9 @@ export const Route = createFileRoute("/api/auth/reset")({
             password?: string;
           };
           const password = body.password ?? "";
-          if (password.length < 8) {
-            return Response.json(
-              { error: "Password must be at least 8 characters." },
-              { status: 400 },
-            );
+          const policyProblem = passwordProblem(password);
+          if (policyProblem) {
+            return Response.json({ error: policyProblem }, { status: 400 });
           }
           const verified = verifyActionToken(body.token ?? "", "password-reset");
           if (!verified) {

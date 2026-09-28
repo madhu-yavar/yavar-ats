@@ -13,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { workEmailProblem } from "@/lib/work-email";
+import { PASSWORD_POLICY_HINT, passwordProblem } from "@/lib/password-policy";
+import { PasswordInput } from "@/components/PasswordInput";
 import { isPublicPath } from "@/lib/public-paths";
 import { BrandFooter, BrandLogo } from "@/components/Brand";
 import {
@@ -669,6 +671,8 @@ function SignInCard() {
       } else {
         const problem = workEmailProblem(email);
         if (problem) throw new Error(problem);
+        const policyProblem = passwordProblem(password);
+        if (policyProblem) throw new Error(policyProblem);
         const message = await registerRequest(email, password);
         toast.success(message);
       }
@@ -705,14 +709,16 @@ function SignInCard() {
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">Password</Label>
-        <Input
+        <PasswordInput
           id="password"
-          type="password"
           required
-          minLength={6}
+          minLength={8}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
+        {mode === "signup" ? (
+          <p className="text-xs text-muted-foreground">{PASSWORD_POLICY_HINT}</p>
+        ) : null}
       </div>
 
       <Button type="submit" className="w-full" disabled={busy}>

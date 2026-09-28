@@ -10,6 +10,7 @@ import { db } from "../../../server/db";
 import { sessions, users } from "@db/schema";
 import { hashPassword, verifyAnyPassword } from "../../../server/password";
 import { resolveSession, SESSION_COOKIE } from "../../../server/identity";
+import { passwordProblem } from "../../../lib/password-policy";
 
 function currentToken(request: Request): string | null {
   const header = request.headers.get("cookie");
@@ -37,11 +38,9 @@ export const Route = createFileRoute("/api/auth/change-password")({
           };
           const currentPassword = body.currentPassword ?? "";
           const newPassword = body.newPassword ?? "";
-          if (newPassword.length < 8) {
-            return Response.json(
-              { error: "New password must be at least 8 characters." },
-              { status: 400 },
-            );
+          const policyProblem = passwordProblem(newPassword);
+          if (policyProblem) {
+            return Response.json({ error: policyProblem }, { status: 400 });
           }
 
           const [user] = await db
@@ -54,6 +53,12 @@ export const Route = createFileRoute("/api/auth/change-password")({
           }
           if (!(await verifyAnyPassword(currentPassword, user.passwordHash))) {
             return Response.json({ error: "Current password is incorrect." }, { status: 401 });
+          }
+          if (await verifyAnyPassword(newPassword, user.passwordHash)) {
+            return Response.json(
+              { error: "The new password must be different from the current one." },
+              { status: 400 },
+            );
           }
 
           const { createHash } = await import("node:crypto");
