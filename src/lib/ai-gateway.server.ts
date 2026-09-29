@@ -397,7 +397,9 @@ async function aiJsonOnce<T>(
     return {
       ok: false,
       status: 401,
-      message: `No ${cfg.provider} API key saved. Add one on the Integrations page.`,
+      // Vendor-neutral on purpose — provider names never leave the server
+      // outside the Integrations → AI model settings page.
+      message: "No AI model key saved. Add one on the Integrations page.",
     };
   }
 
@@ -426,7 +428,7 @@ async function aiJsonOnce<T>(
       return { ok: false, status: 502, message };
     }
     if (!res.ok || !res.body) {
-      const out = providerError(cfg, res.status, await res.text().catch(() => ""));
+      const out = providerError(res.status, await res.text().catch(() => ""));
       await logUsage(opts.feature, cfg, opts.orgId, {
         status: "error",
         attempt,
@@ -553,7 +555,7 @@ async function aiJsonOnce<T>(
     if (res.status === 402)
       message = `${message} — check this organisation's provider billing and API-key quota.`;
     if (res.status === 429) message = `${message} — rate limited, retry shortly.`;
-    const out = { ok: false as const, status: res.status, message: `${cfg.provider}: ${message}` };
+    const out = { ok: false as const, status: res.status, message };
     await logUsage(opts.feature, cfg, opts.orgId, {
       status: "error",
       attempt,
@@ -697,7 +699,7 @@ export type AiResearchResult<T> =
   | { ok: false; status: number; message: string };
 
 /** Map a failed provider response to the shared error shape. */
-function providerError(cfg: AiConfig, status: number, raw: string) {
+function providerError(status: number, raw: string) {
   let message = raw || `AI request failed (${status}).`;
   try {
     const parsed = JSON.parse(raw);
@@ -708,7 +710,7 @@ function providerError(cfg: AiConfig, status: number, raw: string) {
   if (status === 402)
     message = `${message} — check this organisation's provider billing and API-key quota.`;
   if (status === 429) message = `${message} — rate limited, retry shortly.`;
-  return { ok: false as const, status, message: `${cfg.provider}: ${message}` };
+  return { ok: false as const, status, message };
 }
 
 type AnthropicResearch = {
@@ -776,13 +778,13 @@ async function readAnthropicResearchStream(body: ReadableStream<Uint8Array>) {
 
 const RESEARCH_TIMEOUT_MS = 180_000;
 
-function resolveNoKeyError(cfg: AiConfig) {
-  return {
-    ok: false as const,
-    status: 401,
-    message: `No ${cfg.provider} API key saved. Add one on the Integrations page.`,
-  };
-}
+const NO_KEY_ERROR = {
+  ok: false as const,
+  status: 401,
+  // Vendor-neutral on purpose — provider names never leave the server
+  // outside the Integrations → AI model settings page.
+  message: "No AI model key saved. Add one on the Integrations page.",
+};
 
 /**
  * Like `aiJson`, but arms the provider's server-side web search so the model
@@ -798,7 +800,7 @@ export async function aiResearchJson<T>(opts: {
   feature: string;
 }): Promise<AiResearchResult<T>> {
   const cfg = opts.config ?? (await resolveAiConfig(opts.orgId));
-  if (!cfg.apiKey) return resolveNoKeyError(cfg);
+  if (!cfg.apiKey) return NO_KEY_ERROR;
 
   const startedAt = Date.now();
   const fail = async (attempt: number, usage: AiUsage | null, message: string, status = 502) => {
@@ -820,7 +822,7 @@ export async function aiResearchJson<T>(opts: {
       return fail(1, null, `AI request failed: ${(e as Error).message}`);
     }
     if (!res.ok || !res.body) {
-      const out = providerError(cfg, res.status, await res.text().catch(() => ""));
+      const out = providerError(res.status, await res.text().catch(() => ""));
       return fail(1, null, out.message, out.status);
     }
     const stream = await readGoogleStream(res.body);
@@ -874,7 +876,7 @@ export async function aiResearchJson<T>(opts: {
       return fail(1, null, `AI request failed: ${(e as Error).message}`);
     }
     if (!res.ok || !res.body) {
-      const out = providerError(cfg, res.status, await res.text().catch(() => ""));
+      const out = providerError(res.status, await res.text().catch(() => ""));
       return fail(1, null, out.message, out.status);
     }
 
@@ -950,7 +952,7 @@ export async function aiResearchJson<T>(opts: {
     grounded = false;
   }
   if (!res.ok || !res.body) {
-    const out = providerError(cfg, res.status, await res.text().catch(() => ""));
+    const out = providerError(res.status, await res.text().catch(() => ""));
     return fail(grounded ? 1 : 2, null, out.message, out.status);
   }
 

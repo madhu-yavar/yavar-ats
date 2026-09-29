@@ -310,11 +310,13 @@ export async function transcribeScreeningAudio(input: {
   const cfg = await resolveAiConfig(input.orgId);
   if (cfg.provider === "anthropic") {
     throw new Error(
-      "Claude cannot transcribe audio. Type the answers in, or switch the AI provider on Integrations.",
+      "The configured AI model cannot transcribe audio. Type the answers in, or switch the AI provider on Integrations.",
     );
   }
   if (!cfg.apiKey) {
-    throw new Error(`No ${cfg.provider} API key saved. Add one on the Integrations page.`);
+    // Vendor-neutral on purpose — provider names never leave the server
+    // outside the Integrations → AI model settings page.
+    throw new Error("No AI model key saved. Add one on the Integrations page.");
   }
 
   // Google's own API has no OpenAI-style transcription route, so a BYO Gemini
@@ -414,7 +416,7 @@ export async function transcribeScreeningAudio(input: {
     if (res.status === 402)
       message = `${message} — check this organisation's provider billing and API-key quota.`;
     await log("error", null, `${cfg.provider}: ${message}`);
-    throw new Error(`${cfg.provider}: ${message}`);
+    throw new Error(message);
   }
   const json = (await res.json()) as {
     text?: string;
