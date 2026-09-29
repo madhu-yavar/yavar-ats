@@ -11,6 +11,8 @@ import net from "node:net";
  *     metadata protection, including DNS-rebinding via the resolved IP pin)
  *   - redirects are not followed automatically; each hop must be re-validated
  *   - a hard timeout and a response-size cap bound the fetch
+ *   - methods are restricted to an allow-list (GET default; POST/PUT/PATCH/
+ *     DELETE for API integrations) and the host header stays pinned
  */
 
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -58,9 +60,18 @@ async function assertPublicHost(hostname: string): Promise<string> {
 
 export type SafeFetchResponse = Response & { __resolvedIp?: string };
 
+const ALLOWED_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
+
 export async function safeFetch(
   rawUrl: string,
-  opts?: { timeoutMs?: number; maxBytes?: number },
+  opts?: {
+    timeoutMs?: number;
+    maxBytes?: number;
+    /** Defaults to GET. Redirects are never followed, so POSTs are never replayed. */
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+  },
 ): Promise<SafeFetchResponse> {
   const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   let url: URL;
@@ -73,6 +84,8 @@ export async function safeFetch(
     throw new Error("Only http/https URLs can be fetched.");
   }
   if (url.username || url.password) throw new Error("Credentials in URLs are not allowed.");
+  const method = (opts?.method ?? "GET").toUpperCase();
+  if (!ALLOWED_METHODS.has(method)) throw new Error(`Method not allowed: ${method}`);
 
   const resolvedIp = await assertPublicHost(url.hostname);
 
@@ -80,11 +93,14 @@ export async function safeFetch(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     // Pin the resolved, vetted IP for this request: a rebind between the check
-    // and the connection cannot smuggle us to a private address.
+    // and the connection cannot smuggle us to a private address. The host
+    // header stays pinned to the URL even when caller headers are supplied.
     const res = (await fetch(url, {
+      method,
+      headers: { ...(opts?.headers ?? {}), host: url.host },
+      ...(opts?.body !== undefined ? { body: opts.body } : {}),
       redirect: "manual",
       signal: controller.signal,
-      headers: { host: url.host },
     } as RequestInit & { host?: string })) as SafeFetchResponse;
     res.__resolvedIp = resolvedIp;
     return res;

@@ -1433,3 +1433,104 @@ export const onboardingDocuments = pgTable(
     index("onboarding_documents_org_status_idx").on(t.orgId, t.status),
   ],
 );
+
+/* -------------------------------------------------------------- HRMS sync */
+
+/**
+ * Normalised employee-master rows synced *from* the organisation's HRMS
+ * (Keka, greytHR, …) over the connections in source_integrations
+ * (category "hrms"). The HRMS stays the system of record — this table is a
+ * read-only cache, so rows are upserted and tombstoned (employment_status),
+ * never deleted by the sync.
+ */
+export const hrmsEmployees = pgTable(
+  "hrms_employees",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    integrationId: uuid("integration_id")
+      .notNull()
+      .references(() => sourceIntegrations.id, { onDelete: "cascade" }),
+    externalId: text("external_id").notNull(),
+    fullName: text("full_name").notNull(),
+    email: text("email"),
+    employeeCode: text("employee_code"),
+    department: text("department"),
+    jobTitle: text("job_title"),
+    location: text("location"),
+    managerExternalId: text("manager_external_id"),
+    /** Vendor value passed through; "terminated"/"resigned" tombstones a leaver. */
+    employmentStatus: text("employment_status").notNull().default("active"),
+    joinedOn: text("joined_on"),
+    /** Last vendor payload, kept for field-mapping debugging — never rendered. */
+    raw: jsonb("raw")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("hrms_employees_integration_external_key").on(t.integrationId, t.externalId),
+    index("hrms_employees_org_department_idx").on(t.orgId, t.department),
+  ],
+);
+
+/** One row per connection + entity: watermark, health and run statistics. */
+export const hrmsSyncState = pgTable(
+  "hrms_sync_state",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    integrationId: uuid("integration_id")
+      .notNull()
+      .references(() => sourceIntegrations.id, { onDelete: "cascade" }),
+    /** "employees" | "departments" */
+    entity: text("entity").notNull().default("employees"),
+    /** Opaque vendor cursor (page / last-modified watermark) between runs. */
+    cursor: jsonb("cursor")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    lastFullSyncAt: timestamp("last_full_sync_at", { withTimezone: true }),
+    lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+    /** idle | ok | failed */
+    lastRunStatus: text("last_run_status").notNull().default("idle"),
+    lastError: text("last_error"),
+    stats: jsonb("stats")
+      .$type<Record<string, number>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("hrms_sync_state_integration_entity_key").on(t.integrationId, t.entity)],
+);
+
+/**
+ * Per-connection field mapping profile: HRMS field path → ATSIQ employee
+ * field, plus a passthrough bag for vendor-specific fields the defaults do
+ * not cover. `{}` means "adapter defaults" — mappings are overrides.
+ */
+export const hrmsFieldMappings = pgTable(
+  "hrms_field_mappings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    integrationId: uuid("integration_id")
+      .notNull()
+      .references(() => sourceIntegrations.id, { onDelete: "cascade" }),
+    mappings: jsonb("mappings")
+      .$type<Record<string, string>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("hrms_field_mappings_integration_key").on(t.integrationId)],
+);

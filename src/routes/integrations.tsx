@@ -13,6 +13,7 @@ import {
   Loader2,
   Mail,
   Plug,
+  RefreshCw,
   Sparkles,
   Video,
 } from "lucide-react";
@@ -40,6 +41,14 @@ import {
 } from "@/lib/linkedin.functions";
 import { careersInboxStatus, importCareersInbox } from "@/lib/inbox.functions";
 import {
+  disconnectHrmsIntegration,
+  listHrmsIntegrations,
+  saveHrmsIntegration,
+  syncHrmsNow,
+  testHrmsIntegration,
+} from "@/lib/hrms.functions";
+import { hrmsProviderMeta } from "@/lib/hrms";
+import {
   startGoogleMeetConnect,
   startMicrosoftConnect,
   startZoomConnect,
@@ -61,6 +70,33 @@ type Integration = Tables<"source_integrations">;
 const integrationsQuery = queryOptions({
   queryKey: ["source_integrations"],
   queryFn: async () => (await listSourceIntegrations()) as Integration[],
+});
+
+type HrmsSyncInfo = {
+  last_run_at: string | null;
+  last_run_status: string;
+  last_error: string | null;
+  last_full_sync_at: string | null;
+  cached_employees: number;
+};
+
+type HrmsConnection = {
+  id: string;
+  provider: string;
+  label: string;
+  enabled: boolean;
+  has_credentials: boolean;
+  last_test_status: string;
+  last_test_message: string | null;
+  last_tested_at: string | null;
+  base_url: string | null;
+  credential_fields: string[];
+  sync: HrmsSyncInfo;
+};
+
+const hrmsQuery = queryOptions({
+  queryKey: ["hrms_integrations"],
+  queryFn: async () => (await listHrmsIntegrations()) as HrmsConnection[],
 });
 
 const FIELD_LABEL: Record<string, string> = {
@@ -1216,6 +1252,242 @@ const PROVIDER_MODELS: Record<string, { id: string; label: string }[]> = {
   ],
 };
 
+function HrmsConnectionCard({ row }: { row: HrmsConnection }) {
+  const qc = useQueryClient();
+  const save = useServerFn(saveHrmsIntegration);
+  const test = useServerFn(testHrmsIntegration);
+  const disconnect = useServerFn(disconnectHrmsIntegration);
+  const sync = useServerFn(syncHrmsNow);
+
+  const meta = hrmsProviderMeta(row.provider);
+  const [enabled, setEnabled] = useState(row.enabled);
+  useEffect(() => setEnabled(row.enabled), [row.enabled]);
+  const [baseUrl, setBaseUrl] = useState(row.base_url ?? "");
+  const [secrets, setSecrets] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<"save" | "test" | "clear" | "sync" | null>(null);
+  const [expanded, setExpanded] = useState(false);
+
+  const canSync = row.enabled && row.has_credentials;
+
+  function payload() {
+    return {
+      integrationId: row.id,
+      provider: row.provider as "keka" | "greythr",
+      enabled,
+      config: { base_url: baseUrl } as Record<string, string>,
+      secrets,
+    };
+  }
+
+  async function persistCurrent() {
+    const pending = Object.values(secrets).some((v) => v.trim().length > 0);
+    if (!pending) return;
+    await save({ data: payload() });
+    setSecrets({});
+  }
+
+  async function onSave() {
+    setBusy("save");
+    try {
+      await save({ data: payload() });
+      setSecrets({});
+      toast.success(`${row.label} settings saved`);
+      qc.invalidateQueries({ queryKey: ["hrms_integrations"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function onTest() {
+    setBusy("test");
+    try {
+      // Typed-but-unsaved values would test the stored (old) credentials.
+      await persistCurrent();
+      const outcome = await test({
+        data: { integrationId: row.id, provider: row.provider as "keka" | "greythr" },
+      });
+      if (outcome.status === "ok") toast.success(outcome.message);
+      else if (outcome.status === "pending") toast.warning(outcome.message);
+      else toast.error(outcome.message);
+      qc.invalidateQueries({ queryKey: ["hrms_integrations"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Test failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function onClear() {
+    setBusy("clear");
+    try {
+      await disconnect({ data: { integrationId: row.id } });
+      setEnabled(false);
+      toast.success(`${row.label} disconnected — synced employee data deleted`);
+      qc.invalidateQueries({ queryKey: ["hrms_integrations"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function onSync() {
+    setBusy("sync");
+    try {
+      const result = await sync({ data: { integrationId: row.id } });
+      if (result.status === "ok")
+        toast.success(`${row.label}: ${result.upserted} employees synced`);
+      else toast.error(`${row.label} sync failed: ${result.error ?? "unknown error"}`);
+      qc.invalidateQueries({ queryKey: ["hrms_integrations"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Sync failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const syncPill =
+    row.sync.last_run_status === "ok"
+      ? "ok"
+      : row.sync.last_run_status === "failed"
+        ? "failed"
+        : "untested";
+
+  return (
+    <article className="panel p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex min-w-0 items-center gap-2 text-left"
+        >
+          <ChevronDown
+            className={`size-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "" : "-rotate-90"}`}
+          />
+          <Plug className="size-4 shrink-0 text-primary" />
+          <span className="truncate font-medium">{row.label}</span>
+          <StatusPill status={row.last_test_status} />
+        </button>
+        <div className="flex items-center gap-2">
+          {row.has_credentials ? (
+            <span title="Credentials stored" className="text-muted-foreground">
+              <KeyRound className="size-3.5" />
+            </span>
+          ) : null}
+          <Button size="sm" variant="outline" disabled={!canSync || busy !== null} onClick={onSync}>
+            {busy === "sync" ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="size-3.5" />
+            )}
+            Sync now
+          </Button>
+          <Label className="text-xs text-muted-foreground">{enabled ? "On" : "Off"}</Label>
+          <Switch
+            checked={enabled}
+            disabled={busy === "save"}
+            onCheckedChange={async (next) => {
+              setEnabled(next);
+              setBusy("save");
+              try {
+                await save({
+                  data: {
+                    integrationId: row.id,
+                    provider: row.provider as "keka" | "greythr",
+                    enabled: next,
+                    config: { base_url: baseUrl } as Record<string, string>,
+                    secrets: {},
+                  },
+                });
+                toast.success(next ? `${row.label} enabled` : `${row.label} disabled`);
+                qc.invalidateQueries({ queryKey: ["hrms_integrations"] });
+              } catch (e) {
+                setEnabled(!next);
+                toast.error(e instanceof Error ? e.message : "Save failed");
+              } finally {
+                setBusy(null);
+              }
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1">
+          <StatusPill status={syncPill} />
+          {row.sync.cached_employees > 0
+            ? `${row.sync.cached_employees} employees cached`
+            : "Not synced yet"}
+          {row.sync.last_run_at
+            ? ` · last run ${new Date(row.sync.last_run_at).toLocaleString()}`
+            : ""}
+        </span>
+        {row.sync.last_error ? (
+          <span className="truncate text-destructive" title={row.sync.last_error}>
+            {row.sync.last_error}
+          </span>
+        ) : null}
+      </div>
+
+      {expanded ? (
+        <div className="mt-4 space-y-3 border-t pt-4">
+          {meta ? <p className="text-sm text-muted-foreground">{meta.blurb}</p> : null}
+          {meta?.needsBaseUrl ? (
+            <div className="space-y-1.5">
+              <Label htmlFor={`hrms-base-${row.id}`}>API base URL</Label>
+              <Input
+                id={`hrms-base-${row.id}`}
+                value={baseUrl}
+                onChange={(e) => setBaseUrl(e.target.value)}
+                placeholder="https://your-tenant.greythr.com"
+                autoComplete="off"
+              />
+              <p className="text-xs text-muted-foreground">
+                Your greytHR tenant API URL — the same address you use to sign in, ending in
+                greythr.com.
+              </p>
+            </div>
+          ) : null}
+          {(row.credential_fields ?? []).map((field) => (
+            <div key={field} className="space-y-1.5">
+              <Label htmlFor={`hrms-${field}-${row.id}`}>{FIELD_LABEL[field] ?? field}</Label>
+              <Input
+                id={`hrms-${field}-${row.id}`}
+                type="password"
+                value={secrets[field] ?? ""}
+                onChange={(e) => setSecrets((s) => ({ ...s, [field]: e.target.value }))}
+                placeholder={row.has_credentials ? "•••••••• (stored)" : ""}
+                autoComplete="off"
+              />
+              {FIELD_HINT[field] ? (
+                <p className="text-xs text-muted-foreground">{FIELD_HINT[field]}</p>
+              ) : null}
+            </div>
+          ))}
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Button size="sm" onClick={onSave} disabled={busy !== null}>
+              {busy === "save" ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              Save
+            </Button>
+            <Button size="sm" variant="outline" onClick={onTest} disabled={busy !== null}>
+              {busy === "test" ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              Test connection
+            </Button>
+            {row.has_credentials ? (
+              <Button size="sm" variant="ghost" onClick={onClear} disabled={busy !== null}>
+                {busy === "clear" ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                Disconnect
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
 function AiModelCard() {
   const settings = useQuery({
     queryKey: ["ai_settings"],
@@ -1405,6 +1677,7 @@ function AiModelCard() {
 function Integrations() {
   const qc = useQueryClient();
   const rows = useQuery(integrationsQuery);
+  const hrmsRows = useQuery(hrmsQuery);
 
   // Meeting-provider connects return with ?meetings=connected|error&provider=…
   useEffect(() => {
@@ -1434,13 +1707,14 @@ function Integrations() {
       <PageHeader
         eyebrow="Settings"
         title="Integrations"
-        description="Connect the places your CVs and interviews come from. Open a row only when you need to change it — everything you type is stored securely on the server."
+        description="Connect the places your CVs and interviews come from, and your HRMS. Open a row only when you need to change it — everything you type is stored securely on the server."
       />
 
       <Tabs defaultValue="sourcing">
         <TabsList>
           <TabsTrigger value="sourcing">Candidate sources</TabsTrigger>
           <TabsTrigger value="meetings">Interview meetings</TabsTrigger>
+          <TabsTrigger value="hrms">HRMS sync</TabsTrigger>
           <TabsTrigger value="emails">Candidate emails</TabsTrigger>
           <TabsTrigger value="ai">AI model</TabsTrigger>
         </TabsList>
@@ -1450,7 +1724,7 @@ function Integrations() {
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : (
             (rows.data ?? [])
-              .filter((r) => r.category !== "meeting")
+              .filter((r) => r.category !== "meeting" && r.category !== "hrms")
               .map((row) => <IntegrationCard key={row.id} row={row} />)
           )}
           <details className="panel p-4 text-sm text-muted-foreground">
@@ -1508,6 +1782,52 @@ function Integrations() {
               .filter((r) => r.category === "meeting")
               .map((row) => <IntegrationCard key={row.id} row={row} />)
           )}
+        </TabsContent>
+
+        <TabsContent value="hrms" className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Sync your employee master from your HRMS — departments, titles and leavers stay current,
+            so hiring managers, interviewers and internal candidates come straight from your HR
+            system instead of being re-keyed here. Your HRMS stays the system of record; ATSIQ keeps
+            a read-only copy.
+          </p>
+          {hrmsRows.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : (
+            (hrmsRows.data ?? []).map((row) => <HrmsConnectionCard key={row.id} row={row} />)
+          )}
+          <details className="panel p-4 text-sm text-muted-foreground">
+            <summary className="cursor-pointer font-medium text-foreground">
+              How HRMS sync works
+            </summary>
+            <ul className="mt-3 space-y-1.5">
+              <li>
+                <strong className="text-foreground">
+                  Paste credentials, press Test, then Sync
+                </strong>{" "}
+                — the first sync pulls your whole employee directory; afterwards it stays fresh
+                automatically (and you can re-sync any time).
+              </li>
+              <li>
+                <strong className="text-foreground">The HRMS is the source of truth</strong> —
+                employees who leave are marked as leavers, never deleted, and nothing is ever
+                written back to your HRMS.
+              </li>
+              <li>
+                <strong className="text-foreground">Keka</strong> — paste the client ID, client
+                secret and API key from your Keka developer/API settings.
+              </li>
+              <li>
+                <strong className="text-foreground">greytHR</strong> — create an API user in greytHR
+                (My Account → API Users), paste the key and your tenant API base URL.
+              </li>
+              <li>
+                <strong className="text-foreground">More HRMS platforms</strong> — Workday,
+                Darwinbox, ZingHR and Adrenalin are on the roadmap; disconnecting a platform also
+                deletes its synced employee data.
+              </li>
+            </ul>
+          </details>
         </TabsContent>
 
         <TabsContent value="emails">

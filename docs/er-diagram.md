@@ -9,7 +9,7 @@
 > A domain diagram shows that domain's tables in full; references into other domains
 > point at a stub entity that is drawn complete in its own domain.
 
-51 tables across 9 domains.
+54 tables across 9 domains.
 
 ## Identity & access
 
@@ -976,6 +976,12 @@ erDiagram
 | `evaluations` | `interview_id` | `interviews` | no action |
 | `evaluations` | `org_id` | `organizations` | cascade |
 | `hr_incentive_schemes` | `org_id` | `organizations` | cascade |
+| `hrms_employees` | `integration_id` | `source_integrations` | cascade |
+| `hrms_employees` | `org_id` | `organizations` | cascade |
+| `hrms_field_mappings` | `integration_id` | `source_integrations` | cascade |
+| `hrms_field_mappings` | `org_id` | `organizations` | cascade |
+| `hrms_sync_state` | `integration_id` | `source_integrations` | cascade |
+| `hrms_sync_state` | `org_id` | `organizations` | cascade |
 | `inbox_messages` | `org_id` | `organizations` | cascade |
 | `integration_credentials` | `integration_id` | `source_integrations` | cascade |
 | `integration_credentials` | `org_id` | `organizations` | cascade |
@@ -1055,6 +1061,9 @@ erDiagram
 | `email_settings` | Communications & AI settings | 11 | (org_id) |
 | `evaluations` | Candidates & pipeline | 14 | — |
 | `hr_incentive_schemes` | Offers & onboarding | 9 | — |
+| `hrms_employees` | — | 15 | (integrationId+externalId) |
+| `hrms_field_mappings` | — | 6 | (integration_id) |
+| `hrms_sync_state` | — | 12 | (integrationId+entity) |
 | `inbox_messages` | Sourcing & integrations | 16 | — |
 | `integration_credentials` | Sourcing & integrations | 4 | — |
 | `interviews` | Screening & interviews | 14 | — |

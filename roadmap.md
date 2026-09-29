@@ -4,7 +4,7 @@
 
 Study in `docs/hrms-integrations-study.md`: vendor API landscape (Keka, greytHR, Workday buildable today; Darwinbox, ZingHR, Adrenalin partnership-gated), recommended connector architecture reusing the existing integration-credential, outbox and cron primitives, and the phased plan below.
 
-- [ ] P0: connector foundations — "hrms" category on Integrations, adapter interface, sync engine + cron job, employee-master cache, field mappings
+- [x] P0: connector foundations — "hrms" category on Integrations, adapter interface, sync engine + cron job, employee-master cache, field mappings
 - [ ] P1: read connectors for Keka and greytHR (public APIs): employee and department sync
 - [ ] P2: outbound platform — signed webhooks with delivery outbox and retries, scoped public REST API keys
 - [ ] P3: on-hire push to Keka (incl. preboarding) and greytHR, hooked at the stage-transition choke point

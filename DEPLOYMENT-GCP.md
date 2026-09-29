@@ -120,6 +120,7 @@ All endpoints expect `Authorization: Bearer $LOVABLE_CRON_SECRET`:
 | Careers-inbox sync        | `https://z-atsiq.yavar.ai/api/public/inbox-sync`      | every 5–15 min  |
 | Candidate re-sync/scoring | `https://z-atsiq.yavar.ai/api/public/sync-candidates` | hourly          |
 | Candidate email outbox    | `https://z-atsiq.yavar.ai/api/public/process-email-outbox` | every 5 min |
+| HRMS employee sync        | `https://z-atsiq.yavar.ai/api/public/sync-hrms`       | every 15 min    |
 
 ## 7. Example Kubernetes objects (sketch)
 
