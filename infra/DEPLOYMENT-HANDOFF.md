@@ -196,6 +196,11 @@ Cloud Scheduler (all call the app with `Authorization: Bearer <value of atsiq-cr
   `drizzle/pg-migrations/` + `scripts/migrate-pg.mjs` only. Future schema
   changes arrive as new numbered `.sql` files in that folder — just re-run the
   script.
+- **Rebuild the Capture companion before each deploy**: `public/atsiq-capture.zip`
+  is gitignored, so it is not updated by pulls — regenerate it from the
+  extension source whenever `extension/` changes:
+  `cd extension && zip -q ../public/atsiq-capture.zip manifest.json background.js popup.js popup.html`.
+  The Integrations "Download the companion" button serves this file verbatim.
 - `SECRET_ENCRYPTION_KEY` decrypts organisation-level AI/integration
   credentials. Back it up; rotating it requires re-encrypting stored values.
 - Session cookies are `SameSite=None; Secure` over HTTPS — fine behind
