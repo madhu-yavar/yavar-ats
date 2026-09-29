@@ -1,5 +1,16 @@
 # Roadmap
 
+## HRMS integrations (2026-09-29)
+
+Study in `docs/hrms-integrations-study.md`: vendor API landscape (Keka, greytHR, Workday buildable today; Darwinbox, ZingHR, Adrenalin partnership-gated), recommended connector architecture reusing the existing integration-credential, outbox and cron primitives, and the phased plan below.
+
+- [ ] P0: connector foundations — "hrms" category on Integrations, adapter interface, sync engine + cron job, employee-master cache, field mappings
+- [ ] P1: read connectors for Keka and greytHR (public APIs): employee and department sync
+- [ ] P2: outbound platform — signed webhooks with delivery outbox and retries, scoped public REST API keys
+- [ ] P3: on-hire push to Keka (incl. preboarding) and greytHR, hooked at the stage-transition choke point
+- [ ] P4: Workday read via OAuth + RaaS/REST with a per-customer ISU setup guide; partnership track in parallel
+- [ ] P5: CSV import/export templates for partnership-gated HRMS (Darwinbox, ZingHR, Adrenalin); direct adapters as vendor specs arrive; evaluate a unified-API aggregator behind a DPIA
+
 ## AI governance and spend visibility (2026-09-28)
 
 - [x] AI usage ledger (`ai_usage_events`): one row per provider request — organisation, module, provider, model, prompt/completion/total tokens, retry attempt, latency, outcome — written fire-and-forget from the gateway; OpenAI/Anthropic/Gemini usage frames harvested, transcription included, missing frames recorded as zero (never estimated)
