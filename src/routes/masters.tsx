@@ -19,7 +19,7 @@ export const Route = createFileRoute("/masters")({
       {
         name: "description",
         content:
-          "Maintain the global reference library used across requisitions, JDs and CV matching: skills taxonomy, locations, education levels, employment types and industries.",
+          "Maintain your organisation's reference library used across requisitions, JDs and CV matching: role titles, skills taxonomy, locations, education levels, employment types and industries.",
       },
       { property: "og:title", content: "Master Data Library" },
       {
@@ -100,7 +100,7 @@ function Masters() {
       <PageHeader
         eyebrow="Administration"
         title="Master data library"
-        description="Global lists every requisition, JD and match score reads from. Add your own entries any time — recruiters can also add on the fly while raising a requisition."
+        description="Your organisation's shared lists — every requisition, JD and match score reads from them. Add your own entries any time; recruiters can also add on the fly while raising a requisition."
       />
       <div className="grid gap-4 lg:grid-cols-2">
         {GROUPS.map((g) => (
@@ -128,10 +128,14 @@ function MasterCard({
     if (!name.trim()) return;
     setBusy(true);
     try {
-      await addMasterItem(group.kind, name, category || null);
-      toast.success(`${name.trim()} added`);
-      setName("");
-      setCategory("");
+      const res = await addMasterItem(group.kind, name, category || null);
+      if (res?.existed) {
+        toast.info(`“${name.trim()}” is already in this list`);
+      } else {
+        toast.success(`${name.trim()} added`);
+        setName("");
+        setCategory("");
+      }
       qc.invalidateQueries({ queryKey: ["master_items"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not add entry");

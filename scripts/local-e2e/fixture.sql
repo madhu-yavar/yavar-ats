@@ -1859,9 +1859,13 @@ COPY public.user_roles (id, user_id, role, org_id) FROM stdin;
 --
 
 COPY public.users (id, email, email_confirmed_at, password_hash, full_name, avatar_url, created_at, last_login_at) FROM stdin;
-5e2e0000-0000-4000-8000-00000000e2e1	e2e-5e2e0000-0000-4000-8000-00000000e2e1@example.invalid	\N	\N	\N	\N	2026-09-13 18:34:09.995532+05:30	\N
-6a6a0000-0000-4000-8000-00000000d001	e2e-6a6a0000-0000-4000-8000-00000000d001@example.invalid	\N	\N	\N	\N	2026-09-13 18:34:09.995532+05:30	\N
-6a6a0000-0000-4000-8000-00000000d002	e2e-6a6a0000-0000-4000-8000-00000000d002@example.invalid	\N	\N	\N	\N	2026-09-13 18:34:09.995532+05:30	\N
+5e2e0000-0000-4000-8000-00000000e2e1	e2e-owner@atsiq-e2e.local	2026-09-13 18:34:09.995532+05:30	scrypt$16384$8$1$jgQ6U10qxhH0ZEg3-s8ikA$gFsF--y2pvdqF3-ptr3p2XsNn-ApNHjBLhL8pBv0g_aHXInxVBU5lC6v1ZEx3RFGIdeF3ZlTHd1vfWOCXEov1w	\N	\N	2026-09-13 18:34:09.995532+05:30	\N
+6a6a0000-0000-4000-8000-00000000d001	madhu@demo.com	2026-09-13 18:34:09.995532+05:30	scrypt$16384$8$1$jBh6eHgR26bEAooyQ28Riw$YVQpJaIZ7Rb49pcuZkdW9PRXKvLmNMtXgxuYmKRkf58hj5pRTx3Jyuj1PVa8aEOBbj_D9ZKwUZK68pVdUNgZgQ	\N	\N	2026-09-13 18:34:09.995532+05:30	\N
+6a6a0000-0000-4000-8000-00000000d002	hr@yavar.ai	2026-09-13 18:34:09.995532+05:30	scrypt$16384$8$1$jBh6eHgR26bEAooyQ28Riw$YVQpJaIZ7Rb49pcuZkdW9PRXKvLmNMtXgxuYmKRkf58hj5pRTx3Jyuj1PVa8aEOBbj_D9ZKwUZK68pVdUNgZgQ	\N	\N	2026-09-13 18:34:09.995532+05:30	\N
+\.
+
+COPY public.platform_admins (email, user_id, note) FROM stdin;
+madhu@demo.com	6a6a0000-0000-4000-8000-00000000d001	local platform super-user
 \.
 
 
@@ -2581,7 +2585,7 @@ CREATE INDEX master_items_kind_idx ON public.master_items USING btree (kind, act
 -- Name: master_items_kind_name_unique; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE UNIQUE INDEX master_items_kind_name_unique ON public.master_items USING btree (kind, lower(name));
+CREATE UNIQUE INDEX master_items_kind_name_unique ON public.master_items USING btree (org_id, kind, lower(name));
 
 
 --

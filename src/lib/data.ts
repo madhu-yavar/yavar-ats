@@ -71,7 +71,7 @@ export const departmentsQuery = queryOptions({
   queryFn: async () => (await listDepartments()) as Department[],
 });
 
-/** Global reference library: skills, locations, education, employment types, industries. */
+/** The organisation's reference library: skills, locations, education, employment types, industries. */
 export const masterItemsQuery = queryOptions({
   queryKey: ["master_items"],
   queryFn: async () => (await listMasterItems()) as MasterItem[],
@@ -81,8 +81,11 @@ export function byKind(items: MasterItem[] | undefined, kind: MasterKind) {
   return (items ?? []).filter((i) => i.kind === kind);
 }
 
+/** Adds to the library. `existed` is true when the exact entry was already there. */
 export async function addMasterItem(kind: MasterKind, name: string, category?: string | null) {
-  await addMasterItemFn({ data: { kind, name: name.trim(), category: category ?? null } });
+  return (await addMasterItemFn({
+    data: { kind, name: name.trim(), category: category ?? null },
+  })) as { ok: true; existed: boolean };
 }
 
 export const requisitionsQuery = queryOptions({

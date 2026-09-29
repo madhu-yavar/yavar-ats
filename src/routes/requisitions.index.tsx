@@ -16,6 +16,7 @@ import {
   departmentsQuery,
   masterItemsQuery,
   requisitionsQuery,
+  type MasterKind,
 } from "@/lib/data";
 import { findDuplicateRequisitions } from "@/lib/jd-dedupe";
 import { suggestRoleProfile } from "@/lib/role-profile.functions";
@@ -35,14 +36,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
 export const Route = createFileRoute("/requisitions/")({
   head: () => ({
     meta: [
@@ -107,40 +100,36 @@ function Requisitions() {
   const engagementTypes = byKind(masters.data, "engagement_type");
   const clients = byKind(masters.data, "client");
 
-  async function createClient(name: string) {
+  /**
+   * On-the-fly library adds must never block raising the requisition — the
+   * typed value stays selected either way — but the user is told when the
+   * entry was already in the library or the add genuinely failed, instead of
+   * the add silently no-oping.
+   */
+  async function addToLibrary(kind: MasterKind, name: string) {
     try {
-      await addMasterItem("client", name);
-      qc.invalidateQueries({ queryKey: ["master_items"] });
-    } catch {
-      /* already in the library */
+      const res = await addMasterItem(kind, name);
+      if (res?.existed) toast.info(`“${name.trim()}” is already in the library`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : `Could not add “${name.trim()}” to the library`);
     }
+    qc.invalidateQueries({ queryKey: ["master_items"] });
+  }
+
+  async function createClient(name: string) {
+    await addToLibrary("client", name);
   }
 
   async function createEducation(name: string) {
-    try {
-      await addMasterItem("education", name);
-      qc.invalidateQueries({ queryKey: ["master_items"] });
-    } catch {
-      /* already in the library */
-    }
+    await addToLibrary("education", name);
   }
 
   async function createSkill(name: string) {
-    try {
-      await addMasterItem("skill", name);
-      qc.invalidateQueries({ queryKey: ["master_items"] });
-    } catch {
-      /* already in the library — the value is still selected */
-    }
+    await addToLibrary("skill", name);
   }
 
   async function createRoleTitle(name: string) {
-    try {
-      await addMasterItem("role_title", name);
-      qc.invalidateQueries({ queryKey: ["master_items"] });
-    } catch {
-      /* already in the library */
-    }
+    await addToLibrary("role_title", name);
   }
 
   async function createDepartment(name: string) {
@@ -378,8 +367,7 @@ function Requisitions() {
                     }
                     onChange={(next) => setForm({ ...form, location: next.join(", ") })}
                     onCreate={async (name) => {
-                      await addMasterItem("location", name);
-                      await qc.invalidateQueries({ queryKey: ["master_items"] });
+                      await addToLibrary("location", name);
                     }}
                     placeholder="Search locations, or type a new one"
                   />

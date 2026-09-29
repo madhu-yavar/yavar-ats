@@ -36,11 +36,14 @@ export const addMasterItem = createServerFn({ method: "POST" })
         name: data.name.trim(),
         category: data.category ?? null,
       });
+      return { ok: true as const, existed: false as const };
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
+      // A same-org duplicate is not an error — the caller decides whether to
+      // tell the user. Anything else is a real failure and propagates.
       if (!/duplicate|unique/i.test(message)) throw new Error(message);
+      return { ok: true as const, existed: true as const };
     }
-    return { ok: true as const };
   });
 
 export const deleteMasterItem = createServerFn({ method: "POST" })
