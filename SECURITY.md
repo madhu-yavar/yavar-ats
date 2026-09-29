@@ -53,6 +53,15 @@ PostgreSQL is the operational system of record. Authentication, files, AI provid
 email and job boards are external trust boundaries with narrowly scoped credentials. Public capture,
 webhook, OAuth callback and scheduler endpoints validate callers, validate payloads and are rate limited.
 
+Job-board application webhooks (`/api/public/boards/<provider>/<token>`) authenticate on two
+factors: a per-connection delivery token (24 random bytes, stored encrypted with a SHA-256 hash
+lookup — the capture-token precedent) and, where the board's contract defines one, a signature
+header verified as HMAC-SHA256 over the raw, unmodified body with a timing-safe comparison
+(Indeed's `X-Indeed-Signature`). Requisitions are never accepted from a vendor payload — the
+application is routed through ATSIQ's own org-scoped posting rows, and every delivery is stored
+first in `board_webhook_events` (deduplicated, signature failures kept for forensics, terminal
+rows purged after 30 days). Publishing and webhook rotation are `hr_head`-gated and audited.
+
 ## Release evidence
 
 `VERIFICATION_REPORT.md` records the latest automated and browser checks. A fresh application security

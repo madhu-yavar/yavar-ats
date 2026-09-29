@@ -778,6 +778,11 @@ export const sourceIntegrations = pgTable(
     lastTestStatus: text("last_test_status").notNull().default("untested"),
     lastTestMessage: text("last_test_message"),
     lastTestedAt: timestamp("last_tested_at", { withTimezone: true }),
+    // Per-connection webhook delivery token (board application ingestion):
+    // encrypted display copy + sha256 hash lookup, capture-token precedent.
+    webhookToken: text("webhook_token"),
+    webhookTokenHash: text("webhook_token_hash"),
+    webhookConfiguredAt: timestamp("webhook_configured_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -1533,4 +1538,117 @@ export const hrmsFieldMappings = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("hrms_field_mappings_integration_key").on(t.integrationId)],
+);
+
+/* ------------------------------------------------- job board connections */
+
+/**
+ * Syndication state for one requisition on one partner board (LinkedIn /
+ * Indeed / Naukri). `external_id` is the vendor's posting id — the key the
+ * inbound webhook uses to route an applicant back to this requisition.
+ */
+export const requisitionBoardPostings = pgTable(
+  "requisition_board_postings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    requisitionId: uuid("requisition_id")
+      .notNull()
+      .references(() => requisitions.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    /** pending | published | failed | closed | withdrawn */
+    status: text("status").notNull().default("pending"),
+    externalId: text("external_id"),
+    externalUrl: text("external_url"),
+    /** Last posted body — non-secret by construction. */
+    payload: jsonb("payload")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    publishedBy: uuid("published_by"),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("board_postings_req_provider_key").on(t.requisitionId, t.provider),
+    index("board_postings_org_status_idx").on(t.orgId, t.status),
+    index("board_postings_provider_external_idx")
+      .on(t.provider, t.externalId)
+      .where(sql`${t.externalId} is not null`),
+  ],
+);
+
+/**
+ * Raw inbound board webhook events. The `dedupe_key` ("<provider>:<org>:
+ * <event id>") is the idempotency boundary — a redelivery can never file an
+ * applicant twice. Rows are forensics too: terminal rows are purged after
+ * 30 days by board-sync.
+ */
+export const boardWebhookEvents = pgTable(
+  "board_webhook_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    dedupeKey: text("dedupe_key").notNull(),
+    /** NULL when the org could not be resolved from the delivery token. */
+    orgId: uuid("org_id").references(() => organizations.id, { onDelete: "set null" }),
+    provider: text("provider").notNull(),
+    externalEventId: text("external_event_id").notNull(),
+    /** Allowlisted headers only (content-type, user-agent, signature). */
+    headers: jsonb("headers")
+      .$type<Record<string, string>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    payload: jsonb("payload")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    /** pending | processed | duplicate | failed */
+    status: text("status").notNull().default("pending"),
+    requisitionId: uuid("requisition_id"),
+    candidateId: uuid("candidate_id"),
+    applicationId: uuid("application_id"),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("board_webhook_events_dedupe_key").on(t.dedupeKey),
+    index("board_webhook_events_status_idx").on(t.status, t.receivedAt),
+    index("board_webhook_events_org_idx").on(t.orgId, t.receivedAt),
+  ],
+);
+
+/** Poll watermark and run health per board connection (cron bookkeeping). */
+export const boardSyncState = pgTable(
+  "board_sync_state",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    integrationId: uuid("integration_id")
+      .notNull()
+      .references(() => sourceIntegrations.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    lastPolledAt: timestamp("last_polled_at", { withTimezone: true }),
+    lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+    /** idle | ok | failed */
+    lastRunStatus: text("last_run_status").notNull().default("idle"),
+    lastError: text("last_error"),
+    stats: jsonb("stats")
+      .$type<Record<string, number>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("board_sync_state_integration_key").on(t.integrationId)],
 );

@@ -47,15 +47,18 @@ import { Route as ApiAuthRegisterRouteImport } from './routes/api/auth/register'
 import { Route as ApiAuthRequestResetRouteImport } from './routes/api/auth/request-reset'
 import { Route as ApiAuthResetRouteImport } from './routes/api/auth/reset'
 import { Route as ApiAuthSessionRouteImport } from './routes/api/auth/session'
+import { Route as ApiPublicBoardSyncRouteImport } from './routes/api/public/board-sync'
 import { Route as ApiPublicCaptureRouteImport } from './routes/api/public/capture'
 import { Route as ApiPublicInboundEmailRouteImport } from './routes/api/public/inbound-email'
 import { Route as ApiPublicInboxSyncRouteImport } from './routes/api/public/inbox-sync'
 import { Route as ApiPublicProcessEmailOutboxRouteImport } from './routes/api/public/process-email-outbox'
 import { Route as ApiPublicSyncCandidatesRouteImport } from './routes/api/public/sync-candidates'
+import { Route as ApiPublicSyncHrmsRouteImport } from './routes/api/public/sync-hrms'
 import { Route as ApiPublicLinkedinCallbackRouteImport } from './routes/api/public/linkedin/callback'
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
 import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
 import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
+import { Route as ApiPublicBoardsProviderTokenRouteImport } from './routes/api/public/boards/$provider.$token'
 import { Route as ApiPublicIntegrationsGoogleCallbackRouteImport } from './routes/api/public/integrations/google/callback'
 import { Route as ApiPublicIntegrationsMicrosoftCallbackRouteImport } from './routes/api/public/integrations/microsoft/callback'
 import { Route as ApiPublicIntegrationsZoomCallbackRouteImport } from './routes/api/public/integrations/zoom/callback'
@@ -250,6 +253,11 @@ const ApiAuthSessionRoute = ApiAuthSessionRouteImport.update({
   path: '/api/auth/session',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicBoardSyncRoute = ApiPublicBoardSyncRouteImport.update({
+  id: '/api/public/board-sync',
+  path: '/api/public/board-sync',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicCaptureRoute = ApiPublicCaptureRouteImport.update({
   id: '/api/public/capture',
   path: '/api/public/capture',
@@ -276,6 +284,11 @@ const ApiPublicSyncCandidatesRoute = ApiPublicSyncCandidatesRouteImport.update({
   path: '/api/public/sync-candidates',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicSyncHrmsRoute = ApiPublicSyncHrmsRouteImport.update({
+  id: '/api/public/sync-hrms',
+  path: '/api/public/sync-hrms',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicLinkedinCallbackRoute =
   ApiPublicLinkedinCallbackRouteImport.update({
     id: '/api/public/linkedin/callback',
@@ -296,6 +309,12 @@ const LovableEmailTransactionalPreviewRoute =
   LovableEmailTransactionalPreviewRouteImport.update({
     id: '/lovable/email/transactional/preview',
     path: '/lovable/email/transactional/preview',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicBoardsProviderTokenRoute =
+  ApiPublicBoardsProviderTokenRouteImport.update({
+    id: '/api/public/boards/$provider/$token',
+    path: '/api/public/boards/$provider/$token',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPublicIntegrationsGoogleCallbackRoute =
@@ -356,15 +375,18 @@ export interface FileRoutesByFullPath {
   '/api/auth/request-reset': typeof ApiAuthRequestResetRoute
   '/api/auth/reset': typeof ApiAuthResetRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
+  '/api/public/board-sync': typeof ApiPublicBoardSyncRoute
   '/api/public/capture': typeof ApiPublicCaptureRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
   '/api/public/process-email-outbox': typeof ApiPublicProcessEmailOutboxRoute
   '/api/public/sync-candidates': typeof ApiPublicSyncCandidatesRoute
+  '/api/public/sync-hrms': typeof ApiPublicSyncHrmsRoute
   '/api/public/linkedin/callback': typeof ApiPublicLinkedinCallbackRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
+  '/api/public/boards/$provider/$token': typeof ApiPublicBoardsProviderTokenRoute
   '/api/public/integrations/google/callback': typeof ApiPublicIntegrationsGoogleCallbackRoute
   '/api/public/integrations/microsoft/callback': typeof ApiPublicIntegrationsMicrosoftCallbackRoute
   '/api/public/integrations/zoom/callback': typeof ApiPublicIntegrationsZoomCallbackRoute
@@ -408,15 +430,18 @@ export interface FileRoutesByTo {
   '/api/auth/request-reset': typeof ApiAuthRequestResetRoute
   '/api/auth/reset': typeof ApiAuthResetRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
+  '/api/public/board-sync': typeof ApiPublicBoardSyncRoute
   '/api/public/capture': typeof ApiPublicCaptureRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
   '/api/public/process-email-outbox': typeof ApiPublicProcessEmailOutboxRoute
   '/api/public/sync-candidates': typeof ApiPublicSyncCandidatesRoute
+  '/api/public/sync-hrms': typeof ApiPublicSyncHrmsRoute
   '/api/public/linkedin/callback': typeof ApiPublicLinkedinCallbackRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
+  '/api/public/boards/$provider/$token': typeof ApiPublicBoardsProviderTokenRoute
   '/api/public/integrations/google/callback': typeof ApiPublicIntegrationsGoogleCallbackRoute
   '/api/public/integrations/microsoft/callback': typeof ApiPublicIntegrationsMicrosoftCallbackRoute
   '/api/public/integrations/zoom/callback': typeof ApiPublicIntegrationsZoomCallbackRoute
@@ -461,15 +486,18 @@ export interface FileRoutesById {
   '/api/auth/request-reset': typeof ApiAuthRequestResetRoute
   '/api/auth/reset': typeof ApiAuthResetRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
+  '/api/public/board-sync': typeof ApiPublicBoardSyncRoute
   '/api/public/capture': typeof ApiPublicCaptureRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
   '/api/public/process-email-outbox': typeof ApiPublicProcessEmailOutboxRoute
   '/api/public/sync-candidates': typeof ApiPublicSyncCandidatesRoute
+  '/api/public/sync-hrms': typeof ApiPublicSyncHrmsRoute
   '/api/public/linkedin/callback': typeof ApiPublicLinkedinCallbackRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
+  '/api/public/boards/$provider/$token': typeof ApiPublicBoardsProviderTokenRoute
   '/api/public/integrations/google/callback': typeof ApiPublicIntegrationsGoogleCallbackRoute
   '/api/public/integrations/microsoft/callback': typeof ApiPublicIntegrationsMicrosoftCallbackRoute
   '/api/public/integrations/zoom/callback': typeof ApiPublicIntegrationsZoomCallbackRoute
@@ -515,15 +543,18 @@ export interface FileRouteTypes {
     | '/api/auth/request-reset'
     | '/api/auth/reset'
     | '/api/auth/session'
+    | '/api/public/board-sync'
     | '/api/public/capture'
     | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
     | '/api/public/process-email-outbox'
     | '/api/public/sync-candidates'
+    | '/api/public/sync-hrms'
     | '/api/public/linkedin/callback'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/transactional/preview'
+    | '/api/public/boards/$provider/$token'
     | '/api/public/integrations/google/callback'
     | '/api/public/integrations/microsoft/callback'
     | '/api/public/integrations/zoom/callback'
@@ -567,15 +598,18 @@ export interface FileRouteTypes {
     | '/api/auth/request-reset'
     | '/api/auth/reset'
     | '/api/auth/session'
+    | '/api/public/board-sync'
     | '/api/public/capture'
     | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
     | '/api/public/process-email-outbox'
     | '/api/public/sync-candidates'
+    | '/api/public/sync-hrms'
     | '/api/public/linkedin/callback'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/transactional/preview'
+    | '/api/public/boards/$provider/$token'
     | '/api/public/integrations/google/callback'
     | '/api/public/integrations/microsoft/callback'
     | '/api/public/integrations/zoom/callback'
@@ -619,15 +653,18 @@ export interface FileRouteTypes {
     | '/api/auth/request-reset'
     | '/api/auth/reset'
     | '/api/auth/session'
+    | '/api/public/board-sync'
     | '/api/public/capture'
     | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
     | '/api/public/process-email-outbox'
     | '/api/public/sync-candidates'
+    | '/api/public/sync-hrms'
     | '/api/public/linkedin/callback'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/transactional/preview'
+    | '/api/public/boards/$provider/$token'
     | '/api/public/integrations/google/callback'
     | '/api/public/integrations/microsoft/callback'
     | '/api/public/integrations/zoom/callback'
@@ -672,15 +709,18 @@ export interface RootRouteChildren {
   ApiAuthRequestResetRoute: typeof ApiAuthRequestResetRoute
   ApiAuthResetRoute: typeof ApiAuthResetRoute
   ApiAuthSessionRoute: typeof ApiAuthSessionRoute
+  ApiPublicBoardSyncRoute: typeof ApiPublicBoardSyncRoute
   ApiPublicCaptureRoute: typeof ApiPublicCaptureRoute
   ApiPublicInboundEmailRoute: typeof ApiPublicInboundEmailRoute
   ApiPublicInboxSyncRoute: typeof ApiPublicInboxSyncRoute
   ApiPublicProcessEmailOutboxRoute: typeof ApiPublicProcessEmailOutboxRoute
   ApiPublicSyncCandidatesRoute: typeof ApiPublicSyncCandidatesRoute
+  ApiPublicSyncHrmsRoute: typeof ApiPublicSyncHrmsRoute
   ApiPublicLinkedinCallbackRoute: typeof ApiPublicLinkedinCallbackRoute
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
   LovableEmailAuthWebhookRoute: typeof LovableEmailAuthWebhookRoute
   LovableEmailTransactionalPreviewRoute: typeof LovableEmailTransactionalPreviewRoute
+  ApiPublicBoardsProviderTokenRoute: typeof ApiPublicBoardsProviderTokenRoute
   ApiPublicIntegrationsGoogleCallbackRoute: typeof ApiPublicIntegrationsGoogleCallbackRoute
   ApiPublicIntegrationsMicrosoftCallbackRoute: typeof ApiPublicIntegrationsMicrosoftCallbackRoute
   ApiPublicIntegrationsZoomCallbackRoute: typeof ApiPublicIntegrationsZoomCallbackRoute
@@ -954,6 +994,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSessionRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/board-sync': {
+      id: '/api/public/board-sync'
+      path: '/api/public/board-sync'
+      fullPath: '/api/public/board-sync'
+      preLoaderRoute: typeof ApiPublicBoardSyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/capture': {
       id: '/api/public/capture'
       path: '/api/public/capture'
@@ -989,6 +1036,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicSyncCandidatesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/sync-hrms': {
+      id: '/api/public/sync-hrms'
+      path: '/api/public/sync-hrms'
+      fullPath: '/api/public/sync-hrms'
+      preLoaderRoute: typeof ApiPublicSyncHrmsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/linkedin/callback': {
       id: '/api/public/linkedin/callback'
       path: '/api/public/linkedin/callback'
@@ -1015,6 +1069,13 @@ declare module '@tanstack/react-router' {
       path: '/lovable/email/transactional/preview'
       fullPath: '/lovable/email/transactional/preview'
       preLoaderRoute: typeof LovableEmailTransactionalPreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/boards/$provider/$token': {
+      id: '/api/public/boards/$provider/$token'
+      path: '/api/public/boards/$provider/$token'
+      fullPath: '/api/public/boards/$provider/$token'
+      preLoaderRoute: typeof ApiPublicBoardsProviderTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/integrations/google/callback': {
@@ -1080,15 +1141,18 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthRequestResetRoute: ApiAuthRequestResetRoute,
   ApiAuthResetRoute: ApiAuthResetRoute,
   ApiAuthSessionRoute: ApiAuthSessionRoute,
+  ApiPublicBoardSyncRoute: ApiPublicBoardSyncRoute,
   ApiPublicCaptureRoute: ApiPublicCaptureRoute,
   ApiPublicInboundEmailRoute: ApiPublicInboundEmailRoute,
   ApiPublicInboxSyncRoute: ApiPublicInboxSyncRoute,
   ApiPublicProcessEmailOutboxRoute: ApiPublicProcessEmailOutboxRoute,
   ApiPublicSyncCandidatesRoute: ApiPublicSyncCandidatesRoute,
+  ApiPublicSyncHrmsRoute: ApiPublicSyncHrmsRoute,
   ApiPublicLinkedinCallbackRoute: ApiPublicLinkedinCallbackRoute,
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,
   LovableEmailAuthWebhookRoute: LovableEmailAuthWebhookRoute,
   LovableEmailTransactionalPreviewRoute: LovableEmailTransactionalPreviewRoute,
+  ApiPublicBoardsProviderTokenRoute: ApiPublicBoardsProviderTokenRoute,
   ApiPublicIntegrationsGoogleCallbackRoute:
     ApiPublicIntegrationsGoogleCallbackRoute,
   ApiPublicIntegrationsMicrosoftCallbackRoute:

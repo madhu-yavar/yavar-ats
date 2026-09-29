@@ -1,5 +1,16 @@
 # Roadmap
 
+## Enterprise job-board connections (2026-09-29)
+
+LinkedIn, Indeed and Naukri wired end-to-end on the existing integration-credential and cron primitives: connection setup, job-posting syndication and application ingestion. Every vendor path is partner-contract-gated, so adapters are capability-driven and the UI reports contract gaps honestly instead of pretending a happy path.
+
+- [x] Connection foundations — migration `0018` (`requisition_board_postings`, `board_webhook_events`, `board_sync_state`, per-connection webhook tokens), per-org seeding of `source_integrations` rows (new orgs at creation, existing orgs backfilled), Indeed credentials moved to client id/secret/employer id
+- [x] Adapter layer (`src/server/boards/`) — per-board `capabilities / publishPosting / closePosting / pollApplications / verifyDelivery / mapApplication`, all outbound calls via safeFetch, config-driven partner paths for Naukri/Indeed, LinkedIn reuse of the org OAuth connection + capability probes
+- [x] Publishing — `publishToBoard` / `closeBoardPosting` (hr_head, audited, approved-requisitions only) with a "Job boards" panel on the requisition page; closing a requisition takes its postings down
+- [x] Ingestion — per-connection webhook URL (token in path, Indeed `X-Indeed-Signature` HMAC verified timing-safe) + `/api/public/board-sync` cron (5th scheduler job) for polling backfill, stuck-event retries and 30-day event retention; intake reuses the shared candidate-intake core so dedupe, ack mail and scoring match the apply page
+- [x] Connection-completion UX — enterprise checklist per board card on Integrations (credentials → test → webhook → contract capabilities → postings/applications), webhook rotate, "add missing board connections" fallback
+- [ ] Live vendor verification — LinkedIn Job Posting/RSC contract, Indeed Apply registration and signed deliveries from Indeed itself, Naukri endpoint pack (all capability-gated until the partner paperwork lands)
+
 ## HRMS integrations (2026-09-29)
 
 Study in `docs/hrms-integrations-study.md`: vendor API landscape (Keka, greytHR, Workday buildable today; Darwinbox, ZingHR, Adrenalin partnership-gated), recommended connector architecture reusing the existing integration-credential, outbox and cron primitives, and the phased plan below.

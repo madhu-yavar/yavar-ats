@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { db } from "../server/db";
 import { applications, candidates, requisitions, sourceIntegrations } from "@db/schema";
-import { requireOrg } from "./auth.middleware";
+import { requireOrg, requireRole } from "./auth.middleware";
 import {
   clearSecrets,
   importFromProvider,
@@ -66,13 +66,17 @@ const SaveInput = z.object({
   secrets: z.record(z.string(), z.string()).default({}),
 });
 
-/** Persist non-secret config on the row, secrets in the server-only table. */
+/**
+ * Persist non-secret config on the row, secrets in the server-only table.
+ * Credential changes are a privileged action (AGENTS.md) — role-checked and
+ * audited.
+ */
 export const saveIntegration = createServerFn({ method: "POST" })
-  .middleware([requireOrg])
+  .middleware([requireRole("hr_head")])
   .inputValidator((data: unknown) => SaveInput.parse(data))
   .handler(async ({ data, context }) => {
     const [row] = await db
-      .select({ id: sourceIntegrations.id })
+      .select({ id: sourceIntegrations.id, label: sourceIntegrations.label })
       .from(sourceIntegrations)
       .where(
         and(
@@ -98,6 +102,16 @@ export const saveIntegration = createServerFn({ method: "POST" })
           eq(sourceIntegrations.orgId, context.orgId),
         ),
       );
+    const { writeAudit } = await import("../server/audit");
+    await writeAudit({
+      actor: context.memberEmail,
+      orgId: context.orgId,
+      actorUserId: context.userId,
+      action: "integration.credentials.save",
+      entityType: "integration",
+      entityId: data.integrationId,
+      detail: { provider: data.provider, enabled: data.enabled, fields: keys },
+    });
     return { ok: true, storedKeys: keys };
   });
 
@@ -143,12 +157,13 @@ export const testIntegration = createServerFn({ method: "POST" })
     return outcome;
   });
 
+/** Forget a connection's credentials. Privileged (credential change) + audited. */
 export const disconnectIntegration = createServerFn({ method: "POST" })
-  .middleware([requireOrg])
+  .middleware([requireRole("hr_head")])
   .inputValidator((data: unknown) => z.object({ integrationId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
     const [row] = await db
-      .select({ id: sourceIntegrations.id })
+      .select({ id: sourceIntegrations.id, label: sourceIntegrations.label })
       .from(sourceIntegrations)
       .where(
         and(
@@ -175,6 +190,15 @@ export const disconnectIntegration = createServerFn({ method: "POST" })
           eq(sourceIntegrations.orgId, context.orgId),
         ),
       );
+    const { writeAudit } = await import("../server/audit");
+    await writeAudit({
+      actor: context.memberEmail,
+      orgId: context.orgId,
+      actorUserId: context.userId,
+      action: "integration.credentials.remove",
+      entityType: "integration",
+      entityId: data.integrationId,
+    });
     return { ok: true };
   });
 

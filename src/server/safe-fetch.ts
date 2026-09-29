@@ -115,7 +115,13 @@ export async function safeFetch(
  */
 export async function safeFetchText(
   rawUrl: string,
-  opts?: { timeoutMs?: number; maxBytes?: number; hops?: number },
+  opts?: {
+    timeoutMs?: number;
+    maxBytes?: number;
+    hops?: number;
+    /** Forwarded to safeFetch (e.g. an Authorization header for hosted documents). */
+    headers?: Record<string, string>;
+  },
 ): Promise<{ text: string; contentType: string; finalUrl: string }> {
   const maxBytes = opts?.maxBytes ?? DEFAULT_MAX_BYTES;
   let current = rawUrl;

@@ -167,6 +167,7 @@ On the Cloud Run URL:
 5. Trigger an email (e.g. "Forgot your password?") → mail arrives
 6. `POST /api/public/inbox-sync` with `Authorization: Bearer <cron-secret>` → 200 (optional feature)
 7. `POST /api/public/sync-hrms` with `Authorization: Bearer <cron-secret>` → 200 (no-op until an organisation enables an HRMS connection)
+8. `POST /api/public/board-sync` with `Authorization: Bearer <cron-secret>` → 200 summary (no-op until a job-board connection is enabled)
 
 ## 6. DNS cut-over
 
@@ -187,6 +188,7 @@ Cloud Scheduler (all call the app with `Authorization: Bearer <value of atsiq-cr
 | hourly | `https://atsiq.yavar.ai/api/public/sync-candidates` |
 | every 5 min | `https://atsiq.yavar.ai/api/public/process-email-outbox` (drains the candidate email queue) |
 | every 15 min | `https://atsiq.yavar.ai/api/public/sync-hrms` (refreshes the HRMS employee caches) |
+| every 15 min | `https://atsiq.yavar.ai/api/public/board-sync` (job-board application poll/backfill + webhook-event retention) |
 
 ## 8. Notes & gotchas
 

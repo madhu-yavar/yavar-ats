@@ -95,6 +95,17 @@ export const advanceRequisition = createServerFn({ method: "POST" })
       .update(requisitions)
       .set({ status: data.status, approvalTrail: trail as never })
       .where(and(eq(requisitions.id, data.id), eq(requisitions.orgId, context.orgId)));
+
+    // Closing a role takes its job-board postings down with it — best-effort,
+    // audited per posting, never blocking the transition itself.
+    if (data.status === "closed") {
+      const { closePostingsForRequisition } = await import("../server/boards/publish.server");
+      await closePostingsForRequisition({
+        orgId: context.orgId,
+        actor: { memberEmail: context.memberEmail, userId: context.userId },
+        requisitionId: data.id,
+      }).catch(() => undefined);
+    }
     return { ok: true as const };
   });
 

@@ -327,6 +327,10 @@ export const createOrganization = createServerFn({ method: "POST" })
       .returning({ id: organizations.id, name: organizations.name });
     if (!org) throw new Error("The organisation could not be created.");
 
+    // The Integrations page reads this org's own provider rows — seed them
+    // now so a new tenant never opens an empty page. Best-effort by design.
+    void (await import("../server/integration-seeds.server")).seedSourceIntegrations(org.id);
+
     await db.insert(orgMembers).values({
       orgId: org.id,
       userId: context.userId,

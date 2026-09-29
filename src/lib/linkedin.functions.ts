@@ -7,13 +7,12 @@ import { orgLinkedinConnections, requisitions } from "@db/schema";
 import { requireOrg, requireRole } from "./auth.middleware";
 import type { LinkedinCapability } from "./linkedin.server";
 import {
-  LinkedinAuthError,
   authorizeUrl,
   fetchMember,
   linkedinEnvConfigured,
+  linkedinOrgToken,
   postAsMember,
   probeCapabilities,
-  refreshAccessToken,
   signState,
 } from "./linkedin.server";
 
@@ -88,44 +87,18 @@ export const disconnectLinkedIn = createServerFn({ method: "POST" })
   .middleware([requireRole("hr_head")])
   .handler(async ({ context }) => {
     await db.delete(orgLinkedinConnections).where(eq(orgLinkedinConnections.orgId, context.orgId));
+    const { writeAudit } = await import("../server/audit");
+    await writeAudit({
+      actor: context.memberEmail,
+      orgId: context.orgId,
+      actorUserId: context.userId,
+      action: "linkedin.disconnect",
+      entityType: "integration",
+      entityId: context.orgId,
+      detail: { provider: "linkedin" },
+    });
     return { ok: true as const };
   });
-
-/**
- * Read the organisation's stored token, refreshing it when LinkedIn issued a
- * refresh token and the access token is close to expiry.
- */
-async function orgToken(orgId: string): Promise<{ accessToken: string; memberSub: string }> {
-  const { decryptSecret, encryptSecret } = await import("../server/crypto");
-  const [row] = await db
-    .select({
-      memberSub: orgLinkedinConnections.memberSub,
-      accessToken: orgLinkedinConnections.accessToken,
-      refreshToken: orgLinkedinConnections.refreshToken,
-      expiresAt: orgLinkedinConnections.expiresAt,
-    })
-    .from(orgLinkedinConnections)
-    .where(eq(orgLinkedinConnections.orgId, orgId))
-    .limit(1);
-  if (!row) throw new Error("This organisation has not connected LinkedIn yet.");
-
-  const expiresAt = row.expiresAt ? row.expiresAt.getTime() : 0;
-  if (expiresAt && expiresAt - Date.now() < 5 * 60 * 1000) {
-    if (!row.refreshToken) throw new LinkedinAuthError();
-    const next = await refreshAccessToken(decryptSecret(row.refreshToken));
-    await db
-      .update(orgLinkedinConnections)
-      .set({
-        accessToken: encryptSecret(next.access_token),
-        refreshToken: next.refresh_token ? encryptSecret(next.refresh_token) : row.refreshToken,
-        expiresAt: new Date(Date.now() + next.expires_in * 1000),
-        updatedAt: new Date(),
-      })
-      .where(eq(orgLinkedinConnections.orgId, orgId));
-    return { accessToken: next.access_token, memberSub: row.memberSub };
-  }
-  return { accessToken: decryptSecret(row.accessToken), memberSub: row.memberSub };
-}
 
 const PublishInput = z.object({
   requisitionId: z.string().uuid(),
@@ -144,7 +117,7 @@ export const publishToLinkedIn = createServerFn({ method: "POST" })
       .limit(1);
     if (!requisition) throw new Error("Requisition not found.");
 
-    const { accessToken, memberSub } = await orgToken(context.orgId);
+    const { accessToken, memberSub } = await linkedinOrgToken(context.orgId);
     // Confirms the token still works and keeps the stored identity honest.
     await fetchMember(accessToken);
     const postUrn = await postAsMember(accessToken, memberSub, data.text.trim());
@@ -161,6 +134,6 @@ export const linkedinCapabilities = createServerFn({ method: "GET" })
       .where(eq(orgLinkedinConnections.orgId, context.orgId))
       .limit(1);
     if (!row) return [];
-    const { accessToken } = await orgToken(context.orgId);
+    const { accessToken } = await linkedinOrgToken(context.orgId);
     return probeCapabilities(accessToken, row.scope ?? null);
   });

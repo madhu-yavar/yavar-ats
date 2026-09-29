@@ -9,7 +9,7 @@
 > A domain diagram shows that domain's tables in full; references into other domains
 > point at a stub entity that is drawn complete in its own domain.
 
-54 tables across 9 domains.
+57 tables across 9 domains.
 
 ## Identity & access
 
@@ -690,6 +690,9 @@ erDiagram
     text last_test_status
     text last_test_message "nullable"
     timestamptz last_tested_at "nullable"
+    text webhook_token "nullable"
+    text webhook_token_hash "nullable"
+    timestamptz webhook_configured_at "nullable"
     timestamptz updated_at
     timestamptz created_at
   }
@@ -948,6 +951,9 @@ erDiagram
 | `applications` | `candidate_id` | `candidates` | cascade |
 | `applications` | `org_id` | `organizations` | cascade |
 | `applications` | `requisition_id` | `requisitions` | cascade |
+| `board_sync_state` | `integration_id` | `source_integrations` | cascade |
+| `board_sync_state` | `org_id` | `organizations` | cascade |
+| `board_webhook_events` | `org_id` | `organizations` | no action |
 | `candidate_assessments` | `candidate_id` | `candidates` | cascade |
 | `candidate_assessments` | `org_id` | `organizations` | cascade |
 | `candidate_assessments` | `requisition_id` | `requisitions` | no action |
@@ -1004,6 +1010,8 @@ erDiagram
 | `org_members` | `user_id` | `users` | cascade |
 | `org_pool_shares` | `owner_org` | `organizations` | cascade |
 | `org_pool_shares` | `partner_org` | `organizations` | cascade |
+| `requisition_board_postings` | `org_id` | `organizations` | cascade |
+| `requisition_board_postings` | `requisition_id` | `requisitions` | cascade |
 | `requisitions` | `department_id` | `departments` | no action |
 | `requisitions` | `org_id` | `organizations` | cascade |
 | `salary_benchmarks` | `org_id` | `organizations` | cascade |
@@ -1046,6 +1054,8 @@ erDiagram
 | `ai_usage_events` | Communications & AI settings | 15 | — |
 | `applications` | Candidates & pipeline | 10 | (requisitionId+candidateId) |
 | `audit_log` | Identity & access | 10 | — |
+| `board_sync_state` | — | 11 | (integration_id) |
+| `board_webhook_events` | — | 15 | (dedupe_key) |
 | `candidate_assessments` | Candidates & pipeline | 16 | (token) |
 | `candidate_notes` | Candidates & pipeline | 8 | — |
 | `candidate_ownership_events` | Candidates & pipeline | 8 | — |
@@ -1079,6 +1089,7 @@ erDiagram
 | `organizations` | Organisations & masters | 26 | (slug), (capture_token), (capture_token_hash) |
 | `platform_admins` | Identity & access | 6 | (email) |
 | `product_catalogue_commercials` | Organisations & masters | 8 | — |
+| `requisition_board_postings` | — | 16 | (requisitionId+provider) |
 | `requisitions` | Requisitions & job content | 39 | (orgId+code) |
 | `salary_benchmarks` | Intelligence | 15 | — |
 | `screening_kits` | Screening & interviews | 11 | — |
@@ -1088,7 +1099,7 @@ erDiagram
 | `skill_evidence` | Intelligence | 9 | — |
 | `skill_nodes` | Intelligence | 15 | (orgId+slug) |
 | `social_profiles` | Candidates & pipeline | 13 | (candidateId+provider) |
-| `source_integrations` | Sourcing & integrations | 14 | (orgId+provider) |
+| `source_integrations` | Sourcing & integrations | 17 | (orgId+provider) |
 | `stage_events` | Candidates & pipeline | 9 | — |
 | `talent_request_suggestions` | Candidates & pipeline | 8 | (requestId+candidateId) |
 | `talent_requests` | Candidates & pipeline | 10 | — |

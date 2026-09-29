@@ -26,6 +26,7 @@ import {
   saveIntegration,
   testIntegration,
 } from "@/lib/integrations.functions";
+import { ensureBoardIntegrations } from "@/lib/boards.functions";
 import {
   getAiSettings,
   removeAiKey,
@@ -58,6 +59,7 @@ import { orgInbox } from "@/lib/local-inbox.functions";
 import { collectApplicants, type CollectSummary } from "@/lib/collect.functions";
 import { captureSetup, rotateCaptureToken } from "@/lib/capture.functions";
 import { PageHeader } from "@/components/ats";
+import { BoardEnterprisePanel } from "@/components/board-enterprise-panel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { Button } from "@/components/ui/button";
@@ -141,12 +143,13 @@ const SETUP_GUIDE: Record<string, SetupGuide> = {
       "Check that the panel above shows a green “Connected” tick — that is the one-time sign-in, already done for your company.",
       "Open any approved requisition, press “Design post”, then “Publish to LinkedIn”. That is the whole job.",
       "Each post carries your ATSIQ apply link, so CVs sent from LinkedIn arrive in the talent pool and the role's pipeline on their own — read, scored and ready, with nothing to download.",
+      "The requisition's “Job boards” panel also checks whether your contract opens LinkedIn's structured Jobs board and applicant sync — if LinkedIn declines, posts keep going out on the feed with your apply link.",
     ],
   },
 
   naukri: {
     who: "Needs a Naukri Resdex / RMS employer subscription. Ask your Naukri account manager for API access.",
-    minutes: "5 min once Naukri sends your pack",
+    minutes: "10 min once Naukri sends your pack",
     links: [
       { label: "Naukri employer portal", href: "https://recruit.naukri.com/" },
       { label: "Naukri employer support", href: "https://www.naukri.com/recruiter-services" },
@@ -155,19 +158,22 @@ const SETUP_GUIDE: Record<string, SetupGuide> = {
       "Email your Naukri account manager and ask for “Resdex API credentials for our ATS”.",
       "They send an onboarding pack with a client ID, client secret and an API base URL.",
       "Paste all three below (base URL goes in the last box) and press Test connection.",
+      "Press “Set up” under Application webhook and give the generated callback URL to your account manager — applicants Naukri delivers arrive in the pipeline on their own.",
+      "Job posting and applicant pulls stay unavailable until the pack lists those endpoints — the checklist shows exactly what is missing.",
     ],
   },
   indeed: {
-    who: "Needs an Indeed employer account; API keys are issued by Indeed partner support.",
-    minutes: "5 min once Indeed issues the key",
+    who: "Needs an Indeed employer account with the Indeed Apply integration enabled.",
+    minutes: "10 min once Indeed approves your account",
     links: [
       { label: "Indeed employer sign-in", href: "https://employers.indeed.com/" },
       { label: "Indeed partner / API portal", href: "https://developer.indeed.com/" },
     ],
     steps: [
-      "Sign in to the Indeed employer account and request API/partner access for your ATS.",
-      "Copy the API key they issue into the box below.",
-      "Add the API base URL from their email, then press Test connection.",
+      "Sign in to the Indeed employer account and request Indeed Apply / partner access for your ATS.",
+      "Paste the client ID and client secret below (plus your employer ID), then press Test connection.",
+      "Press “Set up” under Application webhook and register the generated URL as the apply endpoint on your Indeed account — Indeed signs every delivery, ATSIQ verifies it before filing anyone.",
+      "Applicants from your Indeed jobs then appear in the pipeline automatically, parsed and scored.",
     ],
   },
   github: {
@@ -1178,6 +1184,16 @@ function IntegrationCard({ row }: { row: Integration }) {
           {provider === "linkedin" || provider === "careers" ? <CareersInboxPanel /> : null}
           {provider === "linkedin" || provider === "careers" ? <CapturePanel /> : null}
           {isMeeting ? <MeetingOAuthPanel row={row} /> : null}
+          {provider === "linkedin" || provider === "indeed" || provider === "naukri" ? (
+            <BoardEnterprisePanel
+              provider={provider as "linkedin" | "indeed" | "naukri"}
+              integrationId={row.id}
+              enabled={enabled}
+              hasCredentials={row.has_credentials}
+              lastTestStatus={row.last_test_status}
+              lastTestMessage={row.last_test_message}
+            />
+          ) : null}
 
           <SetupHelp provider={provider} label={row.label} />
 
@@ -1678,6 +1694,7 @@ function Integrations() {
   const qc = useQueryClient();
   const rows = useQuery(integrationsQuery);
   const hrmsRows = useQuery(hrmsQuery);
+  const [seeding, setSeeding] = useState(false);
 
   // Meeting-provider connects return with ?meetings=connected|error&provider=…
   useEffect(() => {
@@ -1723,9 +1740,44 @@ function Integrations() {
           {rows.isLoading ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : (
-            (rows.data ?? [])
-              .filter((r) => r.category !== "meeting" && r.category !== "hrms")
-              .map((row) => <IntegrationCard key={row.id} row={row} />)
+            <>
+              {(rows.data ?? [])
+                .filter((r) => r.category !== "meeting" && r.category !== "hrms")
+                .map((row) => (
+                  <IntegrationCard key={row.id} row={row} />
+                ))}
+              {rows.data &&
+              !["linkedin", "indeed", "naukri"].every((p) =>
+                rows.data!.some((r) => r.provider === p),
+              ) ? (
+                <div className="panel flex flex-wrap items-center justify-between gap-3 p-4">
+                  <p className="text-sm text-muted-foreground">
+                    Some job-board connections are missing from this organisation's list (older
+                    accounts created before the job-board catalog existed).
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={seeding}
+                    onClick={async () => {
+                      setSeeding(true);
+                      try {
+                        await ensureBoardIntegrations();
+                        qc.invalidateQueries({ queryKey: ["source_integrations"] });
+                        toast.success("Board connections added");
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : "Could not add the rows");
+                      } finally {
+                        setSeeding(false);
+                      }
+                    }}
+                  >
+                    {seeding ? <Loader2 className="size-4 animate-spin" /> : null} Add missing board
+                    connections
+                  </Button>
+                </div>
+              ) : null}
+            </>
           )}
           <details className="panel p-4 text-sm text-muted-foreground">
             <summary className="cursor-pointer font-medium text-foreground">

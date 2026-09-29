@@ -56,6 +56,7 @@ import {
 } from "@/components/ats";
 import { MarketBenchmark } from "@/components/salary-benchmark";
 import { JobCard, ZoneOverlay, type JobCardZone } from "@/components/job-card";
+import { JobBoardsSection } from "@/components/requisition-job-boards";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -1405,6 +1406,8 @@ function RequisitionDetail() {
               </div>
             )}
           </section>
+
+          <JobBoardsSection requisitionId={r.id} approved={r.status === "approved"} />
 
           <section className="panel">
             <div className="border-b border-border p-5">

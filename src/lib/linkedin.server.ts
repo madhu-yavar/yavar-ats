@@ -11,8 +11,11 @@
  * server environment); tenants never see or paste anything.
  */
 import { createHmac, timingSafeEqual } from "crypto";
+import { eq } from "drizzle-orm";
 
+import { db } from "../server/db";
 import { env } from "../server/env";
+import { orgLinkedinConnections } from "@db/schema";
 import { assertAllowedOrigin } from "./oauth-state";
 
 const AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
@@ -207,6 +210,47 @@ export async function postAsMember(
   throw new Error(`LinkedIn post failed [${res.status}]: ${bodyText.slice(0, 300)}`);
 }
 
+/* --------------------------------------------------------------- org token */
+
+/**
+ * Read the organisation's stored token, refreshing it when LinkedIn issued a
+ * refresh token and the access token is close to expiry. Shared by the
+ * client-reached LinkedIn functions and the board adapter layer.
+ */
+export async function linkedinOrgToken(
+  orgId: string,
+): Promise<{ accessToken: string; memberSub: string }> {
+  const { decryptSecret, encryptSecret } = await import("../server/crypto");
+  const [row] = await db
+    .select({
+      memberSub: orgLinkedinConnections.memberSub,
+      accessToken: orgLinkedinConnections.accessToken,
+      refreshToken: orgLinkedinConnections.refreshToken,
+      expiresAt: orgLinkedinConnections.expiresAt,
+    })
+    .from(orgLinkedinConnections)
+    .where(eq(orgLinkedinConnections.orgId, orgId))
+    .limit(1);
+  if (!row) throw new Error("This organisation has not connected LinkedIn yet.");
+
+  const expiresAt = row.expiresAt ? row.expiresAt.getTime() : 0;
+  if (expiresAt && expiresAt - Date.now() < 5 * 60 * 1000) {
+    if (!row.refreshToken) throw new LinkedinAuthError();
+    const next = await refreshAccessToken(decryptSecret(row.refreshToken));
+    await db
+      .update(orgLinkedinConnections)
+      .set({
+        accessToken: encryptSecret(next.access_token),
+        refreshToken: next.refresh_token ? encryptSecret(next.refresh_token) : row.refreshToken,
+        expiresAt: new Date(Date.now() + next.expires_in * 1000),
+        updatedAt: new Date(),
+      })
+      .where(eq(orgLinkedinConnections.orgId, orgId));
+    return { accessToken: next.access_token, memberSub: row.memberSub };
+  }
+  return { accessToken: decryptSecret(row.accessToken), memberSub: row.memberSub };
+}
+
 /* ---------------------------------------------------------------- capabilities */
 
 export type LinkedinCapability = {
@@ -217,7 +261,7 @@ export type LinkedinCapability = {
   detail: string;
 };
 
-const REST_VERSION = "202401";
+export const REST_VERSION = "202401";
 
 async function probeRest(accessToken: string, path: string): Promise<number> {
   const res = await fetch(`${API_URL}${path}`, {
