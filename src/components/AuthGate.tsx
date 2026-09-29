@@ -324,12 +324,22 @@ function TopBar() {
             FAQ
           </a>
         </nav>
-        <a
-          href="#signin"
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-        >
-          Sign in
-        </a>
+        <div className="flex items-center gap-2.5">
+          <a
+            href="https://yavar.ai/contact/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent sm:block"
+          >
+            Book a demo
+          </a>
+          <a
+            href="#signin"
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            Sign in
+          </a>
+        </div>
       </div>
     </header>
   );
@@ -361,6 +371,22 @@ function Hero() {
               </li>
             ))}
           </ul>
+          <div className="flex flex-wrap items-center gap-3">
+            <a
+              href="#signin"
+              className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+            >
+              Get started
+            </a>
+            <a
+              href="https://yavar.ai/contact/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-md border border-border bg-card px-5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+            >
+              Book a demo
+            </a>
+          </div>
           <div className="grid grid-cols-3 gap-4 border-t border-border pt-6">
             {STATS.map((s) => (
               <div key={s.label}>
@@ -640,12 +666,22 @@ function ClosingCta() {
             then you configure departments, locations and invite your internal hiring team.
           </p>
         </div>
-        <a
-          href="#signin"
-          className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-        >
-          Get started
-        </a>
+        <div className="flex flex-wrap items-center gap-3">
+          <a
+            href="#signin"
+            className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            Get started
+          </a>
+          <a
+            href="https://yavar.ai/contact/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-md border border-border bg-card px-5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+          >
+            Book a demo
+          </a>
+        </div>
       </div>
     </section>
   );
