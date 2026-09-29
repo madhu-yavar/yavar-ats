@@ -225,11 +225,10 @@ function Requisitions() {
       return;
     }
     setSaving(true);
-    const code = `REQ-${new Date().getFullYear()}-${String(requisitions.length + 1).padStart(3, "0")}`;
+    let code = "Requisition";
     try {
-      await createRequisition({
+      const res = await createRequisition({
         data: {
-          code,
           title: form.title,
           departmentId: form.department_id || null,
           location: form.location,
@@ -252,9 +251,18 @@ function Requisitions() {
           costCenter: form.cost_center,
         },
       });
+      code = res?.code ?? code;
     } catch (e) {
       setSaving(false);
-      toast.error(e instanceof Error ? e.message : "Could not raise the requisition");
+      const raw = e instanceof Error ? e.message : "";
+      // Drizzle surfaces driver failures as "Failed query: …" SQL dumps —
+      // log those for diagnosis but never toast raw SQL at a user.
+      if (/^Failed query/.test(raw)) {
+        console.error("createRequisition failed:", raw);
+        toast.error("Could not raise the requisition — a server error occurred. Try again.");
+      } else {
+        toast.error(raw || "Could not raise the requisition");
+      }
       return;
     }
     setSaving(false);

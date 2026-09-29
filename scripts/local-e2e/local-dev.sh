@@ -42,18 +42,20 @@ else
     psql -q -c "create role anon nologin; create role authenticated nologin; create role service_role nologin;" || true
     psql -q -f scripts/local-e2e/fixture.sql
     psql -q -f scripts/local-e2e/seed-roles.sql
-    # schema drift: fixture.sql predates some drizzle columns/migrations — apply
-    # the incremental pg-migrations plus known compatibility deltas
-    psql -q -f drizzle/pg-migrations/0009_capture_token_hash.sql 2>/dev/null || true
-    psql -q -c "alter table requisitions add column if not exists job_card_overrides jsonb not null default '{}'::jsonb" || true
-    psql -q -c "alter table organizations add column if not exists capture_token_hash text" || true
-    psql -q -f drizzle/pg-migrations/0018_board_connections.sql 2>/dev/null || true
-    psql -q -f drizzle/pg-migrations/0019_master_items_org_scoped_unique.sql 2>/dev/null || true
   else
     "$PG_BIN/pg_ctl" -D "$DATADIR" -o "-p $PG_PORT -k /tmp -c listen_addresses=127.0.0.1" -l /tmp/atsiq-pgdata.log start >/dev/null
     echo "postgres: started existing cluster on :$PG_PORT"
   fi
 fi
+
+# schema drift: fixture.sql (and old persisted data dirs) predate some drizzle
+# columns/migrations. These are idempotent, so run them on EVERY boot — a
+# reused data dir must be healed too, not just a fresh one.
+psql -q -f drizzle/pg-migrations/0009_capture_token_hash.sql 2>/dev/null || true
+psql -q -c "alter table requisitions add column if not exists job_card_overrides jsonb not null default '{}'::jsonb" || true
+psql -q -c "alter table organizations add column if not exists capture_token_hash text" || true
+psql -q -f drizzle/pg-migrations/0018_board_connections.sql 2>/dev/null || true
+psql -q -f drizzle/pg-migrations/0019_master_items_org_scoped_unique.sql 2>/dev/null || true
 
 # 2. Auth stub
 if curl -s -o /dev/null "http://127.0.0.1:$STUB_PORT/auth/v1/user" 2>/dev/null; then

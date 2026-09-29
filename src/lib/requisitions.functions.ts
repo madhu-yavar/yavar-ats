@@ -3,7 +3,7 @@
  * internal job posting (IJP) apply flow. Every function verifies the caller's
  * organisation (`requireOrg`) and predicates every read/write on it.
  */
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, like } from "drizzle-orm";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
@@ -371,17 +371,16 @@ export const addApplicationsToRequisition = createServerFn({ method: "POST" })
 /* -------------------------------------------------------- create requisition */
 
 /**
- * Raise a manpower requisition. The client generates the per-org `code`
- * (REQ-YYYY-NNN from its own list length — kept identical) and the per-org
- * unique index `requisitions_org_code_key` still rejects duplicates with a
- * thrown error the route surfaces as a toast.
+ * Raise a manpower requisition. The per-org `code` (REQ-YYYY-NNN) is computed
+ * server-side from the highest number already issued this year: the client's
+ * list can be stale or half-loaded, and a repeated number trips the per-org
+ * unique index `requisitions_org_code_key` with a raw database error.
  */
 export const createRequisition = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((data: unknown) =>
     z
       .object({
-        code: z.string().min(1),
         title: z.string().min(1),
         departmentId: z.string().uuid().nullish(),
         location: z.string(),
@@ -406,9 +405,19 @@ export const createRequisition = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
+    const year = new Date().getFullYear();
+    const [latest] = await db
+      .select({ code: requisitions.code })
+      .from(requisitions)
+      .where(and(eq(requisitions.orgId, context.orgId), like(requisitions.code, `REQ-${year}-%`)))
+      .orderBy(desc(requisitions.code))
+      .limit(1);
+    const next = Number(latest?.code?.match(/REQ-\d{4}-(\d+)$/)?.[1] ?? 0) + 1;
+    const code = `REQ-${year}-${String(next).padStart(3, "0")}`;
+
     await db.insert(requisitions).values({
       orgId: context.orgId,
-      code: data.code,
+      code,
       title: data.title,
       departmentId: data.departmentId || null,
       location: data.location,
@@ -431,7 +440,7 @@ export const createRequisition = createServerFn({ method: "POST" })
       costCenter: data.costCenter || null,
       status: "pending_dh",
     });
-    return { ok: true as const };
+    return { ok: true as const, code };
   });
 
 /* ------------------------------------------------------- job card overrides */
