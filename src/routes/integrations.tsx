@@ -724,6 +724,9 @@ function MeetingOAuthPanel({ row }: { row: Integration }) {
   const cfg = (row.config ?? {}) as Record<string, unknown>;
   const connectedEmail =
     typeof cfg["connected_email"] === "string" ? (cfg["connected_email"] as string) : "";
+  // Credentials are the source of truth: a row whose secrets are gone is
+  // disconnected even if a stale connected_email is still in config.
+  const connected = Boolean(connectedEmail) && row.has_credentials;
 
   const provider = row.provider as "teams" | "google_meet" | "zoom";
   const startFn = provider === "teams" ? startMs : provider === "google_meet" ? startGm : startZm;
@@ -764,7 +767,7 @@ function MeetingOAuthPanel({ row }: { row: Integration }) {
           <Plug className="size-4 text-primary" />
           One-click connect — no secrets to paste
         </div>
-        {connectedEmail ? <Badge variant="secondary">Connected as {connectedEmail}</Badge> : null}
+        {connected ? <Badge variant="secondary">Connected as {connectedEmail}</Badge> : null}
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
         Sign in with the work account that hosts your {label} meetings. An organisation owner or HR
@@ -772,7 +775,7 @@ function MeetingOAuthPanel({ row }: { row: Integration }) {
         links.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
-        {connectedEmail ? (
+        {connected ? (
           <Button size="sm" variant="outline" onClick={onDisconnect} disabled={busy}>
             Disconnect {connectedEmail}
           </Button>

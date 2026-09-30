@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useRouter } from "@tanstack/react-router";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -27,6 +27,7 @@ import {
   type MatchWire,
 } from "@/lib/matching.functions";
 import { addApplicationsToRequisition } from "@/lib/requisitions.functions";
+import { moveStage } from "@/lib/lifecycle.functions";
 import { importCandidates } from "@/lib/integrations.functions";
 import { balanceWeights } from "@/lib/cv-extract";
 import { rankPool } from "@/lib/shortlist";
@@ -135,6 +136,7 @@ function socialInput(result: MatchWire) {
 }
 
 function Matching() {
+  const router = useRouter();
   const { req } = Route.useSearch();
   const navigate = Route.useNavigate();
   const { leadership } = useNavCtx();
@@ -528,8 +530,50 @@ function Matching() {
       toast.error(e instanceof Error ? e.message : "Could not record the override");
       return;
     }
+
+    // Overriding a parked/closed candidate to "select" means "I want to
+    // interview them" — return them to Shortlisted in the same action instead
+    // of making the recruiter hunt for the stage mover. Goes through the
+    // audited moveStage path, so the trail stays honest.
+    let returned = false;
+    if (verdict === "select") {
+      const row = pipeline.find((r) => r.app.id === applicationId);
+      const stage = row?.app.stage as string | undefined;
+      if (
+        stage &&
+        !["shortlisted", "ai_screened", "l1", "l2", "l3", "offer", "offer_pending"].includes(stage)
+      ) {
+        try {
+          await moveStage({
+            data: {
+              applicationId,
+              toStage: "shortlisted",
+              reason: overrideReason.trim() || "Recruiter override — returned to scheduling",
+            },
+          });
+          returned = true;
+          qc.invalidateQueries({ queryKey: ["applications"] });
+        } catch (e) {
+          toast.warning(
+            e instanceof Error
+              ? `Override saved, but returning to Shortlisted failed: ${e.message}`
+              : "Override saved, but returning to Shortlisted failed — move the stage manually.",
+          );
+        }
+      }
+    }
+
     setOverrideReason("");
-    toast.success("Recruiter override recorded");
+    if (returned) {
+      toast.success("Override recorded — candidate returned to Shortlisted", {
+        action: {
+          label: "Schedule interview",
+          onClick: () => router.navigate({ to: "/interviews" }),
+        },
+      });
+    } else {
+      toast.success("Recruiter override recorded");
+    }
     qc.invalidateQueries({ queryKey: ["match_scores"] });
   }
 

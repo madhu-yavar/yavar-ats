@@ -163,7 +163,11 @@ export const disconnectIntegration = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => z.object({ integrationId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
     const [row] = await db
-      .select({ id: sourceIntegrations.id, label: sourceIntegrations.label })
+      .select({
+        id: sourceIntegrations.id,
+        label: sourceIntegrations.label,
+        config: sourceIntegrations.config,
+      })
       .from(sourceIntegrations)
       .where(
         and(
@@ -175,11 +179,23 @@ export const disconnectIntegration = createServerFn({ method: "POST" })
     if (!row) throw new Error("Integration not found.");
 
     await clearSecrets(data.integrationId);
+
+    // Meeting-provider connects stamp connection state (connected_email /
+    // connected_at) into config — clear it too, or the card keeps rendering
+    // "Connected as …" and the Connect button never comes back.
+    const config = { ...((row.config as IntegrationConfig) ?? {}) } as Record<
+      string,
+      string | number | boolean | null
+    >;
+    delete config["connected_email"];
+    delete config["connected_at"];
+
     await db
       .update(sourceIntegrations)
       .set({
         enabled: false,
         hasCredentials: false,
+        config,
         lastTestStatus: "untested",
         lastTestMessage: "Credentials removed.",
         lastTestedAt: null,
@@ -198,6 +214,7 @@ export const disconnectIntegration = createServerFn({ method: "POST" })
       action: "integration.credentials.remove",
       entityType: "integration",
       entityId: data.integrationId,
+      detail: { label: row.label },
     });
     return { ok: true };
   });
