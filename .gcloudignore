@@ -1,0 +1,15 @@
+# Cloud Build upload context. Unlike .gitignore-derived defaults, this file
+# re-includes public/atsiq-capture.zip (gitignored by design, but the deployed
+# app must serve the current Capture companion — see DEPLOYMENT-HANDOFF §8).
+.git
+.github
+node_modules
+.output
+.local-storage
+tmp
+*.log
+.env
+.env.*
+!.env.example
+supabase
+test_data
