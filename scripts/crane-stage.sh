@@ -30,11 +30,10 @@ export DOCKER_CONFIG=/outimg/.docker
 
 $CRANE append -f /stage/layer.tar -b node:22-slim -t "$STAGE_TAG"
 $CRANE mutate "$STAGE_TAG" \
-  --workingdir /app \
   --env NODE_ENV=production \
   --env HOST=0.0.0.0 \
   --env PORT=3000 \
-  --entrypoint "node,.output/server/index.mjs" \
+  --entrypoint "node,/app/.output/server/index.mjs" \
   -t "$DESTINATION"
 $CRANE manifest "$DESTINATION" >/dev/null && echo "pushed $DESTINATION"
 $CRANE delete "$STAGE_TAG" >/dev/null 2>&1 || true
