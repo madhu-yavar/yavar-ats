@@ -3,13 +3,15 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Clock } from "lucide-react";
+import { Check, Clock, Loader2, Trash2, X } from "lucide-react";
 
 import {
   addDepartment as addDepartmentFn,
   createDepartment as createDepartmentFn,
   createRequisition,
+  deleteRequisition,
 } from "@/lib/requisitions.functions";
+import { useRoles } from "@/hooks/useRoles";
 import {
   addMasterItem,
   applicationsQuery,
@@ -107,6 +109,14 @@ function enteredCurrentStateAt(r: Requisition): string {
 
 function Requisitions() {
   const qc = useQueryClient();
+  const { roles, isAdmin } = useRoles();
+  const canDeleteDraft = isAdmin || roles.includes("hr_head");
+  const [deletingDraft, setDeletingDraft] = useState<{
+    id: string;
+    code: string;
+    reason: string;
+  } | null>(null);
+  const runDeleteRequisition = useServerFn(deleteRequisition);
   const reqs = useQuery(requisitionsQuery);
   const depts = useQuery(departmentsQuery);
   const apps = useQuery(applicationsQuery);
@@ -140,6 +150,7 @@ function Requisitions() {
 
   const [dupAck, setDupAck] = useState(false);
   const [drafting, setDrafting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const draftProfile = useServerFn(suggestRoleProfile);
   const requisitions = reqs.data ?? [];
   const departments = depts.data ?? [];
@@ -674,6 +685,89 @@ function Requisitions() {
                       );
                     })()}
                     <StatusBadge status={r.status} />
+                    {r.status === "draft" && canDeleteDraft ? (
+                      deletingDraft?.id === r.id ? (
+                        <span
+                          className="flex items-center gap-1"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                        >
+                          <input
+                            autoFocus
+                            className="h-6 w-36 rounded border border-border bg-background px-1.5 text-[11px]"
+                            placeholder="Reason (audit trail)"
+                            value={deletingDraft.reason}
+                            onChange={(e) =>
+                              setDeletingDraft({ ...deletingDraft, reason: e.target.value })
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape") setDeletingDraft(null);
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="rounded bg-destructive p-1 text-destructive-foreground disabled:opacity-50"
+                            disabled={deleting}
+                            title="Delete this draft permanently"
+                            onClick={async (e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setDeleting(true);
+                              try {
+                                await runDeleteRequisition({
+                                  data: {
+                                    id: r.id,
+                                    reason: deletingDraft.reason.trim() || null,
+                                  },
+                                });
+                                toast.success(`Draft ${r.code} deleted`);
+                                setDeletingDraft(null);
+                                qc.invalidateQueries({ queryKey: ["requisitions"] });
+                              } catch (err) {
+                                toast.error(
+                                  err instanceof Error ? err.message : "Could not delete the draft",
+                                );
+                              } finally {
+                                setDeleting(false);
+                              }
+                            }}
+                          >
+                            {deleting ? (
+                              <Loader2 className="size-3 animate-spin" />
+                            ) : (
+                              <Check className="size-3" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded border border-border p-1 text-muted-foreground"
+                            title="Cancel"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setDeletingDraft(null);
+                            }}
+                          >
+                            <X className="size-3" />
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="text-muted-foreground/60 transition-colors hover:text-destructive"
+                          title="Delete this draft"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setDeletingDraft({ id: r.id, code: r.code, reason: "" });
+                          }}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      )
+                    ) : null}
                   </div>
                 </div>
                 <dl className="num mt-4 grid grid-cols-3 gap-3 text-sm">

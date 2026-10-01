@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { db } from "../server/db";
 import { applications, candidates, departments, jobDescriptions, requisitions } from "@db/schema";
-import { assertRole, requireOrg, type AppRole } from "./auth.middleware";
+import { assertRole, requireOrg, requireRole, type AppRole } from "./auth.middleware";
 
 const ReqStatus = z.enum([
   "draft",
@@ -107,6 +107,67 @@ export const advanceRequisition = createServerFn({ method: "POST" })
       }).catch(() => undefined);
     }
     return { ok: true as const };
+  });
+
+/**
+ * Delete a requisition that never went anywhere: drafts only, and only while
+ * nothing references them (no applications). HR head / owner — deletion is a
+ * privileged, audited action; anything with a history must use the status
+ * machine (reject / close) so the trail stays intact.
+ */
+export const deleteRequisition = createServerFn({ method: "POST" })
+  .middleware([requireOrg])
+  .inputValidator((data: unknown) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        reason: z.string().max(500).nullish(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    // Same trust level as closing: HR head or the org's president (owners pass).
+    await assertRole(context.userId, context.orgId, ["hr_head", "president_cbo"]);
+    const [req] = await db
+      .select({
+        id: requisitions.id,
+        code: requisitions.code,
+        title: requisitions.title,
+        status: requisitions.status,
+      })
+      .from(requisitions)
+      .where(and(eq(requisitions.id, data.id), eq(requisitions.orgId, context.orgId)))
+      .limit(1);
+    if (!req) throw new Error("Requisition not found.");
+    if (req.status !== "draft")
+      throw new Error(
+        "Only a draft requisition can be deleted. Reject or close it instead so the approval trail is kept.",
+      );
+
+    const appCount = await db.$count(
+      applications,
+      and(eq(applications.requisitionId, req.id), eq(applications.orgId, context.orgId)),
+    );
+    if (appCount > 0)
+      throw new Error(
+        `This requisition has ${appCount} application(s) — it can no longer be deleted. Reject or close it instead.`,
+      );
+
+    await db
+      .delete(requisitions)
+      .where(and(eq(requisitions.id, req.id), eq(requisitions.orgId, context.orgId)));
+
+    const { writeAudit } = await import("../server/audit");
+    await writeAudit({
+      actor: context.memberEmail,
+      orgId: context.orgId,
+      actorUserId: context.userId,
+      action: "requisition.delete",
+      entityType: "requisition",
+      entityId: req.id,
+      detail: { code: req.code, title: req.title, reason: data.reason?.trim() || null },
+    });
+    return { ok: true as const, code: req.code };
   });
 
 /** Publish / unpublish an approved requisition on the internal job board. */
