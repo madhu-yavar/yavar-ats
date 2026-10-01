@@ -58,6 +58,14 @@ import { MarketBenchmark } from "@/components/salary-benchmark";
 import { JobCard, ZoneOverlay, type JobCardZone } from "@/components/job-card";
 import { JobBoardsSection } from "@/components/requisition-job-boards";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -104,9 +112,12 @@ function RequisitionDetail() {
   const scores = useQuery(matchScoresQuery);
   const draftJd = useServerFn(generateJd);
   const runImportJd = useServerFn(importJd);
-  const { roles, canApprove, requiredRoleFor } = useRoles();
+  const { roles, canApprove, requiredRoleFor, isAdmin } = useRoles();
 
   const [busy, setBusy] = useState(false);
+  const [revokeOpen, setRevokeOpen] = useState(false);
+  const [revokeStatus, setRevokeStatus] = useState<"rejected" | "closed">("rejected");
+  const [revokeReason, setRevokeReason] = useState("");
   const [jdText, setJdText] = useState<string | null>(null);
   const [jdPaste, setJdPaste] = useState("");
   const [showImport, setShowImport] = useState(false);
@@ -251,6 +262,39 @@ function RequisitionDetail() {
   const weightTotal = Object.values(weights).reduce((a, b) => a + b, 0);
   const step = APPROVALS[r.status];
   const allowed = step ? canApprove(r.status) : false;
+  // Revocation: a wrong requisition in the approval chain can be rejected by
+  // the same hierarchy that approves it; an approved one can be closed by the
+  // HR head / president. Server-side advanceRequisition validates both.
+  const canReject =
+    ["pending_dh", "pending_hr", "pending_cbo"].includes(r.status) && canApprove(r.status);
+  const canClose =
+    ["approved", "on_hold"].includes(r.status) && (isAdmin || roles.includes("hr_head"));
+
+  async function revoke(next: "rejected" | "closed") {
+    if (!revokeReason.trim()) {
+      toast.error("A reason is required — it goes on the approval trail");
+      return;
+    }
+    setBusy(true);
+    try {
+      await advanceRequisition({
+        data: { id: r!.id, status: next, comment: revokeReason.trim() },
+      });
+      toast.success(
+        next === "rejected"
+          ? "Requisition rejected — the reason is on the approval trail"
+          : "Requisition closed",
+      );
+      setRevokeOpen(false);
+      setRevokeReason("");
+      qc.invalidateQueries({ queryKey: ["requisition", id] });
+      qc.invalidateQueries({ queryKey: ["requisitions"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not update the requisition");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function advance() {
     if (!step) return;
@@ -710,9 +754,25 @@ function RequisitionDetail() {
             <StatusBadge status={r.status} />
             {step && (
               <div className="text-right">
-                <Button onClick={advance} disabled={busy || !allowed}>
-                  {step.label}
-                </Button>
+                <div className="flex items-center gap-2">
+                  {canReject && (
+                    <Button
+                      variant="outline"
+                      className="border-destructive/40 text-destructive hover:bg-destructive/10"
+                      onClick={() => {
+                        setRevokeStatus("rejected");
+                        setRevokeReason("");
+                        setRevokeOpen(true);
+                      }}
+                      disabled={busy}
+                    >
+                      Reject
+                    </Button>
+                  )}
+                  <Button onClick={advance} disabled={busy || !allowed}>
+                    {step.label}
+                  </Button>
+                </div>
                 {!allowed && (
                   <p className="mt-1 text-xs text-muted-foreground">
                     Requires the {requiredRoleFor(r.status)} role
@@ -720,9 +780,59 @@ function RequisitionDetail() {
                 )}
               </div>
             )}
+            {canClose && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setRevokeStatus("closed");
+                  setRevokeReason("");
+                  setRevokeOpen(true);
+                }}
+                disabled={busy}
+              >
+                Close requisition
+              </Button>
+            )}
           </div>
         }
       />
+
+      <Dialog open={revokeOpen} onOpenChange={setRevokeOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {revokeStatus === "rejected" ? "Reject this requisition" : "Close this requisition"}
+            </DialogTitle>
+            <DialogDescription>
+              {revokeStatus === "rejected"
+                ? "The requisition stops moving through approvals. The reason is recorded on the approval trail and cannot be removed."
+                : "The role is closed for everyone. The reason is recorded on the approval trail."}
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            rows={3}
+            placeholder="Why is this requisition being withdrawn? (required — kept on the audit trail)"
+            value={revokeReason}
+            onChange={(e) => setRevokeReason(e.target.value)}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRevokeOpen(false)} disabled={busy}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => revoke(revokeStatus)}
+              disabled={busy || !revokeReason.trim()}
+            >
+              {busy
+                ? "Saving…"
+                : revokeStatus === "rejected"
+                  ? "Reject requisition"
+                  : "Close requisition"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
