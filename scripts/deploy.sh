@@ -29,6 +29,44 @@ step() { printf '\n\033[1;36m==>\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31mFAIL:\033[0m %s\n' "$*" >&2; exit 1; }
 trap 'rm -rf "$WORK"; kubectl -n $NS delete pod atsiq-deploy-build atsiq-deploy-kaniko --ignore-not-found --wait=false >/dev/null 2>&1 || true' EXIT
 
+# The GKE master resets long exec streams, so kubectl cp truncates multi-MB
+# files. Chunked transfer with per-chunk md5 checks instead.
+md5_of() { md5 -q "$1" 2>/dev/null || md5sum "$1" | cut -d" " -f1; }
+
+fetch_file() { # fetch_file <pod> <remote-path> <local-path>
+  kubectl -n "$NS" exec "$1" -- sh -c "rm -f /tmp/chunk_*; split -b 4M -d '$2' /tmp/chunk_; md5sum /tmp/chunk_* > /tmp/chunks.md5" >/dev/null
+  local list n sum
+  list=$(kubectl -n "$NS" exec "$1" -- sh -c "awk '{print \$NF, \$1}' /tmp/chunks.md5")
+  : > "$3"
+  echo "$list" | while read -r n sum; do
+    for attempt in 1 2 3 4 5; do
+      kubectl -n "$NS" exec "$1" -- cat "$n" > "$WORK/chunk.part" 2>/dev/null || true
+      [ "$(md5_of "$WORK/chunk.part")" = "$sum" ] && break
+      [ "$attempt" = 5 ] && fail "chunk $n failed md5 after 5 attempts."
+      sleep 2
+    done
+    cat "$WORK/chunk.part" >> "$3"
+  done
+}
+
+push_file() { # push_file <local-path> <pod> <remote-path>
+  local sum size part n i
+  sum=$(md5_of "$1"); size=$(stat -f%z "$1" 2>/dev/null || stat -c%s "$1")
+  split -b 4M -d "$1" "$WORK/upchunk_" 2>/dev/null || split -b 4m -d "$1" "$WORK/upchunk_"
+  kubectl -n "$NS" exec "$2" -- sh -c "rm -f /tmp/upchunk_*" >/dev/null
+  for part in "$WORK"/upchunk_*; do
+    n=$(basename "$part")
+    for i in 1 2 3 4 5; do
+      kubectl -n "$NS" exec -i "$2" -- sh -c "cat > /tmp/$n" < "$part" 2>/dev/null || true
+      [ "$(kubectl -n "$NS" exec "$2" -- md5sum "/tmp/$n" 2>/dev/null | cut -d" " -f1)" = "$(md5_of "$part")" ] && break
+      [ "$i" = 5 ] && fail "upload chunk $n failed md5 after 5 attempts."
+      sleep 2
+    done
+  done
+  kubectl -n "$NS" exec "$2" -- sh -c "cat /tmp/upchunk_* > '$3' && md5sum '$3'" | { read -r got _ rest; [ "$got" = "$sum" ] || fail "remote file md5 mismatch after reassembly."; }
+  kubectl -n "$NS" exec "$2" -- sh -c "rm -f /tmp/upchunk_*" >/dev/null
+}
+
 # ---------------------------------------------------------------- guards
 step "Guards"
 cd "$(git rev-parse --show-toplevel)" || fail "not inside the atsiq git repository."
@@ -56,45 +94,30 @@ step "Building the app in a temporary oven/bun pod"
 kubectl -n "$NS" run atsiq-deploy-build --image=oven/bun:1 --restart=Never --overrides='{"spec":{"containers":[{"name":"atsiq-deploy-build","image":"oven/bun:1","command":["sleep","3600"],"resources":{"requests":{"cpu":"2","memory":"4Gi"},"limits":{"cpu":"4","memory":"8Gi"}}}],"restartPolicy":"Never"}}' >/dev/null
 kubectl -n "$NS" wait --for=condition=Ready pod/atsiq-deploy-build --timeout=240s >/dev/null \
   || fail "builder pod never became ready."
-kubectl -n "$NS" cp "$WORK/ctx.tgz" atsiq-deploy-build:/ctx.tgz >/dev/null 2>&1
+push_file "$WORK/ctx.tgz" atsiq-deploy-build /ctx.tgz
 kubectl -n "$NS" exec atsiq-deploy-build -- sh -c \
   'rm -rf /build && mkdir /build && tar -xzf /ctx.tgz -C /build 2>/dev/null; cd /build && bun install --frozen-lockfile >/dev/null 2>&1 && bun run build > build.log 2>&1' \
   || { kubectl -n "$NS" exec atsiq-deploy-build -- tail -20 /build/build.log; fail "app build failed — see the log above."; }
 kubectl -n "$NS" exec atsiq-deploy-build -- sh -c 'cd /build && tar -czf /out.tgz .output' >/dev/null
 
-# pull the artifact back (kubectl cp truncates occasionally — verify size)
-EXPECT=$(kubectl -n "$NS" exec atsiq-deploy-build -- stat -c %s /out.tgz)
-for i in 1 2 3; do
-  kubectl -n "$NS" cp atsiq-deploy-build:/out.tgz "$WORK/out.tgz" >/dev/null 2>&1 || true
-  [ "$(stat -f%z "$WORK/out.tgz" 2>/dev/null || stat -c%s "$WORK/out.tgz")" = "$EXPECT" ] && break
-done
-[ "$(stat -f%z "$WORK/out.tgz" 2>/dev/null || stat -c%s "$WORK/out.tgz")" = "$EXPECT" ] || fail "kubectl cp kept truncating the build output."
+fetch_file atsiq-deploy-build /out.tgz "$WORK/out.tgz"
 echo "  app build ok ($(du -h "$WORK/out.tgz" | cut -f1))"
 
 # ---------------------------------------------------------------- image
-step "Pushing the runtime image with kaniko"
-mkdir -p "$WORK/img"
-tar -xzf "$WORK/out.tgz" -C "$WORK/img"
-cat > "$WORK/img/Dockerfile" <<'DOCKERFILE'
-FROM node:22-slim
-WORKDIR /app
-ENV NODE_ENV=production \
-    HOST=0.0.0.0 \
-    PORT=3000
-COPY .output ./.output
-EXPOSE 3000
-CMD ["node", ".output/server/index.mjs"]
-DOCKERFILE
-tar -czf "$WORK/img.tgz" -C "$WORK/img" .
-kubectl -n "$NS" run atsiq-deploy-kaniko --image=gcr.io/kaniko-project/executor:debug --restart=Never --overrides='{"spec":{"containers":[{"name":"atsiq-deploy-kaniko","image":"gcr.io/kaniko-project/executor:debug","command":["sleep","3600"],"resources":{"requests":{"cpu":"2","memory":"4Gi"},"limits":{"cpu":"4","memory":"12Gi"}}}],"restartPolicy":"Never"}}' >/dev/null
-kubectl -n "$NS" wait --for=condition=Ready pod/atsiq-deploy-kaniko --timeout=240s >/dev/null \
-  || fail "kaniko pod never became ready."
-kubectl -n "$NS" cp "$WORK/img.tgz" atsiq-deploy-kaniko:/workspace/context.tgz >/dev/null 2>&1
-kubectl -n "$NS" exec atsiq-deploy-kaniko -- sh -c 'cd /workspace && mkdir -p context && tar -xzf context.tgz -C context' >/dev/null
+step "Building and pushing the runtime image (kaniko inside the builder pod)"
+# scripts/kaniko-stage.sh ships inside the build context (/build) — nothing
+# to upload here. It stages /outimg (Dockerfile + .output) and fetches the
+# kaniko executor binary.
+kubectl -n "$NS" exec atsiq-deploy-build -- env KASSET="executor_linux_amd64" sh /build/scripts/kaniko-stage.sh \
+  || fail "could not stage the image context in the builder pod."
+
 TOKEN=$(gcloud auth print-access-token)
-kubectl -n "$NS" exec -i atsiq-deploy-kaniko -- sh -c "mkdir -p /kaniko/.docker && printf '%s' '{\"auths\":{\"$REGION-docker.pkg.dev\":{\"username\":\"oauth2accesstoken\",\"password\":\"$TOKEN\"}}}' > /kaniko/.docker/config.json" >/dev/null
-kubectl -n "$NS" exec atsiq-deploy-kaniko -- /kaniko/executor \
-  --context=dir:///workspace/context --dockerfile=Dockerfile \
+kubectl -n "$NS" exec -i atsiq-deploy-build -- env REGISTRY_AUTH="{\"auths\":{\"$REGION-docker.pkg.dev\":{\"username\":\"oauth2accesstoken\",\"password\":\"$TOKEN\"}}}" \
+  sh -c 'printf "%s" "$REGISTRY_AUTH" > /outimg/config.json && test -s /outimg/config.json' >/dev/null \
+  || fail "could not write the registry auth config."
+
+kubectl -n "$NS" exec atsiq-deploy-build -- env DOCKER_CONFIG=/outimg /kaniko-exec \
+  --context=dir:///outimg --dockerfile=Dockerfile \
   --destination="$IMAGE" --snapshot-mode=redo --verbosity=warn \
   || fail "kaniko build/push failed."
 echo "  pushed $IMAGE"
