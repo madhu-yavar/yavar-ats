@@ -202,6 +202,57 @@ export async function exchangeCode(
   };
 }
 
+/* --------------------------------------------- organisation-only connect */
+
+/**
+ * Free/personal mailbox providers. A connected meeting account sends candidate
+ * invites on the organisation's behalf, so a personal mailbox must never
+ * become it — refuse these regardless of who is connecting.
+ */
+const PERSONAL_EMAIL_DOMAINS = new Set([
+  "gmail.com",
+  "googlemail.com",
+  "outlook.com",
+  "hotmail.com",
+  "hotmail.co.uk",
+  "live.com",
+  "msn.com",
+  "yahoo.com",
+  "yahoo.co.in",
+  "yahoo.co.uk",
+  "icloud.com",
+  "me.com",
+  "rediffmail.com",
+  "proton.me",
+  "protonmail.com",
+  "aol.com",
+  "zoho.com",
+  "yandex.com",
+]);
+
+function domainOf(address: string | null | undefined): string | null {
+  const value = (address ?? "").trim().toLowerCase();
+  const at = value.lastIndexOf("@");
+  return at > 0 ? value.slice(at + 1) : null;
+}
+
+/**
+ * Provider account addresses arrive in provider dialects. Microsoft hands over
+ * guest UPNs like "user_gmail.com#EXT#@tenant.onmicrosoft.com" for personal
+ * accounts invited into a tenant — rebuild the real address, or such an
+ * account would pass the domain check under the tenant's fallback domain.
+ */
+export function normaliseAccountEmail(raw: string): string {
+  const value = (raw ?? "").trim().toLowerCase();
+  const guest = value.match(/^(.+)_([^#]+)#ext#@/);
+  return guest ? `${guest[1]}@${guest[2]}` : value;
+}
+
+/** Lower-cased domain of an email address, or null when it has none. */
+export function emailDomainOf(address: string | null | undefined): string | null {
+  return domainOf(address);
+}
+
 /* ---------------------------------------------------------------- callback */
 
 const PROVIDER_ROW: Record<MeetingOAuthProvider, "teams" | "google_meet" | "zoom"> = {
@@ -248,6 +299,35 @@ export async function finishProviderConnect(
 
   try {
     const secretsPatch = await exchangeCode(oauthProvider, code, state.origin);
+
+    // The meeting account is organisation infrastructure — invites to
+    // candidates go out from it — so it must belong to the same organisation
+    // as the member who started the connect: never a personal mailbox, never
+    // another company's work account. The expected domain rides inside the
+    // signed state, so a tampered or replayed state cannot widen it.
+    const accountDomain = domainOf(
+      normaliseAccountEmail(String(secretsPatch["connected_email"] ?? "")),
+    );
+    if (!accountDomain)
+      return back({
+        meetings: "error",
+        provider: oauthProvider,
+        detail: "Could not tell which account you signed in with — please try the connect again.",
+      });
+    if (PERSONAL_EMAIL_DOMAINS.has(accountDomain))
+      return back({
+        meetings: "error",
+        provider: oauthProvider,
+        detail:
+          "That is a personal mailbox. Connect your organisation's own scheduling account (for example interviews@yourcompany.com) so candidate invites stay organisation-specific.",
+      });
+    const expectedDomain = domainOf(state.emailDomain);
+    if (expectedDomain && accountDomain !== expectedDomain)
+      return back({
+        meetings: "error",
+        provider: oauthProvider,
+        detail: `Meeting invites must come from your organisation's own account — one ending in @${expectedDomain}. Sign in again with that mailbox.`,
+      });
 
     const rowProvider = PROVIDER_ROW[oauthProvider];
     const [row] = await db

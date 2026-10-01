@@ -132,6 +132,28 @@ async function googleToken(s: Record<string, string>) {
   return String(body["access_token"] ?? "");
 }
 
+/**
+ * Turn Google's raw calendar-API error JSON into guidance an HR user can act
+ * on. The two failure modes that reach production: the connected account has
+ * no Calendar service at all (Workspace admin disabled it), or the consent
+ * grant predates the Calendar scope.
+ */
+async function googleCalendarError(e: unknown): Promise<Error> {
+  const msg = (e as Error).message;
+  if (msg.includes("notACalendarUser"))
+    return new Error(
+      "Google Calendar is not available on the connected account — Google refused to create the event. " +
+        "Ask your Google Workspace admin to enable the Calendar service for that user, or connect a different " +
+        "account on the Integrations page.",
+    );
+  if (msg.includes("insufficientPermissions") || msg.includes("insufficient authentication scopes"))
+    return new Error(
+      "The connected Google account did not grant Calendar access — disconnect Google Meet on the " +
+        "Integrations page and connect it again, keeping the Calendar permission ticked.",
+    );
+  return e instanceof Error ? e : new Error(msg);
+}
+
 async function googleMeeting(
   s: Record<string, string>,
   req: MeetingRequest,
@@ -159,7 +181,12 @@ async function googleMeeting(
       }),
     },
   );
-  const body = await jsonOrThrow(res, "Google Calendar event creation");
+  let body: Record<string, unknown>;
+  try {
+    body = await jsonOrThrow(res, "Google Calendar event creation");
+  } catch (e) {
+    throw await googleCalendarError(e);
+  }
   const conf = body["conferenceData"] as { entryPoints?: { uri?: string }[] } | undefined;
   const joinUrl =
     (typeof body["hangoutLink"] === "string" ? body["hangoutLink"] : "") ||
@@ -333,10 +360,23 @@ export async function testMeetingProvider(
       return { status: "ok" as const, message: "Zoom server-to-server credentials accepted." };
     }
     if (provider === "google_meet") {
-      await googleToken(secrets);
+      const token = await googleToken(secrets);
+      // A valid token is not enough — the account itself must have the
+      // Calendar service (403 notACalendarUser otherwise), so probe it here
+      // where the admin is watching, not later at scheduling time.
+      const probe = await fetch(
+        "https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=1",
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!probe.ok) {
+        const detail = await probe.text().catch(() => "");
+        throw await googleCalendarError(
+          new Error(`Google Calendar probe failed [${probe.status}]: ${detail.slice(0, 300)}`),
+        );
+      }
       return {
         status: "ok" as const,
-        message: "Google refresh token accepted — Meet links can be created.",
+        message: "Google Calendar is reachable — Meet links can be created.",
       };
     }
     await graphToken(secrets);

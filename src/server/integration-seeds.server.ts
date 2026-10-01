@@ -20,12 +20,12 @@ export type SeedIntegration = {
 export const INTEGRATION_CATALOG: SeedIntegration[] = [
   {
     provider: "linkedin",
-    label: "LinkedIn Talent Solutions",
+    label: "LinkedIn (company account)",
     category: "sourcing",
     config: {
-      docs: "https://learn.microsoft.com/linkedin/talent/",
+      docs: "https://developer.linkedin.com/",
       notes:
-        "Recruiter System Connect / Job Postings API. Candidate profiles cannot be read via the public API.",
+        "Connects the company's own LinkedIn account. Job posts publish from it and applicants come back through your apply link. Structured Jobs-board listings and applicant sync need the paid Job Posting / Talent Solutions products on your LinkedIn contract.",
     },
     credentialFields: ["client_id", "client_secret"],
   },

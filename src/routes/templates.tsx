@@ -6,6 +6,7 @@ import { Loader2, Star } from "lucide-react";
 import { JobCard, ZoneOverlay, type JobCardZone } from "@/components/job-card";
 
 import { templatesQuery, type TemplateWire } from "@/lib/data";
+import { errorToastMessage } from "@/lib/errors";
 import {
   analyzeTemplateFile,
   deleteTemplate,
@@ -443,7 +444,7 @@ function TemplateEditor({ editor, onClose }: { editor: EditorState; onClose: () 
       qc.invalidateQueries({ queryKey: ["templates"] });
       onClose();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not save the template");
+      toast.error(errorToastMessage(e, "Could not save the template"));
     } finally {
       setSaving(false);
     }
@@ -955,7 +956,7 @@ function KindSection({
 
   return (
     <section className="panel p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-base font-semibold">{group.title}</h2>
           <p className="text-xs text-muted-foreground">{group.hint}</p>
@@ -1029,7 +1030,7 @@ function Templates() {
         title="Content templates"
         description="How your organisation sounds and looks — templates steer every AI-drafted LinkedIn post, job description and branded job-card image. The default template applies automatically; recruiters can pick another while designing."
       />
-      <div className="grid gap-4">
+      <div className="grid gap-4 lg:grid-cols-2">
         {KINDS.map((group) => (
           <KindSection
             key={group.kind}

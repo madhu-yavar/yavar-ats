@@ -15,6 +15,13 @@ export type OAuthState = {
   provider: "linkedin" | "microsoft" | "google" | "zoom";
   origin: string;
   ts: number;
+  /**
+   * Email domain of the member who started the connect, captured server-side at
+   * start time so the callback can pin the provider account to the
+   * organisation. Optional: states signed before this field existed simply
+   * skip the domain pinning (the personal-mailbox block still applies).
+   */
+  emailDomain?: string;
 };
 
 function stateKey(): string {

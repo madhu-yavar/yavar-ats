@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireOrg } from "./auth.middleware";
 import {
   buildAuthorizeUrl,
+  emailDomainOf,
   oauthConfigured,
   type MeetingOAuthProvider,
 } from "./meetings-oauth.server";
@@ -21,6 +22,7 @@ async function connectUrl(
   origin: string,
   orgId: string,
   userId: string,
+  memberEmail: string,
 ): Promise<{ url: string }> {
   if (!oauthConfigured(provider)) {
     throw new Error(
@@ -28,7 +30,17 @@ async function connectUrl(
     );
   }
   const safeOrigin = assertAllowedOrigin(origin);
-  const state = signOAuthState({ orgId, userId, provider, origin: safeOrigin, ts: Date.now() });
+  // Pins the callback to the organisation's own domain — the connected
+  // meeting account must share it (organisation-specific invites).
+  const expectedDomain = emailDomainOf(memberEmail);
+  const state = signOAuthState({
+    orgId,
+    userId,
+    provider,
+    origin: safeOrigin,
+    ts: Date.now(),
+    ...(expectedDomain ? { emailDomain: expectedDomain } : {}),
+  });
   return { url: buildAuthorizeUrl(provider, state, safeOrigin) };
 }
 
@@ -36,19 +48,19 @@ export const startMicrosoftConnect = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((d: unknown) => z.object({ origin: z.string().url() }).parse(d))
   .handler(async ({ data, context }) =>
-    connectUrl("microsoft", data.origin, context.orgId, context.userId),
+    connectUrl("microsoft", data.origin, context.orgId, context.userId, context.memberEmail),
   );
 
 export const startGoogleMeetConnect = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((d: unknown) => z.object({ origin: z.string().url() }).parse(d))
   .handler(async ({ data, context }) =>
-    connectUrl("google", data.origin, context.orgId, context.userId),
+    connectUrl("google", data.origin, context.orgId, context.userId, context.memberEmail),
   );
 
 export const startZoomConnect = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((d: unknown) => z.object({ origin: z.string().url() }).parse(d))
   .handler(async ({ data, context }) =>
-    connectUrl("zoom", data.origin, context.orgId, context.userId),
+    connectUrl("zoom", data.origin, context.orgId, context.userId, context.memberEmail),
   );

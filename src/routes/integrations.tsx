@@ -121,7 +121,7 @@ const FIELD_HINT: Record<string, string> = {
   api_key: "A single long key your account manager or the developer portal gives you.",
   employer_id: "Your employer/company number on the job board.",
   token: "A read-only token you generate in your own account settings.",
-  refresh_token: "A long-lived code from the one-time sign-in step described below.",
+  refresh_token: "A long-lived code your own registered app's sign-in flow returns.",
   tenant_id: "Your organisation's directory ID in Microsoft Entra (Azure AD).",
   organizer_email: "The mailbox that will host the interviews, e.g. interviews@yourcompany.com.",
 };
@@ -140,7 +140,7 @@ const SETUP_GUIDE: Record<string, SetupGuide> = {
     minutes: "Under a minute",
     links: [],
     steps: [
-      "Check that the panel above shows a green “Connected” tick — that is the one-time sign-in, already done for your company.",
+      "Press “Connect LinkedIn” above and sign in with your company's LinkedIn account — one time, for the whole team. The card title turns green when it is done.",
       "Open any approved requisition, press “Design post”, then “Publish to LinkedIn”. That is the whole job.",
       "Each post carries your ATSIQ apply link, so CVs sent from LinkedIn arrive in the talent pool and the role's pipeline on their own — read, scored and ready, with nothing to download.",
       "The requisition's “Job boards” panel also checks whether your contract opens LinkedIn's structured Jobs board and applicant sync — if LinkedIn declines, posts keep going out on the feed with your apply link.",
@@ -200,33 +200,33 @@ const SETUP_GUIDE: Record<string, SetupGuide> = {
     ],
   },
   zoom: {
-    who: "One person with a Zoom account (licensed plan recommended for longer interviews).",
+    who: "Your organisation's own Zoom account under the company's Zoom tenant (licensed plan recommended for longer interviews).",
     minutes: "2 min",
     links: [],
     steps: [
-      "Press Connect Zoom below and sign in with that Zoom account.",
+      "Press Connect Zoom above and sign in with that organisation account — not a personal one.",
       "Accept the meeting:write permission screen.",
       "Done: scheduled interviews get a Zoom join link automatically.",
     ],
   },
   google_meet: {
-    who: "One person with a Google account that owns the recruiting calendar.",
+    who: "Your organisation's shared scheduling mailbox on Google Workspace (for example interviews@yourcompany.com), with Google Calendar enabled for it.",
     minutes: "2 min",
     links: [],
     steps: [
-      "Press Connect Google Meet below and sign in with that Google account.",
+      "Press Connect Google Meet above and sign in as that shared account — not a personal Gmail.",
       "Accept the calendar permission screen — Meet links are then minted on every online interview.",
-      "Done: invites with the Meet link go to the candidate and the interviewer automatically.",
+      "Done: invites with the Meet link reach the candidate and the interviewer from your organisation's address.",
     ],
   },
   teams: {
-    who: "One person with a Microsoft 365 work account (the mailbox that hosts interviews).",
+    who: "Your organisation's own Microsoft 365 account for interviews (for example interviews@yourcompany.com). It must be a normal Teams-licensed user — a bare Exchange shared mailbox cannot sign in.",
     minutes: "2 min",
     links: [],
     steps: [
-      "Press Connect Microsoft Teams below and sign in with that work account.",
+      "Press Connect Microsoft Teams above and sign in with that interview account.",
       "Accept the permissions screen — the app may need a one-time approval from your Microsoft 365 admin.",
-      "Done: every scheduled interview gets a real Teams join link, and the invite reaches the candidate's inbox.",
+      "Done: every scheduled interview gets a real Teams join link, and the invite reaches the candidate's inbox from your organisation's address.",
     ],
   },
 };
@@ -277,7 +277,7 @@ export const Route = createFileRoute("/integrations")({
       {
         name: "description",
         content:
-          "Configure LinkedIn Talent Solutions, Naukri Resdex, Indeed and GitHub API credentials, test each connection and enable them as sourcing channels.",
+          "Connect the company's LinkedIn account, Naukri Resdex, Indeed and GitHub, test each connection and enable them as sourcing channels.",
       },
       { property: "og:title", content: "Sourcing Integrations" },
       {
@@ -305,6 +305,23 @@ function StatusPill({ status }: { status: string }) {
       <Icon className="size-3.5" /> {label}
     </span>
   );
+}
+
+/**
+ * LinkedIn's card pill cannot come from last_test_status — the OAuth callback
+ * writes org_linkedin_connections and never touches the source_integrations
+ * row. It mirrors the organisation's live connection instead (shared
+ * ["linkedin_connect"] cache with LinkedinOneClick).
+ */
+function LinkedinStatusPill() {
+  const status = useQuery({
+    queryKey: ["linkedin_connect"],
+    queryFn: () => linkedinStatus({ data: undefined }),
+    refetchOnWindowFocus: true,
+  });
+  const s = status.data;
+  if (!s || !s.configured) return <StatusPill status="untested" />;
+  return <StatusPill status={s.connected ? "ok" : "pending"} />;
 }
 
 /** Shared credential inputs (used directly, or tucked away for LinkedIn). */
@@ -699,8 +716,9 @@ We would like to enable data access on our contract so that ATSIQ can:
 
 Please confirm:
   1. what is included in our current contract and what needs to be added,
-  2. the approval steps and expected timeline for our ATS to be enabled,
-  3. any partner registration LinkedIn requires on the ATS vendor side.
+  2. the commercial terms, and the approval steps and expected timeline,
+  3. anything LinkedIn still needs to enable for the ATSIQ app, which is
+     already registered — no vendor-side sign-up should be outstanding.
 
 Our recruiting team is ready to complete whatever LinkedIn needs from our end.
 
@@ -742,8 +760,11 @@ function MeetingOAuthPanel({ row }: { row: Integration }) {
       else window.location.href = url;
     } catch (e) {
       tab?.close();
-      setBusy(false);
       toast.error(e instanceof Error ? e.message : "Could not start the connect flow");
+    } finally {
+      // The provider tab carries the rest of the flow; this page must not sit
+      // on a spinner forever if the user turns to that tab and finishes there.
+      setBusy(false);
     }
   }
 
@@ -770,15 +791,26 @@ function MeetingOAuthPanel({ row }: { row: Integration }) {
         {connected ? <Badge variant="secondary">Connected as {connectedEmail}</Badge> : null}
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
-        Sign in with the work account that hosts your {label} meetings. An organisation owner or HR
-        head connects it once; every recruiter's schedule reuses the same account for invites and
-        links.
+        Sign in with your organisation's own scheduling account — a shared mailbox such as
+        interviews@yourcompany.com, not a personal address (personal Gmail/Outlook accounts are
+        refused). An organisation owner or HR head connects it once; every recruiter's schedule
+        reuses the same account for invites and links.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         {connected ? (
-          <Button size="sm" variant="outline" onClick={onDisconnect} disabled={busy}>
-            Disconnect {connectedEmail}
-          </Button>
+          <>
+            <Button size="sm" variant="outline" onClick={onDisconnect} disabled={busy}>
+              Disconnect {connectedEmail}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={onConnect} disabled={busy}>
+              {busy ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Video className="size-3.5" />
+              )}
+              Use a different account
+            </Button>
+          </>
         ) : (
           <Button size="sm" onClick={onConnect} disabled={busy}>
             {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Video className="size-3.5" />}
@@ -786,6 +818,11 @@ function MeetingOAuthPanel({ row }: { row: Integration }) {
           </Button>
         )}
       </div>
+      {connected ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Switching accounts is safe: the current one keeps working until the new sign-in completes.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -1132,7 +1169,11 @@ function IntegrationCard({ row }: { row: Integration }) {
           />
           <Plug className="size-4 shrink-0 text-primary" />
           <span className="truncate font-medium">{row.label}</span>
-          <StatusPill status={row.last_test_status} />
+          {provider === "linkedin" ? (
+            <LinkedinStatusPill />
+          ) : (
+            <StatusPill status={row.last_test_status} />
+          )}
         </button>
         <div className="flex items-center gap-2">
           {row.has_credentials ? (
@@ -1200,48 +1241,94 @@ function IntegrationCard({ row }: { row: Integration }) {
 
           <SetupHelp provider={provider} label={row.label} />
 
-          {row.credential_fields.length && provider !== "linkedin" ? (
-            <div className="mt-4">
-              <CredentialFields
-                fields={row.credential_fields}
-                hasCredentials={row.has_credentials}
-                secrets={secrets}
-                setSecrets={setSecrets}
-                baseUrl={baseUrl}
-                setBaseUrl={setBaseUrl}
-                showBaseUrl={!isMeeting && provider !== "github" && provider !== "careers"}
-              />
-            </div>
-          ) : null}
-
-          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4">
-            {provider !== "linkedin" ? (
-              <>
-                <Button size="sm" onClick={onSave} disabled={busy !== null}>
-                  {busy === "save" ? <Loader2 className="size-4 animate-spin" /> : null} Save
-                </Button>
-                <Button size="sm" variant="outline" onClick={onTest} disabled={busy !== null}>
-                  {busy === "test" ? <Loader2 className="size-4 animate-spin" /> : null} Test
-                  connection
-                </Button>
-                {row.has_credentials ? (
-                  <Button size="sm" variant="ghost" onClick={onClear} disabled={busy !== null}>
-                    Remove credentials
+          {isMeeting ? (
+            row.credential_fields.length ? (
+              // One-click OAuth is the normal path now that the platform's own
+              // apps are registered; the manual boxes only serve self-hosted
+              // installs (or a customer's own registered app), so they tuck
+              // away instead of contradicting the "no secrets" headline.
+              <details className="mt-4 rounded-lg border border-border bg-surface-2 p-3 open:pb-4">
+                <summary className="cursor-pointer text-sm font-medium">
+                  Advanced — connect with your own registered app instead
+                </summary>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  The one-click connect above uses ATSIQ&apos;s registered app and needs no secrets.
+                  The boxes below are only for self-hosted installs that run without it, or for
+                  connecting an app of your own.
+                </p>
+                <div className="mt-3">
+                  <CredentialFields
+                    fields={row.credential_fields}
+                    hasCredentials={row.has_credentials}
+                    secrets={secrets}
+                    setSecrets={setSecrets}
+                    baseUrl={baseUrl}
+                    setBaseUrl={setBaseUrl}
+                    showBaseUrl={false}
+                  />
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <Button size="sm" onClick={onSave} disabled={busy !== null}>
+                    {busy === "save" ? <Loader2 className="size-4 animate-spin" /> : null} Save
                   </Button>
+                  <Button size="sm" variant="outline" onClick={onTest} disabled={busy !== null}>
+                    {busy === "test" ? <Loader2 className="size-4 animate-spin" /> : null} Test
+                    connection
+                  </Button>
+                  {row.has_credentials ? (
+                    <Button size="sm" variant="ghost" onClick={onClear} disabled={busy !== null}>
+                      Remove credentials
+                    </Button>
+                  ) : null}
+                </div>
+              </details>
+            ) : null
+          ) : (
+            <>
+              {row.credential_fields.length && provider !== "linkedin" ? (
+                <div className="mt-4">
+                  <CredentialFields
+                    fields={row.credential_fields}
+                    hasCredentials={row.has_credentials}
+                    secrets={secrets}
+                    setSecrets={setSecrets}
+                    baseUrl={baseUrl}
+                    setBaseUrl={setBaseUrl}
+                    showBaseUrl={provider !== "github" && provider !== "careers"}
+                  />
+                </div>
+              ) : null}
+
+              <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4">
+                {provider !== "linkedin" ? (
+                  <>
+                    <Button size="sm" onClick={onSave} disabled={busy !== null}>
+                      {busy === "save" ? <Loader2 className="size-4 animate-spin" /> : null} Save
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={onTest} disabled={busy !== null}>
+                      {busy === "test" ? <Loader2 className="size-4 animate-spin" /> : null} Test
+                      connection
+                    </Button>
+                    {row.has_credentials ? (
+                      <Button size="sm" variant="ghost" onClick={onClear} disabled={busy !== null}>
+                        Remove credentials
+                      </Button>
+                    ) : null}
+                  </>
                 ) : null}
-              </>
-            ) : null}
-            {docs ? (
-              <a
-                href={docs}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="ml-auto text-xs text-primary underline-offset-4 hover:underline"
-              >
-                Provider API docs
-              </a>
-            ) : null}
-          </div>
+                {docs ? (
+                  <a
+                    href={docs}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="ml-auto text-xs text-primary underline-offset-4 hover:underline"
+                  >
+                    Provider API docs
+                  </a>
+                ) : null}
+              </div>
+            </>
+          )}
         </div>
       ) : null}
     </article>
@@ -1698,6 +1785,13 @@ function Integrations() {
   const rows = useQuery(integrationsQuery);
   const hrmsRows = useQuery(hrmsQuery);
   const [seeding, setSeeding] = useState(false);
+  // A rejected connect (wrong-domain mailbox, admin-consent refusal, …) bounces
+  // back here as a query param; toasts vanish, so the reason is kept on-screen
+  // in the meetings tab until dismissed.
+  const [meetingNotice, setMeetingNotice] = useState<{
+    name: string;
+    detail: string | null;
+  } | null>(null);
 
   // Meeting-provider connects return with ?meetings=connected|error&provider=…
   useEffect(() => {
@@ -1713,11 +1807,12 @@ function Integrations() {
           : provider === "zoom"
             ? "Zoom"
             : "The provider";
-    if (outcome === "connected") toast.success(`${name} connected for your organisation`);
-    else
-      toast.error(
-        `${name} connect did not complete${params.get("detail") ? `: ${params.get("detail")}` : ""}`,
-      );
+    if (outcome === "connected") {
+      toast.success(`${name} connected for your organisation`);
+      setMeetingNotice(null);
+    } else {
+      setMeetingNotice({ name, detail: params.get("detail") });
+    }
     window.history.replaceState({}, "", window.location.pathname);
     qc.invalidateQueries({ queryKey: ["source_integrations"] });
   }, []);
@@ -1830,6 +1925,22 @@ function Integrations() {
             Connect one conferencing account and every interview gets a real join link and calendar
             invite.
           </p>
+          {meetingNotice ? (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+              <p className="text-sm font-medium">{meetingNotice.name} connect did not complete</p>
+              {meetingNotice.detail ? (
+                <p className="mt-1 text-sm text-muted-foreground">{meetingNotice.detail}</p>
+              ) : null}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="mt-1"
+                onClick={() => setMeetingNotice(null)}
+              >
+                Dismiss
+              </Button>
+            </div>
+          ) : null}
           {rows.isLoading ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : (
