@@ -34,6 +34,18 @@ type BoardReadiness = {
   detail: string;
 };
 
+/** Wire shape of boardConnectionStatus — what a board's connect panel renders. */
+export type BoardConnectStatus = {
+  provider: string;
+  enabled: boolean;
+  hasCredentials: boolean;
+  lastTestStatus: string;
+  lastTestMessage: string | null;
+  connected: boolean;
+  caps: BoardReadiness | null;
+  capsError: string | null;
+};
+
 type BoardProviderStatus = {
   provider: string;
   enabled: boolean;
@@ -281,6 +293,67 @@ export const boardIntegrationSummary = createServerFn({ method: "GET" })
       };
     }
     return out;
+  });
+
+/**
+ * Live connection status for one board's Integrations card connect panel:
+ * the stored-row facts plus what the board's adapter says the connection can
+ * actually do. Read-only; the honest "not provisioned yet" detail strings come
+ * from the adapters themselves.
+ */
+export const boardConnectionStatus = createServerFn({ method: "GET" })
+  .middleware([requireOrg])
+  .inputValidator((data: unknown) => z.object({ provider: ProviderEnum }).parse(data))
+  .handler(async ({ data, context }): Promise<BoardConnectStatus> => {
+    const [row] = await db
+      .select({
+        enabled: sourceIntegrations.enabled,
+        hasCredentials: sourceIntegrations.hasCredentials,
+        lastTestStatus: sourceIntegrations.lastTestStatus,
+        lastTestMessage: sourceIntegrations.lastTestMessage,
+      })
+      .from(sourceIntegrations)
+      .where(
+        and(
+          eq(sourceIntegrations.orgId, context.orgId),
+          eq(sourceIntegrations.provider, data.provider),
+        ),
+      )
+      .limit(1);
+    if (!row) throw new Error(`${PROVIDER_LABEL[data.provider]} is not on the Integrations page.`);
+
+    // Credentials are the source of truth; lastTestStatus only says the board
+    // itself accepted them (same honesty rule as the meeting-provider cards).
+    const connected = row.hasCredentials && row.lastTestStatus === "ok";
+
+    let caps: BoardReadiness | null = null;
+    let capsError: string | null = null;
+    if (row.enabled) {
+      try {
+        const { getBoardAdapter, loadBoardConnection } = await import("../server/boards/registry");
+        const conn = await loadBoardConnection(context.orgId, data.provider);
+        const adapterCaps = await getBoardAdapter(data.provider).capabilities(conn);
+        caps = {
+          posting: adapterCaps.posting,
+          applications: adapterCaps.applications,
+          applicationsMode: adapterCaps.applicationsMode,
+          detail: adapterCaps.detail,
+        };
+      } catch (e) {
+        capsError = e instanceof Error ? e.message : "The connection could not be checked.";
+      }
+    }
+
+    return {
+      provider: data.provider,
+      enabled: row.enabled,
+      hasCredentials: row.hasCredentials,
+      lastTestStatus: row.lastTestStatus,
+      lastTestMessage: row.lastTestMessage,
+      connected,
+      caps,
+      capsError,
+    };
   });
 
 /**

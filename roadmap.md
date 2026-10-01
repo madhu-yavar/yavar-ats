@@ -25,6 +25,7 @@ LinkedIn, Indeed and Naukri wired end-to-end on the existing integration-credent
 - [x] Publishing — `publishToBoard` / `closeBoardPosting` (hr_head, audited, approved-requisitions only) with a "Job boards" panel on the requisition page; closing a requisition takes its postings down
 - [x] Ingestion — per-connection webhook URL (token in path, Indeed `X-Indeed-Signature` HMAC verified timing-safe) + `/api/public/board-sync` cron (5th scheduler job) for polling backfill, stuck-event retries and 30-day event retention; intake reuses the shared candidate-intake core so dedupe, ack mail and scoring match the apply page
 - [x] Connection-completion UX — enterprise checklist per board card on Integrations (credentials → test → webhook → contract capabilities → postings/applications), webhook rotate, "add missing board connections" fallback
+- [x] One-press connect for Naukri/Indeed (2026-10-01) — connect panel on each card mirroring the LinkedIn one: Connect saves the pasted partner keys and verifies them against the board's token endpoint (`token_path`-aware, matching the adapters) in one press, Disconnect is the same audited credential removal, "What this connection can do" surfaces the adapter's honest contract detail, and each panel ships a ready-to-send request note for the board's account manager
 - [ ] Live vendor verification — LinkedIn Job Posting/RSC contract, Indeed Apply registration and signed deliveries from Indeed itself, Naukri endpoint pack (all capability-gated until the partner paperwork lands)
 
 ## HRMS integrations (2026-09-29)

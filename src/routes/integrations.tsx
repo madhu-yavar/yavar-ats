@@ -59,6 +59,7 @@ import { orgInbox } from "@/lib/local-inbox.functions";
 import { collectApplicants, type CollectSummary } from "@/lib/collect.functions";
 import { captureSetup, rotateCaptureToken } from "@/lib/capture.functions";
 import { PageHeader } from "@/components/ats";
+import { BoardConnectPanel } from "@/components/board-connect-panel";
 import { BoardEnterprisePanel } from "@/components/board-enterprise-panel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -155,11 +156,11 @@ const SETUP_GUIDE: Record<string, SetupGuide> = {
       { label: "Naukri employer support", href: "https://www.naukri.com/recruiter-services" },
     ],
     steps: [
-      "Email your Naukri account manager and ask for “Resdex API credentials for our ATS”.",
-      "They send an onboarding pack with a client ID, client secret and an API base URL.",
-      "Paste all three below (base URL goes in the last box) and press Test connection.",
+      "Email your Naukri account manager and ask for “Resdex API credentials for our ATS” — the ready-to-send request in the connect panel above covers every detail to ask for.",
+      "They send an onboarding pack with a client ID, client secret, an account ID and an API base URL.",
+      "Paste all four below (base URL goes in the last box) and press “Connect Naukri” — one press saves the keys and verifies them against Naukri's token endpoint. The card title turns green when it connects.",
       "Press “Set up” under Application webhook and give the generated callback URL to your account manager — applicants Naukri delivers arrive in the pipeline on their own.",
-      "Job posting and applicant pulls stay unavailable until the pack lists those endpoints — the checklist shows exactly what is missing.",
+      "Job posting and applicant pulls stay unavailable until the pack lists those endpoints — the “What this connection can do” panel and the checklist show exactly what is missing.",
     ],
   },
   indeed: {
@@ -170,8 +171,8 @@ const SETUP_GUIDE: Record<string, SetupGuide> = {
       { label: "Indeed partner / API portal", href: "https://developer.indeed.com/" },
     ],
     steps: [
-      "Sign in to the Indeed employer account and request Indeed Apply / partner access for your ATS.",
-      "Paste the client ID and client secret below (plus your employer ID), then press Test connection.",
+      "Sign in to the Indeed employer account and request Indeed Apply / partner access for your ATS — the ready-to-send request in the connect panel above covers every detail to ask for.",
+      "Paste the client ID and client secret below (plus your employer ID), then press “Connect Indeed” — one press saves the keys and verifies them against Indeed's token endpoint. The card title turns green when it connects.",
       "Press “Set up” under Application webhook and register the generated URL as the apply endpoint on your Indeed account — Indeed signs every delivery, ATSIQ verifies it before filing anyone.",
       "Applicants from your Indeed jobs then appear in the pipeline automatically, parsed and scored.",
     ],
@@ -1225,6 +1226,20 @@ function IntegrationCard({ row }: { row: Integration }) {
           ) : null}
 
           {provider === "linkedin" ? <LinkedinOneClick /> : null}
+          {provider === "naukri" || provider === "indeed" ? (
+            <BoardConnectPanel
+              provider={provider}
+              label={row.label}
+              integrationId={row.id}
+              hasCredentials={row.has_credentials}
+              lastTestStatus={row.last_test_status}
+              lastTestMessage={row.last_test_message}
+              config={cfg}
+              baseUrl={baseUrl}
+              secrets={secrets}
+              onSecretsSaved={() => setSecrets({})}
+            />
+          ) : null}
           {provider === "linkedin" || provider === "careers" ? <CareersInboxPanel /> : null}
           {provider === "linkedin" || provider === "careers" ? <CapturePanel /> : null}
           {isMeeting ? <MeetingOAuthPanel row={row} /> : null}

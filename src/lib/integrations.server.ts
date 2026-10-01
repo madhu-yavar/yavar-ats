@@ -136,7 +136,13 @@ async function testTokenEndpoint(
 
   try {
     const base = assertIntegrationBaseUrl(baseUrl);
-    const res = await fetch(`${base}/oauth/token`, {
+    // Same path resolution as the board adapters (src/server/boards/partner.ts):
+    // the test must verify the exact handshake publishing and polling will use.
+    const tokenPath =
+      typeof config["token_path"] === "string" && config["token_path"].trim()
+        ? config["token_path"].trim()
+        : "/oauth/token";
+    const res = await fetch(`${base}${tokenPath.startsWith("/") ? tokenPath : `/${tokenPath}`}`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -171,7 +177,9 @@ export async function testProvider(
     case "naukri":
       return testTokenEndpoint("Naukri", secrets, config, ["client_id", "client_secret"]);
     case "indeed":
-      return testTokenEndpoint("Indeed", secrets, config, ["api_key"]);
+      // Mirrors fetchClientToken in src/server/boards/partner.ts: client_id
+      // (api_key accepted as an alias) plus client_secret are both required.
+      return testTokenEndpoint("Indeed", secrets, config, ["client_id", "client_secret"]);
     case "careers":
       return { status: "ok", message: "Built-in source — no credentials required." };
     case "zoom":
