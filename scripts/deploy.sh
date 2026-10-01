@@ -86,7 +86,7 @@ if [ ! -f "$WORK/ctx/public/atsiq-capture.zip" ]; then
   echo "  companion zip missing — rebuilding from extension/"
   ( cd extension && zip -qr "$WORK/ctx/public/atsiq-capture.zip" manifest.json background.js popup.js popup.html )
 fi
-tar -czf "$WORK/ctx.tgz" -C "$WORK/ctx" .
+COPYFILE_DISABLE=1 tar --exclude='._*' -czf "$WORK/ctx.tgz" -C "$WORK/ctx" .
 echo "  context: $(du -h "$WORK/ctx.tgz" | cut -f1)"
 
 # ---------------------------------------------------------------- builder
