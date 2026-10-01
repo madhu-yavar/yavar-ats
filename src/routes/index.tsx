@@ -11,6 +11,8 @@ import {
   CheckCircle2,
   Clock,
   Copy,
+  FileSignature,
+  PhoneCall,
   Search,
   ShieldCheck,
   Sparkles,
@@ -28,6 +30,7 @@ import {
   matchScoresQuery,
   offersQuery,
   requisitionsQuery,
+  screeningQueueCountsQuery,
   type Candidate,
   type Requisition,
 } from "@/lib/data";
@@ -155,7 +158,7 @@ function Panel({
 
 function Dashboard() {
   const qc = useQueryClient();
-  const { roles, isAdmin } = useRoles();
+  const { roles, isAdmin, canApprove } = useRoles();
   const { org, isOwner } = useOrg();
   const { isSuperUser } = usePlatform();
   const roleLabel = isOwner
@@ -296,6 +299,31 @@ function Dashboard() {
       )
       .slice(0, 5);
   }, [interviews.data]);
+
+  /* ---------- needs you today ---------- */
+  const countsQ = useQuery({ ...screeningQueueCountsQuery, enabled: Boolean(org) });
+  // Strictly "yours": canApprove mirrors the server's approval-role map, so a
+  // recruiter sees only their drafts and a DH only the DH hop. Deliberately not
+  // myNotifications — those approval items are org-wide, not role-filtered.
+  const pendingMine = useMemo(
+    () => pending.filter((r) => canApprove(r.status)),
+    [pending, canApprove],
+  );
+  // Status literal written by scheduleInterview's auto-queue
+  // (interviews.functions.ts) — a rename there must land here too.
+  const pendingScheduling = useMemo(
+    () => (interviews.data ?? []).filter((i) => i.status === "pending_scheduling"),
+    [interviews.data],
+  );
+  const stalledTotal = useMemo(
+    () =>
+      applications.filter((a) => stalledDays(a.stage as Stage, a.last_activity_at) !== null).length,
+    [applications],
+  );
+  const offersAwaiting = offerRows.filter(
+    (o) => o.status === "pending_hr" || o.status === "pending_cbo",
+  ).length;
+  const toCall = countsQ.data?.to_call ?? 0;
 
   const sourceMix = useMemo(() => {
     const m = new Map<string, number>();
@@ -594,12 +622,122 @@ function Dashboard() {
         </div>
       </header>
 
+      {(() => {
+        // "Bring it to closure": every row lands where the action completes.
+        const oldestPendingMine = [...pendingMine].sort((a, b) => {
+          const last = (r: Requisition) => {
+            const trail = Array.isArray(r.approval_trail)
+              ? (r.approval_trail as { at?: string }[])
+              : [];
+            return new Date(trail[trail.length - 1]?.at ?? r.created_at).getTime();
+          };
+          return last(a) - last(b);
+        });
+        const strip: {
+          icon: React.ComponentType<{ className?: string }>;
+          label: string;
+          value: number;
+          to:
+            | "/requisitions"
+            | "/requisitions/$id"
+            | "/candidates"
+            | "/interviews"
+            | "/screening"
+            | "/offers";
+          tone?: "default" | "warning";
+          params?: { id: string };
+        }[] = [];
+        if (pendingMine.length)
+          strip.push({
+            icon: ShieldCheck,
+            label: "Requisitions awaiting your approval",
+            value: pendingMine.length,
+            to: pendingMine.length === 1 ? "/requisitions/$id" : "/requisitions",
+            tone: "warning",
+            ...(pendingMine.length === 1 && oldestPendingMine[0]
+              ? { params: { id: oldestPendingMine[0].id } }
+              : {}),
+          });
+        if (pendingScheduling.length)
+          strip.push({
+            icon: CalendarClock,
+            label: "Interview rounds awaiting scheduling",
+            value: pendingScheduling.length,
+            to: "/interviews",
+          });
+        if (toCall)
+          strip.push({
+            icon: PhoneCall,
+            label: "Screening calls ready — best matches first",
+            value: toCall,
+            to: "/screening",
+            tone: "warning",
+          });
+        if (stalledTotal)
+          strip.push({
+            icon: Clock,
+            label: "Candidates past their stage SLA",
+            value: stalledTotal,
+            to: "/candidates",
+            tone: "warning",
+          });
+        if (isExecutive && offersAwaiting)
+          strip.push({
+            icon: FileSignature,
+            label: "Offers awaiting approval",
+            value: offersAwaiting,
+            to: "/offers",
+          });
+
+        const needsYou = strip.reduce((s, r) => s + r.value, 0);
+        return (
+          <section
+            className="border-b border-border bg-card px-5 py-3 sm:px-7"
+            data-testid="needs-you"
+          >
+            <div className="mb-1 flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Needs you today
+              </p>
+              {countsQ.isLoading && org ? (
+                <p className="num text-xs text-muted-foreground">Checking…</p>
+              ) : (
+                <p className="num text-xs text-muted-foreground">
+                  {needsYou ? `${needsYou} thing${needsYou === 1 ? "" : "s"}` : "all clear"}
+                </p>
+              )}
+            </div>
+            {strip.length ? (
+              <div className="grid sm:grid-cols-2 sm:gap-x-8">
+                {strip.map((row) => (
+                  <ActionRow
+                    key={row.label}
+                    icon={row.icon}
+                    label={row.label}
+                    value={row.value}
+                    to={row.to}
+                    {...(row.tone ? { tone: row.tone } : {})}
+                    {...(row.params ? { params: row.params } : {})}
+                  />
+                ))}
+              </div>
+            ) : countsQ.isLoading && org ? null : (
+              <p className="flex items-center gap-2 py-2.5 text-sm text-muted-foreground">
+                <CheckCircle2 className="size-4 text-emerald-600" />
+                Approvals, screening calls, scheduling and SLAs are all clear.
+              </p>
+            )}
+          </section>
+        );
+      })()}
+
       <section className="grid border-b border-border bg-surface-2/50 sm:grid-cols-2 xl:grid-cols-4">
         {[
           {
             label: "Open requisitions",
             value: open.length,
             note: `${pending.length} awaiting approval`,
+            to: "/requisitions",
           },
           {
             label: "Candidates in play",
@@ -607,29 +745,35 @@ function Dashboard() {
               (a) => !["joined", "rejected", "withdrawn"].includes(canonical(a.stage as Stage)),
             ).length,
             note: `${candidates.length} in talent pool`,
+            to: "/candidates",
           },
           {
             label: "Average match",
             value: `${avgMatch}%`,
             note: `${scored.length} of ${applications.length} scored`,
+            to: "/matching",
           },
           isExecutive
             ? {
                 label: "Salary committed",
                 value: inr(committed),
                 note: `${inr(budgeted)} budgeted`,
+                to: "/reports",
               }
             : {
                 label: "Upcoming interviews",
                 value: upcoming.length,
                 note: `${stalled.length} candidates need attention`,
+                to: "/interviews",
               },
         ].map((metric) => (
-          <div
+          <Link
             key={metric.label}
-            className="group relative border-b border-border px-5 py-4 transition-colors last:border-b-0 hover:bg-card sm:[&:nth-child(odd)]:border-r xl:border-b-0 xl:border-r xl:last:border-r-0"
+            to={metric.to}
+            className="group relative block border-b border-border px-5 py-4 transition-colors last:border-b-0 hover:bg-card sm:[&:nth-child(odd)]:border-r xl:border-b-0 xl:border-r xl:last:border-r-0"
           >
             <span className="absolute inset-x-5 top-0 h-px scale-x-0 bg-primary/70 transition-transform duration-300 group-hover:scale-x-100" />
+            <ArrowUpRight className="absolute right-4 top-3.5 size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
             <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               {metric.label}
             </p>
@@ -637,7 +781,7 @@ function Dashboard() {
               {metric.value}
             </p>
             <p className="mt-1.5 text-xs text-muted-foreground">{metric.note}</p>
-          </div>
+          </Link>
         ))}
       </section>
 
@@ -1257,17 +1401,25 @@ function ActionRow({
   value,
   to,
   tone = "default",
+  params,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: number;
-  to: "/requisitions" | "/candidates" | "/interviews";
+  to:
+    | "/requisitions"
+    | "/requisitions/$id"
+    | "/candidates"
+    | "/interviews"
+    | "/screening"
+    | "/offers";
   tone?: "default" | "warning";
+  params?: { id: string };
 }) {
   return (
-    <Link to={to} className="group flex items-center gap-3 py-3.5">
+    <Link to={to} {...(params ? { params } : {})} className="group flex items-center gap-3 py-2.5">
       <span
-        className={`flex size-8 items-center justify-center rounded-md ${tone === "warning" ? "bg-warning/15 text-warning" : "bg-secondary text-muted-foreground"}`}
+        className={`flex size-8 shrink-0 items-center justify-center rounded-md ${tone === "warning" ? "bg-warning/15 text-warning" : "bg-secondary text-muted-foreground"}`}
       >
         <Icon className="size-4" />
       </span>

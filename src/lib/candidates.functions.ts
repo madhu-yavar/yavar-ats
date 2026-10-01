@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { db } from "../server/db";
 import { candidates, captureEvents, applications, requisitions } from "@db/schema";
-import { requireOrg } from "./auth.middleware";
+import { assertRole, requireOrg } from "./auth.middleware";
 import { deleteObject } from "../server/storage";
 
 /**
@@ -19,6 +19,13 @@ export const deleteCandidates = createServerFn({ method: "POST" })
     z.object({ candidateIds: z.array(z.string().uuid()).min(1).max(100) }).parse(data),
   )
   .handler(async ({ data, context }) => {
+    // Deletion is rare and destructive — HR head or above only.
+    await assertRole(
+      context.userId,
+      context.orgId,
+      ["hr_head", "president_cbo"],
+      "Only the HR head or the CBO can delete candidates.",
+    );
     // Org predicate everywhere: an id from another tenant simply does not match.
     const rows = await db
       .select({

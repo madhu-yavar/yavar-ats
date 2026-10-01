@@ -9,7 +9,7 @@
 > A domain diagram shows that domain's tables in full; references into other domains
 > point at a stub entity that is drawn complete in its own domain.
 
-57 tables across 9 domains.
+58 tables across 9 domains.
 
 ## Identity & access
 
@@ -524,7 +524,7 @@ erDiagram
 
 ## Screening & interviews
 
-`ai_interviews`, `interviews`, `screening_kits`, `screening_runs`
+`ai_interviews`, `interviews`, `screening_kits`, `screening_runs`, `screening_prep_jobs`
 
 ```mermaid
 erDiagram
@@ -591,6 +591,18 @@ erDiagram
     uuid created_by "nullable"
     timestamptz created_at
   }
+  screening_prep_jobs {
+    uuid id PK
+    uuid org_id FK
+    uuid application_id FK,UK
+    uuid candidate_id FK
+    uuid requisition_id FK
+    text status
+    integer attempts
+    text last_error "nullable"
+    timestamptz created_at
+    timestamptz updated_at
+  }
 
   ai_interviews }o--|| applications : "application_id · cascade"
   ai_interviews }o--o| organizations : "org_id · cascade"
@@ -605,6 +617,10 @@ erDiagram
   screening_runs }o--|| candidates : "candidate_id · cascade"
   screening_runs }o--o| requisitions : "requisition_id"
   screening_runs }o--o| applications : "application_id"
+  screening_prep_jobs }o--o| organizations : "org_id · cascade"
+  screening_prep_jobs }o--|| applications : "application_id · cascade"
+  screening_prep_jobs }o--|| candidates : "candidate_id · cascade"
+  screening_prep_jobs }o--|| requisitions : "requisition_id · cascade"
 ```
 
 ## Offers & onboarding
@@ -1020,6 +1036,10 @@ erDiagram
 | `screening_kits` | `candidate_id` | `candidates` | cascade |
 | `screening_kits` | `org_id` | `organizations` | cascade |
 | `screening_kits` | `requisition_id` | `requisitions` | no action |
+| `screening_prep_jobs` | `application_id` | `applications` | cascade |
+| `screening_prep_jobs` | `candidate_id` | `candidates` | cascade |
+| `screening_prep_jobs` | `org_id` | `organizations` | cascade |
+| `screening_prep_jobs` | `requisition_id` | `requisitions` | cascade |
 | `screening_runs` | `application_id` | `applications` | no action |
 | `screening_runs` | `candidate_id` | `candidates` | cascade |
 | `screening_runs` | `kit_id` | `screening_kits` | cascade |
@@ -1093,6 +1113,7 @@ erDiagram
 | `requisitions` | Requisitions & job content | 39 | (orgId+code) |
 | `salary_benchmarks` | Intelligence | 15 | — |
 | `screening_kits` | Screening & interviews | 11 | — |
+| `screening_prep_jobs` | Screening & interviews | 10 | (application_id) |
 | `screening_runs` | Screening & interviews | 22 | — |
 | `sessions` | Identity & access | 8 | (token_hash) |
 | `skill_edges` | Intelligence | 8 | — |

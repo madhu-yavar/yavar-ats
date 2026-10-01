@@ -341,6 +341,7 @@ function RequisitionDetail() {
       });
       toast.success("JD drafted and sent for Department Head review");
       qc.invalidateQueries({ queryKey: ["jd", id] });
+      qc.invalidateQueries({ queryKey: ["jd_statuses"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "JD generation failed");
     } finally {
@@ -381,6 +382,7 @@ function RequisitionDetail() {
       setShowImport(false);
       toast.success("Your JD was imported, structured and sent for Department Head review");
       qc.invalidateQueries({ queryKey: ["jd", id] });
+      qc.invalidateQueries({ queryKey: ["jd_statuses"] });
       qc.invalidateQueries({ queryKey: ["requisition", id] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "JD import failed");
@@ -414,6 +416,7 @@ function RequisitionDetail() {
     }
     toast.success("JD approved — sourcing can begin");
     qc.invalidateQueries({ queryKey: ["jd", id] });
+    qc.invalidateQueries({ queryKey: ["jd_statuses"] });
   }
 
   async function saveWeights(next: typeof weights) {

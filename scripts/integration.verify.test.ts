@@ -14,6 +14,8 @@ import {
   orgMembers,
   organizations,
   requisitions,
+  screeningKits,
+  screeningPrepJobs,
   userRoles,
   users,
 } from "../drizzle/schema";
@@ -341,5 +343,143 @@ describe("H4: CV vault degrades gracefully without storage configured", () => {
     expect(res.path).toBeTruthy();
     // No path segment may be ".." (traversal); dots inside a segment are fine.
     expect(res.path!.split("/")).not.toContain("..");
+  });
+});
+
+describe("screening prep queue (shortlist → background kit)", () => {
+  const { recordStageTransition } = require("../src/lib/stage-events.server") as {
+    recordStageTransition: typeof import("../src/lib/stage-events.server").recordStageTransition;
+  };
+  const { runScreeningPrep } = require("../src/lib/screening-prep.server") as {
+    runScreeningPrep: typeof import("../src/lib/screening-prep.server").runScreeningPrep;
+  };
+
+  const jobFor = async (applicationId: string) => {
+    const [row] = await db
+      .select()
+      .from(screeningPrepJobs)
+      .where(eq(screeningPrepJobs.applicationId, applicationId))
+      .limit(1);
+    return row ?? null;
+  };
+
+  let appShortlisted: string;
+  let appApplied: string;
+
+  beforeAll(async () => {
+    const mkApp = async (email: string, name: string, stage: "applied" | "shortlisted") => {
+      const [c] = await db
+        .insert(candidates)
+        .values({ fullName: name, email, orgId: orgA })
+        .returning({ id: candidates.id });
+      const [a] = await db
+        .insert(applications)
+        .values({ requisitionId: reqA, candidateId: c!.id, orgId: orgA, stage })
+        .returning({ id: applications.id });
+      return a!.id;
+    };
+    appShortlisted = await mkApp("prep-shortlisted@test.local", "Prep Shortlisted", "shortlisted");
+    appApplied = await mkApp("prep-applied@test.local", "Prep Applied", "applied");
+  });
+
+  test("shortlist transition enqueues exactly one prep job", async () => {
+    await recordStageTransition({
+      orgId: orgA,
+      applicationId: appShortlisted,
+      fromStage: "applied",
+      toStage: "shortlisted",
+      actor: "test",
+    });
+    const job = await jobFor(appShortlisted);
+    expect(job).not.toBeNull();
+    expect(job!.status).toBe("pending");
+    expect(job!.attempts).toBe(0);
+    expect(job!.candidateId).toBeTruthy();
+    expect(job!.requisitionId).toBe(reqA);
+  });
+
+  test("re-shortlisting resets a failed job instead of duplicating it", async () => {
+    await db
+      .update(screeningPrepJobs)
+      .set({ status: "failed", attempts: 3, lastError: "older failure" })
+      .where(eq(screeningPrepJobs.applicationId, appShortlisted));
+    await recordStageTransition({
+      orgId: orgA,
+      applicationId: appShortlisted,
+      fromStage: "on_hold",
+      toStage: "shortlisted",
+      actor: "test",
+    });
+    const rows = await db
+      .select()
+      .from(screeningPrepJobs)
+      .where(eq(screeningPrepJobs.applicationId, appShortlisted));
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.status).toBe("pending");
+    expect(rows[0]!.attempts).toBe(0);
+    expect(rows[0]!.lastError).toBeNull();
+  });
+
+  test("non-shortlisted transitions enqueue nothing", async () => {
+    await recordStageTransition({
+      orgId: orgA,
+      applicationId: appApplied,
+      fromStage: "applied",
+      toStage: "l1",
+      actor: "test",
+    });
+    expect(await jobFor(appApplied)).toBeNull();
+  });
+
+  test("backfill covers shortlisted-without-kit, skips applied and kit-existing rows", async () => {
+    // A shortlisted candidate who already has a kit must be skipped.
+    const [kitted] = await db
+      .insert(candidates)
+      .values({ fullName: "Prep Kitted", email: "prep-kitted@test.local", orgId: orgA })
+      .returning({ id: candidates.id });
+    const [kitApp] = await db
+      .insert(applications)
+      .values({ requisitionId: reqA, candidateId: kitted!.id, orgId: orgA, stage: "shortlisted" })
+      .returning({ id: applications.id });
+    await db.insert(screeningKits).values({
+      orgId: orgA,
+      candidateId: kitted!.id,
+      requisitionId: reqA,
+      applicationId: kitApp!.id,
+    });
+
+    await runScreeningPrep({ max: 100 });
+
+    // applied → no job; shortlisted-without-kit (appShortlisted now has one
+    // from the hook) → the kitted row must still have no job.
+    expect(await jobFor(appApplied)).toBeNull();
+    expect(await jobFor(kitApp!.id)).toBeNull();
+  });
+
+  test("no-AI-key org: jobs fail with vendor-neutral copy only", async () => {
+    // Drain the job: expire backoff between attempts so all retries land now.
+    for (let i = 0; i < 3; i++) {
+      await runScreeningPrep({ max: 100 });
+      await db.execute(
+        (await import("drizzle-orm")).sql`update screening_prep_jobs set updated_at = now() - interval '5 minutes' where status = 'pending'`,
+      );
+    }
+    const job = await jobFor(appShortlisted);
+    expect(job).not.toBeNull();
+    expect(job!.status).toBe("failed");
+    expect(job!.attempts).toBe(3);
+    expect(job!.lastError).toBeTruthy();
+    // Vendor-neutral by construction: no provider or model names may leak.
+    expect(job!.lastError!).not.toMatch(/openai|anthropic|gemini|gpt|claude/i);
+    expect(job!.lastError).toMatch(/Integrations|automatically|job description/i);
+
+    // And a kit must NOT have been written for the failed job.
+    const kits = await db
+      .select({ id: screeningKits.id })
+      .from(screeningKits)
+      .where(
+        and(eq(screeningKits.candidateId, job!.candidateId), eq(screeningKits.orgId, orgA)),
+      );
+    expect(kits.length).toBe(0);
   });
 });

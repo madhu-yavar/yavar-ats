@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Clock } from "lucide-react";
 
 import {
   addDepartment as addDepartmentFn,
@@ -14,11 +15,16 @@ import {
   applicationsQuery,
   byKind,
   departmentsQuery,
+  jdStatusesQuery,
+  latestJdStatusMap,
   masterItemsQuery,
   requisitionsQuery,
+  type JdWireStatus,
   type MasterKind,
+  type Requisition,
 } from "@/lib/data";
 import { findDuplicateRequisitions } from "@/lib/jd-dedupe";
+import { errorToastMessage } from "@/lib/errors";
 import { suggestRoleProfile } from "@/lib/role-profile.functions";
 import { EmptyState, PageHeader, SkillPills, StatusBadge, inr } from "@/components/ats";
 import { MarketBenchmarkPanel } from "@/components/MarketBenchmark";
@@ -56,12 +62,57 @@ export const Route = createFileRoute("/requisitions/")({
   component: Requisitions,
 });
 
+type TrailEntry = {
+  from?: string;
+  to?: string;
+  actor?: string;
+  decision?: string;
+  comment?: string | null;
+  at?: string;
+};
+
+/** Mirrors APPROVALS on requisitions.$id.tsx — whose desk each parked status sits on. */
+const WAITING_ON: Partial<Record<string, string>> = {
+  draft: "Department Head review",
+  pending_dh: "Department Head approval",
+  pending_hr: "HR Head approval",
+  pending_cbo: "President / CBO approval",
+};
+
+const JD_CHIP: Record<JdWireStatus, { label: string; className: string }> = {
+  draft: {
+    label: "JD draft",
+    className: "border-border bg-surface-2 text-muted-foreground",
+  },
+  pending_dh: {
+    label: "JD pending DH",
+    className: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  },
+  approved: {
+    label: "JD approved",
+    className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  },
+  changes_requested: {
+    label: "JD changes requested",
+    className: "border-destructive/30 bg-destructive/10 text-destructive",
+  },
+};
+
+/** When the requisition entered its current state (last trail entry, else creation). */
+function enteredCurrentStateAt(r: Requisition): string {
+  const trail = Array.isArray(r.approval_trail) ? (r.approval_trail as TrailEntry[]) : [];
+  const last = trail[trail.length - 1];
+  return (last && typeof last.at === "string" && last.at) || r.created_at;
+}
+
 function Requisitions() {
   const qc = useQueryClient();
   const reqs = useQuery(requisitionsQuery);
   const depts = useQuery(departmentsQuery);
   const apps = useQuery(applicationsQuery);
   const masters = useQuery(masterItemsQuery);
+  const jdStatuses = useQuery(jdStatusesQuery);
+  const jdMap = useMemo(() => latestJdStatusMap(jdStatuses.data), [jdStatuses.data]);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -254,15 +305,12 @@ function Requisitions() {
       code = res?.code ?? code;
     } catch (e) {
       setSaving(false);
-      const raw = e instanceof Error ? e.message : "";
-      // Drizzle surfaces driver failures as "Failed query: …" SQL dumps —
-      // log those for diagnosis but never toast raw SQL at a user.
-      if (/^Failed query/.test(raw)) {
-        console.error("createRequisition failed:", raw);
-        toast.error("Could not raise the requisition — a server error occurred. Try again.");
-      } else {
-        toast.error(raw || "Could not raise the requisition");
-      }
+      toast.error(
+        errorToastMessage(
+          e,
+          "Could not raise the requisition — a server error occurred. Try again.",
+        ),
+      );
       return;
     }
     setSaving(false);
@@ -609,7 +657,24 @@ function Requisitions() {
                       ) : null}
                     </div>
                   </div>
-                  <StatusBadge status={r.status} />
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {(() => {
+                      const jd = jdMap.get(r.id);
+                      const chip = jd ? JD_CHIP[jd] : null;
+                      return chip ? (
+                        <span
+                          className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium ${chip.className}`}
+                        >
+                          {chip.label}
+                        </span>
+                      ) : (
+                        <span className="whitespace-nowrap rounded-full border border-dashed border-border px-2 py-0.5 text-[11px] text-muted-foreground">
+                          No JD yet
+                        </span>
+                      );
+                    })()}
+                    <StatusBadge status={r.status} />
+                  </div>
                 </div>
                 <dl className="num mt-4 grid grid-cols-3 gap-3 text-sm">
                   <div>
@@ -630,6 +695,26 @@ function Requisitions() {
                 <div className="mt-4">
                   <SkillPills skills={r.must_have_skills.slice(0, 6)} />
                 </div>
+                {(() => {
+                  const waiting = WAITING_ON[r.status];
+                  if (!waiting) return null;
+                  const days = Math.max(
+                    0,
+                    Math.floor(
+                      (Date.now() - new Date(enteredCurrentStateAt(r)).getTime()) / 86_400_000,
+                    ),
+                  );
+                  return (
+                    <p
+                      className={`mt-3 flex items-center gap-1.5 text-xs ${
+                        days >= 3 ? "font-medium text-warning" : "text-muted-foreground"
+                      }`}
+                    >
+                      <Clock className="size-3.5" />
+                      Waiting {days} day{days === 1 ? "" : "s"} — {waiting}
+                    </p>
+                  );
+                })()}
                 <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
                   <span>
                     Weights — skills {r.weight_skills} · exp {r.weight_experience} · edu{" "}

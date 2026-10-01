@@ -189,6 +189,14 @@ Cloud Scheduler (all call the app with `Authorization: Bearer <value of atsiq-cr
 | every 5 min | `https://atsiq.yavar.ai/api/public/process-email-outbox` (drains the candidate email queue) |
 | every 15 min | `https://atsiq.yavar.ai/api/public/sync-hrms` (refreshes the HRMS employee caches) |
 | every 15 min | `https://atsiq.yavar.ai/api/public/board-sync` (job-board application poll/backfill + webhook-event retention) |
+| every 5 min | `https://atsiq.yavar.ai/api/public/screening-prep` (prepares screening kits for shortlisted candidates in the background; retries ≤3) |
+
+Registering these in Cloud Scheduler is a **devops step** — the app only serves the
+routes. Until `screening-prep` is registered, screening kits are still built when a
+recruiter presses "Prepare questions" (degraded, not broken); after registration the
+first sweep backfills every shortlisted candidate missing a kit (AI cost: one
+`screening_kit` call per candidate on the organisation's own key, throttled to ≤100
+per sweep, fully ledgered in `ai_usage_events`).
 
 ## 8. Notes & gotchas
 

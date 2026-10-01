@@ -6,7 +6,7 @@
  * returned in the exact PostgREST wire shape routes were written against:
  * snake_case column names, ISO date strings.
  */
-import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
@@ -126,6 +126,38 @@ export const listJobDescriptions = createServerFn({ method: "POST" })
     return snakeRows(rows);
   });
 
+/** postgres-js returns a row-list Array (drizzle passes it through); accept
+ * either shape defensively — an empty result must never look like a bug. */
+function execRows(res: unknown): Record<string, unknown>[] {
+  if (Array.isArray(res)) return res as Record<string, unknown>[];
+  const r = res as { rows?: Record<string, unknown>[] } | null;
+  return r?.rows ?? [];
+}
+
+/**
+ * Latest JD version per requisition — the status chip only. JD body text never
+ * rides along. Writers of job_descriptions MUST invalidate ["jd_statuses"].
+ */
+export type JdStatusRow = { requisition_id: string; status: string; version: number };
+
+export const listLatestJdStatuses = createServerFn({ method: "POST" })
+  .middleware([requireOrg])
+  .handler(async ({ context }): Promise<JdStatusRow[]> => {
+    // distinct on requires the leading order-by columns — do not simplify.
+    const res = await db.execute(sql`
+      select distinct on (requisition_id)
+             requisition_id, status::text as status, version
+      from job_descriptions
+      where org_id = ${context.orgId}
+      order by requisition_id, version desc
+    `);
+    return execRows(res).map((r) => ({
+      requisition_id: String(r["requisition_id"]),
+      status: String(r["status"]),
+      version: Number(r["version"]),
+    }));
+  });
+
 export const listCandidates = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .handler(async ({ context }) => {
@@ -184,6 +216,132 @@ export const listCandidates = createServerFn({ method: "POST" })
       : [];
 
     return snakeRows([...ownRows, ...fullShared, ...redactedShared] as never);
+  });
+
+/* --------------------------------------------------- ⌘K global search */
+
+export type SearchCandidate = {
+  id: string;
+  full_name: string;
+  email: string | null;
+  location: string | null;
+  experience_years: number | string | null;
+  /** True = row came from a REDACTED consortium share: email/phone/CTC are NULL server-side. */
+  via_partner_pool: boolean;
+};
+export type SearchRequisition = { id: string; code: string; title: string; status: string };
+export type GlobalSearchResult = {
+  candidates: SearchCandidate[];
+  requisitions: SearchRequisition[];
+};
+
+/**
+ * ⌘K palette search. Never selects resume_text/phone/CTC; the redacted-share
+ * branch nulls email in the projection AND excludes email from its WHERE — a
+ * partner user may not even probe "does email-X exist in the shared pool?".
+ */
+export const globalSearch = createServerFn({ method: "POST" })
+  .middleware([requireOrg])
+  .inputValidator((data: unknown) => z.object({ term: z.string().max(80) }).parse(data))
+  .handler(async ({ data, context }): Promise<GlobalSearchResult> => {
+    const clean = data.term
+      .trim()
+      .slice(0, 80)
+      .replace(/[%_\\]/g, "");
+    if (clean.length < 2) return { candidates: [], requisitions: [] };
+    const pattern = `%${clean}%`;
+
+    const reqRows = await db
+      .select({
+        id: requisitions.id,
+        code: requisitions.code,
+        title: requisitions.title,
+        status: requisitions.status,
+      })
+      .from(requisitions)
+      .where(
+        and(
+          eq(requisitions.orgId, context.orgId),
+          or(ilike(requisitions.code, pattern), ilike(requisitions.title, pattern)),
+        ),
+      )
+      .orderBy(desc(requisitions.createdAt))
+      .limit(5);
+
+    // Share resolution copied from listCandidates (active shares, /redact/i scope).
+    const shares = await db
+      .select({ ownerOrg: orgPoolShares.ownerOrg, scope: orgPoolShares.scope })
+      .from(orgPoolShares)
+      .where(and(eq(orgPoolShares.partnerOrg, context.orgId), eq(orgPoolShares.status, "active")));
+    const isRedacted = (scope: string | null) => Boolean(scope && /redact/i.test(scope));
+    const fullOwners = shares.filter((s) => !isRedacted(s.scope)).map((s) => s.ownerOrg);
+    const redactedOwners = shares.filter((s) => isRedacted(s.scope)).map((s) => s.ownerOrg);
+
+    const slim = {
+      id: candidates.id,
+      fullName: candidates.fullName,
+      email: candidates.email,
+      location: candidates.location,
+      experienceYears: candidates.experienceYears,
+    };
+    const visibleMatch = or(
+      ilike(candidates.fullName, pattern),
+      ilike(candidates.location, pattern),
+    );
+    const emailMatch = ilike(candidates.email, pattern);
+    const ownRows = await db
+      .select(slim)
+      .from(candidates)
+      .where(and(eq(candidates.orgId, context.orgId), or(visibleMatch, emailMatch)))
+      .orderBy(desc(candidates.createdAt))
+      .limit(8);
+    const fullRows = fullOwners.length
+      ? await db
+          .select(slim)
+          .from(candidates)
+          .where(and(inArray(candidates.orgId, fullOwners), or(visibleMatch, emailMatch)))
+          .orderBy(desc(candidates.createdAt))
+          .limit(8)
+      : [];
+    // Redacted partners: match on name/location only — never email.
+    const redactedRows = redactedOwners.length
+      ? await db
+          .select({
+            id: candidates.id,
+            fullName: candidates.fullName,
+            email: sql<string | null>`null`,
+            location: candidates.location,
+            experienceYears: candidates.experienceYears,
+          })
+          .from(candidates)
+          .where(and(inArray(candidates.orgId, redactedOwners), visibleMatch))
+          .orderBy(desc(candidates.createdAt))
+          .limit(8)
+      : [];
+
+    const rank = (r: { fullName: string | null; own: boolean }) => {
+      const prefix = r.fullName?.toLowerCase().startsWith(clean.toLowerCase()) ? 0 : 1;
+      return prefix * 10 + (r.own ? 0 : 1);
+    };
+    const pool = [
+      ...ownRows.map((r) => ({ ...r, own: true })),
+      ...fullRows.map((r) => ({ ...r, own: false })),
+      ...redactedRows.map((r) => ({ ...r, own: false })),
+    ]
+      .sort((a, b) => rank(a) - rank(b))
+      .slice(0, 6);
+
+    return {
+      candidates: pool.map((r) => ({
+        id: r.id,
+        full_name: r.fullName,
+        email: r.email,
+        location: r.location,
+        experience_years: r.experienceYears,
+        via_partner_pool: !r.own,
+      })),
+      requisitions: reqRows,
+    };
   });
 
 export const getCandidate = createServerFn({ method: "POST" })
@@ -393,17 +551,6 @@ export const listCandidateNotes = createServerFn({ method: "POST" })
       )
       .orderBy(desc(candidateNotes.createdAt));
     return snakeRows(rows);
-  });
-
-export const listScreeningKits = createServerFn({ method: "POST" })
-  .middleware([requireOrg])
-  .handler(async ({ context }) => {
-    const rows = await db
-      .select()
-      .from(screeningKits)
-      .where(eq(screeningKits.orgId, context.orgId))
-      .orderBy(desc(screeningKits.createdAt));
-    return snakeRowsWithout(rows, ["engine"]);
   });
 
 export const listCandidateScreeningKits = createServerFn({ method: "POST" })

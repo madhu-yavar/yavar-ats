@@ -1327,6 +1327,43 @@ export const screeningRuns = pgTable(
   ],
 );
 
+export type ScreeningPrepStatus = "pending" | "running" | "ready" | "failed";
+
+/**
+ * Background queue that prepares screening kits when a candidate is
+ * shortlisted, so the questions are ready before the recruiter arrives.
+ * One job per application (unique index); re-enqueue is an upsert that resets
+ * a failed attempt. Kits themselves stay in screening_kits — deliberately no
+ * unique index there, because manual "Rebuild questions" keeps multiple kits
+ * per pairing; dedupe happens in code.
+ */
+export const screeningPrepJobs = pgTable(
+  "screening_prep_jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").references(() => organizations.id, { onDelete: "cascade" }),
+    applicationId: uuid("application_id")
+      .notNull()
+      .references(() => applications.id, { onDelete: "cascade" }),
+    candidateId: uuid("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    requisitionId: uuid("requisition_id")
+      .notNull()
+      .references(() => requisitions.id, { onDelete: "cascade" }),
+    status: text("status").$type<ScreeningPrepStatus>().notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("screening_prep_jobs_application_key").on(t.applicationId),
+    index("screening_prep_jobs_queue_idx").on(t.status, t.updatedAt),
+    index("screening_prep_jobs_org_idx").on(t.orgId, t.status),
+  ],
+);
+
 export const hrIncentiveSchemes = pgTable("hr_incentive_schemes", {
   orgId: uuid("org_id")
     .primaryKey()

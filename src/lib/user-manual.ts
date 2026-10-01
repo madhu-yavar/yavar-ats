@@ -54,7 +54,7 @@ export const FIRST_RUN_JOURNEY = [
     title: "Screen and interview",
     to: "/screening",
     detail:
-      "Generate JD-and-CV-specific screening questions, review answers, then schedule interviews and collect interviewer scorecards before progressing the candidate.",
+      "Work the screening queue: the best matches per role, with JD-and-CV-specific questions prepared in the background. Review answers, score the call and move the candidate on without leaving the page.",
     access: "recruiter",
   },
   {
@@ -187,14 +187,15 @@ export const MANUAL_SECTIONS: ManualSection[] = [
     id: "screening",
     title: "8. Preliminary screening-call support",
     summary:
-      "A JD-and-CV-specific helper for consistent recruiter screening and explainable second-level matching.",
+      "A per-role triage queue with JD-and-CV-specific questions prepared in the background, so the call is ready before the recruiter arrives.",
     steps: [
-      "Open Screening calls (/screening), choose a requisition and candidate, or open the Screening section on the candidate profile.",
-      "Generate a question kit. Each question includes why HR should ask it, the most relevant answer expected, and weak-answer guidance grounded in the JD and candidate evidence.",
-      "Review, edit, remove, copy or print the questions before the call. The saved kit remains attached to that candidate and role.",
-      "After the call, enter answers question by question, paste whole-call notes, or upload the private audio recording for transcription.",
-      "Submit for analysis to receive per-question verdicts and evidence, a screening score, recommendation, red flags and rationale. ATSIQ also shows the combined fit using 60% existing JD/CV match and 40% screening result.",
-      "Previous runs and private recording links remain available for authorised organisation users.",
+      "Open Screening calls (/screening). Pick a role; the queue shows To call, Questions ready, Screened and All, each with a live count.",
+      "When someone is shortlisted, their question kit is prepared automatically in the background — no waiting, no button. Rows pulse until the questions are ready, then move to Questions ready on their own.",
+      "Move through the stack with j / k (or arrow keys); press a to advance, s to shortlist, r to reject. Everything about one candidate — score evidence, questions, answers, grading, stage — lives in the pane on the right.",
+      "Each question includes why HR should ask it, the most relevant answer expected, and weak-answer guidance grounded in the JD and candidate evidence. Review, edit, remove, copy or print before the call.",
+      "After the call, enter answers question by question, paste whole-call notes, or upload the private audio recording for transcription. Submit for per-question verdicts, a screening score, recommendation, red flags and rationale — the combined fit uses 60% existing JD/CV match and 40% screening result.",
+      "If questions are not prepared, the organisation's AI key is missing or the role has no job description — check Integrations, then press Prepare questions on the candidate as a fallback.",
+      "The Screening section on the candidate profile offers the same kit and grading; previous runs and private recording links remain available to authorised organisation users.",
     ],
   },
   {

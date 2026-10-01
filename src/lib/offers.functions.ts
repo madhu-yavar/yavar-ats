@@ -58,6 +58,15 @@ export const createOffer = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
+    // Raising an offer is a recruiting-team action — hiring managers and
+    // department heads consume offers through approvals, they don't create them.
+    await assertRole(
+      context.userId,
+      context.orgId,
+      ["recruiter", "hr_head", "president_cbo"],
+      "Only the recruiting team (recruiter, HR head or the CBO) can raise an offer.",
+    );
+
     const [application] = await db
       .select({ id: applications.id })
       .from(applications)

@@ -117,6 +117,28 @@ function Interviews() {
     ["shortlisted", "ai_screened", "l1", "l2", "l3", "offer", "offer_pending"].includes(a.stage),
   );
 
+  /** Levels already scored for the selected candidate — mirrors the server's
+   * finality rule: a scheduled round with a scorecard can never be re-scored. */
+  const scoredLevelsFor = (applicationId: string) =>
+    new Set(
+      (evals.data ?? [])
+        .filter((e) => e.application_id === applicationId && e.interview_id)
+        .map((e) => e.level),
+    );
+  const scoredLevels = scoredLevelsFor(form.application_id);
+  const levelLocked = scoredLevels.has(Number(form.level));
+
+  /** Pick a candidate and land the form on the first level that is still open. */
+  function pickApplication(applicationId: string) {
+    const locked = scoredLevelsFor(applicationId);
+    const firstOpen = LEVELS.find((l) => !locked.has(l.level));
+    setForm({
+      ...form,
+      application_id: applicationId,
+      level: locked.has(Number(form.level)) && firstOpen ? String(firstOpen.level) : form.level,
+    });
+  }
+
   const filtered = eligible.filter((a) => {
     const c = (cands.data ?? []).find((x) => x.id === a.candidate_id);
     const r = (reqs.data ?? []).find((x) => x.id === a.requisition_id);
@@ -229,6 +251,10 @@ function Interviews() {
   async function submitEvaluation() {
     if (!form.application_id) {
       toast.error("Pick a candidate first");
+      return;
+    }
+    if (scoredLevels.has(Number(form.level))) {
+      toast.error("This interview round has already been scored — scorecards are final.");
       return;
     }
     if (form.recommendation !== "select" && !form.reason.trim() && !form.comments.trim()) {
@@ -608,7 +634,7 @@ function Interviews() {
                             size="sm"
                             variant="ghost"
                             className="h-6 px-2 text-[11px]"
-                            onClick={() => setForm({ ...form, application_id: a.id })}
+                            onClick={() => pickApplication(a.id)}
                           >
                             Record
                           </Button>
@@ -635,10 +661,7 @@ function Interviews() {
           <div className="mt-4 space-y-4">
             <div>
               <Label className="mb-1.5 block text-xs text-muted-foreground">Candidate</Label>
-              <Select
-                value={form.application_id}
-                onValueChange={(v) => setForm({ ...form, application_id: v })}
-              >
+              <Select value={form.application_id} onValueChange={(v) => pickApplication(v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select candidate" />
                 </SelectTrigger>
@@ -661,13 +684,22 @@ function Interviews() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {LEVELS.map((l) => (
-                    <SelectItem key={l.level} value={String(l.level)}>
-                      {l.label}
-                    </SelectItem>
-                  ))}
+                  {LEVELS.map((l) => {
+                    const locked = scoredLevels.has(l.level);
+                    return (
+                      <SelectItem key={l.level} value={String(l.level)} disabled={locked}>
+                        {l.label}
+                        {locked ? " — scored, final" : ""}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
+              {levelLocked ? (
+                <p className="mt-1.5 text-xs text-destructive">
+                  L{form.level} has already been scored — scorecards are final. Pick another level.
+                </p>
+              ) : null}
             </div>
             <div>
               <Label className="mb-1.5 block text-xs text-muted-foreground">Focus area</Label>
@@ -727,7 +759,7 @@ function Interviews() {
                 onChange={(e) => setForm({ ...form, comments: e.target.value })}
               />
             </div>
-            <Button className="w-full" onClick={submitEvaluation} disabled={busy}>
+            <Button className="w-full" onClick={submitEvaluation} disabled={busy || levelLocked}>
               {busy ? <Loader2 className="size-4 animate-spin" /> : null} Submit evaluation
             </Button>
           </div>

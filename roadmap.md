@@ -1,5 +1,21 @@
 # Roadmap
 
+## HR quick wins (2026-10-01)
+
+- [x] Requisition cards surface JD state at a glance — latest-version JD chip (draft / pending DH / approved / changes requested / no JD yet) plus a "Waiting N days — \<approver\>" line derived from the approval trail; flips live via `["jd_statuses"]` invalidation on every JD write
+- [x] ⌘K command palette on every page — role-scoped navigation, quick actions and redaction-aware live search over candidates (slim projection, partner-pool rows never expose email/CTC and can't be probed by email) and requisitions
+- [x] "Needs you today" dashboard strip — role-filtered counts, each landing where the action completes: approvals awaiting you, rounds awaiting scheduling, screening calls waiting (count-only `screeningQueueCounts` sharing the queue's CTEs so numbers can't diverge), SLA breaches, offers awaiting approval (exec); all-clear state; the four stat tiles are now links
+
+## Screening triage queue (2026-09-30)
+
+The recruiter never waits and never wonders: screening questions are prepared in the background the moment someone is shortlisted, and `/screening` is a role-scoped triage queue that stays seamless at 1000+ CVs.
+
+- [x] Background preparation — migration `0022` (`screening_prep_jobs`, one job per application, upsert-on-shortlist), enqueue hook on the shared stage-transition choke point (covers recruiter moves, bulk moves and autoscore), backfill + retry worker (`screening-prep.server.ts`, ≤100/run, lease-reclaim, ≤3 attempts, vendor-neutral failure copy) and the `/api/public/screening-prep` cron route (devops registers it in Cloud Scheduler)
+- [x] Matching-engine audit-trail fix — `persistMatchResult`'s auto-shortlist now journals the stage transition (and sends the shortlisted email) like autoscore and manual shortlists always did; first bulk scoring run after deploy emails every auto-shortlisted candidate
+- [x] Slim queue endpoints — `listScreeningQueue` (50-row joined pages, true per-bucket counts under the current filters, no resume text or rationale on the wire) and `getScreeningCandidate` (single-candidate pane data, `resume_text` dropped); org-wide `listScreeningKits` retired
+- [x] The queue UI — buckets with live counts (To call / Questions ready / Screened / All), seamless infinite scroll, split-pane triage with the ScreeningPanel embedded, CV download, match evidence, StageMover in place, keyboard triage (j/k/a/s/r), live pulse while background prep completes
+- [ ] Register `/api/public/screening-prep` in Cloud Scheduler (devops; see infra/DEPLOYMENT-HANDOFF.md §7)
+
 ## Enterprise job-board connections (2026-09-29)
 
 LinkedIn, Indeed and Naukri wired end-to-end on the existing integration-credential and cron primitives: connection setup, job-posting syndication and application ingestion. Every vendor path is partner-contract-gated, so adapters are capability-driven and the UI reports contract gaps honestly instead of pretending a happy path.

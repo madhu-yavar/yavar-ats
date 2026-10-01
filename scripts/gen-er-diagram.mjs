@@ -44,6 +44,7 @@ const DOMAINS = {
   evaluations: "Candidates & pipeline",
   screening_kits: "Screening & interviews",
   screening_runs: "Screening & interviews",
+  screening_prep_jobs: "Screening & interviews",
   interviews: "Screening & interviews",
   ai_interviews: "Screening & interviews",
   offers: "Offers & onboarding",

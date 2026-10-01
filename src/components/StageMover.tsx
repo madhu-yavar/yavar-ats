@@ -42,6 +42,7 @@ export function StageMover({
   applicationIds,
   currentStage,
   onDone,
+  presetToStage,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -50,6 +51,8 @@ export function StageMover({
   /** Known when moving exactly one application — narrows the legal options. */
   currentStage?: Stage;
   onDone?: () => void;
+  /** Keyboard shortcuts pre-seed the destination; still fully editable. */
+  presetToStage?: Stage | null;
 }) {
   const masters = useQuery(masterItemsQuery);
   const move = useServerFn(moveStage);
@@ -62,10 +65,15 @@ export function StageMover({
 
   useEffect(() => {
     if (open) {
-      setToStage("");
       setReason("");
       setNote("");
+      // An illegal preset (e.g. "shortlisted" while already shortlisted)
+      // silently degrades to "Choose a stage", never to an illegal move.
+      const legal = currentStage ? allowedTransitions(currentStage) : null;
+      setToStage(presetToStage && (!legal || legal.includes(presetToStage)) ? presetToStage : "");
     }
+    // Seed only at open, exactly like the reset this replaces.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // A reason belongs to a stage — clearing it when the stage changes keeps them paired.

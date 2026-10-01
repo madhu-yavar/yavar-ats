@@ -25,7 +25,6 @@ import {
   listMatchScores,
   listOffers,
   listRequisitions,
-  listScreeningKits,
   listSocialProfiles,
   listTalentRequestSuggestions,
   listTalentRequests,
@@ -33,7 +32,16 @@ import {
   listVerifications,
   getRequisition,
   getCandidate,
+  globalSearch,
+  listLatestJdStatuses,
 } from "./queries.functions";
+import {
+  getScreeningCandidate,
+  listScreeningQueue,
+  screeningQueueCounts,
+} from "./screening-queue.functions";
+import type { ScreeningQueueRow } from "./screening-queue.functions";
+import type { ScreeningQueueCounts } from "./screening-queue.functions";
 import { addMasterItem as addMasterItemFn } from "./master.functions";
 import { getLatestBenchmark, type BenchmarkRow } from "./salary-benchmark.functions";
 import { listTemplates, type TemplateWire } from "./templates.functions";
@@ -241,17 +249,122 @@ export const screeningRunsQuery = (candidateId: string) =>
       (await listCandidateScreeningRuns({ data: { candidateId } })) as ScreeningRun[],
   });
 
-/** Every screening kit in the organisation, newest first. */
-export const allScreeningKitsQuery = queryOptions({
-  queryKey: ["screening_kits", "all"],
-  queryFn: async () => (await listScreeningKits()) as ScreeningKit[],
-});
-
 /** Every graded screening call in the organisation, newest first. */
 export const allScreeningRunsQuery = queryOptions({
   queryKey: ["screening_runs", "all"],
   queryFn: async () => (await listAllScreeningRuns()) as ScreeningRun[],
 });
+
+/* ------------------------------------------- screening triage queue (slim) */
+
+export type ScreeningBucket = "to_call" | "ready" | "graded" | "all";
+
+export type { ScreeningQueueRow };
+
+export type ScreeningQueuePage = {
+  rows: ScreeningQueueRow[];
+  counts: { to_call: number; ready: number; graded: number; all: number };
+  total: number;
+};
+
+/** One page of the triage queue; counts ride along so tab badges never lie. */
+export const screeningQueueQuery = (input: {
+  requisitionId?: string | null;
+  bucket: ScreeningBucket;
+  term?: string;
+  offset: number;
+  limit?: number;
+}) =>
+  queryOptions({
+    queryKey: ["screening_queue", input],
+    queryFn: async () =>
+      (await listScreeningQueue({
+        data: { ...input, limit: input.limit ?? 50 },
+      })) as ScreeningQueuePage,
+  });
+
+export type ScreeningCandidateDetail = {
+  candidate: Omit<Candidate, "resume_text">;
+  application: {
+    id: string;
+    stage: string;
+    applied_at: string;
+    requisition_id: string;
+    requisition_title: string;
+    requisition_code: string | null;
+  };
+  match: {
+    overall_score: number | null;
+    rationale: string | null;
+    matched_skills: string[];
+    missing_skills: string[];
+    risk_flags: string[];
+    recommendation: string | null;
+    computed_at: string | null;
+  } | null;
+  roles: { application_id: string; requisition_id: string; title: string; stage: string }[];
+};
+
+/** The selected candidate's pane data (full profile minus resume text). */
+export const screeningCandidateQuery = (candidateId: string, applicationId: string) =>
+  queryOptions({
+    queryKey: ["screening_candidate", candidateId, applicationId],
+    queryFn: async () =>
+      (await getScreeningCandidate({
+        data: { candidateId, applicationId },
+      })) as ScreeningCandidateDetail,
+  });
+
+/* ------------------------------------------------- dashboard & ⌘K palette */
+
+/** Bucket counts only — feeds the dashboard strip. The ["screening_queue", …]
+ * key prefix means the queue page's invalidations refresh this for free. */
+export const screeningQueueCountsQuery = queryOptions({
+  queryKey: ["screening_queue", "counts"],
+  queryFn: async () => (await screeningQueueCounts()) as ScreeningQueueCounts,
+  staleTime: 30_000,
+});
+
+export type JdWireStatus = "draft" | "pending_dh" | "approved" | "changes_requested";
+export type JdStatusWire = { requisition_id: string; status: JdWireStatus; version: number };
+
+/** Latest JD version per requisition. Writers must invalidate ["jd_statuses"]. */
+export const jdStatusesQuery = queryOptions({
+  queryKey: ["jd_statuses"],
+  queryFn: async () => (await listLatestJdStatuses()) as JdStatusWire[],
+  staleTime: 15_000,
+});
+
+/** requisition_id → latest JD status (missing entry = no JD version yet). */
+export function latestJdStatusMap(rows: JdStatusWire[] | undefined) {
+  const m = new Map<string, JdWireStatus>();
+  for (const r of rows ?? []) m.set(r.requisition_id, r.status);
+  return m;
+}
+
+export type SearchCandidateWire = {
+  id: string;
+  full_name: string;
+  email: string | null;
+  location: string | null;
+  experience_years: number | string | null;
+  via_partner_pool: boolean;
+};
+export type GlobalSearchWire = {
+  candidates: SearchCandidateWire[];
+  requisitions: { id: string; code: string; title: string; status: string }[];
+};
+
+/** ⌘K palette search — slim, redaction-aware, gated to ≥2 chars. */
+export const globalSearchQuery = (term: string) =>
+  queryOptions({
+    queryKey: ["global_search", term.trim().toLowerCase()],
+    enabled: term.trim().length >= 2,
+    queryFn: async () => (await globalSearch({ data: { term } })) as GlobalSearchWire,
+    staleTime: 15_000,
+    placeholderData: (prev: GlobalSearchWire | undefined) => prev,
+    gcTime: 60_000,
+  });
 
 /* ----------------------------- team & sharing queries (ported to drizzle) */
 

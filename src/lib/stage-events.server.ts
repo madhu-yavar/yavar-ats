@@ -11,7 +11,15 @@
 import { eq, inArray } from "drizzle-orm";
 
 import { db } from "../server/db";
-import { applications, candidates, organizations, requisitions, stageEvents } from "@db/schema";
+import {
+  applications,
+  candidates,
+  organizations,
+  requisitions,
+  screeningKits,
+  screeningPrepJobs,
+  stageEvents,
+} from "@db/schema";
 import { enqueueStageUpdates } from "./email-outbox.server";
 import type { Stage } from "./lifecycle";
 
@@ -52,6 +60,8 @@ export async function recordStageTransition(input: RecordStageTransitionInput): 
 
 export async function recordStageTransitions(inputs: RecordStageTransitionInput[]): Promise<void> {
   if (!inputs.length) return;
+
+  await enqueueScreeningPrep(inputs);
 
   const events = await db
     .insert(stageEvents)
@@ -125,5 +135,81 @@ export async function recordStageTransitions(inputs: RecordStageTransitionInput[
 
   for (const [orgId, rows] of byOrg) {
     await enqueueStageUpdates(rows, { orgId });
+  }
+}
+
+/**
+ * Screening kits are prepared in the background when a candidate is
+ * shortlisted, so the questions are ready before HR opens the triage queue.
+ * Sitting on the shared transition choke point covers every path that
+ * advances a stage: recruiter moves (single + bulk), autoscore and the
+ * matching engine.
+ *
+ * Never throws — a prep-enqueue failure must not fail the stage move.
+ */
+async function enqueueScreeningPrep(inputs: RecordStageTransitionInput[]): Promise<void> {
+  try {
+    const shortlisted = inputs.filter((i) => i.toStage === "shortlisted");
+    if (!shortlisted.length) return;
+
+    // orgId is re-taken from the application row, not the caller's input.
+    const appRows = await db
+      .select({
+        id: applications.id,
+        orgId: applications.orgId,
+        candidateId: applications.candidateId,
+        requisitionId: applications.requisitionId,
+      })
+      .from(applications)
+      .where(
+        inArray(
+          applications.id,
+          shortlisted.map((i) => i.applicationId),
+        ),
+      );
+    const candidates2 = appRows.filter((a) => a.orgId && a.requisitionId);
+    if (!candidates2.length) return;
+
+    // Pairings that already have any kit are skipped — manual "Rebuild
+    // questions" keeps multiple kits per pairing, so dedupe happens here in
+    // code rather than through a unique index. Candidate ids are globally
+    // unique uuids, so no org predicate is needed for this existence check.
+    const kitRows = await db
+      .select({
+        candidateId: screeningKits.candidateId,
+        requisitionId: screeningKits.requisitionId,
+      })
+      .from(screeningKits)
+      .where(
+        inArray(
+          screeningKits.candidateId,
+          candidates2.map((a) => a.candidateId),
+        ),
+      );
+    const kitted = new Set(kitRows.map((k) => `${k.candidateId}:${k.requisitionId}`));
+
+    const fresh = candidates2.filter((a) => !kitted.has(`${a.candidateId}:${a.requisitionId}`));
+    if (!fresh.length) return;
+
+    await db
+      .insert(screeningPrepJobs)
+      .values(
+        fresh.map((a) => ({
+          orgId: a.orgId!,
+          applicationId: a.id,
+          candidateId: a.candidateId,
+          requisitionId: a.requisitionId!,
+        })),
+      )
+      // Upsert, not insert-only: a previously failed job re-enqueues with a
+      // clean slate. A `ready` job only reaches this statement when its
+      // pairing has no kit row (i.e. the kit vanished) — re-prepping is then
+      // the correct outcome.
+      .onConflictDoUpdate({
+        target: screeningPrepJobs.applicationId,
+        set: { status: "pending", attempts: 0, lastError: null, updatedAt: new Date() },
+      });
+  } catch (e) {
+    console.error("[screening-prep] enqueue failed (stage move unaffected):", e);
   }
 }

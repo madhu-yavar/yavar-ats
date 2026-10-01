@@ -52,6 +52,7 @@ import { Route as ApiPublicCaptureRouteImport } from './routes/api/public/captur
 import { Route as ApiPublicInboundEmailRouteImport } from './routes/api/public/inbound-email'
 import { Route as ApiPublicInboxSyncRouteImport } from './routes/api/public/inbox-sync'
 import { Route as ApiPublicProcessEmailOutboxRouteImport } from './routes/api/public/process-email-outbox'
+import { Route as ApiPublicScreeningPrepRouteImport } from './routes/api/public/screening-prep'
 import { Route as ApiPublicSyncCandidatesRouteImport } from './routes/api/public/sync-candidates'
 import { Route as ApiPublicSyncHrmsRouteImport } from './routes/api/public/sync-hrms'
 import { Route as ApiPublicLinkedinCallbackRouteImport } from './routes/api/public/linkedin/callback'
@@ -279,6 +280,11 @@ const ApiPublicProcessEmailOutboxRoute =
     path: '/api/public/process-email-outbox',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicScreeningPrepRoute = ApiPublicScreeningPrepRouteImport.update({
+  id: '/api/public/screening-prep',
+  path: '/api/public/screening-prep',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicSyncCandidatesRoute = ApiPublicSyncCandidatesRouteImport.update({
   id: '/api/public/sync-candidates',
   path: '/api/public/sync-candidates',
@@ -380,6 +386,7 @@ export interface FileRoutesByFullPath {
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
   '/api/public/process-email-outbox': typeof ApiPublicProcessEmailOutboxRoute
+  '/api/public/screening-prep': typeof ApiPublicScreeningPrepRoute
   '/api/public/sync-candidates': typeof ApiPublicSyncCandidatesRoute
   '/api/public/sync-hrms': typeof ApiPublicSyncHrmsRoute
   '/api/public/linkedin/callback': typeof ApiPublicLinkedinCallbackRoute
@@ -435,6 +442,7 @@ export interface FileRoutesByTo {
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
   '/api/public/process-email-outbox': typeof ApiPublicProcessEmailOutboxRoute
+  '/api/public/screening-prep': typeof ApiPublicScreeningPrepRoute
   '/api/public/sync-candidates': typeof ApiPublicSyncCandidatesRoute
   '/api/public/sync-hrms': typeof ApiPublicSyncHrmsRoute
   '/api/public/linkedin/callback': typeof ApiPublicLinkedinCallbackRoute
@@ -491,6 +499,7 @@ export interface FileRoutesById {
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
   '/api/public/process-email-outbox': typeof ApiPublicProcessEmailOutboxRoute
+  '/api/public/screening-prep': typeof ApiPublicScreeningPrepRoute
   '/api/public/sync-candidates': typeof ApiPublicSyncCandidatesRoute
   '/api/public/sync-hrms': typeof ApiPublicSyncHrmsRoute
   '/api/public/linkedin/callback': typeof ApiPublicLinkedinCallbackRoute
@@ -548,6 +557,7 @@ export interface FileRouteTypes {
     | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
     | '/api/public/process-email-outbox'
+    | '/api/public/screening-prep'
     | '/api/public/sync-candidates'
     | '/api/public/sync-hrms'
     | '/api/public/linkedin/callback'
@@ -603,6 +613,7 @@ export interface FileRouteTypes {
     | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
     | '/api/public/process-email-outbox'
+    | '/api/public/screening-prep'
     | '/api/public/sync-candidates'
     | '/api/public/sync-hrms'
     | '/api/public/linkedin/callback'
@@ -658,6 +669,7 @@ export interface FileRouteTypes {
     | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
     | '/api/public/process-email-outbox'
+    | '/api/public/screening-prep'
     | '/api/public/sync-candidates'
     | '/api/public/sync-hrms'
     | '/api/public/linkedin/callback'
@@ -714,6 +726,7 @@ export interface RootRouteChildren {
   ApiPublicInboundEmailRoute: typeof ApiPublicInboundEmailRoute
   ApiPublicInboxSyncRoute: typeof ApiPublicInboxSyncRoute
   ApiPublicProcessEmailOutboxRoute: typeof ApiPublicProcessEmailOutboxRoute
+  ApiPublicScreeningPrepRoute: typeof ApiPublicScreeningPrepRoute
   ApiPublicSyncCandidatesRoute: typeof ApiPublicSyncCandidatesRoute
   ApiPublicSyncHrmsRoute: typeof ApiPublicSyncHrmsRoute
   ApiPublicLinkedinCallbackRoute: typeof ApiPublicLinkedinCallbackRoute
@@ -1029,6 +1042,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicProcessEmailOutboxRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/screening-prep': {
+      id: '/api/public/screening-prep'
+      path: '/api/public/screening-prep'
+      fullPath: '/api/public/screening-prep'
+      preLoaderRoute: typeof ApiPublicScreeningPrepRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/sync-candidates': {
       id: '/api/public/sync-candidates'
       path: '/api/public/sync-candidates'
@@ -1146,6 +1166,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicInboundEmailRoute: ApiPublicInboundEmailRoute,
   ApiPublicInboxSyncRoute: ApiPublicInboxSyncRoute,
   ApiPublicProcessEmailOutboxRoute: ApiPublicProcessEmailOutboxRoute,
+  ApiPublicScreeningPrepRoute: ApiPublicScreeningPrepRoute,
   ApiPublicSyncCandidatesRoute: ApiPublicSyncCandidatesRoute,
   ApiPublicSyncHrmsRoute: ApiPublicSyncHrmsRoute,
   ApiPublicLinkedinCallbackRoute: ApiPublicLinkedinCallbackRoute,

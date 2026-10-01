@@ -1,7 +1,8 @@
-import { and, asc, eq, ilike, inArray, isNotNull, lte } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { createServerFn } from "@tanstack/react-start";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { AppRole } from "./auth.middleware";
 import { db } from "../server/db";
 import {
   interviews,
@@ -10,6 +11,7 @@ import {
   organizations,
   platformAdmins,
   requisitions,
+  userRoles,
 } from "@db/schema";
 
 /**
@@ -74,6 +76,23 @@ export const myNotifications = createServerFn({ method: "GET" })
       const now = Date.now();
       const in7 = new Date(now + 7 * 864e5);
 
+      // The bell is an action inbox: an item may only appear for someone who can
+      // actually action it. Roles decide — org membership alone is not enough.
+      const roles = (
+        await db
+          .select({ role: userRoles.role })
+          .from(userRoles)
+          .where(and(eq(userRoles.userId, context.userId), eq(userRoles.orgId, orgId)))
+      ).map((r) => r.role);
+      const isAdmin = member.isOwner || roles.includes("president_cbo");
+      const APPROVAL_HOP: Record<string, AppRole> = {
+        pending_dh: "department_head",
+        pending_hr: "hr_head",
+        pending_cbo: "president_cbo",
+      };
+      const canApproveRequisition = (status: string) =>
+        isAdmin || (APPROVAL_HOP[status] !== undefined && roles.includes(APPROVAL_HOP[status]!));
+
       // Freshly approved tenants: a one-time welcome notice so the owner hears
       // the decision in-app (email already goes out; the 10s org poll covers
       // the screen flip itself).
@@ -121,23 +140,36 @@ export const myNotifications = createServerFn({ method: "GET" })
           .where(
             and(eq(offers.orgId, orgId), inArray(offers.status, ["pending_hr", "pending_cbo"])),
           ),
-        db
-          .select({
-            id: interviews.id,
-            interviewer: interviews.interviewer,
-            scheduledAt: interviews.scheduledAt,
-            status: interviews.status,
-          })
-          .from(interviews)
-          .where(
-            and(
-              eq(interviews.orgId, orgId),
-              eq(interviews.status, "scheduled"),
-              isNotNull(interviews.scheduledAt),
-              lte(interviews.scheduledAt, in7),
+        // Only the interviewer's own rounds — an email filter, not org-wide.
+        // No lower date bound on purpose: a past session without a scorecard is
+        // exactly what the assignee still owes.
+        email
+          ? db
+              .select({
+                id: interviews.id,
+                interviewer: interviews.interviewer,
+                scheduledAt: interviews.scheduledAt,
+                status: interviews.status,
+              })
+              .from(interviews)
+              .where(
+                and(
+                  eq(interviews.orgId, orgId),
+                  eq(interviews.status, "scheduled"),
+                  isNotNull(interviews.scheduledAt),
+                  lte(interviews.scheduledAt, in7),
+                  sql`lower(${interviews.interviewerEmail}) = ${email}`,
+                ),
+              )
+              .orderBy(asc(interviews.scheduledAt))
+          : Promise.resolve(
+              [] as {
+                id: string;
+                interviewer: string | null;
+                scheduledAt: Date | null;
+                status: string;
+              }[],
             ),
-          )
-          .orderBy(asc(interviews.scheduledAt)),
         member.isOwner
           ? db
               .select({
@@ -150,7 +182,7 @@ export const myNotifications = createServerFn({ method: "GET" })
           : Promise.resolve([] as { id: string; email: string; createdAt: Date }[]),
       ]);
 
-      for (const r of reqs)
+      for (const r of reqs.filter((r) => canApproveRequisition(r.status)))
         out.push({
           id: `req:${r.id}`,
           kind: "approval",
@@ -161,7 +193,7 @@ export const myNotifications = createServerFn({ method: "GET" })
           severity: "urgent",
         });
 
-      if (ofrs.length)
+      if (ofrs.length && (isAdmin || roles.includes("hr_head")))
         out.push({
           id: "offers:pending",
           kind: "offer",

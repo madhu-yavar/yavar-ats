@@ -35,8 +35,13 @@ const QuestionSchema = z.object({
  * Pull JD, requisition, candidate and the latest match for one pairing.
  * Every lookup carries the caller's org predicate — the candidate, the
  * requisition and the application must all belong to the caller's org.
+ * Exported for the background prep worker (screening-prep.server.ts).
  */
-async function loadPairing(orgId: string, candidateId: string, requisitionId: string | null) {
+export async function loadPairing(
+  orgId: string,
+  candidateId: string,
+  requisitionId: string | null,
+) {
   const [candidate] = await db
     .select()
     .from(candidates)
@@ -129,6 +134,73 @@ async function loadPairing(orgId: string, candidateId: string, requisitionId: st
 
 /* --------------------------------------------------------------- build kit */
 
+/**
+ * Resolve one pairing and build + insert a screening kit. Shared by the
+ * recruiter's button (createScreeningKit) and the background prep worker —
+ * one code path, so a background kit is indistinguishable from a manual one.
+ * The caller has already established that candidateId/requisitionId live in
+ * orgId (loadPairing re-checks every lookup).
+ */
+export async function prepareScreeningKitForPairing(input: {
+  orgId: string;
+  candidateId: string;
+  requisitionId: string;
+  /** Null for background prep — no signed-in user. */
+  createdBy: string | null;
+}): Promise<{ kitId: string; questions: ScreeningQuestion[]; focus_summary: string }> {
+  const { candidate, requisition, application, jdText, match } = await loadPairing(
+    input.orgId,
+    input.candidateId,
+    input.requisitionId,
+  );
+  if (!requisition) throw new Error("Pick the role this screening call is for.");
+  if (!jdText.trim()) throw new Error("This role has no job description text yet.");
+
+  const kit = await buildScreeningKit({
+    orgId: input.orgId,
+    role: requisition.title,
+    jdText,
+    mustHave: requisition.mustHaveSkills ?? [],
+    goodToHave: requisition.goodToHaveSkills ?? [],
+    experienceMin: requisition.experienceMin ?? 0,
+    experienceMax: requisition.experienceMax ?? 0,
+    budgetCtc: requisition.budgetCtc != null ? Number(requisition.budgetCtc) : null,
+    currency: "INR",
+    candidateName: candidate.fullName,
+    resumeText: candidate.resumeText,
+    candidateSkills: candidate.skills ?? [],
+    experienceYears: Number(candidate.experienceYears) || 0,
+    currentEmployer: candidate.currentEmployer,
+    employmentHistory: candidate.employmentHistory,
+    education: candidate.education,
+    currentCtc: candidate.currentCtc != null ? Number(candidate.currentCtc) : null,
+    expectedCtc: candidate.expectedCtc != null ? Number(candidate.expectedCtc) : null,
+    noticePeriodDays: candidate.noticePeriodDays,
+    location: candidate.location,
+    matchRationale: match?.rationale ?? null,
+    missingSkills: match?.missingSkills ?? [],
+    riskFlags: match?.riskFlags ?? [],
+  });
+
+  const [row] = await db
+    .insert(screeningKits)
+    .values({
+      orgId: input.orgId,
+      candidateId: candidate.id,
+      requisitionId: requisition.id,
+      applicationId: application?.id ?? null,
+      questions: kit.questions as never,
+      focusSummary: kit.focus_summary,
+      engine: kit.engine as never,
+      createdBy: input.createdBy,
+    })
+    .returning({ id: screeningKits.id });
+  if (!row) throw new Error("Could not save the screening kit");
+
+  // `engine` stays server-internal (persisted above, logged in ai_usage_events).
+  return { kitId: row.id, questions: kit.questions, focus_summary: kit.focus_summary };
+}
+
 export const createScreeningKit = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((data: unknown) =>
@@ -139,59 +211,14 @@ export const createScreeningKit = createServerFn({ method: "POST" })
       })
       .parse(data),
   )
-  .handler(async ({ data, context }) => {
-    const { candidate, requisition, application, jdText, match } = await loadPairing(
-      context.orgId,
-      data.candidateId,
-      data.requisitionId ?? null,
-    );
-    if (!requisition) throw new Error("Pick the role this screening call is for.");
-    if (!jdText.trim()) throw new Error("This role has no job description text yet.");
-
-    const kit = await buildScreeningKit({
+  .handler(async ({ data, context }) =>
+    prepareScreeningKitForPairing({
       orgId: context.orgId,
-      role: requisition.title,
-      jdText,
-      mustHave: requisition.mustHaveSkills ?? [],
-      goodToHave: requisition.goodToHaveSkills ?? [],
-      experienceMin: requisition.experienceMin ?? 0,
-      experienceMax: requisition.experienceMax ?? 0,
-      budgetCtc: requisition.budgetCtc != null ? Number(requisition.budgetCtc) : null,
-      currency: "INR",
-      candidateName: candidate.fullName,
-      resumeText: candidate.resumeText,
-      candidateSkills: candidate.skills ?? [],
-      experienceYears: Number(candidate.experienceYears) || 0,
-      currentEmployer: candidate.currentEmployer,
-      employmentHistory: candidate.employmentHistory,
-      education: candidate.education,
-      currentCtc: candidate.currentCtc != null ? Number(candidate.currentCtc) : null,
-      expectedCtc: candidate.expectedCtc != null ? Number(candidate.expectedCtc) : null,
-      noticePeriodDays: candidate.noticePeriodDays,
-      location: candidate.location,
-      matchRationale: match?.rationale ?? null,
-      missingSkills: match?.missingSkills ?? [],
-      riskFlags: match?.riskFlags ?? [],
-    });
-
-    const [row] = await db
-      .insert(screeningKits)
-      .values({
-        orgId: context.orgId,
-        candidateId: candidate.id,
-        requisitionId: requisition.id,
-        applicationId: application?.id ?? null,
-        questions: kit.questions as never,
-        focusSummary: kit.focus_summary,
-        engine: kit.engine as never,
-        createdBy: context.userId,
-      })
-      .returning({ id: screeningKits.id });
-    if (!row) throw new Error("Could not save the screening kit");
-
-    // `engine` stays server-internal (persisted above, logged in ai_usage_events).
-    return { kitId: row.id, questions: kit.questions, focus_summary: kit.focus_summary };
-  });
+      candidateId: data.candidateId,
+      requisitionId: data.requisitionId ?? "",
+      createdBy: context.userId,
+    }),
+  );
 
 /* ------------------------------------------------------------- edit a kit */
 
