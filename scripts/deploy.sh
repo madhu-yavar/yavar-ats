@@ -104,22 +104,15 @@ fetch_file atsiq-deploy-build /out.tgz "$WORK/out.tgz"
 echo "  app build ok ($(du -h "$WORK/out.tgz" | cut -f1))"
 
 # ---------------------------------------------------------------- image
-step "Building and pushing the runtime image (kaniko inside the builder pod)"
-# scripts/kaniko-stage.sh ships inside the build context (/build) — nothing
-# to upload here. It stages /outimg (Dockerfile + .output) and fetches the
-# kaniko executor binary.
-kubectl -n "$NS" exec atsiq-deploy-build -- env KASSET="executor_linux_amd64" sh /build/scripts/kaniko-stage.sh \
-  || fail "could not stage the image context in the builder pod."
-
+step "Assembling and pushing the runtime image (crane inside the builder pod)"
+# scripts/crane-stage.sh ships inside the build context (/build) — nothing
+# to upload. It layers /app/.output onto node:22-slim and pushes with crane.
 TOKEN=$(gcloud auth print-access-token)
-kubectl -n "$NS" exec -i atsiq-deploy-build -- env REGISTRY_AUTH="{\"auths\":{\"$REGION-docker.pkg.dev\":{\"username\":\"oauth2accesstoken\",\"password\":\"$TOKEN\"}}}" \
-  sh -c 'printf "%s" "$REGISTRY_AUTH" > /outimg/config.json && test -s /outimg/config.json' >/dev/null \
-  || fail "could not write the registry auth config."
-
-kubectl -n "$NS" exec atsiq-deploy-build -- env DOCKER_CONFIG=/outimg /kaniko-exec \
-  --context=dir:///outimg --dockerfile=Dockerfile \
-  --destination="$IMAGE" --snapshot-mode=redo --verbosity=warn \
-  || fail "kaniko build/push failed."
+kubectl -n "$NS" exec atsiq-deploy-build -- env \
+  DESTINATION="$IMAGE" \
+  REGISTRY_AUTH="{\"auths\":{\"$REGION-docker.pkg.dev\":{\"username\":\"oauth2accesstoken\",\"password\":\"$TOKEN\"}}}" \
+  sh /build/scripts/crane-stage.sh \
+  || fail "could not build/push the runtime image."
 echo "  pushed $IMAGE"
 
 # ---------------------------------------------------------------- migrate
