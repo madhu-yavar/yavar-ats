@@ -36,4 +36,5 @@ $CRANE mutate "$STAGE_TAG" \
   --entrypoint "node,/app/.output/server/index.mjs" \
   -t "$DESTINATION"
 $CRANE manifest "$DESTINATION" >/dev/null && echo "pushed $DESTINATION"
+# Best-effort cleanup of the staging tag — never fail the run here.
 $CRANE delete "$STAGE_TAG" >/dev/null 2>&1 || true
