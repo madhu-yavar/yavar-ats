@@ -9,8 +9,14 @@
 #   2. GoTrue-compatible auth stub on 127.0.0.1:54999 (scripts/local-e2e/auth-stub.ts)
 #   3. Vite dev server (port from its output — 8080/8081)
 #
-# Logins: madhu@demo.com / demo1234  (super admin, Demo Corp)
-#         hr@yavar.ai    / demo1234  (owner, Yavar Technologies)
+# Logins (password demo1234 for every account):
+#   madhu@demo.com       super admin (Demo Corp)
+#   hr@yavar.ai          owner / CHRO (Yavar Technologies)
+#   hrhead@demo.com      HR head, non-owner view
+#   recruiter@demo.com   recruiter
+#   dh@demo.com          department head
+#   hm@demo.com          hiring manager
+#   owner@newdemo.com    owner (New Demo Technologies)
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -67,6 +73,7 @@ psql -q -f drizzle/pg-migrations/0019_master_items_org_scoped_unique.sql 2>/dev/
 psql -q -f drizzle/pg-migrations/0020_content_templates_ensure.sql 2>/dev/null || true
 psql -q -f drizzle/pg-migrations/0021_linkedin_row_rename.sql 2>/dev/null || true
 psql -q -f drizzle/pg-migrations/0022_screening_prep_jobs.sql 2>/dev/null || true
+psql -q -f drizzle/pg-migrations/0023_observability.sql 2>/dev/null || true
 
 # 2. Auth stub
 if curl -s -o /dev/null "http://127.0.0.1:$STUB_PORT/auth/v1/user" 2>/dev/null; then
@@ -114,6 +121,11 @@ else
 fi
 
 echo ""
-echo "Open the printed URL and sign in:"
-echo "  madhu@demo.com / demo1234   (super admin, Demo Corp)"
-echo "  hr@yavar.ai    / demo1234   (owner, Yavar Technologies)"
+echo "Open the printed URL and sign in (password demo1234 for every account):"
+echo "  madhu@demo.com       super admin (Demo Corp)"
+echo "  hr@yavar.ai          owner / CHRO (Yavar Technologies)"
+echo "  hrhead@demo.com      HR head, non-owner view"
+echo "  recruiter@demo.com   recruiter"
+echo "  dh@demo.com          department head"
+echo "  hm@demo.com          hiring manager"
+echo "  owner@newdemo.com    owner (New Demo Technologies)"
