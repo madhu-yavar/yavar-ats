@@ -1864,10 +1864,6 @@ COPY public.users (id, email, email_confirmed_at, password_hash, full_name, avat
 6a6a0000-0000-4000-8000-00000000d002	hr@yavar.ai	2026-09-13 18:34:09.995532+05:30	scrypt$16384$8$1$jBh6eHgR26bEAooyQ28Riw$YVQpJaIZ7Rb49pcuZkdW9PRXKvLmNMtXgxuYmKRkf58hj5pRTx3Jyuj1PVa8aEOBbj_D9ZKwUZK68pVdUNgZgQ	\N	\N	2026-09-13 18:34:09.995532+05:30	\N
 \.
 
-COPY public.platform_admins (email, user_id, note) FROM stdin;
-madhu@demo.com	6a6a0000-0000-4000-8000-00000000d001	local platform super-user
-\.
-
 
 --
 -- Data for Name: buckets; Type: TABLE DATA; Schema: storage; Owner: postgres
