@@ -17,7 +17,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../server/db";
-import { aiProviderCredentials, aiSettings } from "@db/schema";
+import { aiProviderCredentials, aiSettings, aiTraces } from "@db/schema";
 
 const OPENAI_ENDPOINT = "https://api.openai.com/v1/chat/completions";
 const ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1/messages";
@@ -56,8 +56,51 @@ export type AiConfig = { provider: AiProvider; model: string; apiKey: string | n
 export type AiUsage = { promptTokens: number; completionTokens: number; totalTokens: number };
 
 export type AiJsonResult<T> =
-  | { ok: true; data: T; model: string; provider: AiProvider; usage: AiUsage | null }
-  | { ok: false; status: number; message: string };
+  | {
+      ok: true;
+      data: T;
+      model: string;
+      provider: AiProvider;
+      usage: AiUsage | null;
+      rawText?: string;
+    }
+  | { ok: false; status: number; message: string; rawText?: string };
+
+/** Cap helpers for the ai_traces capture — the pieces are large but bounded. */
+const TRACE_SYSTEM_CAP = 30_000;
+const TRACE_BODY_CAP = 60_000;
+
+/**
+ * Persist the full prompt/response capture for one AI invocation into
+ * `ai_traces` (superadmin observability console). Fire-and-forget: tracing
+ * must never break the call it observes. Per-attempt token/latency frames
+ * live in ai_usage_events rows sharing the same traceId.
+ */
+function writeTrace(trace: {
+  id: string;
+  orgId: string | null;
+  userId: string | null;
+  feature: string;
+  ok: boolean;
+  schemaValid: boolean | null;
+  attempts: number;
+  durationMs: number;
+  grounded: boolean | null;
+  errorMessage: string | null;
+  systemPrompt: string | null;
+  prompt: string | null;
+  response: string | null;
+}) {
+  void db
+    .insert(aiTraces)
+    .values({
+      ...trace,
+      systemPrompt: trace.systemPrompt?.slice(0, TRACE_SYSTEM_CAP) ?? null,
+      prompt: trace.prompt?.slice(0, TRACE_BODY_CAP) ?? null,
+      response: trace.response?.slice(0, TRACE_BODY_CAP) ?? null,
+    })
+    .catch((e) => console.error("[ai-trace] capture failed", trace.feature, e));
+}
 
 /**
  * Append one provider request to the AI spend ledger (src/server/ai-usage.ts).
@@ -75,12 +118,15 @@ async function logUsage(
     usage: AiUsage | null;
     grounded?: boolean;
     message?: string | null;
+    traceId?: string | null | undefined;
+    userId?: string | null | undefined;
   },
 ) {
   try {
     const { recordAiUsage } = await import("../server/ai-usage");
     await recordAiUsage({
       orgId: orgId ?? null,
+      userId: data.userId ?? null,
       feature,
       provider: cfg.provider,
       model: cfg.model,
@@ -92,6 +138,7 @@ async function logUsage(
       durationMs: Date.now() - data.startedAt,
       grounded: data.grounded ?? null,
       errorMessage: data.status === "error" ? (data.message ?? null) : null,
+      traceId: data.traceId ?? null,
     });
   } catch (e) {
     console.error("[ai-usage] logging failed", feature, e);
@@ -345,36 +392,73 @@ export async function aiJson<T>(opts: {
   images?: AiImage[];
   docs?: AiDoc[];
   orgId?: string | null | undefined;
+  userId?: string | null | undefined;
   config?: AiConfig;
   schema?: SchemaLike<T>;
   /** Ledger slug for the AI spend log — see AI_FEATURES in src/server/ai-usage.ts. */
   feature: string;
 }): Promise<AiJsonResult<T>> {
-  if (!opts.schema) return aiJsonOnce(opts, 1);
+  const traceId = crypto.randomUUID();
+  const startedAt = Date.now();
+  const trace = (
+    result: AiJsonResult<T>,
+    promptUsed: string,
+    attempts: number,
+    schemaValid: boolean | null,
+  ): AiJsonResult<T> => {
+    writeTrace({
+      id: traceId,
+      orgId: opts.orgId ?? null,
+      userId: opts.userId ?? null,
+      feature: opts.feature,
+      ok: result.ok,
+      schemaValid,
+      attempts,
+      durationMs: Date.now() - startedAt,
+      grounded: null,
+      errorMessage: result.ok ? null : result.message,
+      systemPrompt: opts.system,
+      prompt: promptUsed,
+      response: result.ok
+        ? (result.rawText ?? JSON.stringify(result.data))
+        : (result.rawText ?? null),
+    });
+    return result;
+  };
 
-  const first = await aiJsonOnce(opts, 1);
-  if (!first.ok) return first;
+  if (!opts.schema) {
+    const first = await aiJsonOnce<T>({ ...opts, traceId }, 1);
+    return trace(first, opts.prompt, 1, null);
+  }
+
+  const first = await aiJsonOnce<T>({ ...opts, traceId }, 1);
+  if (!first.ok) return trace(first, opts.prompt, 1, false);
 
   const check = opts.schema.safeParse(first.data);
-  if (check.success) return { ...first, data: check.data };
+  if (check.success) return trace({ ...first, data: check.data }, opts.prompt, 1, true);
 
   const issues = check.error.issues
     .slice(0, 5)
     .map((i) => `${String(i.path.join(".") || "(root)")}: ${i.message}`)
     .join("; ");
-  const retry = await aiJsonOnce(
-    {
-      ...opts,
-      prompt: `${opts.prompt}\n\nYour previous response did not match the required JSON schema (${issues}). Return the corrected JSON object and nothing else.`,
-    },
-    2,
-  );
-  if (!retry.ok) return retry;
+  const retryPrompt = `${opts.prompt}\n\nYour previous response did not match the required JSON schema (${issues}). Return the corrected JSON object and nothing else.`;
+  const retry = await aiJsonOnce<T>({ ...opts, prompt: retryPrompt, traceId }, 2);
+  if (!retry.ok) return trace(retry, retryPrompt, 2, false);
   const recheck = opts.schema.safeParse(retry.data);
   if (!recheck.success) {
-    return { ok: false, status: 502, message: "AI response failed schema validation." };
+    return trace(
+      {
+        ok: false,
+        status: 502,
+        message: "AI response failed schema validation.",
+        ...(retry.rawText ? { rawText: retry.rawText } : {}),
+      },
+      retryPrompt,
+      2,
+      false,
+    );
   }
-  return { ...retry, data: recheck.data };
+  return trace({ ...retry, data: recheck.data }, retryPrompt, 2, true);
 }
 
 async function aiJsonOnce<T>(
@@ -385,8 +469,11 @@ async function aiJsonOnce<T>(
     docs?: AiDoc[];
     /** Org context for credential resolution — pass whenever the caller has one. */
     orgId?: string | null | undefined;
+    userId?: string | null | undefined;
     /** Force a provider/model instead of the saved setting (used by "Test model"). */
     config?: AiConfig;
+    /** Trace linkage for the ledger rows this attempt writes. */
+    traceId?: string;
     feature: string;
   },
   attempt: number,
@@ -419,6 +506,8 @@ async function aiJsonOnce<T>(
     } catch (e) {
       const message = `AI request failed: ${(e as Error).message}`;
       await logUsage(opts.feature, cfg, opts.orgId, {
+        traceId: opts.traceId,
+        userId: opts.userId,
         status: "error",
         attempt,
         startedAt,
@@ -430,6 +519,8 @@ async function aiJsonOnce<T>(
     if (!res.ok || !res.body) {
       const out = providerError(res.status, await res.text().catch(() => ""));
       await logUsage(opts.feature, cfg, opts.orgId, {
+        traceId: opts.traceId,
+        userId: opts.userId,
         status: "error",
         attempt,
         startedAt,
@@ -443,15 +534,19 @@ async function aiJsonOnce<T>(
     if (!parsed) {
       const message = "AI returned a response that could not be parsed.";
       await logUsage(opts.feature, cfg, opts.orgId, {
+        traceId: opts.traceId,
+        userId: opts.userId,
         status: "error",
         attempt,
         startedAt,
         usage: stream.usage,
         message,
       });
-      return { ok: false, status: 502, message };
+      return { ok: false, status: 502, message, rawText: stream.text };
     }
     await logUsage(opts.feature, cfg, opts.orgId, {
+      traceId: opts.traceId,
+      userId: opts.userId,
       status: "ok",
       attempt,
       startedAt,
@@ -463,6 +558,7 @@ async function aiJsonOnce<T>(
       model: cfg.model,
       provider: cfg.provider,
       usage: stream.usage,
+      rawText: stream.text,
     };
   }
 
@@ -534,6 +630,8 @@ async function aiJsonOnce<T>(
   } catch (e) {
     const message = `AI request failed: ${(e as Error).message}`;
     await logUsage(opts.feature, cfg, opts.orgId, {
+      traceId: opts.traceId,
+      userId: opts.userId,
       status: "error",
       attempt,
       startedAt,
@@ -557,6 +655,8 @@ async function aiJsonOnce<T>(
     if (res.status === 429) message = `${message} — rate limited, retry shortly.`;
     const out = { ok: false as const, status: res.status, message };
     await logUsage(opts.feature, cfg, opts.orgId, {
+      traceId: opts.traceId,
+      userId: opts.userId,
       status: "error",
       attempt,
       startedAt,
@@ -573,22 +673,33 @@ async function aiJsonOnce<T>(
   if (!parsed) {
     const message = "AI returned a response that could not be parsed.";
     await logUsage(opts.feature, cfg, opts.orgId, {
+      traceId: opts.traceId,
+      userId: opts.userId,
       status: "error",
       attempt,
       startedAt,
       usage: stream.usage,
       message,
     });
-    return { ok: false, status: 502, message };
+    return { ok: false, status: 502, message, rawText: stream.text };
   }
 
   await logUsage(opts.feature, cfg, opts.orgId, {
+    traceId: opts.traceId,
+    userId: opts.userId,
     status: "ok",
     attempt,
     startedAt,
     usage: stream.usage,
   });
-  return { ok: true, data: parsed, model: cfg.model, provider: cfg.provider, usage: stream.usage };
+  return {
+    ok: true,
+    data: parsed,
+    model: cfg.model,
+    provider: cfg.provider,
+    usage: stream.usage,
+    rawText: stream.text,
+  };
 }
 
 /* --------------------------------------------------- research (web search) */
@@ -695,8 +806,9 @@ export type AiResearchResult<T> =
       /** False when the model answered without live web access — an estimate. */
       grounded: boolean;
       usage: AiUsage | null;
+      rawText?: string;
     }
-  | { ok: false; status: number; message: string };
+  | { ok: false; status: number; message: string; rawText?: string };
 
 /** Map a failed provider response to the shared error shape. */
 function providerError(status: number, raw: string) {
@@ -795,23 +907,70 @@ export async function aiResearchJson<T>(opts: {
   system: string;
   prompt: string;
   orgId?: string | null | undefined;
+  userId?: string | null | undefined;
   config?: AiConfig;
   /** Ledger slug for the AI spend log — see AI_FEATURES in src/server/ai-usage.ts. */
   feature: string;
 }): Promise<AiResearchResult<T>> {
+  const traceId = crypto.randomUUID();
+  const startedAt = Date.now();
+  let attempts = 1;
+  const result = await researchCall<T>(opts, traceId, startedAt, (n) => {
+    attempts = n;
+  });
+  writeTrace({
+    id: traceId,
+    orgId: opts.orgId ?? null,
+    userId: opts.userId ?? null,
+    feature: opts.feature,
+    ok: result.ok,
+    schemaValid: null,
+    attempts,
+    durationMs: Date.now() - startedAt,
+    grounded: result.ok ? result.grounded : null,
+    errorMessage: result.ok ? null : result.message,
+    systemPrompt: opts.system,
+    prompt: opts.prompt,
+    response: result.ok
+      ? (result.rawText ?? JSON.stringify(result.data))
+      : (result.rawText ?? null),
+  });
+  return result;
+}
+
+async function researchCall<T>(
+  opts: {
+    system: string;
+    prompt: string;
+    orgId?: string | null | undefined;
+    userId?: string | null | undefined;
+    config?: AiConfig;
+    feature: string;
+  },
+  traceId: string,
+  startedAt: number,
+  setAttempts: (n: number) => void,
+): Promise<AiResearchResult<T>> {
   const cfg = opts.config ?? (await resolveAiConfig(opts.orgId));
   if (!cfg.apiKey) return NO_KEY_ERROR;
 
-  const startedAt = Date.now();
-  const fail = async (attempt: number, usage: AiUsage | null, message: string, status = 502) => {
+  const fail = async (
+    attempt: number,
+    usage: AiUsage | null,
+    message: string,
+    status = 502,
+    rawText?: string,
+  ) => {
     await logUsage(opts.feature, cfg, opts.orgId, {
+      traceId,
+      userId: opts.userId,
       status: "error",
       attempt,
       startedAt,
       usage,
       message,
     });
-    return { ok: false as const, status, message };
+    return { ok: false as const, status, message, ...(rawText ? { rawText } : {}) };
   };
 
   if (cfg.provider === "google") {
@@ -828,9 +987,17 @@ export async function aiResearchJson<T>(opts: {
     const stream = await readGoogleStream(res.body);
     const parsed = parseJsonish<T>(stream.text);
     if (!parsed) {
-      return fail(1, stream.usage, "AI returned a response that could not be parsed.");
+      return fail(
+        1,
+        stream.usage,
+        "AI returned a response that could not be parsed.",
+        502,
+        stream.text,
+      );
     }
     await logUsage(opts.feature, cfg, opts.orgId, {
+      traceId,
+      userId: opts.userId,
       status: "ok",
       attempt: 1,
       startedAt,
@@ -844,6 +1011,7 @@ export async function aiResearchJson<T>(opts: {
       provider: cfg.provider,
       grounded: stream.grounded,
       usage: stream.usage,
+      rawText: stream.text,
     };
   }
 
@@ -882,11 +1050,26 @@ export async function aiResearchJson<T>(opts: {
 
     const stream = await readAnthropicResearchStream(res.body);
     if (stream.paused) {
-      return fail(1, stream.usage, "The research turn was paused mid-flight — try again.");
+      return fail(
+        1,
+        stream.usage,
+        "The research turn was paused mid-flight — try again.",
+        502,
+        stream.text,
+      );
     }
     const parsed = parseJsonish<T>(stream.text);
-    if (!parsed) return fail(1, stream.usage, "AI returned a response that could not be parsed.");
+    if (!parsed)
+      return fail(
+        1,
+        stream.usage,
+        "AI returned a response that could not be parsed.",
+        502,
+        stream.text,
+      );
     await logUsage(opts.feature, cfg, opts.orgId, {
+      traceId,
+      userId: opts.userId,
       status: "ok",
       attempt: 1,
       startedAt,
@@ -900,6 +1083,7 @@ export async function aiResearchJson<T>(opts: {
       provider: cfg.provider,
       grounded: stream.grounded,
       usage: stream.usage,
+      rawText: stream.text,
     };
   }
 
@@ -938,6 +1122,8 @@ export async function aiResearchJson<T>(opts: {
   let grounded = true;
   if (res.status === 400) {
     await logUsage(opts.feature, cfg, opts.orgId, {
+      traceId,
+      userId: opts.userId,
       status: "error",
       attempt: 1,
       startedAt,
@@ -950,6 +1136,7 @@ export async function aiResearchJson<T>(opts: {
       return fail(2, null, `AI request failed: ${(e as Error).message}`);
     }
     grounded = false;
+    setAttempts(2);
   }
   if (!res.ok || !res.body) {
     const out = providerError(res.status, await res.text().catch(() => ""));
@@ -959,8 +1146,16 @@ export async function aiResearchJson<T>(opts: {
   const stream = await readOpenAiStream(res.body);
   const parsed = parseJsonish<T>(stream.text);
   if (!parsed)
-    return fail(grounded ? 1 : 2, stream.usage, "AI returned a response that could not be parsed.");
+    return fail(
+      grounded ? 1 : 2,
+      stream.usage,
+      "AI returned a response that could not be parsed.",
+      502,
+      stream.text,
+    );
   await logUsage(opts.feature, cfg, opts.orgId, {
+    traceId,
+    userId: opts.userId,
     status: "ok",
     attempt: grounded ? 1 : 2,
     startedAt,
@@ -974,5 +1169,6 @@ export async function aiResearchJson<T>(opts: {
     provider: cfg.provider,
     grounded,
     usage: stream.usage,
+    rawText: stream.text,
   };
 }

@@ -9,7 +9,7 @@
 > A domain diagram shows that domain's tables in full; references into other domains
 > point at a stub entity that is drawn complete in its own domain.
 
-58 tables across 9 domains.
+60 tables across 9 domains.
 
 ## Identity & access
 
@@ -911,6 +911,7 @@ erDiagram
     integer duration_ms "nullable"
     boolean grounded "nullable"
     text error_message "nullable"
+    uuid trace_id "nullable"
     timestamptz created_at
   }
   email_outbox {
@@ -1071,7 +1072,9 @@ erDiagram
 | `ai_interviews` | Screening & interviews | 8 | — |
 | `ai_provider_credentials` | Communications & AI settings | 4 | (orgId+provider) |
 | `ai_settings` | Communications & AI settings | 9 | (org_id) |
-| `ai_usage_events` | Communications & AI settings | 15 | — |
+| `ai_traces` | — | 15 | — |
+| `ai_usage_events` | Communications & AI settings | 16 | — |
+| `app_logs` | — | 11 | — |
 | `applications` | Candidates & pipeline | 10 | (requisitionId+candidateId) |
 | `audit_log` | Identity & access | 10 | — |
 | `board_sync_state` | — | 11 | (integration_id) |

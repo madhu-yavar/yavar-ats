@@ -1,4 +1,5 @@
 import {
+  Activity,
   BarChart3,
   BookMarked,
   BookOpen,
@@ -103,6 +104,12 @@ export const NAV_GROUPS: NavGroup[] = [
         to: "/platform-ai-usage",
         label: "AI usage",
         icon: Coins,
+        show: (c) => c.isSuperUser,
+      },
+      {
+        to: "/platform-observability",
+        label: "Observability",
+        icon: Activity,
         show: (c) => c.isSuperUser,
       },
       {

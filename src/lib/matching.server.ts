@@ -148,6 +148,8 @@ export async function scoreCandidate(opts: {
   includeSocial: boolean;
   /** Org context for AI credential resolution. */
   orgId?: string | null | undefined;
+  /** Attribution for the observability trace. */
+  userId?: string | null;
 }): Promise<MatchResult> {
   const { jd, candidate, weights } = opts;
 
@@ -201,6 +203,7 @@ export async function scoreCandidate(opts: {
       }),
     ),
     orgId: opts.orgId,
+    userId: opts.userId,
   });
   if (!ai.ok) throw new Error(ai.message);
 
@@ -228,6 +231,7 @@ export async function scoreCandidate(opts: {
         fetchGithubSignal(links.githubUrl ?? null, jdSkills),
         fetchLinkedinSignal({
           orgId: opts.orgId,
+          userId: opts.userId,
           url: links.linkedinUrl ?? null,
           jobTitle: jd.title,
           jdSkills,
@@ -236,6 +240,7 @@ export async function scoreCandidate(opts: {
         }),
         fetchWritingSignal({
           orgId: opts.orgId,
+          userId: opts.userId,
           urls: [links.websiteUrl ?? "", links.xUrl ?? ""].filter(Boolean),
           jobTitle: jd.title,
           jdSkills,

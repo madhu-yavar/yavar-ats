@@ -175,6 +175,7 @@ export async function fetchLinkedinSignal(opts: {
   resumeText: string | null;
   profileText?: string | null;
   orgId?: string | null | undefined;
+  userId?: string | null | undefined;
 }): Promise<SocialSignal | null> {
   const handle = linkedinHandle(opts.url);
   if (!opts.url) return null;
@@ -203,6 +204,7 @@ export async function fetchLinkedinSignal(opts: {
       }),
     ),
     orgId: opts.orgId,
+    userId: opts.userId,
   });
 
   if (!result.ok) {
@@ -239,6 +241,7 @@ export async function fetchWritingSignal(opts: {
   jobTitle: string;
   jdSkills: string[];
   orgId?: string | null | undefined;
+  userId?: string | null | undefined;
 }): Promise<SocialSignal | null> {
   const urls = opts.urls.filter(Boolean);
   if (!urls.length) return null;
@@ -287,6 +290,7 @@ export async function fetchWritingSignal(opts: {
       }),
     ),
     orgId: opts.orgId,
+    userId: opts.userId,
   });
 
   if (!result.ok) {

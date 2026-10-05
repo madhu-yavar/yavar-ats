@@ -53,6 +53,8 @@ export async function recordAiUsage(input: {
   durationMs?: number | null;
   grounded?: boolean | null;
   errorMessage?: string | null;
+  /** Links this row to its full prompt/response capture in ai_traces. */
+  traceId?: string | null;
 }): Promise<void> {
   try {
     const clamp = (n: number | null | undefined) =>
@@ -74,6 +76,7 @@ export async function recordAiUsage(input: {
           : Math.max(0, Math.round(input.durationMs)),
       grounded: input.grounded ?? null,
       errorMessage: input.errorMessage ? input.errorMessage.slice(0, 500) : null,
+      traceId: input.traceId ?? null,
     });
   } catch (e) {
     console.error("[ai-usage] failed to record", input.feature, e);

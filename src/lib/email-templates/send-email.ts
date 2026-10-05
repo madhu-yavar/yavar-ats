@@ -42,6 +42,34 @@ export interface SendTemplateEmailOptions {
 }
 
 /**
+ * Every send attempt — success or failure — lands in app_logs (source "email")
+ * so delivery questions ("did the invite reach them?") are answerable from the
+ * observability console instead of pod logs. Dynamic import keeps src/server/**
+ * out of any client-reachable graph. Never throws.
+ */
+function logSend(
+  level: "info" | "warn" | "error",
+  args: { template: string; to: string; transport: "smtp" | "lovable" | "none"; startedAt: number },
+  error?: unknown,
+): void {
+  void import("../../server/logger")
+    .then((m) =>
+      m.logApp(level, "email", `send ${args.template} → ${args.to}`, {
+        detail: {
+          template: args.template,
+          to: args.to,
+          transport: args.transport,
+          durationMs: Date.now() - args.startedAt,
+          ...(error == null
+            ? {}
+            : { error: error instanceof Error ? error.message : String(error) }),
+        },
+      }),
+    )
+    .catch(() => {});
+}
+
+/**
  * Renders a registered template and sends it through Lovable's managed email
  * API. Suppression, retries, and rate limits are enforced by Lovable
  * server-side. A suppressed recipient is an expected outcome
@@ -77,27 +105,34 @@ export async function sendTemplateEmail(
 
   // Self-hosted deployments send over their own SMTP (documented in
   // DEPLOYMENT-GCP.md); the Lovable API path only exists on Lovable Cloud.
+  const startedAt = Date.now();
   const smtpUrl = process.env["SMTP_URL"];
   if (smtpUrl) {
     const transporter = nodemailer.createTransport(smtpUrl);
-    await transporter.sendMail({
-      from,
-      to: recipient,
-      subject,
-      html,
-      text,
-      ...(options.replyTo ? { replyTo: options.replyTo } : {}),
-      ...(options.attachments?.length
-        ? {
-            attachments: options.attachments.map((a) => ({
-              filename: a.filename,
-              content: Buffer.from(a.contentBase64, "base64"),
-              contentType: a.contentType,
-            })),
-          }
-        : {}),
-      headers: { "X-ATSIQ-Idempotency-Key": options.idempotencyKey || crypto.randomUUID() },
-    });
+    try {
+      await transporter.sendMail({
+        from,
+        to: recipient,
+        subject,
+        html,
+        text,
+        ...(options.replyTo ? { replyTo: options.replyTo } : {}),
+        ...(options.attachments?.length
+          ? {
+              attachments: options.attachments.map((a) => ({
+                filename: a.filename,
+                content: Buffer.from(a.contentBase64, "base64"),
+                contentType: a.contentType,
+              })),
+            }
+          : {}),
+        headers: { "X-ATSIQ-Idempotency-Key": options.idempotencyKey || crypto.randomUUID() },
+      });
+    } catch (e) {
+      logSend("error", { template: templateName, to: recipient, transport: "smtp", startedAt }, e);
+      throw e;
+    }
+    logSend("info", { template: templateName, to: recipient, transport: "smtp", startedAt });
     return { sent: true };
   }
 
@@ -107,6 +142,11 @@ export async function sendTemplateEmail(
 
   const apiKey = process.env["LOVABLE_API_KEY"];
   if (!apiKey) {
+    logSend(
+      "error",
+      { template: templateName, to: recipient, transport: "none", startedAt },
+      "Email is not configured: set SMTP_URL (self-hosted) or LOVABLE_API_KEY (Lovable Cloud)",
+    );
     throw new Error(
       "Email is not configured: set SMTP_URL (self-hosted) or LOVABLE_API_KEY (Lovable Cloud)",
     );
@@ -130,10 +170,21 @@ export async function sendTemplateEmail(
     );
   } catch (error) {
     if (error instanceof EmailAPIError && error.code === "recipient_suppressed") {
+      logSend(
+        "warn",
+        { template: templateName, to: recipient, transport: "lovable", startedAt },
+        "recipient_suppressed by email provider",
+      );
       return { sent: false, reason: "recipient_suppressed" };
     }
+    logSend(
+      "error",
+      { template: templateName, to: recipient, transport: "lovable", startedAt },
+      error,
+    );
     throw error;
   }
 
+  logSend("info", { template: templateName, to: recipient, transport: "lovable", startedAt });
   return { sent: true };
 }

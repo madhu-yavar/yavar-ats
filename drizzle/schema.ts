@@ -849,6 +849,8 @@ export const aiUsageEvents = pgTable(
     durationMs: integer("duration_ms"),
     grounded: boolean("grounded"),
     errorMessage: text("error_message"),
+    /** Links this ledger row to its full request/response capture in ai_traces. */
+    traceId: uuid("trace_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -856,6 +858,83 @@ export const aiUsageEvents = pgTable(
     index("ai_usage_events_feature_created_idx").on(t.feature, t.createdAt),
     index("ai_usage_events_model_idx").on(t.model),
     index("ai_usage_events_created_idx").on(t.createdAt),
+    index("ai_usage_events_trace_idx").on(t.traceId),
+  ],
+);
+
+export type AppLogLevel = "debug" | "info" | "warn" | "error";
+export type AppLogSource =
+  "http" | "server-fn" | "client" | "email" | "ai" | "cron" | "auth" | "job" | "app";
+
+/**
+ * Structured backend/client log — the queryable pipeline behind the
+ * superadmin observability console. Rows are purged after 14 days.
+ */
+export const appLogs = pgTable(
+  "app_logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    level: text("level").$type<AppLogLevel>().notNull(),
+    source: text("source").$type<AppLogSource>().notNull(),
+    message: text("message").notNull(),
+    /** Stack traces and structured context (size-capped by the logger). */
+    detail: jsonb("detail"),
+    orgId: uuid("org_id"),
+    userId: uuid("user_id"),
+    route: text("route"),
+    statusCode: integer("status_code"),
+    durationMs: integer("duration_ms"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("app_logs_created_idx").on(t.createdAt),
+    index("app_logs_level_created_idx").on(t.level, t.createdAt),
+    index("app_logs_source_created_idx").on(t.source, t.createdAt),
+    index("app_logs_org_created_idx").on(t.orgId, t.createdAt),
+  ],
+);
+
+/** Per-attempt frame captured alongside an AI trace. */
+export type AiTraceUsageFrame = {
+  provider: string;
+  model: string;
+  status: "ok" | "error";
+  latencyMs: number | null;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  error?: string;
+};
+
+/**
+ * Full prompt + response capture for one AI gateway invocation (all attempts).
+ * Contains CV/JD text — superadmin console only, purged after 14 days.
+ */
+export const aiTraces = pgTable(
+  "ai_traces",
+  {
+    id: uuid("id").primaryKey(),
+    orgId: uuid("org_id"),
+    userId: uuid("user_id"),
+    feature: text("feature").notNull(),
+    ok: boolean("ok").notNull(),
+    schemaValid: boolean("schema_valid"),
+    attempts: integer("attempts").notNull().default(1),
+    durationMs: integer("duration_ms"),
+    grounded: boolean("grounded"),
+    errorMessage: text("error_message"),
+    systemPrompt: text("system_prompt"),
+    prompt: text("prompt"),
+    response: text("response"),
+    usageFrames: jsonb("usage_frames")
+      .$type<AiTraceUsageFrame[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("ai_traces_created_idx").on(t.createdAt),
+    index("ai_traces_org_created_idx").on(t.orgId, t.createdAt),
+    index("ai_traces_feature_created_idx").on(t.feature, t.createdAt),
   ],
 );
 

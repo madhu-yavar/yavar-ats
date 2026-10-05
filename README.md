@@ -31,6 +31,15 @@ ATSIQ by Yavar AI is an enterprise recruiting intelligence platform. It combines
 - Every AI provider request is recorded in the `ai_usage_events` ledger (feature, provider, model, tokens, attempt, latency) and aggregated in the platform super admin's `/platform-ai-usage` console
 - Tenant authorization enforced in server middleware and repeated in every tenant query with an explicit organisation predicate
 
+## Observability
+
+A super-admin-only console (`/platform-observability`) surfaces everything the app logs, backed by two database tables (both purged after 14 days — no external log stack required):
+
+- `app_logs` — one row per API route / server-fn request (status, duration), every `console.error`/`console.warn`, every email send attempt (success and failure, with the SMTP/provider error), AI call summaries, and browser-side uncaught errors ingested via `POST /api/public/client-logs` (rate-limited, size-capped).
+- `ai_traces` — the full system prompt, user prompt and raw model response for every AI gateway invocation, plus its schema-validation verdict; per-attempt tokens/latency live in `ai_usage_events` rows linked by `trace_id`. May contain CV/JD text — readable only from the super-admin console.
+
+Logging is fail-open: no observability write can break a request, an email send or an AI call.
+
 ## Documentation
 
 - `docs/er-diagram.md` — entity-relationship diagram for all tables, generated from `drizzle/schema.ts` (`node scripts/gen-er-diagram.mjs`)

@@ -18,6 +18,7 @@ import { AuthGate } from "@/components/AuthGate";
 import { AppShell } from "@/components/AppShell";
 import { OrgGate } from "@/components/OrgGate";
 import { Toaster } from "@/components/ui/sonner";
+import { installClientTelemetry } from "@/lib/client-telemetry";
 
 function NotFoundComponent() {
   return (
@@ -130,6 +131,10 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  // FE leg of the observability pipeline — global error/rejection capture.
+  useEffect(() => {
+    installClientTelemetry();
+  }, []);
   // Candidate-facing questionnaire/apply links and the legal pages are opened by people with no account.
   const isPublic =
     pathname.startsWith("/assess/") ||

@@ -71,6 +71,7 @@ export const generateJd = createServerFn({ method: "POST" })
     const template = await resolveTemplate(context.orgId, "jd", data.templateId);
     const result = await aiJson<GeneratedJd>({
       orgId: context.orgId,
+      userId: context.userId,
       feature: "jd_generate",
       system: buildTemplateSystemPrompt({ base: BASE_JD_SYSTEM, template }),
       prompt: JSON.stringify(data),
@@ -98,6 +99,7 @@ export const importJd = createServerFn({ method: "POST" })
       GeneratedJd & { experience_min: number; experience_max: number; detected_title: string }
     >({
       orgId: context.orgId,
+      userId: context.userId,
       feature: "jd_import",
       system:
         "You are parsing an EXISTING job description supplied by a recruiter. Extract, never invent. " +
@@ -146,6 +148,7 @@ export const suggestWeights = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<WeightAdvice> => {
     const result = await aiJson<WeightAdvice>({
       orgId: context.orgId,
+      userId: context.userId,
       feature: "weight_suggest",
       system:
         "You tune the scoring model for one specific job description. Distribute exactly 100 points across " +
@@ -224,6 +227,7 @@ export const draftLinkedinPost = createServerFn({ method: "POST" })
     const template = await resolveTemplate(context.orgId, "linkedin_post", data.templateId);
     const result = await aiJson<SocialJobPost>({
       orgId: context.orgId,
+      userId: context.userId,
       feature: "linkedin_post",
       system: buildTemplateSystemPrompt({
         base: BASE_POST_SYSTEM,
@@ -303,6 +307,7 @@ export const matchJdToCv = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { model: _model, ...wire } = await scoreCandidate({
       orgId: context.orgId,
+      userId: context.userId,
       jd: data.jd,
       candidate: data.candidate as never,
       weights: data.weights,
@@ -347,6 +352,7 @@ export const matchPipeline = createServerFn({ method: "POST" })
       try {
         const { model: _model, ...wire } = await scoreCandidate({
           orgId: context.orgId,
+          userId: context.userId,
           jd: data.jd,
           candidate: row.candidate as never,
           weights: data.weights,
@@ -384,6 +390,7 @@ export const parseResume = createServerFn({ method: "POST" })
       website_url: string | null;
     }>({
       orgId: context.orgId,
+      userId: context.userId,
       feature: "resume_parse",
       system:
         "Extract structured candidate data from a resume. Return ONLY JSON with keys: full_name, email, phone, " +

@@ -24,6 +24,7 @@ import { Route as OffersRouteImport } from './routes/offers'
 import { Route as OrganisationRouteImport } from './routes/organisation'
 import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as PlatformAiUsageRouteImport } from './routes/platform-ai-usage'
+import { Route as PlatformObservabilityRouteImport } from './routes/platform-observability'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as RoiRouteImport } from './routes/roi'
@@ -49,6 +50,7 @@ import { Route as ApiAuthResetRouteImport } from './routes/api/auth/reset'
 import { Route as ApiAuthSessionRouteImport } from './routes/api/auth/session'
 import { Route as ApiPublicBoardSyncRouteImport } from './routes/api/public/board-sync'
 import { Route as ApiPublicCaptureRouteImport } from './routes/api/public/capture'
+import { Route as ApiPublicClientLogsRouteImport } from './routes/api/public/client-logs'
 import { Route as ApiPublicInboundEmailRouteImport } from './routes/api/public/inbound-email'
 import { Route as ApiPublicInboxSyncRouteImport } from './routes/api/public/inbox-sync'
 import { Route as ApiPublicProcessEmailOutboxRouteImport } from './routes/api/public/process-email-outbox'
@@ -137,6 +139,11 @@ const PlatformRoute = PlatformRouteImport.update({
 const PlatformAiUsageRoute = PlatformAiUsageRouteImport.update({
   id: '/platform-ai-usage',
   path: '/platform-ai-usage',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlatformObservabilityRoute = PlatformObservabilityRouteImport.update({
+  id: '/platform-observability',
+  path: '/platform-observability',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyRoute = PrivacyRouteImport.update({
@@ -264,6 +271,11 @@ const ApiPublicCaptureRoute = ApiPublicCaptureRouteImport.update({
   path: '/api/public/capture',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicClientLogsRoute = ApiPublicClientLogsRouteImport.update({
+  id: '/api/public/client-logs',
+  path: '/api/public/client-logs',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicInboundEmailRoute = ApiPublicInboundEmailRouteImport.update({
   id: '/api/public/inbound-email',
   path: '/api/public/inbound-email',
@@ -358,6 +370,7 @@ export interface FileRoutesByFullPath {
   '/organisation': typeof OrganisationRoute
   '/platform': typeof PlatformRoute
   '/platform-ai-usage': typeof PlatformAiUsageRoute
+  '/platform-observability': typeof PlatformObservabilityRoute
   '/privacy': typeof PrivacyRoute
   '/reports': typeof ReportsRoute
   '/roi': typeof RoiRoute
@@ -383,6 +396,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/public/board-sync': typeof ApiPublicBoardSyncRoute
   '/api/public/capture': typeof ApiPublicCaptureRoute
+  '/api/public/client-logs': typeof ApiPublicClientLogsRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
   '/api/public/process-email-outbox': typeof ApiPublicProcessEmailOutboxRoute
@@ -414,6 +428,7 @@ export interface FileRoutesByTo {
   '/organisation': typeof OrganisationRoute
   '/platform': typeof PlatformRoute
   '/platform-ai-usage': typeof PlatformAiUsageRoute
+  '/platform-observability': typeof PlatformObservabilityRoute
   '/privacy': typeof PrivacyRoute
   '/reports': typeof ReportsRoute
   '/roi': typeof RoiRoute
@@ -439,6 +454,7 @@ export interface FileRoutesByTo {
   '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/public/board-sync': typeof ApiPublicBoardSyncRoute
   '/api/public/capture': typeof ApiPublicCaptureRoute
+  '/api/public/client-logs': typeof ApiPublicClientLogsRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
   '/api/public/process-email-outbox': typeof ApiPublicProcessEmailOutboxRoute
@@ -471,6 +487,7 @@ export interface FileRoutesById {
   '/organisation': typeof OrganisationRoute
   '/platform': typeof PlatformRoute
   '/platform-ai-usage': typeof PlatformAiUsageRoute
+  '/platform-observability': typeof PlatformObservabilityRoute
   '/privacy': typeof PrivacyRoute
   '/reports': typeof ReportsRoute
   '/roi': typeof RoiRoute
@@ -496,6 +513,7 @@ export interface FileRoutesById {
   '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/public/board-sync': typeof ApiPublicBoardSyncRoute
   '/api/public/capture': typeof ApiPublicCaptureRoute
+  '/api/public/client-logs': typeof ApiPublicClientLogsRoute
   '/api/public/inbound-email': typeof ApiPublicInboundEmailRoute
   '/api/public/inbox-sync': typeof ApiPublicInboxSyncRoute
   '/api/public/process-email-outbox': typeof ApiPublicProcessEmailOutboxRoute
@@ -529,6 +547,7 @@ export interface FileRouteTypes {
     | '/organisation'
     | '/platform'
     | '/platform-ai-usage'
+    | '/platform-observability'
     | '/privacy'
     | '/reports'
     | '/roi'
@@ -554,6 +573,7 @@ export interface FileRouteTypes {
     | '/api/auth/session'
     | '/api/public/board-sync'
     | '/api/public/capture'
+    | '/api/public/client-logs'
     | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
     | '/api/public/process-email-outbox'
@@ -585,6 +605,7 @@ export interface FileRouteTypes {
     | '/organisation'
     | '/platform'
     | '/platform-ai-usage'
+    | '/platform-observability'
     | '/privacy'
     | '/reports'
     | '/roi'
@@ -610,6 +631,7 @@ export interface FileRouteTypes {
     | '/api/auth/session'
     | '/api/public/board-sync'
     | '/api/public/capture'
+    | '/api/public/client-logs'
     | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
     | '/api/public/process-email-outbox'
@@ -641,6 +663,7 @@ export interface FileRouteTypes {
     | '/organisation'
     | '/platform'
     | '/platform-ai-usage'
+    | '/platform-observability'
     | '/privacy'
     | '/reports'
     | '/roi'
@@ -666,6 +689,7 @@ export interface FileRouteTypes {
     | '/api/auth/session'
     | '/api/public/board-sync'
     | '/api/public/capture'
+    | '/api/public/client-logs'
     | '/api/public/inbound-email'
     | '/api/public/inbox-sync'
     | '/api/public/process-email-outbox'
@@ -698,6 +722,7 @@ export interface RootRouteChildren {
   OrganisationRoute: typeof OrganisationRoute
   PlatformRoute: typeof PlatformRoute
   PlatformAiUsageRoute: typeof PlatformAiUsageRoute
+  PlatformObservabilityRoute: typeof PlatformObservabilityRoute
   PrivacyRoute: typeof PrivacyRoute
   ReportsRoute: typeof ReportsRoute
   RoiRoute: typeof RoiRoute
@@ -723,6 +748,7 @@ export interface RootRouteChildren {
   ApiAuthSessionRoute: typeof ApiAuthSessionRoute
   ApiPublicBoardSyncRoute: typeof ApiPublicBoardSyncRoute
   ApiPublicCaptureRoute: typeof ApiPublicCaptureRoute
+  ApiPublicClientLogsRoute: typeof ApiPublicClientLogsRoute
   ApiPublicInboundEmailRoute: typeof ApiPublicInboundEmailRoute
   ApiPublicInboxSyncRoute: typeof ApiPublicInboxSyncRoute
   ApiPublicProcessEmailOutboxRoute: typeof ApiPublicProcessEmailOutboxRoute
@@ -844,6 +870,13 @@ declare module '@tanstack/react-router' {
       path: '/platform-ai-usage'
       fullPath: '/platform-ai-usage'
       preLoaderRoute: typeof PlatformAiUsageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/platform-observability': {
+      id: '/platform-observability'
+      path: '/platform-observability'
+      fullPath: '/platform-observability'
+      preLoaderRoute: typeof PlatformObservabilityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacy': {
@@ -1021,6 +1054,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCaptureRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/client-logs': {
+      id: '/api/public/client-logs'
+      path: '/api/public/client-logs'
+      fullPath: '/api/public/client-logs'
+      preLoaderRoute: typeof ApiPublicClientLogsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/inbound-email': {
       id: '/api/public/inbound-email'
       path: '/api/public/inbound-email'
@@ -1138,6 +1178,7 @@ const rootRouteChildren: RootRouteChildren = {
   OrganisationRoute: OrganisationRoute,
   PlatformRoute: PlatformRoute,
   PlatformAiUsageRoute: PlatformAiUsageRoute,
+  PlatformObservabilityRoute: PlatformObservabilityRoute,
   PrivacyRoute: PrivacyRoute,
   ReportsRoute: ReportsRoute,
   RoiRoute: RoiRoute,
@@ -1163,6 +1204,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthSessionRoute: ApiAuthSessionRoute,
   ApiPublicBoardSyncRoute: ApiPublicBoardSyncRoute,
   ApiPublicCaptureRoute: ApiPublicCaptureRoute,
+  ApiPublicClientLogsRoute: ApiPublicClientLogsRoute,
   ApiPublicInboundEmailRoute: ApiPublicInboundEmailRoute,
   ApiPublicInboxSyncRoute: ApiPublicInboxSyncRoute,
   ApiPublicProcessEmailOutboxRoute: ApiPublicProcessEmailOutboxRoute,
