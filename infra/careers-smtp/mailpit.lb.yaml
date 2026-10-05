@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailpit
+  namespace: atsiq
+  labels:
+    app: careers-smtp
+spec:
+  allocateLoadBalancerNodePorts: true
+  clusterIP: 34.118.235.48
+  clusterIPs:
+  - 34.118.235.48
+  externalTrafficPolicy: Cluster
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - name: smtp
+    nodePort: 31702
+    port: 25
+    protocol: TCP
+    targetPort: 1025
+  selector:
+    app: careers-smtp
+  sessionAffinity: None
+  type: LoadBalancer
+

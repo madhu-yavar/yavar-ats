@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: careers-smtp
+  namespace: atsiq
+  labels:
+    app: careers-smtp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: careers-smtp
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/restartedAt: '2026-10-05T15:24:32+05:30'
+      labels:
+        app: careers-smtp
+    spec:
+      containers:
+      - args:
+        - --max=500
+        - --max-age=48h
+        - --quiet
+        env:
+        - name: containers
+          value: bridge
+        - name: WEBHOOK_URL
+          value: http://atsiq.atsiq.svc.cluster.local:80/api/public/inbound-email
+        image: axllent/mailpit:v1.22
+        imagePullPolicy: IfNotPresent
+        name: mailpit
+        ports:
+        - containerPort: 1025
+          name: smtp
+          protocol: TCP
+        - containerPort: 8025
+          name: api
+          protocol: TCP
+        resources:
+          limits:
+            ephemeral-storage: 1Gi
+            memory: 512Mi
+          requests:
+            cpu: 250m
+            ephemeral-storage: 1Gi
+            memory: 256Mi
+        securityContext:
+          capabilities:
+            drop:
+            - NET_RAW
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      - command:
+        - node
+        - /bridge/bridge.mjs
+        env:
+        - name: containers
+          value: bridge
+        - name: WEBHOOK_URL
+          value: http://atsiq.atsiq.svc.cluster.local:80/api/public/inbound-email
+        envFrom:
+        - secretRef:
+            name: atsiq-env
+        image: node:22-alpine
+        imagePullPolicy: IfNotPresent
+        name: bridge
+        resources:
+          limits:
+            ephemeral-storage: 1Gi
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            ephemeral-storage: 1Gi
+            memory: 128Mi
+        securityContext:
+          capabilities:
+            drop:
+            - NET_RAW
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /bridge
+          name: bridge
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      tolerations:
+      - effect: NoSchedule
+        key: kubernetes.io/arch
+        operator: Equal
+        value: amd64
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: careers-mail-bridge
+        name: bridge
+
