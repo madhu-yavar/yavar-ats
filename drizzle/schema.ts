@@ -925,6 +925,10 @@ export const aiTraces = pgTable(
     systemPrompt: text("system_prompt"),
     prompt: text("prompt"),
     response: text("response"),
+    /** 'json' (structured single call) | 'research' (grounded web search). */
+    harness: text("harness"),
+    /** Coarse feature grouping: screening | matching | jd | research | comms | copilot | platform. */
+    capability: text("capability"),
     usageFrames: jsonb("usage_frames")
       .$type<AiTraceUsageFrame[]>()
       .notNull()
@@ -935,7 +939,38 @@ export const aiTraces = pgTable(
     index("ai_traces_created_idx").on(t.createdAt),
     index("ai_traces_org_created_idx").on(t.orgId, t.createdAt),
     index("ai_traces_feature_created_idx").on(t.feature, t.createdAt),
+    index("ai_traces_capability_idx").on(t.capability),
   ],
+);
+
+export type AiTraceStepKind = "model_call" | "tool_call" | "guard";
+export type AiTraceStepStatus = "ok" | "error" | "running";
+
+/**
+ * One span of an AI invocation — a model attempt, a tool call (the research
+ * path's web searches; future agent tools) or a guard check. Cascades on
+ * trace delete so the retention sweep removes spans for free.
+ */
+export const aiTraceSteps = pgTable(
+  "ai_trace_steps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    traceId: uuid("trace_id")
+      .notNull()
+      .references(() => aiTraces.id, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    kind: text("kind").$type<AiTraceStepKind>().notNull(),
+    name: text("name").notNull(),
+    status: text("status").$type<AiTraceStepStatus>().notNull().default("ok"),
+    /** Size-capped JSON strings — the gateway stores stringified payloads. */
+    input: jsonb("input").$type<string | null>(),
+    output: jsonb("output").$type<string | null>(),
+    error: text("error"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    durationMs: integer("duration_ms"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("ai_trace_steps_trace_seq_idx").on(t.traceId, t.seq)],
 );
 
 export type EmailOutboxKind = "ack" | "stage_update" | "interview_invite" | "offer_released";

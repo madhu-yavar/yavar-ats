@@ -74,6 +74,14 @@ psql -q -f drizzle/pg-migrations/0020_content_templates_ensure.sql 2>/dev/null |
 psql -q -f drizzle/pg-migrations/0021_linkedin_row_rename.sql 2>/dev/null || true
 psql -q -f drizzle/pg-migrations/0022_screening_prep_jobs.sql 2>/dev/null || true
 psql -q -f drizzle/pg-migrations/0023_observability.sql 2>/dev/null || true
+psql -q -f drizzle/pg-migrations/0024_trace_steps.sql 2>/dev/null || true
+
+# Sync the pg_migrations ledger: the fixture + healing list above leave the
+# schema complete, so mark every shipped migration applied — migrate-pg.mjs
+# then only ever applies genuinely-new files instead of crashing on 0000.
+for mf in drizzle/pg-migrations/*.sql; do
+  psql -q -c "insert into pg_migrations (name) values ('$(basename "$mf")') on conflict do nothing" 2>/dev/null || true
+done
 
 # 2. Auth stub
 if curl -s -o /dev/null "http://127.0.0.1:$STUB_PORT/auth/v1/user" 2>/dev/null; then

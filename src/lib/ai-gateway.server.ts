@@ -17,7 +17,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../server/db";
-import { aiProviderCredentials, aiSettings, aiTraces } from "@db/schema";
+import { aiProviderCredentials, aiSettings, aiTraceSteps, aiTraces } from "@db/schema";
 
 const OPENAI_ENDPOINT = "https://api.openai.com/v1/chat/completions";
 const ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1/messages";
@@ -55,6 +55,17 @@ export type AiConfig = { provider: AiProvider; model: string; apiKey: string | n
 /** Token usage as reported by the provider — null when no usage frame arrived. */
 export type AiUsage = { promptTokens: number; completionTokens: number; totalTokens: number };
 
+/** One web-search tool call harvested from a grounded stream. */
+export type SearchToolCall = { query: string | null; domains: string[] };
+
+const domainOf = (url: string): string => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url.slice(0, 60);
+  }
+};
+
 export type AiJsonResult<T> =
   | {
       ok: true;
@@ -69,12 +80,75 @@ export type AiJsonResult<T> =
 /** Cap helpers for the ai_traces capture — the pieces are large but bounded. */
 const TRACE_SYSTEM_CAP = 30_000;
 const TRACE_BODY_CAP = 60_000;
+const TRACE_STEP_PAYLOAD_CAP = 8_000;
+const TRACE_STEP_CAP = 50;
+
+/**
+ * Feature → capability grouping ("skills") for the observability console.
+ * Every AI_FEATURES slug must map to exactly one capability.
+ */
+export const AI_CAPABILITY_OF: Record<string, string> = {
+  resume_parse: "matching",
+  jd_parse: "matching",
+  candidate_score: "matching",
+  doc_extract: "matching",
+  jd_generate: "jd",
+  jd_import: "jd",
+  weight_suggest: "jd",
+  role_profile: "jd",
+  template_import: "jd",
+  jobcard_qa: "jd",
+  screening_kit: "screening",
+  screening_grade: "screening",
+  assessment_generate: "screening",
+  assessment_score: "screening",
+  audio_transcribe: "screening",
+  market_benchmark: "research",
+  salary_research: "research",
+  linkedin_signal: "research",
+  writing_signal: "research",
+  claim_verify: "research",
+  talent_brain: "research",
+  linkedin_post: "comms",
+  offer_letter: "comms",
+  copilot: "copilot",
+  model_test: "platform",
+};
+
+export const capabilityOf = (feature: string): string => AI_CAPABILITY_OF[feature] ?? "platform";
+
+/** One span under a trace — a model attempt, tool call, or guard check. */
+export interface AiAgentStepInput {
+  kind: "model_call" | "tool_call" | "guard";
+  name: string;
+  status?: "ok" | "error" | "running";
+  input?: unknown;
+  output?: unknown;
+  error?: string;
+  startedAt?: number;
+  durationMs?: number;
+}
+
+function capStepPayload(value: unknown): string | null {
+  if (value == null) return null;
+  let text: string;
+  if (typeof value === "string") text = value;
+  else {
+    try {
+      text = JSON.stringify(value);
+    } catch {
+      text = String(value);
+    }
+  }
+  return text.slice(0, TRACE_STEP_PAYLOAD_CAP);
+}
 
 /**
  * Persist the full prompt/response capture for one AI invocation into
  * `ai_traces` (superadmin observability console). Fire-and-forget: tracing
  * must never break the call it observes. Per-attempt token/latency frames
- * live in ai_usage_events rows sharing the same traceId.
+ * live in ai_usage_events rows sharing the same traceId; ordered spans land
+ * in ai_trace_steps (cascaded on trace delete — the purge sweeps both).
  */
 function writeTrace(trace: {
   id: string;
@@ -90,16 +164,87 @@ function writeTrace(trace: {
   systemPrompt: string | null;
   prompt: string | null;
   response: string | null;
+  harness: "json" | "research";
+  steps?: AiAgentStepInput[];
 }) {
   void db
     .insert(aiTraces)
     .values({
-      ...trace,
+      id: trace.id,
+      orgId: trace.orgId,
+      userId: trace.userId,
+      feature: trace.feature,
+      ok: trace.ok,
+      schemaValid: trace.schemaValid,
+      attempts: trace.attempts,
+      durationMs: trace.durationMs,
+      grounded: trace.grounded,
+      errorMessage: trace.errorMessage,
       systemPrompt: trace.systemPrompt?.slice(0, TRACE_SYSTEM_CAP) ?? null,
       prompt: trace.prompt?.slice(0, TRACE_BODY_CAP) ?? null,
       response: trace.response?.slice(0, TRACE_BODY_CAP) ?? null,
+      harness: trace.harness,
+      capability: capabilityOf(trace.feature),
+    })
+    .then(() => {
+      const steps = (trace.steps ?? []).slice(0, TRACE_STEP_CAP);
+      if (!steps.length) return;
+      return db.insert(aiTraceSteps).values(
+        steps.map((s, i) => ({
+          traceId: trace.id,
+          seq: i + 1,
+          kind: s.kind,
+          name: s.name.slice(0, 120),
+          status: s.status ?? ("ok" as const),
+          input: capStepPayload(s.input),
+          output: capStepPayload(s.output),
+          error: s.error?.slice(0, 500) ?? null,
+          startedAt: s.startedAt ? new Date(s.startedAt) : null,
+          durationMs: s.durationMs ?? null,
+        })),
+      );
     })
     .catch((e) => console.error("[ai-trace] capture failed", trace.feature, e));
+}
+
+/**
+ * Public recorder for future agent loops: a multi-step tool agent calls this
+ * once per run with its ordered spans and gets a durable trace (ai_traces +
+ * ai_trace_steps) in the observability console. Fire-and-forget; returns the
+ * trace id synchronously.
+ */
+export function recordAgentTrace(input: {
+  feature: string;
+  orgId?: string | null;
+  userId?: string | null;
+  startedAt: number;
+  ok: boolean;
+  errorMessage?: string | null;
+  systemPrompt?: string | null;
+  prompt?: string | null;
+  output?: unknown;
+  steps: AiAgentStepInput[];
+}): string {
+  const traceId = crypto.randomUUID();
+  writeTrace({
+    id: traceId,
+    orgId: input.orgId ?? null,
+    userId: input.userId ?? null,
+    feature: input.feature,
+    ok: input.ok,
+    schemaValid: null,
+    attempts: input.steps.filter((s) => s.kind === "model_call").length || 1,
+    durationMs: Date.now() - input.startedAt,
+    grounded: null,
+    errorMessage: input.errorMessage ?? null,
+    systemPrompt: input.systemPrompt ?? null,
+    prompt: input.prompt ?? null,
+    response:
+      typeof input.output === "string" ? input.output : JSON.stringify(input.output ?? null),
+    harness: "json",
+    steps: input.steps,
+  });
+  return traceId;
 }
 
 /**
@@ -251,6 +396,7 @@ async function readOpenAiStream(body: ReadableStream<Uint8Array>) {
   let buffer = "";
   let text = "";
   let usage: AiUsage | null = null;
+  const citationUrls = new Set<string>();
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -266,6 +412,11 @@ async function readOpenAiStream(body: ReadableStream<Uint8Array>) {
         const chunk = JSON.parse(payload);
         const delta = chunk?.choices?.[0]?.delta?.content;
         if (typeof delta === "string") text += delta;
+        // Grounded answers carry url_citation annotations alongside the deltas.
+        for (const a of chunk?.choices?.[0]?.delta?.annotations ?? []) {
+          const url = a?.url_citation?.url;
+          if (typeof url === "string") citationUrls.add(url);
+        }
         const u = chunk?.usage;
         if (u && typeof u === "object") {
           const promptTokens = typeof u.prompt_tokens === "number" ? u.prompt_tokens : 0;
@@ -283,7 +434,10 @@ async function readOpenAiStream(body: ReadableStream<Uint8Array>) {
       }
     }
   }
-  return { text, usage };
+  const searches: SearchToolCall[] = citationUrls.size
+    ? [{ query: null, domains: [...citationUrls].map(domainOf).slice(0, 20) }]
+    : [];
+  return { text, usage, searches };
 }
 
 /**
@@ -422,6 +576,7 @@ export async function aiJson<T>(opts: {
       response: result.ok
         ? (result.rawText ?? JSON.stringify(result.data))
         : (result.rawText ?? null),
+      harness: "json",
     });
     return result;
   };
@@ -759,6 +914,7 @@ async function readGoogleStream(body: ReadableStream<Uint8Array>) {
   let text = "";
   let grounded = false;
   let usage: AiUsage | null = null;
+  const searchDomains = new Set<string>();
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -774,7 +930,13 @@ async function readGoogleStream(body: ReadableStream<Uint8Array>) {
         for (const part of cand?.content?.parts ?? []) {
           if (typeof part?.text === "string") text += part.text;
         }
-        if (cand?.groundingMetadata?.groundingChunks?.length) grounded = true;
+        if (cand?.groundingMetadata?.groundingChunks?.length) {
+          grounded = true;
+          for (const gc of cand.groundingMetadata.groundingChunks) {
+            const uri = gc?.web?.uri;
+            if (typeof uri === "string") searchDomains.add(domainOf(uri));
+          }
+        }
         const u = chunk?.usageMetadata;
         if (u && typeof u === "object") {
           const prompt = typeof u.promptTokenCount === "number" ? u.promptTokenCount : 0;
@@ -794,7 +956,10 @@ async function readGoogleStream(body: ReadableStream<Uint8Array>) {
       }
     }
   }
-  return { text, grounded, usage };
+  const searches: SearchToolCall[] = searchDomains.size
+    ? [{ query: null, domains: [...searchDomains].slice(0, 20) }]
+    : [];
+  return { text, grounded, usage, searches };
 }
 
 export type AiResearchResult<T> =
@@ -807,8 +972,9 @@ export type AiResearchResult<T> =
       grounded: boolean;
       usage: AiUsage | null;
       rawText?: string;
+      searches?: SearchToolCall[];
     }
-  | { ok: false; status: number; message: string; rawText?: string };
+  | { ok: false; status: number; message: string; rawText?: string; searches?: SearchToolCall[] };
 
 /** Map a failed provider response to the shared error shape. */
 function providerError(status: number, raw: string) {
@@ -830,19 +996,28 @@ type AnthropicResearch = {
   grounded: boolean;
   paused: boolean;
   usage: AiUsage | null;
+  searches: SearchToolCall[];
 };
 
 /**
  * Anthropic stream reader that additionally harvests server-side web-search
- * results. Search blocks arrive whole in `content_block_start` (not deltas);
- * a failed search surfaces there as an error object under HTTP 200, hence the
- * Array.isArray guard.
+ * tool calls: each `server_tool_use` block carries the issued query and its
+ * paired `web_search_tool_result` block the cited pages. Search blocks arrive
+ * whole in `content_block_start` (not deltas); a failed search surfaces there
+ * as an error object under HTTP 200, hence the Array.isArray guard.
  */
 async function readAnthropicResearchStream(body: ReadableStream<Uint8Array>) {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  const out: AnthropicResearch = { text: "", grounded: false, paused: false, usage: null };
+  const out: AnthropicResearch = {
+    text: "",
+    grounded: false,
+    paused: false,
+    usage: null,
+    searches: [],
+  };
+  let openQuery: string | null = null;
   let promptTokens: number | null = null;
   let completionTokens: number | null = null;
   for (;;) {
@@ -860,8 +1035,17 @@ async function readAnthropicResearchStream(body: ReadableStream<Uint8Array>) {
           out.text += chunk.delta.text;
         } else if (chunk?.type === "content_block_start") {
           const block = chunk.content_block;
-          if (block?.type === "web_search_tool_result" && Array.isArray(block.content)) {
+          if (block?.type === "server_tool_use") {
+            openQuery =
+              typeof block?.input?.query === "string" ? (block.input.query as string) : null;
+          } else if (block?.type === "web_search_tool_result" && Array.isArray(block.content)) {
             out.grounded = true;
+            const domains = block.content
+              .map((c: { url?: unknown }) => (typeof c?.url === "string" ? domainOf(c.url) : null))
+              .filter((d: string | null): d is string => !!d)
+              .slice(0, 20);
+            out.searches.push({ query: openQuery, domains });
+            openQuery = null;
           }
         } else if (chunk?.type === "message_start") {
           const t = chunk?.message?.usage?.input_tokens;
@@ -934,6 +1118,13 @@ export async function aiResearchJson<T>(opts: {
     response: result.ok
       ? (result.rawText ?? JSON.stringify(result.data))
       : (result.rawText ?? null),
+    harness: "research",
+    steps: (result.searches ?? []).map((s) => ({
+      kind: "tool_call" as const,
+      name: "web_search",
+      input: s.query ? { query: s.query } : undefined,
+      output: { domains: s.domains },
+    })),
   });
   return result;
 }
@@ -960,6 +1151,7 @@ async function researchCall<T>(
     message: string,
     status = 502,
     rawText?: string,
+    searches: SearchToolCall[] = [],
   ) => {
     await logUsage(opts.feature, cfg, opts.orgId, {
       traceId,
@@ -970,7 +1162,13 @@ async function researchCall<T>(
       usage,
       message,
     });
-    return { ok: false as const, status, message, ...(rawText ? { rawText } : {}) };
+    return {
+      ok: false as const,
+      status,
+      message,
+      ...(rawText ? { rawText } : {}),
+      ...(searches.length ? { searches } : {}),
+    };
   };
 
   if (cfg.provider === "google") {
@@ -993,6 +1191,7 @@ async function researchCall<T>(
         "AI returned a response that could not be parsed.",
         502,
         stream.text,
+        stream.searches,
       );
     }
     await logUsage(opts.feature, cfg, opts.orgId, {
@@ -1011,6 +1210,7 @@ async function researchCall<T>(
       provider: cfg.provider,
       grounded: stream.grounded,
       usage: stream.usage,
+      searches: stream.searches,
       rawText: stream.text,
     };
   }
@@ -1056,6 +1256,7 @@ async function researchCall<T>(
         "The research turn was paused mid-flight — try again.",
         502,
         stream.text,
+        stream.searches,
       );
     }
     const parsed = parseJsonish<T>(stream.text);
@@ -1066,6 +1267,7 @@ async function researchCall<T>(
         "AI returned a response that could not be parsed.",
         502,
         stream.text,
+        stream.searches,
       );
     await logUsage(opts.feature, cfg, opts.orgId, {
       traceId,
@@ -1083,6 +1285,7 @@ async function researchCall<T>(
       provider: cfg.provider,
       grounded: stream.grounded,
       usage: stream.usage,
+      searches: stream.searches,
       rawText: stream.text,
     };
   }
@@ -1152,6 +1355,7 @@ async function researchCall<T>(
       "AI returned a response that could not be parsed.",
       502,
       stream.text,
+      stream.searches,
     );
   await logUsage(opts.feature, cfg, opts.orgId, {
     traceId,
@@ -1169,6 +1373,7 @@ async function researchCall<T>(
     provider: cfg.provider,
     grounded,
     usage: stream.usage,
+    searches: stream.searches,
     rawText: stream.text,
   };
 }
