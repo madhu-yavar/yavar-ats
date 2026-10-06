@@ -10,6 +10,7 @@ import { template as applicationAckTemplate } from "./application-ack";
 import { template as stageUpdateTemplate } from "./stage-update";
 import { template as interviewInviteTemplate } from "./interview-invite";
 import { template as offerReleasedTemplate } from "./offer-released";
+import { template as platformEmailTestTemplate } from "./platform-email-test";
 
 /**
  * Dynamic template-data bag passed to every template renderer and subject
@@ -57,4 +58,5 @@ export const TEMPLATES: Record<string, TemplateEntry> = {
   stage_update: stageUpdateTemplate,
   interview_invite: interviewInviteTemplate,
   offer_released: offerReleasedTemplate,
+  "platform-email-test": platformEmailTestTemplate,
 };

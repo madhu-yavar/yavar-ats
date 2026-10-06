@@ -61,6 +61,8 @@ import { captureSetup, rotateCaptureToken } from "@/lib/capture.functions";
 import { PageHeader } from "@/components/ats";
 import { BoardConnectPanel } from "@/components/board-connect-panel";
 import { BoardEnterprisePanel } from "@/components/board-enterprise-panel";
+import { TransactionalEmailCard } from "@/components/TransactionalEmailCard";
+import { usePlatform } from "@/hooks/usePlatform";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { Button } from "@/components/ui/button";
@@ -1797,6 +1799,7 @@ function AiModelCard() {
 
 function Integrations() {
   const qc = useQueryClient();
+  const { isSuperUser } = usePlatform();
   const rows = useQuery(integrationsQuery);
   const hrmsRows = useQuery(hrmsQuery);
   const [seeding, setSeeding] = useState(false);
@@ -1847,6 +1850,10 @@ function Integrations() {
           <TabsTrigger value="hrms">HRMS sync</TabsTrigger>
           <TabsTrigger value="emails">Candidate emails</TabsTrigger>
           <TabsTrigger value="ai">AI model</TabsTrigger>
+          {/* Deployment-level sending credential — platform super admins only.
+              Lives here (not the per-org cards) because registration
+              confirmations fire before an organisation exists. */}
+          {isSuperUser ? <TabsTrigger value="outbound">Transactional email</TabsTrigger> : null}
         </TabsList>
 
         <TabsContent value="sourcing" className="space-y-3">
@@ -2018,6 +2025,12 @@ function Integrations() {
         <TabsContent value="ai">
           <AiModelCard />
         </TabsContent>
+
+        {isSuperUser ? (
+          <TabsContent value="outbound">
+            <TransactionalEmailCard />
+          </TabsContent>
+        ) : null}
       </Tabs>
     </>
   );

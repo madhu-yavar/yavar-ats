@@ -9,7 +9,7 @@
 > A domain diagram shows that domain's tables in full; references into other domains
 > point at a stub entity that is drawn complete in its own domain.
 
-60 tables across 9 domains.
+62 tables across 9 domains.
 
 ## Identity & access
 
@@ -963,6 +963,7 @@ erDiagram
 | `ai_interviews` | `org_id` | `organizations` | cascade |
 | `ai_provider_credentials` | `org_id` | `organizations` | cascade |
 | `ai_settings` | `org_id` | `organizations` | cascade |
+| `ai_trace_steps` | `trace_id` | `ai_traces` | cascade |
 | `ai_usage_events` | `org_id` | `organizations` | cascade |
 | `ai_usage_events` | `user_id` | `users` | no action |
 | `applications` | `candidate_id` | `candidates` | cascade |
@@ -1072,7 +1073,8 @@ erDiagram
 | `ai_interviews` | Screening & interviews | 8 | — |
 | `ai_provider_credentials` | Communications & AI settings | 4 | (orgId+provider) |
 | `ai_settings` | Communications & AI settings | 9 | (org_id) |
-| `ai_traces` | — | 15 | — |
+| `ai_trace_steps` | — | 12 | — |
+| `ai_traces` | — | 17 | — |
 | `ai_usage_events` | Communications & AI settings | 16 | — |
 | `app_logs` | — | 11 | — |
 | `applications` | Candidates & pipeline | 10 | (requisitionId+candidateId) |
@@ -1111,6 +1113,7 @@ erDiagram
 | `org_pool_shares` | Organisations & masters | 10 | (ownerOrg+partnerOrg) |
 | `organizations` | Organisations & masters | 26 | (slug), (capture_token), (capture_token_hash) |
 | `platform_admins` | Identity & access | 6 | (email) |
+| `platform_settings` | — | 4 | — |
 | `product_catalogue_commercials` | Organisations & masters | 8 | — |
 | `requisition_board_postings` | — | 16 | (requisitionId+provider) |
 | `requisitions` | Requisitions & job content | 39 | (orgId+code) |

@@ -75,6 +75,7 @@ psql -q -f drizzle/pg-migrations/0021_linkedin_row_rename.sql 2>/dev/null || tru
 psql -q -f drizzle/pg-migrations/0022_screening_prep_jobs.sql 2>/dev/null || true
 psql -q -f drizzle/pg-migrations/0023_observability.sql 2>/dev/null || true
 psql -q -f drizzle/pg-migrations/0024_trace_steps.sql 2>/dev/null || true
+psql -q -f drizzle/pg-migrations/0025_platform_settings.sql 2>/dev/null || true
 
 # Sync the pg_migrations ledger: the fixture + healing list above leave the
 # schema complete, so mark every shipped migration applied — migrate-pg.mjs

@@ -5,6 +5,11 @@ import { z } from "zod";
 import { db } from "../server/db";
 import { writeAudit } from "../server/audit";
 import { deletePrefix } from "../server/storage";
+import { encryptSecret } from "../server/crypto";
+import {
+  readTransactionalEmailConfig,
+  TRANSACTIONAL_EMAIL_SETTING,
+} from "../server/platform-settings.server";
 import {
   aiProviderCredentials,
   aiSettings,
@@ -23,6 +28,7 @@ import {
   orgMembers,
   organizations,
   platformAdmins,
+  platformSettings,
   requisitions,
   socialProfiles,
   stageEvents,
@@ -530,4 +536,137 @@ export const reviewOrganization = createServerFn({ method: "POST" })
     await db.update(organizations).set(patch).where(eq(organizations.id, data.orgId));
 
     return { ok: true, emailed, emailError, notifiedAt: emailed ? now.toISOString() : null };
+  });
+
+/* ------------------------------------------------- transactional email config */
+
+export type PlatformEmailConfig = {
+  /** Where the active credential comes from: saved in this console, env var, or nothing. */
+  source: "saved" | "env" | "none";
+  provider: "resend" | null;
+  /** The From address that will be used, whatever its source. */
+  fromAddress: string;
+  /** Last 4 chars of the saved API key — enough to recognise it, never the key. */
+  keyLast4: string | null;
+  updatedAt: string | null;
+  envKeyPresent: boolean;
+};
+
+/** Pull the addr-spec out of `user@dom` or `Name <user@dom>`; null when neither. */
+function fromAddressSpec(value: string): string | null {
+  const inner = /<\s*([^>]+?)\s*>/.exec(value)?.[1] ?? value.trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inner) ? inner : null;
+}
+
+/** What the transactional-email sender will use right now (super users only). */
+export const getPlatformEmailConfig = createServerFn({ method: "GET" })
+  .middleware([requirePlatformAdmin])
+  .handler(async (): Promise<PlatformEmailConfig> => {
+    const [saved, row] = await Promise.all([
+      readTransactionalEmailConfig(),
+      db
+        .select({ updatedAt: platformSettings.updatedAt })
+        .from(platformSettings)
+        .where(eq(platformSettings.key, TRANSACTIONAL_EMAIL_SETTING))
+        .limit(1),
+    ]);
+    const envKey = process.env["RESEND_API_KEY"] || null;
+    const active = saved ?? (envKey ? { apiKey: envKey, fromAddress: "" } : null);
+    return {
+      source: saved ? "saved" : envKey ? "env" : "none",
+      provider: active ? "resend" : null,
+      fromAddress: saved?.fromAddress || process.env["EMAIL_FROM"] || "",
+      keyLast4: active ? active.apiKey.slice(-4) : null,
+      updatedAt: row[0]?.updatedAt ? row[0].updatedAt.toISOString() : null,
+      envKeyPresent: Boolean(envKey),
+    };
+  });
+
+const EMAIL_CONFIG_INPUT = z.object({
+  apiKey: z.string().trim().min(16).max(200),
+  fromAddress: z
+    .string()
+    .trim()
+    .max(160)
+    .refine(
+      (v) => fromAddressSpec(v) !== null,
+      "Use a valid address like ATSIQ <noreply@yourdomain>",
+    ),
+});
+
+/**
+ * Save (or rotate) the transactional-email credential from the platform console.
+ * Stored encrypted at rest; takes precedence over RESEND_API_KEY until removed.
+ */
+export const setPlatformEmailConfig = createServerFn({ method: "POST" })
+  .middleware([requirePlatformAdmin])
+  .inputValidator((data: unknown) => EMAIL_CONFIG_INPUT.parse(data))
+  .handler(async ({ data, context }) => {
+    const { encryptionEnabled } = await import("../server/crypto");
+    if (!encryptionEnabled()) {
+      throw new Error(
+        "SECRET_ENCRYPTION_KEY is not set on this deployment — credentials cannot be stored safely.",
+      );
+    }
+    const value = encryptSecret(
+      JSON.stringify({ provider: "resend", apiKey: data.apiKey, fromAddress: data.fromAddress }),
+    );
+    await db
+      .insert(platformSettings)
+      .values({
+        key: TRANSACTIONAL_EMAIL_SETTING,
+        valueEncrypted: value,
+        updatedBy: context.userId,
+      })
+      .onConflictDoUpdate({
+        target: platformSettings.key,
+        set: { valueEncrypted: value, updatedBy: context.userId, updatedAt: new Date() },
+      });
+    await writeAudit({
+      actor: context.email,
+      actorUserId: context.userId,
+      action: "platform.email.config",
+      entityType: "platform_settings",
+      // entity_id is a uuid column and the setting key is text — the key rides
+      // in the detail instead, matching addPlatformAdmin's no-entityId pattern.
+      detail: {
+        setting: TRANSACTIONAL_EMAIL_SETTING,
+        provider: "resend",
+        fromAddress: fromAddressSpec(data.fromAddress),
+      },
+    });
+    return { ok: true };
+  });
+
+/** Remove the saved credential — the deployment env var (if any) becomes active again. */
+export const clearPlatformEmailConfig = createServerFn({ method: "POST" })
+  .middleware([requirePlatformAdmin])
+  .handler(async ({ context }) => {
+    await db.delete(platformSettings).where(eq(platformSettings.key, TRANSACTIONAL_EMAIL_SETTING));
+    await writeAudit({
+      actor: context.email,
+      actorUserId: context.userId,
+      action: "platform.email.config.clear",
+      entityType: "platform_settings",
+      detail: { setting: TRANSACTIONAL_EMAIL_SETTING },
+    });
+    return { ok: true };
+  });
+
+/** Delivers a test email to the requesting super user's own address. */
+export const sendPlatformTestEmail = createServerFn({ method: "POST" })
+  .middleware([requirePlatformAdmin])
+  .handler(async ({ context }) => {
+    const saved = await readTransactionalEmailConfig();
+    if (!saved && !process.env["RESEND_API_KEY"]) {
+      throw new Error(
+        "No email transport is configured — save an API key below or set RESEND_API_KEY / SMTP_URL.",
+      );
+    }
+    const { sendTemplateEmail } = await import("@/lib/email-templates/send-email");
+    await sendTemplateEmail("platform-email-test", context.email, {
+      templateData: { siteName: "ATSIQ", recipient: context.email },
+      idempotencyKey: `platform-email-test-${context.userId}-${Date.now()}`,
+    });
+    return { ok: true, to: context.email };
   });

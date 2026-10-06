@@ -81,9 +81,24 @@ Recent additions to note per release: `0015_ai_usage_events.sql` (AI usage ledge
 | Google sign-in button                                                | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`                                                                                                                                 |
 | Careers-inbox email webhook                                          | `INBOUND_EMAIL_SECRET` (random 32+), `INBOUND_EMAIL_DOMAIN`                                                                                                                            |
 | Scheduler/cron routes                                                | `LOVABLE_CRON_SECRET` (random 32+; optional `LOVABLE_CRON_SECRET_PREVIOUS` for rotation)                                                                                               |
-| Transactional email                                                  | `SMTP_URL` (e.g. `smtps://user:pass@smtp.example.com:465`), `EMAIL_FROM`                                                                                                               |
+| Transactional email                                                  | `SMTP_URL` (e.g. `smtps://user:pass@smtp.example.com:465`) **or** `RESEND_API_KEY` (hosted email API — no relay to run), `EMAIL_FROM`                                                   |
 
 **Secrets to generate:** `SESSION_SECRET`, `SECRET_ENCRYPTION_KEY` (AES-256 key for credentials at rest; `openssl rand -base64 32`), `OAUTH_STATE_SECRET`, `LINKEDIN_STATE_SECRET`, `INBOUND_EMAIL_SECRET`, `LOVABLE_CRON_SECRET` — stored in Secret Manager. `SECRET_ENCRYPTION_KEY` is mandatory before saving OAuth or AI credentials. Rotating it requires re-encrypting stored values.
+
+### Transactional email transports
+
+The sender picks the first configured transport: `SMTP_URL` → `RESEND_API_KEY` → `LOVABLE_API_KEY` (Lovable Cloud only). Registration confirmation, invitations, password reset, org approval notices and the queued candidate emails all flow through it, so **at least one must be set** or sign-up cannot complete.
+
+**Resend setup (no SMTP relay needed):**
+
+1. Create a Resend account → **Domains** → add `atsiq.yavar.ai` (already in DNS with no MX/SPF — Resend's records add cleanly; the root `yavar.ai` SPF/DMARC stay untouched). Do **not** use `notify.atsiq.yavar.ai` — its DNS is still delegated to Lovable's nameservers from the Lovable-Cloud era.
+2. Add the DNS records Resend displays (SPF include, DKIM TXT, DMARC) to the `yavar.ai` zone and wait for the domain to show **Verified**.
+3. Create an API key, then either:
+   - **In-app (preferred):** sign in as a platform super user → **Integrations → Transactional email** → paste the key + From address → Save, then "Send test email". The credential is stored encrypted (`SECRET_ENCRYPTION_KEY` required) and overrides the env var — rotation needs no redeploy.
+   - **Environment:** set `RESEND_API_KEY=re_…` and `EMAIL_FROM="ATSIQ <noreply@atsiq.yavar.ai>"` in the deployment secret (the From domain must match the verified domain).
+4. Resend's free tier allows 100 emails/day (3 000/month) — enough for onboarding; upgrade if candidate-email volume grows. Failed sends are logged to `app_logs` (source `email`), visible in the platform observability console.
+
+`RESEND_SEND_URL` (optional) overrides the API endpoint for local testing only.
 
 ### Organisation-owned AI credentials
 

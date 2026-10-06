@@ -1,11 +1,12 @@
 import * as React from "react";
+import { createHash } from "node:crypto";
 import { render } from "@react-email/render";
 import { EmailAPIError, sendLovableEmail } from "@lovable.dev/email-js";
 import nodemailer from "nodemailer";
 import { TEMPLATES, type TemplateData } from "./registry";
 
-// Server-only: reads SMTP_URL (self-hosted) or LOVABLE_API_KEY (Lovable Cloud).
-// Never import from client components.
+// Server-only: reads SMTP_URL or RESEND_API_KEY (self-hosted) or
+// LOVABLE_API_KEY (Lovable Cloud). Never import from client components.
 
 // Configuration baked in at scaffold time
 const SITE_NAME = "ATSIQ";
@@ -49,7 +50,12 @@ export interface SendTemplateEmailOptions {
  */
 function logSend(
   level: "info" | "warn" | "error",
-  args: { template: string; to: string; transport: "smtp" | "lovable" | "none"; startedAt: number },
+  args: {
+    template: string;
+    to: string;
+    transport: "smtp" | "resend" | "lovable" | "none";
+    startedAt: number;
+  },
   error?: unknown,
 ): void {
   void import("../../server/logger")
@@ -101,7 +107,19 @@ export async function sendTemplateEmail(
   const text = await render(element, { plainText: true });
   const subject =
     typeof template.subject === "function" ? template.subject(templateData) : template.subject;
-  const from = process.env["EMAIL_FROM"] || `${SITE_NAME} <noreply@${FROM_DOMAIN}>`;
+
+  // A credential saved in the Integrations → Transactional email tab (encrypted
+  // at rest) takes precedence over the environment so a super user can activate
+  // or rotate email without a redeploy. Both lookups fail soft.
+  let savedEmail: { apiKey: string; fromAddress: string } | null = null;
+  try {
+    const { readTransactionalEmailConfig } = await import("../../server/platform-settings.server");
+    savedEmail = await readTransactionalEmailConfig();
+  } catch {
+    // no DB / no table yet — environment variables remain the source
+  }
+  const from =
+    savedEmail?.fromAddress || process.env["EMAIL_FROM"] || `${SITE_NAME} <noreply@${FROM_DOMAIN}>`;
 
   // Self-hosted deployments send over their own SMTP (documented in
   // DEPLOYMENT-GCP.md); the Lovable API path only exists on Lovable Cloud.
@@ -136,6 +154,76 @@ export async function sendTemplateEmail(
     return { sent: true };
   }
 
+  // Resend's hosted API — the no-relay path: an API key plus a verified sending
+  // domain (DNS) replaces a self-run SMTP server. Attachments are carried as
+  // base64, same as the SMTP branch. An explicit SMTP_URL still wins when both
+  // are set; the platform-console credential beats the environment variable.
+  // RESEND_SEND_URL exists so local e2e can capture sends without touching the
+  // real API (mirrors LOVABLE_SEND_URL below).
+  const resendKey = savedEmail?.apiKey || process.env["RESEND_API_KEY"];
+  if (resendKey) {
+    try {
+      const response = await fetch(
+        process.env["RESEND_SEND_URL"] || "https://api.resend.com/emails",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${resendKey}`,
+            "Content-Type": "application/json",
+            // Resend dedupes retries on this header for 24h, but only when the
+            // request body is identical — a changed body with a used key is
+            // rejected. Callers pass logical keys ("email-confirm-<userId>",
+            // outbox row ids) whose bodies legitimately change between sends
+            // (a fresh confirmation token re-renders the html), so the key is
+            // fingerprinted with the rendered content: an identical retry
+            // (outbox redelivery) dedupes, a genuinely new mail sends.
+            "Idempotency-Key": `${options.idempotencyKey || crypto.randomUUID()}-${createHash("sha256").update(html).digest("hex").slice(0, 16)}`,
+          },
+          signal: AbortSignal.timeout(15_000),
+          body: JSON.stringify({
+            from,
+            to: recipient,
+            subject,
+            html,
+            text,
+            ...(options.replyTo ? { reply_to: options.replyTo } : {}),
+            ...(options.attachments?.length
+              ? {
+                  attachments: options.attachments.map((a) => ({
+                    filename: a.filename,
+                    content: a.contentBase64,
+                    content_type: a.contentType,
+                  })),
+                }
+              : {}),
+          }),
+        },
+      );
+      if (!response.ok) {
+        const detail = (await response.json().catch(() => null)) as { message?: unknown } | null;
+        const reason = detail?.message != null ? String(detail.message) : `HTTP ${response.status}`;
+        throw new Error(`Resend rejected the send (${reason})`);
+      }
+    } catch (e) {
+      // Surface network-level failures ("fetch failed", aborts) with something
+      // an admin can act on; API rejections already carry Resend's message.
+      const err =
+        e instanceof Error && /fetch failed|aborted|timeout/i.test(e.message)
+          ? new Error(
+              `Resend is unreachable (${e.message}) — check RESEND_API_KEY and cluster egress`,
+            )
+          : e;
+      logSend(
+        "error",
+        { template: templateName, to: recipient, transport: "resend", startedAt },
+        err,
+      );
+      throw err;
+    }
+    logSend("info", { template: templateName, to: recipient, transport: "resend", startedAt });
+    return { sent: true };
+  }
+
   if (options.attachments?.length) {
     throw new EmailAttachmentsUnsupportedError();
   }
@@ -145,10 +233,10 @@ export async function sendTemplateEmail(
     logSend(
       "error",
       { template: templateName, to: recipient, transport: "none", startedAt },
-      "Email is not configured: set SMTP_URL (self-hosted) or LOVABLE_API_KEY (Lovable Cloud)",
+      "Email is not configured: set SMTP_URL or RESEND_API_KEY (self-hosted) or LOVABLE_API_KEY (Lovable Cloud)",
     );
     throw new Error(
-      "Email is not configured: set SMTP_URL (self-hosted) or LOVABLE_API_KEY (Lovable Cloud)",
+      "Email is not configured: set SMTP_URL or RESEND_API_KEY (self-hosted) or LOVABLE_API_KEY (Lovable Cloud)",
     );
   }
 

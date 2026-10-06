@@ -260,6 +260,19 @@ export const platformAdmins = pgTable(
   ],
 );
 
+/**
+ * Deployment-level settings owned by platform super users (values encrypted at
+ * rest via SECRET_ENCRYPTION_KEY). One row per setting key; currently holds the
+ * transactional-email provider credential so the Resend key can be rotated
+ * from the platform console without a redeploy.
+ */
+export const platformSettings = pgTable("platform_settings", {
+  key: text("key").primaryKey(),
+  valueEncrypted: text("value_encrypted").notNull(),
+  updatedBy: uuid("updated_by"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 /* -------------------------------------------------- requisitions & JDs */
 
 export const departments = pgTable(

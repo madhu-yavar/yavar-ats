@@ -10,9 +10,9 @@
 | Database | Ordinary **PostgreSQL 14+** (drizzle ORM). Schema source of truth: `drizzle/pg-migrations/` applied by `scripts/migrate-pg.mjs` (idempotent). **Do NOT use `drizzle-kit migrate`** — the old `drizzle/migrations` journal is incomplete and cannot build a fresh database. |
 | Auth | First-party: scrypt password hashes in the `users` table, httpOnly `atsiq_session` cookie, DB-backed `sessions` table. No external identity provider. |
 | Object storage (CV vault, template sources, brand logos) | Any S3-compatible store. Recommended: **GCS bucket with HMAC keys**. |
-| Email | Any SMTP relay (`SMTP_URL`). Used for: registration confirmation, invitations, password reset, org approval notices, and the queued candidate emails (acknowledgment, stage update, interview invitation, offer) drained by the `process-email-outbox` cron. |
+| Email | Any SMTP relay (`SMTP_URL`) **or** Resend's hosted API (`RESEND_API_KEY` + verified sending domain — no relay to run; setup steps in `DEPLOYMENT-GCP.md` § "Transactional email transports"). Used for: registration confirmation, invitations, password reset, org approval notices, and the queued candidate emails (acknowledgment, stage update, interview invitation, offer) drained by the `process-email-outbox` cron. |
 | Health probe | **`GET /`** (HTTP 200). There is no `/health` endpoint. |
-| Environment variables | **Copy-ready template: `infra/env.production.example`** — the annotated production `.env`. Only `DATABASE_URL` + `SESSION_SECRET` are required to boot; `SMTP_URL` is required for email delivery. |
+| Environment variables | **Copy-ready template: `infra/env.production.example`** — the annotated production `.env`. Only `DATABASE_URL` + `SESSION_SECRET` are required to boot; `SMTP_URL` or `RESEND_API_KEY` is required for email delivery. |
 
 ---
 
@@ -22,7 +22,7 @@
 |---|---|
 | GCP project ID + region | e.g. `yavar-studio`, region `asia-south1` |
 | DNS control for `atsiq.yavar.ai` | Currently proxied through **Cloudflare**; origin must be repointed at the Cloud Run URL at cut-over |
-| SMTP credentials | Host/port/user/pass (or an existing corporate relay). Password-reset and invitation emails depend on this |
+| SMTP credentials **or** a Resend account | Host/port/user/pass for a relay (`SMTP_URL`) — or a Resend API key after verifying the sending subdomain in Resend's dashboard (`RESEND_API_KEY`). Password-reset, registration-confirmation and invitation emails depend on this |
 | Confirmation that Lovable's DB backup/restore is settled | The production data (users, organisations, candidates) currently lives in Lovable's managed database; a `pg_dump` must be exported from there — see §3 |
 
 ---
@@ -150,6 +150,13 @@ gcloud run deploy atsiq \
   --set-env-vars "PUBLIC_SITE_URL=https://atsiq.yavar.ai,TRUSTED_PROXY_COUNT=1" \
   --quiet
 ```
+
+> **Email via Resend instead of SMTP:** create the secret `atsiq-resend-api-key` and swap
+> `SMTP_URL=atsiq-smtp-url:latest` for `RESEND_API_KEY=atsiq-resend-api-key:latest` in
+> `--set-secrets`, and add `EMAIL_FROM="ATSIQ <noreply@atsiq.yavar.ai>"` to
+> `--set-env-vars` (the From domain must be verified in Resend first). Alternatively — no
+> redeploy needed — a platform super user can paste the key in the app under
+> Integrations → Transactional email (stored encrypted; overrides the env var).
 
 > **`TRUSTED_PROXY_COUNT=1` is required** (one proxy hop in front of the app).
 > The service must only be reachable through that proxy.
