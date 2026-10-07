@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Check, Copy, Loader2, Mail, RefreshCw, Trash2 } from "lucide-react";
 
 import {
-  getInboxMessage,
+  getInboxThread,
   orgInbox,
   removeInboxMessage,
   retryInboxMessage,
@@ -75,15 +75,10 @@ function InboxPage() {
   const fetchInbox = useServerFn(orgInbox);
   const retry = useServerFn(retryInboxMessage);
   const remove = useServerFn(removeInboxMessage);
-  const fetchMessage = useServerFn(getInboxMessage);
+  const fetchThread = useServerFn(getInboxThread);
 
   const inbox = useQuery({ queryKey: ["org_inbox"], queryFn: () => fetchInbox({}) });
-  const [reading, setReading] = useState<string | null>(null);
-  const message = useQuery({
-    queryKey: ["org_inbox_message", reading],
-    queryFn: () => fetchMessage({ data: { id: reading! } }),
-    enabled: Boolean(reading),
-  });
+  const [threadKey, setThreadKey] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [busy, setBusy] = useState<string | null>(null);
@@ -124,6 +119,48 @@ function InboxPage() {
     });
   }, [inbox.data, search, status]);
 
+  // Gmail-style conversations: group by normalised subject (Re:/Fwd: stripped)
+  // within the same candidate, so one candidate's back-and-forth reads as one
+  // thread while different candidates on a similar subject stay separate.
+  const groups = useMemo(() => {
+    const norm = (s: string | null) =>
+      (s ?? "")
+        .replace(/^\s*((re|fwd?|fw)\s*:\s*)+/i, "")
+        .trim()
+        .toLowerCase() || "(no subject)";
+    const byKey = new Map<
+      string,
+      { key: string; subject: string; messages: InboxRow[]; last: InboxRow }
+    >();
+    for (const m of rows) {
+      const key = `${norm(m.subject)}|${m.candidate_id ?? ""}`;
+      const g = byKey.get(key) ?? {
+        key,
+        subject: m.subject ?? "(no subject)",
+        messages: [],
+        last: m,
+      };
+      g.messages.push(m);
+      g.last = m;
+      byKey.set(key, g);
+    }
+    const list = [...byKey.values()];
+    for (const g of list) {
+      g.messages.sort((a, b) => a.received_at.localeCompare(b.received_at));
+      const bare = g.messages.find((m) => !/^(re|fwd?|fw)\s*:/i.test(m.subject ?? ""));
+      if (bare?.subject) g.subject = bare.subject;
+    }
+    return list.sort((a, b) => b.last.received_at.localeCompare(a.last.received_at));
+  }, [rows]);
+
+  const openGroup = groups.find((g) => g.key === threadKey) ?? null;
+  const thread = useQuery({
+    queryKey: ["org_inbox_thread", threadKey],
+    queryFn: () => fetchThread({ data: { ids: (openGroup?.messages ?? []).map((m) => m.id) } }),
+    enabled: Boolean(openGroup?.messages.length),
+  });
+  const linkedCandidateId = thread.data?.find((m) => m.candidate_id)?.candidate_id ?? null;
+
   const act = async (id: string, kind: "retry" | "remove") => {
     setBusy(id);
     try {
@@ -135,6 +172,7 @@ function InboxPage() {
         toast.success("Mail removed.");
       }
       await qc.invalidateQueries({ queryKey: ["org_inbox"] });
+      await qc.invalidateQueries({ queryKey: ["org_inbox_thread"] });
       await qc.invalidateQueries({ queryKey: ["candidates"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "That did not work.");
@@ -264,150 +302,144 @@ function InboxPage() {
             )}
             Refresh
           </Button>
-          <span className="ml-auto text-sm text-muted-foreground">{rows.length} shown</span>
+          <span className="ml-auto text-sm text-muted-foreground">
+            {groups.length} conversations
+          </span>
         </div>
 
-        <div className="mt-4 overflow-x-auto">
-          {rows.length === 0 ? (
+        <div className="mt-4">
+          {groups.length === 0 ? (
             <EmptyState
               title="No applications here yet"
               hint="Send a test mail with a CV attached to the address above, or forward your careers mailbox to it."
             />
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="py-2 pr-3 font-medium">Received</th>
-                  <th className="py-2 pr-3 font-medium">From</th>
-                  <th className="py-2 pr-3 font-medium">Subject</th>
-                  <th className="py-2 pr-3 font-medium">CV</th>
-                  <th className="py-2 pr-3 font-medium">Outcome</th>
-                  <th className="py-2 pr-3 font-medium">Detail</th>
-                  <th className="py-2 font-medium" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((m) => (
-                  <tr key={m.id} className="border-b border-border/60 align-top">
-                    <td className="py-2 pr-3 whitespace-nowrap text-muted-foreground">
-                      {new Date(m.received_at).toLocaleString()}
-                    </td>
-                    <td className="py-2 pr-3">
-                      <span className="block font-medium text-foreground">
-                        {m.from_name ?? m.from_email}
+            <div className="divide-y divide-border overflow-hidden rounded-md border border-border">
+              {groups.map((g) => (
+                <button
+                  key={g.key}
+                  type="button"
+                  className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+                  onClick={() => setThreadKey(g.key)}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium text-foreground">
+                        {g.subject}
                       </span>
-                      {m.from_name ? (
-                        <span className="block text-xs text-muted-foreground">{m.from_email}</span>
+                      {g.messages.length > 1 ? (
+                        <span className="shrink-0 rounded-full border border-border px-1.5 text-xs text-muted-foreground">
+                          {g.messages.length}
+                        </span>
                       ) : null}
-                    </td>
-                    <td className="max-w-xs py-2 pr-3">
-                      <button
-                        type="button"
-                        className="block truncate text-left text-foreground underline-offset-2 hover:text-primary hover:underline"
-                        onClick={() => setReading(m.id)}
-                        title="Read this mail"
-                      >
-                        {m.subject ?? "(no subject)"}
-                      </button>
-                    </td>
-                    <td className="max-w-[12rem] py-2 pr-3 truncate font-mono text-xs">
-                      {m.attachment_name ?? "—"}
-                    </td>
-                    <td className="py-2 pr-3">
-                      <span
-                        className={`inline-flex rounded-full border px-2 py-0.5 text-xs ${
-                          STATUS_STYLE[m.status] ?? STATUS_STYLE["received"]
-                        }`}
-                      >
-                        {STATUS_LABEL[m.status] ?? m.status}
-                      </span>
-                    </td>
-                    <td className="max-w-sm py-2 pr-3 text-muted-foreground">
-                      {m.detail ?? "—"}
+                    </div>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {g.last.from_name ?? g.last.from_email}
+                      {g.last.snippet ? ` — ${g.last.snippet}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <span className="whitespace-nowrap text-xs text-muted-foreground">
+                      {new Date(g.last.received_at).toLocaleString()}
+                    </span>
+                    <span
+                      className={`inline-flex rounded-full border px-2 py-0.5 text-xs ${
+                        STATUS_STYLE[g.last.status] ?? STATUS_STYLE["received"]
+                      }`}
+                    >
+                      {STATUS_LABEL[g.last.status] ?? g.last.status}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <Dialog open={Boolean(threadKey)} onOpenChange={(o) => !o && setThreadKey(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Mail className="size-4 text-muted-foreground" />
+                {openGroup?.subject ?? "(no subject)"}
+              </DialogTitle>
+              <DialogDescription>
+                {openGroup ? `${openGroup.messages.length} message(s) in this conversation` : ""}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[26rem] space-y-4 overflow-y-auto pr-1">
+              {thread.data?.length
+                ? thread.data.map((m) => (
+                    <div key={m.id} className="rounded-md border border-border p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground">
+                            {m.from_name ?? m.from_email}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {m.from_email} · {new Date(m.received_at).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <span
+                            className={`inline-flex rounded-full border px-2 py-0.5 text-xs ${
+                              STATUS_STYLE[m.status] ?? STATUS_STYLE["received"]
+                            }`}
+                          >
+                            {STATUS_LABEL[m.status] ?? m.status}
+                          </span>
+                          {m.status === "error" || m.status === "received" ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busy === m.id}
+                              onClick={() => act(m.id, "retry")}
+                            >
+                              <RefreshCw className="size-4" />
+                              <span className="ml-1">Retry</span>
+                            </Button>
+                          ) : null}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={busy === m.id}
+                            onClick={() => act(m.id, "remove")}
+                            aria-label="Remove mail"
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">
+                        {m.body || "(no readable body — this mail arrived without plain text)"}
+                      </p>
+                      {m.attachment_name ? (
+                        <p className="mt-2 font-mono text-xs text-muted-foreground">
+                          Attachment: {m.attachment_name}
+                        </p>
+                      ) : null}
                       {m.candidate_id ? (
                         <Link
                           to="/candidates/$id"
                           params={{ id: m.candidate_id }}
-                          className="ml-2 text-primary underline"
+                          className="mt-2 inline-block text-xs text-primary underline"
                         >
                           Open candidate
                         </Link>
                       ) : null}
-                    </td>
-                    <td className="py-2 whitespace-nowrap text-right">
-                      {m.status === "error" || m.status === "received" ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={busy === m.id}
-                          onClick={() => act(m.id, "retry")}
-                        >
-                          {busy === m.id ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : (
-                            <RefreshCw className="size-4" />
-                          )}
-                          <span className="ml-1">Try again</span>
-                        </Button>
-                      ) : null}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={busy === m.id}
-                        onClick={() => act(m.id, "remove")}
-                        aria-label="Remove mail"
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        <Dialog open={Boolean(reading)} onOpenChange={(o) => !o && setReading(null)}>
-          <DialogContent className="max-w-xl">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Mail className="size-4 text-muted-foreground" />
-                {message.data?.subject ?? "(no subject)"}
-              </DialogTitle>
-              <DialogDescription>
-                {message.data
-                  ? `${message.data.from_name ?? message.data.from_email ?? "Unknown sender"} · ${new Date(message.data.received_at).toLocaleString()}`
-                  : "Loading…"}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3 text-sm">
-              <div className="space-y-1 rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-                <div>
-                  From: <span className="num">{message.data?.from_email ?? "—"}</span>
-                </div>
-                <div>
-                  To: <span className="num">{message.data?.to_address ?? "—"}</span>
-                </div>
-                {message.data?.attachment_name ? (
-                  <div>
-                    Attachment: <span className="num">{message.data.attachment_name}</span>
-                  </div>
-                ) : null}
-                {message.data?.detail ? <div>Outcome: {message.data.detail}</div> : null}
-              </div>
-              <div className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-md border border-border p-3 leading-relaxed">
-                {message.data?.body || "(no readable body — this mail arrived without plain text)"}
-              </div>
+                    </div>
+                  ))
+                : null}
             </div>
             <DialogFooter className="gap-2">
-              {message.data?.candidate_id ? (
+              {linkedCandidateId ? (
                 <Button asChild variant="outline">
-                  <Link to="/candidates/$id" params={{ id: message.data.candidate_id }}>
+                  <Link to="/candidates/$id" params={{ id: linkedCandidateId }}>
                     Open candidate
                   </Link>
                 </Button>
               ) : null}
-              <Button variant="ghost" onClick={() => setReading(null)}>
+              <Button variant="ghost" onClick={() => setThreadKey(null)}>
                 Close
               </Button>
             </DialogFooter>

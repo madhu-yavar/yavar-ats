@@ -2,7 +2,7 @@
  * Server functions for the organisation's own careers inbox: the address, the
  * mail that has arrived, and the manual retry / remove actions.
  */
-import { and, desc, eq, ilike, ne } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, ne, sql } from "drizzle-orm";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
@@ -15,6 +15,7 @@ export type InboxRow = {
   from_email: string | null;
   from_name: string | null;
   subject: string | null;
+  snippet: string | null;
   attachment_name: string | null;
   status: string;
   detail: string | null;
@@ -47,6 +48,7 @@ export const orgInbox = createServerFn({ method: "GET" })
         from_email: inboxMessages.fromEmail,
         from_name: inboxMessages.fromName,
         subject: inboxMessages.subject,
+        snippet: sql<string | null>`left(${inboxMessages.body}, 140)`,
         attachment_name: inboxMessages.attachmentName,
         status: inboxMessages.status,
         detail: inboxMessages.detail,
@@ -78,12 +80,14 @@ export const orgInbox = createServerFn({ method: "GET" })
     };
   });
 
-/** One mail with its body, for the inbox reader pane. Org-scoped. */
-export const getInboxMessage = createServerFn({ method: "GET" })
+/** A conversation's full messages (bodies included), oldest first. Org-scoped. */
+export const getInboxThread = createServerFn({ method: "GET" })
   .middleware([requireOrg])
-  .inputValidator((data: unknown) => z.object({ id: z.string().uuid() }).parse(data))
+  .inputValidator((data: unknown) =>
+    z.object({ ids: z.array(z.string().uuid()).min(1).max(50) }).parse(data),
+  )
   .handler(async ({ data, context }) => {
-    const [row] = await db
+    const rows = await db
       .select({
         id: inboxMessages.id,
         to_address: inboxMessages.toAddress,
@@ -98,10 +102,9 @@ export const getInboxMessage = createServerFn({ method: "GET" })
         received_at: inboxMessages.receivedAt,
       })
       .from(inboxMessages)
-      .where(and(eq(inboxMessages.id, data.id), eq(inboxMessages.orgId, context.orgId)))
-      .limit(1);
-    if (!row) throw new Error("Message not found.");
-    return { ...row, received_at: row.received_at.toISOString() };
+      .where(and(eq(inboxMessages.orgId, context.orgId), inArray(inboxMessages.id, data.ids)))
+      .orderBy(inboxMessages.receivedAt);
+    return rows.map((r) => ({ ...r, received_at: r.received_at.toISOString() }));
   });
 
 export const retryInboxMessage = createServerFn({ method: "POST" })
