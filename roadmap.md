@@ -46,6 +46,47 @@ Study in `docs/hrms-integrations-study.md`: vendor API landscape (Keka, greytHR,
 - [x] Vendor/model abstraction: AI provider and model names removed from the landing page, product catalogue (page and PDF/XLSX export), user manual, toasts/cards and all server-to-client payloads; a one-time migration (`0016`) scrubbed model ids already persisted in candidate activity trails. The organisation's own Integrations → AI model settings keeps provider and model choice (BYO keys)
 - [x] Usage attribution fixes: careers-inbox CV parsing and Talent Brain AI now carry the organisation id so every ledger row resolves to a tenant
 
+## Conversational candidate communication (2026-10-07) — planned
+
+Two-way, tracked candidate email with the full journey visible on the application. Extends the shipped one-way track (outbox + cron + per-org settings, delivered via Resend since 2026-10-07) and reuses the shipped inbound careers-inbox bridge (`inbox_messages` already carries candidate/requisition linkage) and pre-onboarding document stack (`onboarding_documents` + extraction agent + HR validation).
+
+**Phase 1 — Tracked identities & thread core ("see the journey")**
+- [ ] **Inbound transport via Resend Receiving** (chosen over the M365 Power Automate hop for the reply leg — no mail-admin dependency): add the still-missing inbound MX for `atsiq.yavar.ai` at Namecheap (shown "Pending" on the Resend domain page), then Resend's `email.received` webhook POSTs replies to a new signed endpoint (`/api/public/resend-inbound`, Svix signature verified, secret in env); unknown addresses fall through to the careers inbox
+- [ ] Per-user sending handles `<handle>@atsiq.yavar.ai` (org-unique, registered on the member; disabled on offboarding, threads preserved) as the From on every candidate email the member triggers — one verified domain serves all tenants, zero per-tenant DNS
+- [ ] Tokenised Reply-To (`reply+<token>@atsiq.yavar.ai`, application-scoped, expiring, rotated on reschedule) on every outbound candidate email — replies flow candidate → Resend → ATSIQ with no mailbox anywhere; delivered mail carries List headers so threads group in the candidate's client
+- [ ] Inbound routing: the new endpoint resolves reply tokens → files the message against the application (`inbox_messages` linkage columns already exist); plain-text replies accepted when a valid token is present (today's careers intake skips them)
+- [ ] Application journey timeline: one activity stream per application showing stage events, every outbound email (from the outbox) and every inbound reply — "the TA sees the whole conversation in the app"
+- [ ] The M365 Power Automate flow remains optional, only for candidates who mail the organisation's legacy `careers@yavar.ai` address directly
+
+**Phase 2 — Interview acceptance & reminders**
+- [ ] Accept / Decline tokenised links (candidate + each panelist) in the interview invite; recorded per recipient on the interview; decline raises a reschedule task for the TA
+- [ ] Reminder pass folded into the 5-minute outbox cron (no new scheduler): T-24h and T-2h reminders to acceptors, nudges to non-responders
+- [ ] Reschedule sends an updated calendar entry (UID already stable) and re-issues accept links
+
+**Phase 3 — Document requests & pre-boarding automation**
+- [ ] Configurable per-org document checklist; on offer release, an automatic document-request email listing pending documents, each with a tokenised upload link to a candidate self-service page (files land in `onboarding_documents`, source `upload`)
+- [ ] Auto-tick: inbound documents already route through the careers inbox with AI extraction and doc-type classification — match them against open requests so a mailed document clears its own checklist item
+- [ ] Pending-document reminders (bounded, e.g. every 3 days, max 3) and a joining-day communication template
+- [ ] Trigger mode per org: pre-release validation (shipped behaviour) or post-release pre-boarding (new) — the offer gate follows the chosen mode
+
+**Automation coverage matrix** (journey point → automation → state)
+
+| Journey point | Automation | State |
+|---|---|---|
+| Application submitted (apply page / job boards) | Application ack | ✅ live |
+| Shortlisted / moved L1–L3 | Stage update (never AI-screen/reject) | ✅ live |
+| Interview scheduled | Invite + calendar to candidate; panel copy | ✅ live (panel copy: phase 2) |
+| Candidate/panel respond | Acceptance recorded; decline → reschedule task | 🔜 phase 2 |
+| T-24h / T-2h before interview | Reminders to acceptors; nudge to non-responders | 🔜 phase 2 |
+| Candidate replies to any email | Captured on the application thread; TA sees it in-app | 🔜 phase 1 |
+| Offer released | Offer letter (PDF) + document-request checklist | ✅ / 🔜 phase 3 |
+| Documents pending | Bounded reminders; inbound docs auto-clear their checklist item | 🔜 phase 3 |
+| Pre-joining | Joining-day communication template | 🔜 phase 3 |
+| Rejected / on hold | Courteous rejection email — deliberately off in P1; optional per-org toggle if wanted (product call) | ⏸ decision needed |
+| Candidate silent N days | Stalled-application nudge to the TA (not auto-to-candidate) | ⏸ optional, phase 3+ |
+
+**Security/ops invariants for all phases:** tokens are single-purpose and expiring; reply tokens rotate on reschedule; sending handles retire with the member; inbound size caps and per-org abuse caps carry over; every delivery attempt stays in `app_logs`; no new scheduler job (reminders ride the 5-minute outbox cron).
+
 ## Candidate communications (2026-09-27)
 
 - [x] Candidate email outbox with queued delivery, retries and suppression

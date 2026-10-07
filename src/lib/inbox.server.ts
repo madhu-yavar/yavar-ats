@@ -147,7 +147,8 @@ export async function attachmentText(filename: string, bytes: Uint8Array): Promi
     // Register the worker module on globalThis: pdf.js then runs its worker
     // message handler on the main thread and skips the file-based lookup.
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    (globalThis as Record<string, unknown>).pdfjsWorker ??=
+    (globalThis as { pdfjsWorker?: unknown }).pdfjsWorker ??=
+      // @ts-expect-error the legacy worker build ships no type declarations
       await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
     // pdf.js transfers (detaches) the buffer it is given — hand it a copy so the
     // caller keeps usable bytes for the resume vault and size reporting.
