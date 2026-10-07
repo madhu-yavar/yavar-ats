@@ -16,7 +16,9 @@ import {
   type InboxRow,
 } from "@/lib/local-inbox.functions";
 import { EmptyState, PageHeader } from "@/components/ats";
+import { listMembers } from "@/lib/org.functions";
 import { useNavCtx } from "@/hooks/useNavCtx";
+import { useOrg } from "@/hooks/useOrg";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -95,6 +97,7 @@ function InboxPage() {
   const inbox = useQuery({ queryKey: ["org_inbox"], queryFn: () => fetchInbox({}) });
   const [threadKey, setThreadKey] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [memberFilter, setMemberFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [busy, setBusy] = useState<string | null>(null);
@@ -102,6 +105,12 @@ function InboxPage() {
   const [careers, setCareers] = useState("");
   const [savingCareers, setSavingCareers] = useState(false);
   const persistCareers = useServerFn(saveCareersEmail);
+  const fetchMembers = useServerFn(listMembers);
+  const members = useQuery({
+    queryKey: ["org_members_list"],
+    queryFn: () => fetchMembers({}),
+    enabled: nav.leadership,
+  });
 
   useEffect(() => {
     setCareers(inbox.data?.careersEmail ?? "");
@@ -123,26 +132,11 @@ function InboxPage() {
   const address = inbox.data?.address ?? null;
   const counts = inbox.data?.counts;
 
-  if (!nav.governance) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Careers inbox" description="Candidate correspondence intake." />
-        <div className="panel p-8 text-center">
-          <h1 className="text-lg font-semibold">Restricted</h1>
-          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-            Candidate correspondence is confidential. The careers inbox is visible only to HR
-            leadership (owner, HR head, President/CBO). Recruiters and hiring managers work
-            candidates through the talent pool instead.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   const rows = useMemo(() => {
     const all = (inbox.data?.messages ?? []) as InboxRow[];
     const q = search.trim().toLowerCase();
     return all.filter((m) => {
+      if (memberFilter !== "all" && (m.owner_id ?? "") !== memberFilter) return false;
       if (status === "starred") {
         if (!m.starred) return false;
       } else if (status !== "all" && m.status !== status) return false;
@@ -151,7 +145,7 @@ function InboxPage() {
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q));
     });
-  }, [inbox.data, search, status]);
+  }, [inbox.data, search, status, memberFilter]);
 
   // Gmail-style conversations: group by normalised subject (Re:/Fwd: stripped)
   // within the same candidate, so one candidate's back-and-forth reads as one
@@ -379,6 +373,21 @@ function InboxPage() {
             placeholder="Search sender, subject or file"
             className="max-w-sm"
           />
+          {nav.leadership ? (
+            <Select value={memberFilter} onValueChange={setMemberFilter}>
+              <SelectTrigger className="w-52">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All members</SelectItem>
+                {(members.data ?? []).map((mm) => (
+                  <SelectItem key={mm.id} value={mm.id}>
+                    {mm.fullName || mm.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
           <Select value={status} onValueChange={setStatus}>
             <SelectTrigger className="w-48">
               <SelectValue />

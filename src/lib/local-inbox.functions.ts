@@ -7,8 +7,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { db } from "../server/db";
-import { inboxMessages, organizations } from "@db/schema";
-import { assertRole, requireOrg } from "./auth.middleware";
+import { inboxMessages, organizations, userRoles } from "@db/schema";
+import { assertRole, activeOrgOf, requireOrg } from "./auth.middleware";
 
 export type InboxRow = {
   id: string;
@@ -21,6 +21,7 @@ export type InboxRow = {
   detail: string | null;
   candidate_id: string | null;
   requisition_id: string | null;
+  owner_id: string | null;
   starred: boolean;
   read_at: string | null;
   received_at: string;
@@ -35,19 +36,26 @@ export type InboxView = {
 };
 
 /**
- * Candidate mail is confidential HR correspondence. The inbox (list, reader,
- * star/remove/retry, careers-address registration) is restricted to HR
- * leadership — owner, HR head, President/CBO. Recruiters and hiring managers
- * work candidates through the talent pool, never through this mailbox.
+ * Candidate mail is confidential per-user correspondence. HR leadership
+ * (owner, HR head, President/CBO) sees the whole org inbox with filters;
+ * every other member sees only the mail on their own candidates.
  */
-async function assertInboxAccess(userId: string, orgId: string): Promise<void> {
-  await assertRole(userId, orgId, ["hr_head", "president_cbo"], "The careers inbox is restricted to HR leadership.");
+async function inboxScope(userId: string, orgId: string): Promise<"all" | { ownerId: string }> {
+  const org = await activeOrgOf(userId);
+  if (!org || org.orgId !== orgId) throw new Error("You are not part of an organisation yet.");
+  if (org.isOwner) return "all";
+  const roles = await db
+    .select({ role: userRoles.role })
+    .from(userRoles)
+    .where(and(eq(userRoles.userId, userId), eq(userRoles.orgId, orgId)));
+  if (roles.some((r) => r.role === "hr_head" || r.role === "president_cbo")) return "all";
+  return { ownerId: userId };
 }
 
 export const orgInbox = createServerFn({ method: "GET" })
   .middleware([requireOrg])
   .handler(async ({ context }): Promise<InboxView> => {
-    await assertInboxAccess(context.userId, context.orgId);
+    const scope = await inboxScope(context.userId, context.orgId);
     const { inboxAddress } = await import("./local-inbox.server");
     const [org] = await db
       .select({ inboxSlug: organizations.inboxSlug, careersEmail: organizations.careersEmail })
@@ -69,10 +77,15 @@ export const orgInbox = createServerFn({ method: "GET" })
         detail: inboxMessages.detail,
         candidate_id: inboxMessages.candidateId,
         requisition_id: inboxMessages.requisitionId,
+        owner_id: inboxMessages.ownerId,
         received_at: inboxMessages.receivedAt,
       })
       .from(inboxMessages)
-      .where(eq(inboxMessages.orgId, context.orgId))
+      .where(
+        scope === "all"
+          ? eq(inboxMessages.orgId, context.orgId)
+          : and(eq(inboxMessages.orgId, context.orgId), eq(inboxMessages.ownerId, context.userId)),
+      )
       .orderBy(desc(inboxMessages.receivedAt))
       .limit(500);
 
@@ -103,18 +116,16 @@ export const getInboxThread = createServerFn({ method: "GET" })
     z.object({ ids: z.array(z.string().uuid()).min(1).max(50) }).parse(data),
   )
   .handler(async ({ data, context }) => {
-    await assertInboxAccess(context.userId, context.orgId);
+    const scope = await inboxScope(context.userId, context.orgId);
+    const visible =
+      scope === "all"
+        ? eq(inboxMessages.orgId, context.orgId)
+        : and(eq(inboxMessages.orgId, context.orgId), eq(inboxMessages.ownerId, context.userId));
     // Opening a conversation marks its mail read (Gmail behaviour).
     await db
       .update(inboxMessages)
       .set({ readAt: new Date() })
-      .where(
-        and(
-          eq(inboxMessages.orgId, context.orgId),
-          inArray(inboxMessages.id, data.ids),
-          isNull(inboxMessages.readAt),
-        ),
-      );
+      .where(and(visible, inArray(inboxMessages.id, data.ids), isNull(inboxMessages.readAt)));
     const rows = await db
       .select({
         id: inboxMessages.id,
@@ -132,7 +143,7 @@ export const getInboxThread = createServerFn({ method: "GET" })
         received_at: inboxMessages.receivedAt,
       })
       .from(inboxMessages)
-      .where(and(eq(inboxMessages.orgId, context.orgId), inArray(inboxMessages.id, data.ids)))
+      .where(and(visible, inArray(inboxMessages.id, data.ids)))
       .orderBy(inboxMessages.receivedAt);
     return rows.map((r) => ({ ...r, received_at: r.received_at.toISOString() }));
   });
@@ -144,11 +155,17 @@ export const setInboxStar = createServerFn({ method: "POST" })
     z.object({ ids: z.array(z.string().uuid()).min(1).max(200), starred: z.boolean() }).parse(data),
   )
   .handler(async ({ data, context }) => {
-    await assertInboxAccess(context.userId, context.orgId);
+    const scope = await inboxScope(context.userId, context.orgId);
     await db
       .update(inboxMessages)
       .set({ starred: data.starred })
-      .where(and(eq(inboxMessages.orgId, context.orgId), inArray(inboxMessages.id, data.ids)));
+      .where(
+        and(
+          eq(inboxMessages.orgId, context.orgId),
+          inArray(inboxMessages.id, data.ids),
+          ...(scope === "all" ? [] : [eq(inboxMessages.ownerId, context.userId)]),
+        ),
+      );
     return { ok: true };
   });
 
@@ -159,10 +176,16 @@ export const removeInboxMessages = createServerFn({ method: "POST" })
     z.object({ ids: z.array(z.string().uuid()).min(1).max(200) }).parse(data),
   )
   .handler(async ({ data, context }) => {
-    await assertInboxAccess(context.userId, context.orgId);
+    const scope = await inboxScope(context.userId, context.orgId);
     await db
       .delete(inboxMessages)
-      .where(and(eq(inboxMessages.orgId, context.orgId), inArray(inboxMessages.id, data.ids)));
+      .where(
+        and(
+          eq(inboxMessages.orgId, context.orgId),
+          inArray(inboxMessages.id, data.ids),
+          ...(scope === "all" ? [] : [eq(inboxMessages.ownerId, context.userId)]),
+        ),
+      );
     return { ok: true };
   });
 
@@ -170,7 +193,21 @@ export const retryInboxMessage = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((data: unknown) => z.object({ messageId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
-    await assertInboxAccess(context.userId, context.orgId);
+    const scope = await inboxScope(context.userId, context.orgId);
+    if (scope !== "all") {
+      const [owned] = await db
+        .select({ id: inboxMessages.id })
+        .from(inboxMessages)
+        .where(
+          and(
+            eq(inboxMessages.id, data.messageId),
+            eq(inboxMessages.orgId, context.orgId),
+            eq(inboxMessages.ownerId, context.userId),
+          ),
+        )
+        .limit(1);
+      if (!owned) throw new Error("Message not found.");
+    }
     const { retryMessage } = await import("./local-inbox.server");
     return retryMessage(context.orgId, data.messageId);
   });
@@ -179,10 +216,16 @@ export const removeInboxMessage = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((data: unknown) => z.object({ messageId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
-    await assertInboxAccess(context.userId, context.orgId);
+    const scope = await inboxScope(context.userId, context.orgId);
     await db
       .delete(inboxMessages)
-      .where(and(eq(inboxMessages.id, data.messageId), eq(inboxMessages.orgId, context.orgId)));
+      .where(
+        and(
+          eq(inboxMessages.id, data.messageId),
+          eq(inboxMessages.orgId, context.orgId),
+          ...(scope === "all" ? [] : [eq(inboxMessages.ownerId, context.userId)]),
+        ),
+      );
     return { ok: true as const };
   });
 
@@ -196,7 +239,12 @@ export const saveCareersEmail = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((data: unknown) => z.object({ email: z.string().max(320).nullish() }).parse(data))
   .handler(async ({ data, context }) => {
-    await assertInboxAccess(context.userId, context.orgId);
+    await assertRole(
+      context.userId,
+      context.orgId,
+      ["hr_head", "president_cbo"],
+      "The careers address is managed by HR leadership.",
+    );
     const email = (data.email ?? "").trim().toLowerCase();
     if (!email) {
       await db

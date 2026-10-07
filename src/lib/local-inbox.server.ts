@@ -127,6 +127,7 @@ export interface ReplyLink {
   orgId?: string;
   candidateId?: string | null;
   applicationId?: string | null;
+  ownerId?: string | null;
 }
 
 export async function receiveMail(mail: InboundMail, link?: ReplyLink): Promise<InboundResult> {
@@ -205,13 +206,28 @@ export async function receiveMail(mail: InboundMail, link?: ReplyLink): Promise<
     };
   }
 
+  // The mail's owner is the owning recruiter of the candidate it concerns —
+  // that person (and HR leadership) sees it in their inbox; nobody else does.
+  const ownerOfCandidate = async (candidateId: string): Promise<string | null> => {
+    const [row] = await db
+      .select({ ownerId: candidates.ownerId })
+      .from(candidates)
+      .where(eq(candidates.id, candidateId))
+      .limit(1);
+    return row?.ownerId ?? null;
+  };
+  let resolvedOwner: string | null = link?.ownerId ?? null;
+
   const finish = async (result: InboundResult) => {
+    const candidateId = result.candidateId ?? link?.candidateId ?? null;
+    if (candidateId) resolvedOwner = (await ownerOfCandidate(candidateId)) ?? resolvedOwner;
     await db
       .update(inboxMessages)
       .set({
         status: result.status === "stored" ? "received" : result.status,
         detail: result.detail,
-        candidateId: result.candidateId ?? link?.candidateId ?? null,
+        candidateId,
+        ownerId: resolvedOwner,
       })
       .where(eq(inboxMessages.id, savedId));
     return { ...result, messageId: savedId };
@@ -238,6 +254,9 @@ export async function receiveMail(mail: InboundMail, link?: ReplyLink): Promise<
         .where(and(eq(candidates.email, sender.email), eq(candidates.orgId, org.id)))
         .limit(1);
       knownCandidateId = known?.id ?? null;
+    }
+    if (knownCandidateId) {
+      resolvedOwner = (await ownerOfCandidate(knownCandidateId)) ?? resolvedOwner;
     }
     return finish({
       status: filedDocs.length ? "stored" : "skipped",
@@ -289,6 +308,7 @@ export async function receiveMail(mail: InboundMail, link?: ReplyLink): Promise<
       .update(inboxMessages)
       .set({ requisitionId, attachmentBytes: bytes.length })
       .where(eq(inboxMessages.id, savedId));
+    resolvedOwner = (await ownerOfCandidate(ingested.candidateId)) ?? resolvedOwner;
     return finish({
       status: ingested.alreadyApplied ? "updated" : "imported",
       detail: `${ingested.name} (${ingested.email})${requisitionId ? " added to the matching role" : " filed in the talent pool"}.`,

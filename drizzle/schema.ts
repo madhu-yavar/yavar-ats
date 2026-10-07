@@ -1100,6 +1100,8 @@ export const inboxMessages = pgTable(
     requisitionId: uuid("requisition_id"),
     /** Set when the mail arrived through a reply token (Phase 1 reply routing). */
     applicationId: uuid("application_id"),
+    /** The candidate's owning recruiter — visibility scope for the inbox. */
+    ownerId: uuid("owner_id"),
     starred: boolean("starred").notNull().default(false),
     readAt: timestamp("read_at", { withTimezone: true }),
     providerMessageId: text("provider_message_id"),
@@ -1112,6 +1114,7 @@ export const inboxMessages = pgTable(
       .where(sql`${t.providerMessageId} is not null`),
     index("inbox_messages_org_idx").on(t.orgId, t.receivedAt),
     index("inbox_messages_application_idx").on(t.applicationId),
+    index("inbox_messages_owner_idx").on(t.orgId, t.ownerId, t.receivedAt),
   ],
 );
 
