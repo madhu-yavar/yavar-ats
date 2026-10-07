@@ -16,6 +16,7 @@ import {
   type InboxRow,
 } from "@/lib/local-inbox.functions";
 import { EmptyState, PageHeader } from "@/components/ats";
+import { useNavCtx } from "@/hooks/useNavCtx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -82,6 +83,7 @@ const fmtDate = (iso: string) => {
 };
 
 function InboxPage() {
+  const nav = useNavCtx();
   const qc = useQueryClient();
   const fetchInbox = useServerFn(orgInbox);
   const retry = useServerFn(retryInboxMessage);
@@ -120,6 +122,22 @@ function InboxPage() {
 
   const address = inbox.data?.address ?? null;
   const counts = inbox.data?.counts;
+
+  if (!nav.governance) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Careers inbox" description="Candidate correspondence intake." />
+        <div className="panel p-8 text-center">
+          <h1 className="text-lg font-semibold">Restricted</h1>
+          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+            Candidate correspondence is confidential. The careers inbox is visible only to HR
+            leadership (owner, HR head, President/CBO). Recruiters and hiring managers work
+            candidates through the talent pool instead.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const rows = useMemo(() => {
     const all = (inbox.data?.messages ?? []) as InboxRow[];

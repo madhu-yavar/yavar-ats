@@ -8,7 +8,7 @@ import { z } from "zod";
 
 import { db } from "../server/db";
 import { inboxMessages, organizations } from "@db/schema";
-import { requireOrg } from "./auth.middleware";
+import { assertRole, requireOrg } from "./auth.middleware";
 
 export type InboxRow = {
   id: string;
@@ -34,9 +34,20 @@ export type InboxView = {
   counts: { total: number; imported: number; updated: number; skipped: number; errors: number };
 };
 
+/**
+ * Candidate mail is confidential HR correspondence. The inbox (list, reader,
+ * star/remove/retry, careers-address registration) is restricted to HR
+ * leadership — owner, HR head, President/CBO. Recruiters and hiring managers
+ * work candidates through the talent pool, never through this mailbox.
+ */
+async function assertInboxAccess(userId: string, orgId: string): Promise<void> {
+  await assertRole(userId, orgId, ["hr_head", "president_cbo"], "The careers inbox is restricted to HR leadership.");
+}
+
 export const orgInbox = createServerFn({ method: "GET" })
   .middleware([requireOrg])
   .handler(async ({ context }): Promise<InboxView> => {
+    await assertInboxAccess(context.userId, context.orgId);
     const { inboxAddress } = await import("./local-inbox.server");
     const [org] = await db
       .select({ inboxSlug: organizations.inboxSlug, careersEmail: organizations.careersEmail })
@@ -92,6 +103,7 @@ export const getInboxThread = createServerFn({ method: "GET" })
     z.object({ ids: z.array(z.string().uuid()).min(1).max(50) }).parse(data),
   )
   .handler(async ({ data, context }) => {
+    await assertInboxAccess(context.userId, context.orgId);
     // Opening a conversation marks its mail read (Gmail behaviour).
     await db
       .update(inboxMessages)
@@ -132,6 +144,7 @@ export const setInboxStar = createServerFn({ method: "POST" })
     z.object({ ids: z.array(z.string().uuid()).min(1).max(200), starred: z.boolean() }).parse(data),
   )
   .handler(async ({ data, context }) => {
+    await assertInboxAccess(context.userId, context.orgId);
     await db
       .update(inboxMessages)
       .set({ starred: data.starred })
@@ -146,6 +159,7 @@ export const removeInboxMessages = createServerFn({ method: "POST" })
     z.object({ ids: z.array(z.string().uuid()).min(1).max(200) }).parse(data),
   )
   .handler(async ({ data, context }) => {
+    await assertInboxAccess(context.userId, context.orgId);
     await db
       .delete(inboxMessages)
       .where(and(eq(inboxMessages.orgId, context.orgId), inArray(inboxMessages.id, data.ids)));
@@ -156,6 +170,7 @@ export const retryInboxMessage = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((data: unknown) => z.object({ messageId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
+    await assertInboxAccess(context.userId, context.orgId);
     const { retryMessage } = await import("./local-inbox.server");
     return retryMessage(context.orgId, data.messageId);
   });
@@ -164,6 +179,7 @@ export const removeInboxMessage = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((data: unknown) => z.object({ messageId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
+    await assertInboxAccess(context.userId, context.orgId);
     await db
       .delete(inboxMessages)
       .where(and(eq(inboxMessages.id, data.messageId), eq(inboxMessages.orgId, context.orgId)));
@@ -180,6 +196,7 @@ export const saveCareersEmail = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((data: unknown) => z.object({ email: z.string().max(320).nullish() }).parse(data))
   .handler(async ({ data, context }) => {
+    await assertInboxAccess(context.userId, context.orgId);
     const email = (data.email ?? "").trim().toLowerCase();
     if (!email) {
       await db

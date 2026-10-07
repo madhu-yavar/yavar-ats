@@ -69,7 +69,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     heading: "Sourcing",
     items: [
-      { to: "/inbox", label: "Careers inbox", icon: Inbox, show: (c) => c.recruiterView },
+      { to: "/inbox", label: "Careers inbox", icon: Inbox, show: (c) => c.governance },
       { to: "/ijp", label: "Internal postings", icon: Building2, show: (c) => c.recruiterView },
     ],
   },
