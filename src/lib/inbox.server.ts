@@ -139,9 +139,16 @@ export async function attachmentText(filename: string, bytes: Uint8Array): Promi
   if (bytes.byteLength > MAX_INPUT_BYTES) return "";
 
   if (name.endsWith(".pdf")) {
-    // pdfjs-dist legacy build, no worker: unpdf's bundled mega-module blows the
-    // build's TypeScript AST walker (stack overflow) when it enters the graph.
+    // pdfjs-dist legacy build (unpdf's bundled mega-module blows the build's
+    // TypeScript AST walker when it enters the graph). The legacy build lazily
+    // imports ./pdf.worker.mjs, which the nitro server bundle never emits — on
+    // prod that made every inbound PDF fail with "Cannot find module …
+    // pdf.worker.mjs" — and a real Worker does not exist in the Node runtime.
+    // Register the worker module on globalThis: pdf.js then runs its worker
+    // message handler on the main thread and skips the file-based lookup.
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    (globalThis as Record<string, unknown>).pdfjsWorker ??=
+      await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
     // pdf.js transfers (detaches) the buffer it is given — hand it a copy so the
     // caller keeps usable bytes for the resume vault and size reporting.
     const doc = await pdfjs.getDocument({
