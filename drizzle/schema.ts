@@ -1098,6 +1098,8 @@ export const inboxMessages = pgTable(
     detail: text("detail"),
     candidateId: uuid("candidate_id"),
     requisitionId: uuid("requisition_id"),
+    /** Set when the mail arrived through a reply token (Phase 1 reply routing). */
+    applicationId: uuid("application_id"),
     providerMessageId: text("provider_message_id"),
     receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -1107,6 +1109,7 @@ export const inboxMessages = pgTable(
       .on(t.orgId, t.providerMessageId)
       .where(sql`${t.providerMessageId} is not null`),
     index("inbox_messages_org_idx").on(t.orgId, t.receivedAt),
+    index("inbox_messages_application_idx").on(t.applicationId),
   ],
 );
 

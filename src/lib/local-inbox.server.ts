@@ -123,16 +123,25 @@ async function matchRequisition(orgId: string, haystack: string): Promise<string
  * import any CV attachment. Never throws — every outcome is stored on the row so
  * HR can see exactly what happened to each mail.
  */
-export async function receiveMail(mail: InboundMail): Promise<InboundResult> {
+export interface ReplyLink {
+  orgId?: string;
+  candidateId?: string | null;
+  applicationId?: string | null;
+}
+
+export async function receiveMail(mail: InboundMail, link?: ReplyLink): Promise<InboundResult> {
   const addresses = recipientAddresses(mail.to ?? "");
   const slug = localPart(mail.to ?? "");
   if (!slug)
     return { status: "error", detail: "No recipient address on the mail.", messageId: null };
 
   // Mail sent straight to the ATSIQ address, or forwarded from the organisation's
-  // own careers address (careers@company.com) which it registered here.
+  // own careers address (careers@company.com) which it registered here. Reply
+  // tokens skip the address lookup — the outbox row names the tenant.
   let org: { id: string; status: string | null } | null = null;
-  if (addresses.length) {
+  if (link?.orgId) {
+    org = { id: link.orgId, status: "active" };
+  } else if (addresses.length) {
     const [row] = await db
       .select({ id: organizations.id, status: organizations.status })
       .from(organizations)
@@ -173,6 +182,7 @@ export async function receiveMail(mail: InboundMail): Promise<InboundResult> {
     subject: mail.subject ?? null,
     body: (mail.text ?? "").slice(0, 20000) || null,
     attachmentName: cv?.filename ?? null,
+    applicationId: link?.applicationId ?? null,
     providerMessageId: mail.messageId ?? null,
     status: "received",
     receivedAt: new Date(),
@@ -201,7 +211,7 @@ export async function receiveMail(mail: InboundMail): Promise<InboundResult> {
       .set({
         status: result.status === "stored" ? "received" : result.status,
         detail: result.detail,
-        candidateId: result.candidateId ?? null,
+        candidateId: result.candidateId ?? link?.candidateId ?? null,
       })
       .where(eq(inboxMessages.id, savedId));
     return { ...result, messageId: savedId };
@@ -220,8 +230,8 @@ export async function receiveMail(mail: InboundMail): Promise<InboundResult> {
   if (!cv) {
     // A plain reply still threads to its candidate when we know the sender —
     // replies from unknown senders stay unlinked until reply tokens (roadmap).
-    let knownCandidateId: string | null = null;
-    if (sender.email) {
+    let knownCandidateId: string | null = link?.candidateId ?? null;
+    if (!knownCandidateId && sender.email) {
       const [known] = await db
         .select({ id: candidates.id })
         .from(candidates)

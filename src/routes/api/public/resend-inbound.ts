@@ -19,7 +19,7 @@ import { and, eq, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../../../server/db";
-import { organizations } from "@db/schema";
+import { applications, emailOutbox, organizations } from "@db/schema";
 
 const MAX_ATTACHMENT_BYTES = 10_000_000;
 const MAX_TOTAL_ATTACHMENT_BYTES = 25_000_000;
@@ -163,8 +163,10 @@ async function run(request: Request): Promise<Response> {
   }
 
   const { receiveMail } = await import("@/lib/local-inbox.server");
+  // No lowercasing: reply tokens are case-sensitive base64url.
+  const toAddresses = (full.to ?? event.data.to ?? []).map((a) => a.trim());
   const mail = {
-    to: (full.to ?? event.data.to ?? []).join(", "),
+    to: toAddresses.join(", "),
     from: full.from ?? event.data.from ?? "",
     subject: full.subject ?? event.data.subject ?? null,
     text: full.text ?? null,
@@ -172,7 +174,33 @@ async function run(request: Request): Promise<Response> {
     attachments,
   };
 
-  let result = await receiveMail(mail);
+  // Reply tokens: reply+<token>@ on the recipient list binds this mail to the
+  // application the original send belongs to — the reply threads onto that
+  // candidate's record even without a CV and regardless of the sender address.
+  let link:
+    { orgId?: string; candidateId?: string | null; applicationId?: string | null } | undefined;
+  for (const addr of toAddresses) {
+    if (!addr.startsWith("reply+")) continue;
+    const [row] = await db
+      .select({ orgId: emailOutbox.orgId, applicationId: emailOutbox.applicationId })
+      .from(emailOutbox)
+      .where(eq(emailOutbox.replyTo, addr))
+      .limit(1);
+    if (!row) continue;
+    let candidateId: string | null = null;
+    if (row.applicationId) {
+      const [app] = await db
+        .select({ candidateId: applications.candidateId })
+        .from(applications)
+        .where(eq(applications.id, row.applicationId))
+        .limit(1);
+      candidateId = app?.candidateId ?? null;
+    }
+    link = { orgId: row.orgId, applicationId: row.applicationId, candidateId };
+    break;
+  }
+
+  let result = await receiveMail(mail, link);
 
   // Platform-owned addresses (noreply@, replies@) name no tenant, so
   // receiveMail cannot resolve them. While the platform runs a single active

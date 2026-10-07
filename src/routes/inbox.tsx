@@ -55,6 +55,7 @@ export const Route = createFileRoute("/inbox")({
 });
 
 const STATUS_STYLE: Record<string, string> = {
+  stored: "bg-violet-50 text-violet-700 border-violet-200",
   imported: "bg-emerald-50 text-emerald-700 border-emerald-200",
   updated: "bg-blue-50 text-blue-700 border-blue-200",
   skipped: "bg-muted text-muted-foreground border-border",
@@ -63,6 +64,7 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 const STATUS_LABEL: Record<string, string> = {
+  stored: "Reply",
   imported: "Filed",
   updated: "Updated",
   skipped: "No CV",
@@ -291,6 +293,7 @@ function InboxPage() {
               <SelectItem value="imported">Filed</SelectItem>
               <SelectItem value="updated">Updated</SelectItem>
               <SelectItem value="skipped">No CV</SelectItem>
+              <SelectItem value="stored">Replies</SelectItem>
               <SelectItem value="error">Needs a look</SelectItem>
             </SelectContent>
           </Select>

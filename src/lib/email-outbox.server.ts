@@ -6,6 +6,7 @@
  * retries + backoff. Per-org toggles live in email_settings (defaults = all on).
  * Server-only.
  */
+import { randomBytes } from "node:crypto";
 import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 
 import { db } from "../server/db";
@@ -17,7 +18,11 @@ import {
   type EmailOutboxKind,
   type EmailOutboxStatus,
 } from "@db/schema";
-import { EmailAttachmentsUnsupportedError, sendTemplateEmail } from "./email-templates/send-email";
+import {
+  EmailAttachmentsUnsupportedError,
+  FROM_DOMAIN,
+  sendTemplateEmail,
+} from "./email-templates/send-email";
 import { DEFAULT_EMAIL_SETTINGS, type EmailSettingsEffective } from "./email-settings.shared";
 
 const MAX_ATTEMPTS = 5;
@@ -70,17 +75,15 @@ export function formatInOrgTZ(date: Date, timezone: string): string {
   }
 }
 
-async function resolveReplyTo(
-  orgId: string,
-  settings: EmailSettingsEffective,
-): Promise<string | null> {
-  if (settings.replyTo) return settings.replyTo;
-  const [org] = await db
-    .select({ careersEmail: organizations.careersEmail })
-    .from(organizations)
-    .where(eq(organizations.id, orgId))
-    .limit(1);
-  return org?.careersEmail ?? null;
+/**
+ * Reply-to for outbound candidate mail: a per-message token address on the
+ * platform domain. The receiving webhook resolves reply+<token> back to this
+ * mail's application, so the conversation threads in ATSIQ. The organisation's
+ * own reply-to (Integrations → Candidate emails) still wins when set — replies
+ * then land in that human mailbox as before.
+ */
+function replyToFor(custom: string | null | undefined): string {
+  return custom || `reply+${randomBytes(16).toString("base64url")}@${FROM_DOMAIN}`;
 }
 
 /** Marks queued stage updates superseded by a newer one for the same applications. */
@@ -146,7 +149,7 @@ export async function enqueueEmail(input: EnqueueEmailInput): Promise<void> {
       kind: input.kind,
       templateName: input.templateName,
       toEmail: to,
-      replyTo: await resolveReplyTo(input.orgId, settings),
+      replyTo: replyToFor(settings.replyTo),
       templateData: input.templateData ?? {},
       attachments: input.attachments ?? [],
       idempotencyKey: input.idempotencyKey,
@@ -175,7 +178,7 @@ export async function enqueueStageUpdates(
 
   const settings = ctx.settings ?? (await getOrgEmailSettings(ctx.orgId));
   if (!settings.enabled || !settings.stageEnabled) return;
-  const replyTo = await resolveReplyTo(ctx.orgId, settings);
+  const replyTo = replyToFor(settings.replyTo);
 
   await supersedeQueuedStageUpdates(valid.map((r) => r.applicationId));
 
@@ -188,7 +191,7 @@ export async function enqueueStageUpdates(
         kind: "stage_update" as const,
         templateName: "stage_update",
         toEmail: r.toEmail.trim().toLowerCase(),
-        replyTo,
+        replyTo: replyToFor(settings.replyTo),
         templateData: r.templateData,
         attachments: [] as EmailOutboxAttachment[],
         idempotencyKey: r.idempotencyKey,
