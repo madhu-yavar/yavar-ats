@@ -112,7 +112,16 @@ kubectl -n "$NS" exec atsiq-deploy-build -- env \
   DESTINATION="$IMAGE" \
   REGISTRY_AUTH="{\"auths\":{\"$REGION-docker.pkg.dev\":{\"username\":\"oauth2accesstoken\",\"password\":\"$TOKEN\"}}}" \
   sh /build/scripts/crane-stage.sh \
-  || fail "could not build/push the runtime image."
+  || {
+    # crane has been OOM-killed (exit 137) AFTER a completed push more than
+    # once — a pushed image is a success. Verify the registry before failing.
+    sleep 5
+    if gcloud artifacts docker images describe "$IMAGE" --format='value(imageSummary.digest)' >/dev/null 2>&1; then
+      echo "  crane died after the push — image verified in the registry, continuing."
+    else
+      fail "could not build/push the runtime image."
+    fi
+  }
 echo "  pushed $IMAGE"
 
 # ---------------------------------------------------------------- migrate
