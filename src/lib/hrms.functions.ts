@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { db } from "../server/db";
 import { sourceIntegrations } from "@db/schema";
-import { requireOrg } from "./auth.middleware";
+import { requireOrg, requireRole } from "./auth.middleware";
 import { clearSecrets, readSecrets } from "./integrations.server";
 import {
   ensureHrmsConnections,
@@ -83,7 +83,7 @@ const HrmsSaveInput = z.object({
 
 /** Persist non-secret config on the row, secrets in the server-only table. */
 export const saveHrmsIntegration = createServerFn({ method: "POST" })
-  .middleware([requireOrg])
+  .middleware([requireRole("hr_head")])
   .inputValidator((data: unknown) => HrmsSaveInput.parse(data))
   .handler(async ({ data, context }) => {
     const [row] = await db
@@ -130,7 +130,7 @@ export const saveHrmsIntegration = createServerFn({ method: "POST" })
   });
 
 export const testHrmsIntegration = createServerFn({ method: "POST" })
-  .middleware([requireOrg])
+  .middleware([requireRole("hr_head")])
   .inputValidator((data: unknown) =>
     z
       .object({ integrationId: z.string().uuid(), provider: z.enum(HRMS_PROVIDERS_IDS) })

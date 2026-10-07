@@ -116,7 +116,7 @@ export const saveIntegration = createServerFn({ method: "POST" })
   });
 
 export const testIntegration = createServerFn({ method: "POST" })
-  .middleware([requireOrg])
+  .middleware([requireRole("hr_head")])
   .inputValidator((data: unknown) =>
     z.object({ integrationId: z.string().uuid(), provider: z.enum(PROVIDERS) }).parse(data),
   )

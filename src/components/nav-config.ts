@@ -69,7 +69,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     heading: "Sourcing",
     items: [
-      { to: "/inbox", label: "Careers inbox", icon: Inbox, show: (c) => c.governance },
+      { to: "/inbox", label: "Careers inbox", icon: Inbox, show: (c) => c.recruiterView },
       { to: "/ijp", label: "Internal postings", icon: Building2, show: (c) => c.recruiterView },
     ],
   },
@@ -86,7 +86,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: "/team", label: "Users & roles", icon: ShieldCheck, show: (c) => c.governance },
       { to: "/organisation", label: "Organisation", icon: Building2, show: (c) => c.isOwner },
-      { to: "/integrations", label: "Integrations", icon: Plug, show: (c) => c.governance },
+      { to: "/integrations", label: "Integrations", icon: Plug, show: (c) => c.recruiterView },
       { to: "/masters", label: "Master data", icon: Database, show: (c) => c.governance },
       {
         to: "/templates",

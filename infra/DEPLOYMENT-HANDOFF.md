@@ -225,3 +225,11 @@ per sweep, fully ledgered in `ai_usage_events`).
 - Reference documents in the repo: `infra/SELF-HOSTING.md` (exit plan),
   `DEPLOYMENT-GCP.md` (older GKE-variant reference, env-var details §4,
   OAuth redirect URIs §5).
+- **GKE / Envoy Gateway route (`infra/k8s/atsiq-httproute.yaml`)**: the live
+  deployment on z-atsiq.yavar.ai sits behind the shared Envoy Gateway
+  (`platform-gateway`), whose default request timeout is **15s**. The route
+  therefore sets `timeouts.request: 300s` — without it every long AI request
+  (market pay research, and any future multi-minute server function) is cut
+  with a 504 even though the server finishes the work. Keep the override when
+  re-applying the route, and keep it above the AI research cap (180s) plus page
+  fetches.
