@@ -61,6 +61,15 @@ export const Route = createFileRoute("/api/auth/login")({
             .set({ lastLoginAt: new Date(), ...upgrade })
             .where(eq(users.id, user.id));
 
+          // First sign-in after an invitation: claim any pending org invite so
+          // the member lands in their organisation with the invited role.
+          try {
+            const { claimPendingInviteForUser } = await import("../../../server/invite-claim");
+            await claimPendingInviteForUser(user.id, user.email);
+          } catch {
+            /* claiming is best-effort — the invitation panel remains available */
+          }
+
           return new Response(JSON.stringify({ ok: true, email: user.email }), {
             status: 200,
             headers: {

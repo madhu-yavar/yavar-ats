@@ -26,6 +26,7 @@ export function useOrg() {
     org: q.data?.org ?? null,
     membership: q.data?.membership ?? null,
     roles: q.data?.roles ?? [],
+    pendingInvite: q.data?.pendingInvite ?? null,
     isOwner: Boolean(q.data?.membership?.isOwner),
     isLoading: q.isLoading,
     isError: q.isError,

@@ -7,6 +7,7 @@ import { db } from "../server/db";
 import { emailVerified } from "../server/claims";
 import { departments, masterItems, orgMembers, organizations, userRoles } from "@db/schema";
 import { registrableDomain, workEmailProblem } from "@/lib/work-email";
+import { signActionToken } from "../server/action-token";
 
 export type AppRole =
   "recruiter" | "hiring_manager" | "department_head" | "hr_head" | "president_cbo";
@@ -57,6 +58,8 @@ export type MyOrg = {
   org: Organization | null;
   membership: { id: string; isOwner: boolean; status: string } | null;
   roles: AppRole[];
+  /** An invitation waiting for this email — shown as a Join panel, never a wizard. */
+  pendingInvite: { orgId: string; orgName: string } | null;
 };
 
 const ROLE_LABELS: Record<AppRole, string> = {
@@ -80,6 +83,16 @@ async function notifyInvitedMember(args: {
   inviterName?: string | null;
   memberId?: string | null;
 }) {
+  // The join link proves mailbox ownership: it sets the first password,
+  // confirms the address and claims the invited role in one step.
+  const joinUrl = args.memberId
+    ? `${process.env["PUBLIC_SITE_URL"] ?? "https://atsiq.yavar.ai"}/join/${signActionToken(
+        args.memberId,
+        "org-invite",
+        7 * 24 * 60 * 60 * 1000,
+      )}`
+    : undefined;
+
   try {
     const { sendTemplateEmail } = await import("@/lib/email-templates/send-email");
     await sendTemplateEmail("member-invited", args.email, {
@@ -91,6 +104,7 @@ async function notifyInvitedMember(args: {
         inviteeName: args.inviteeName ?? undefined,
         inviterName: args.inviterName ?? undefined,
         email: args.email,
+        joinUrl,
       },
     });
   } catch (e) {
@@ -138,6 +152,8 @@ function orgRowToOrganization(o: typeof organizations.$inferSelect): Organizatio
 export const myOrg = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<MyOrg> => {
+    const email = (context.claims?.email as string | undefined)?.toLowerCase();
+
     const [member] = await db
       .select({
         id: orgMembers.id,
@@ -150,7 +166,29 @@ export const myOrg = createServerFn({ method: "GET" })
       .orderBy(orgMembers.createdAt)
       .limit(1);
 
-    if (!member) return { org: null, membership: null, roles: [] };
+    if (!member) {
+      // No membership yet — surface any invitation waiting for this email so
+      // the member can join instead of being pushed into the org wizard.
+      let pendingInvite: MyOrg["pendingInvite"] = null;
+      if (email) {
+        const [invite] = await db
+          .select({ orgId: orgMembers.orgId, orgName: organizations.name })
+          .from(orgMembers)
+          .innerJoin(organizations, eq(organizations.id, orgMembers.orgId))
+          .where(
+            and(
+              ilike(orgMembers.email, email),
+              isNull(orgMembers.userId),
+              eq(orgMembers.status, "invited"),
+              eq(organizations.status, "active"),
+            ),
+          )
+          .orderBy(orgMembers.createdAt)
+          .limit(1);
+        if (invite) pendingInvite = { orgId: invite.orgId, orgName: invite.orgName };
+      }
+      return { org: null, membership: null, roles: [], pendingInvite };
+    }
 
     const [org, roles] = await Promise.all([
       db.select().from(organizations).where(eq(organizations.id, member.orgId)).limit(1),
@@ -164,6 +202,7 @@ export const myOrg = createServerFn({ method: "GET" })
       org: org[0] ? orgRowToOrganization(org[0]) : null,
       membership: { id: member.id, isOwner: member.isOwner, status: member.status },
       roles: roles.map((r) => r.role as AppRole),
+      pendingInvite: null,
     };
   });
 
@@ -178,38 +217,10 @@ export const claimInvite = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     const email = (context.claims?.email as string | undefined)?.toLowerCase();
     if (!email) throw new Error("Your account has no email address.");
-
-    const [invite] = await db
-      .select({ id: orgMembers.id, orgId: orgMembers.orgId, invitedRole: orgMembers.invitedRole })
-      .from(orgMembers)
-      .where(and(ilike(orgMembers.email, email), isNull(orgMembers.userId)))
-      .orderBy(orgMembers.createdAt)
-      .limit(1);
-    if (!invite) throw new Error("No pending invitation was found for your email address.");
-
-    const [inviteOrg] = await db
-      .select({ status: organizations.status })
-      .from(organizations)
-      .where(eq(organizations.id, invite.orgId))
-      .limit(1);
-    if ((inviteOrg?.status ?? "active") !== "active") {
-      throw new Error("This organisation is not approved yet — try again once it is live.");
-    }
-
-    // `user_id is null` guard makes the claim single-use under races.
-    const claimed = await db
-      .update(orgMembers)
-      .set({ userId: context.userId, status: "active", joinedAt: new Date() })
-      .where(and(eq(orgMembers.id, invite.id), isNull(orgMembers.userId)))
-      .returning({ id: orgMembers.id });
-    if (!claimed.length) throw new Error("That invitation has already been claimed.");
-
-    if (invite.invitedRole) {
-      await db
-        .insert(userRoles)
-        .values({ userId: context.userId, role: invite.invitedRole, orgId: invite.orgId });
-    }
-    return { ok: true, orgId: invite.orgId };
+    const { claimPendingInviteForUser } = await import("../server/invite-claim");
+    const claimed = await claimPendingInviteForUser(context.userId, email);
+    if (!claimed) throw new Error("No pending invitation was found for your email address.");
+    return { ok: true, orgId: claimed.orgId };
   });
 
 const CreateInput = z.object({

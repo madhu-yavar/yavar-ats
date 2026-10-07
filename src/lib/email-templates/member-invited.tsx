@@ -19,6 +19,7 @@ import type { TemplateEntry } from "./registry";
 interface Props {
   siteName?: string;
   siteUrl?: string;
+  joinUrl?: string;
   orgName?: string;
   inviteeName?: string;
   inviterName?: string;
@@ -36,6 +37,7 @@ const Email = ({
   roleLabel = "Recruiter",
   title,
   email,
+  joinUrl,
 }: Props) => (
   <Html lang="en" dir="ltr">
     <Head />
@@ -53,9 +55,15 @@ const Email = ({
           <strong>{roleLabel}</strong>
           {title ? ` (${title})` : ""}.
         </Text>
-        <Button style={button} href={siteUrl}>
-          Sign in to {siteName}
+        <Button style={button} href={joinUrl ?? siteUrl}>
+          {joinUrl ? "Set your password and join" : `Sign in to ${siteName}`}
         </Button>
+        {joinUrl ? (
+          <Text style={small}>
+            Opening this link lets you set your password for <strong>{email}</strong> — the
+            invitation is applied automatically. The link works for 7 days.
+          </Text>
+        ) : null}
         <Text style={small}>
           Sign in with your work address{email ? ` (${email})` : ""} — the same address this
           invitation was sent to. Your role and organisation are applied automatically the first

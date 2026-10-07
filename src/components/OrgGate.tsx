@@ -1,6 +1,11 @@
 import { useLocation } from "@tanstack/react-router";
 
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+
 import { signOutApp } from "@/lib/auth-client";
+import { claimInvite } from "@/lib/org.functions";
 import { Button } from "@/components/ui/button";
 import { useOrg } from "@/hooks/useOrg";
 import { usePlatform } from "@/hooks/usePlatform";
@@ -13,7 +18,11 @@ import { isPublicPath } from "@/lib/public-paths";
  */
 export function OrgGate({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  const { org, membership, isLoading, isError, error, refetch } = useOrg();
+  const qc = useQueryClient();
+  const { org, membership, pendingInvite, isLoading, isError, error, refetch } = useOrg();
+  const claim = useServerFn(claimInvite);
+  const [claimError, setClaimError] = useState<string | null>(null);
+  const [claiming, setClaiming] = useState(false);
   const platform = usePlatform();
 
   if (isPublicPath(location.pathname)) return <>{children}</>;
@@ -57,7 +66,53 @@ export function OrgGate({ children }: { children: React.ReactNode }) {
   // Platform super users administer tenants; they do not belong to one.
   if ((!org || !membership) && (platform.isSuperUser || platform.claimable)) return <>{children}</>;
 
-  if (!org || !membership) return <OnboardingWizard onDone={() => refetch()} />;
+  if (!org || !membership) {
+    // An invited member who registered on their own must join their org — the
+    // creation wizard is for founders, not for invitees.
+    if (pendingInvite) {
+      const join = async () => {
+        setClaiming(true);
+        setClaimError(null);
+        try {
+          await claim({});
+          await refetch();
+          await qc.invalidateQueries({ queryKey: ["my_org"] });
+        } catch (e) {
+          setClaimError(e instanceof Error ? e.message : "Joining did not work.");
+        } finally {
+          setClaiming(false);
+        }
+      };
+      return (
+        <div className="flex min-h-screen items-center justify-center px-4">
+          <div className="panel max-w-md space-y-4 p-8 text-center">
+            <h1 className="text-lg font-semibold">You're invited to {pendingInvite.orgName}</h1>
+            <p className="text-sm text-muted-foreground">
+              Your account is on the roster. Claim the invitation to enter the workspace with
+              the role your organisation assigned you.
+            </p>
+            {claimError ? (
+              <p className="text-sm text-red-600">{claimError}</p>
+            ) : null}
+            <Button className="w-full" disabled={claiming} onClick={() => void join()}>
+              {claiming ? "Joining…" : `Join ${pendingInvite.orgName}`}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                await signOutApp();
+                window.location.assign("/");
+              }}
+            >
+              Sign out
+            </Button>
+          </div>
+        </div>
+      );
+    }
+    return <OnboardingWizard onDone={() => refetch()} />;
+  }
 
   // A super user who owns a pending tenant must still reach the platform
   // console — otherwise the first tenant can never be approved.

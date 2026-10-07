@@ -804,7 +804,7 @@ function SignInCard() {
       >
         {mode === "signin"
           ? "New company? Register your organisation"
-          : "Already have an account? Sign in"}
+          : "Invited to a company or new here? Create your account"}
       </button>
     </form>
   );

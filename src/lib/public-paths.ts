@@ -6,6 +6,6 @@ const PUBLIC_PATHS = new Set(["/auth/reset", "/privacy", "/cookies"]);
 
 export function isPublicPath(pathname: string): boolean {
   return (
-    PUBLIC_PATHS.has(pathname) || pathname.startsWith("/apply/") || pathname.startsWith("/assess/")
+    PUBLIC_PATHS.has(pathname) || pathname.startsWith("/apply/") || pathname.startsWith("/assess/") || pathname.startsWith("/join/")
   );
 }
