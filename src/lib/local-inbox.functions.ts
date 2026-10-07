@@ -2,7 +2,7 @@
  * Server functions for the organisation's own careers inbox: the address, the
  * mail that has arrived, and the manual retry / remove actions.
  */
-import { and, desc, eq, ilike, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNull, ne, sql } from "drizzle-orm";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
@@ -21,6 +21,8 @@ export type InboxRow = {
   detail: string | null;
   candidate_id: string | null;
   requisition_id: string | null;
+  starred: boolean;
+  read_at: string | null;
   received_at: string;
 };
 
@@ -50,6 +52,8 @@ export const orgInbox = createServerFn({ method: "GET" })
         subject: inboxMessages.subject,
         snippet: sql<string | null>`left(${inboxMessages.body}, 140)`,
         attachment_name: inboxMessages.attachmentName,
+        starred: inboxMessages.starred,
+        read_at: inboxMessages.readAt,
         status: inboxMessages.status,
         detail: inboxMessages.detail,
         candidate_id: inboxMessages.candidateId,
@@ -63,6 +67,7 @@ export const orgInbox = createServerFn({ method: "GET" })
 
     const messages: InboxRow[] = rows.map((r) => ({
       ...r,
+      read_at: r.read_at ? r.read_at.toISOString() : null,
       received_at: r.received_at.toISOString(),
     }));
     return {
@@ -87,6 +92,17 @@ export const getInboxThread = createServerFn({ method: "GET" })
     z.object({ ids: z.array(z.string().uuid()).min(1).max(50) }).parse(data),
   )
   .handler(async ({ data, context }) => {
+    // Opening a conversation marks its mail read (Gmail behaviour).
+    await db
+      .update(inboxMessages)
+      .set({ readAt: new Date() })
+      .where(
+        and(
+          eq(inboxMessages.orgId, context.orgId),
+          inArray(inboxMessages.id, data.ids),
+          isNull(inboxMessages.readAt),
+        ),
+      );
     const rows = await db
       .select({
         id: inboxMessages.id,
@@ -96,6 +112,8 @@ export const getInboxThread = createServerFn({ method: "GET" })
         subject: inboxMessages.subject,
         body: inboxMessages.body,
         attachment_name: inboxMessages.attachmentName,
+        starred: inboxMessages.starred,
+        read_at: inboxMessages.readAt,
         status: inboxMessages.status,
         detail: inboxMessages.detail,
         candidate_id: inboxMessages.candidateId,
@@ -105,6 +123,33 @@ export const getInboxThread = createServerFn({ method: "GET" })
       .where(and(eq(inboxMessages.orgId, context.orgId), inArray(inboxMessages.id, data.ids)))
       .orderBy(inboxMessages.receivedAt);
     return rows.map((r) => ({ ...r, received_at: r.received_at.toISOString() }));
+  });
+
+/** Star / unstar a set of mails (org-scoped). */
+export const setInboxStar = createServerFn({ method: "POST" })
+  .middleware([requireOrg])
+  .inputValidator((data: unknown) =>
+    z.object({ ids: z.array(z.string().uuid()).min(1).max(200), starred: z.boolean() }).parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    await db
+      .update(inboxMessages)
+      .set({ starred: data.starred })
+      .where(and(eq(inboxMessages.orgId, context.orgId), inArray(inboxMessages.id, data.ids)));
+    return { ok: true };
+  });
+
+/** Bulk remove mails (org-scoped). */
+export const removeInboxMessages = createServerFn({ method: "POST" })
+  .middleware([requireOrg])
+  .inputValidator((data: unknown) =>
+    z.object({ ids: z.array(z.string().uuid()).min(1).max(200) }).parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    await db
+      .delete(inboxMessages)
+      .where(and(eq(inboxMessages.orgId, context.orgId), inArray(inboxMessages.id, data.ids)));
+    return { ok: true };
   });
 
 export const retryInboxMessage = createServerFn({ method: "POST" })

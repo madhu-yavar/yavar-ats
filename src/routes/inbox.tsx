@@ -3,14 +3,16 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Check, Copy, Loader2, Mail, RefreshCw, Trash2 } from "lucide-react";
+import { Check, Copy, Loader2, Mail, Paperclip, RefreshCw, Star, Trash2 } from "lucide-react";
 
 import {
   getInboxThread,
   orgInbox,
   removeInboxMessage,
+  removeInboxMessages,
   retryInboxMessage,
   saveCareersEmail,
+  setInboxStar,
   type InboxRow,
 } from "@/lib/local-inbox.functions";
 import { EmptyState, PageHeader } from "@/components/ats";
@@ -72,15 +74,25 @@ const STATUS_LABEL: Record<string, string> = {
   error: "Needs a look",
 };
 
+const fmtDate = (iso: string) => {
+  const d = new Date(iso);
+  return d.toDateString() === new Date().toDateString()
+    ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : d.toLocaleDateString([], { month: "short", day: "numeric" });
+};
+
 function InboxPage() {
   const qc = useQueryClient();
   const fetchInbox = useServerFn(orgInbox);
   const retry = useServerFn(retryInboxMessage);
   const remove = useServerFn(removeInboxMessage);
+  const removeBulk = useServerFn(removeInboxMessages);
+  const setStar = useServerFn(setInboxStar);
   const fetchThread = useServerFn(getInboxThread);
 
   const inbox = useQuery({ queryKey: ["org_inbox"], queryFn: () => fetchInbox({}) });
   const [threadKey, setThreadKey] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [busy, setBusy] = useState<string | null>(null);
@@ -113,7 +125,9 @@ function InboxPage() {
     const all = (inbox.data?.messages ?? []) as InboxRow[];
     const q = search.trim().toLowerCase();
     return all.filter((m) => {
-      if (status !== "all" && m.status !== status) return false;
+      if (status === "starred") {
+        if (!m.starred) return false;
+      } else if (status !== "all" && m.status !== status) return false;
       if (!q) return true;
       return [m.from_email, m.from_name, m.subject, m.attachment_name, m.detail]
         .filter(Boolean)
@@ -180,6 +194,40 @@ function InboxPage() {
       toast.error(e instanceof Error ? e.message : "That did not work.");
     } finally {
       setBusy(null);
+    }
+  };
+
+  const toggleSelectGroup = (ids: string[]) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const all = ids.every((id) => prev.has(id));
+      ids.forEach((id) => (all ? next.delete(id) : next.add(id)));
+      return next;
+    });
+
+  const allIds = groups.flatMap((g) => g.messages.map((m) => m.id));
+  const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id));
+
+  const bulkRemove = async () => {
+    setBusy("bulk");
+    try {
+      await removeBulk({ data: { ids: [...selected] } });
+      toast.success(`${selected.size} mail(s) removed.`);
+      setSelected(new Set());
+      await qc.invalidateQueries({ queryKey: ["org_inbox"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "That did not work.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const toggleStar = async (ids: string[], starred: boolean) => {
+    try {
+      await setStar({ data: { ids, starred } });
+      await qc.invalidateQueries({ queryKey: ["org_inbox"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "That did not work.");
     }
   };
 
@@ -278,6 +326,35 @@ function InboxPage() {
 
       <div className="panel p-5">
         <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="checkbox"
+            className="size-4 cursor-pointer accent-primary"
+            checked={allSelected}
+            onChange={() =>
+              setSelected(() => {
+                const next = new Set<string>();
+                if (!allSelected) allIds.forEach((id) => next.add(id));
+                return next;
+              })
+            }
+            aria-label="Select all conversations"
+          />
+          {selected.size > 0 ? (
+            <>
+              <span className="text-sm text-muted-foreground">{selected.size} selected</span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy === "bulk"}
+                onClick={() => void bulkRemove()}
+              >
+                <Trash2 className="mr-1 size-4" /> Remove
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
+                Clear
+              </Button>
+            </>
+          ) : null}
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -293,6 +370,7 @@ function InboxPage() {
               <SelectItem value="imported">Filed</SelectItem>
               <SelectItem value="updated">Updated</SelectItem>
               <SelectItem value="skipped">No CV</SelectItem>
+              <SelectItem value="starred">Starred</SelectItem>
               <SelectItem value="stored">Replies</SelectItem>
               <SelectItem value="error">Needs a look</SelectItem>
             </SelectContent>
@@ -317,44 +395,80 @@ function InboxPage() {
               hint="Send a test mail with a CV attached to the address above, or forward your careers mailbox to it."
             />
           ) : (
-            <div className="divide-y divide-border overflow-hidden rounded-md border border-border">
-              {groups.map((g) => (
-                <button
-                  key={g.key}
-                  type="button"
-                  className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
-                  onClick={() => setThreadKey(g.key)}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-medium text-foreground">
-                        {g.subject}
+            <div className="divide-y divide-border overflow-hidden rounded-md border border-border bg-card">
+              {groups.map((g) => {
+                const ids = g.messages.map((m) => m.id);
+                const unread = g.messages.some((m) => !m.read_at);
+                const starred = g.messages.some((m) => m.starred);
+                const checked = ids.every((id) => selected.has(id));
+                return (
+                  <div
+                    key={g.key}
+                    className={`flex items-start gap-2 px-3 py-2.5 transition-colors ${
+                      checked ? "bg-primary/5" : "hover:bg-muted/40"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-1.5 size-4 shrink-0 cursor-pointer accent-primary"
+                      checked={checked}
+                      onChange={() => toggleSelectGroup(ids)}
+                      aria-label="Select conversation"
+                    />
+                    <button
+                      type="button"
+                      className="mt-1 shrink-0"
+                      aria-label={starred ? "Unstar conversation" : "Star conversation"}
+                      onClick={() => void toggleStar(ids, !starred)}
+                    >
+                      <Star
+                        className={`size-4 ${
+                          starred ? "fill-amber-400 text-amber-400" : "text-muted-foreground"
+                        }`}
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      className="flex min-w-0 flex-1 items-baseline gap-3 text-left"
+                      onClick={() => setThreadKey(g.key)}
+                    >
+                      <span
+                        className={`w-44 shrink-0 truncate text-sm ${
+                          unread ? "font-semibold text-foreground" : "text-foreground/75"
+                        }`}
+                      >
+                        {g.last.from_name ?? g.last.from_email}
+                        {g.messages.length > 1 ? (
+                          <span className="ml-1 text-xs font-normal text-muted-foreground">
+                            {g.messages.length}
+                          </span>
+                        ) : null}
                       </span>
-                      {g.messages.length > 1 ? (
-                        <span className="shrink-0 rounded-full border border-border px-1.5 text-xs text-muted-foreground">
-                          {g.messages.length}
+                      <span className="min-w-0 flex-1 truncate text-sm">
+                        <span
+                          className={
+                            unread ? "font-semibold text-foreground" : "text-foreground/85"
+                          }
+                        >
+                          {g.subject}
+                        </span>
+                        {g.last.snippet ? (
+                          <span className="text-muted-foreground"> — {g.last.snippet}</span>
+                        ) : null}
+                      </span>
+                      {g.last.attachment_name ? (
+                        <span className="hidden shrink-0 items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground sm:inline-flex">
+                          <Paperclip className="size-3" />
+                          {g.last.attachment_name.replace(/\.[^.]+$/, "").slice(0, 18)}
                         </span>
                       ) : null}
-                    </div>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {g.last.from_name ?? g.last.from_email}
-                      {g.last.snippet ? ` — ${g.last.snippet}` : ""}
-                    </p>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {fmtDate(g.last.received_at)}
+                      </span>
+                    </button>
                   </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    <span className="whitespace-nowrap text-xs text-muted-foreground">
-                      {new Date(g.last.received_at).toLocaleString()}
-                    </span>
-                    <span
-                      className={`inline-flex rounded-full border px-2 py-0.5 text-xs ${
-                        STATUS_STYLE[g.last.status] ?? STATUS_STYLE["received"]
-                      }`}
-                    >
-                      {STATUS_LABEL[g.last.status] ?? g.last.status}
-                    </span>
-                  </div>
-                </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

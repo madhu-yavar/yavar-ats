@@ -1100,6 +1100,8 @@ export const inboxMessages = pgTable(
     requisitionId: uuid("requisition_id"),
     /** Set when the mail arrived through a reply token (Phase 1 reply routing). */
     applicationId: uuid("application_id"),
+    starred: boolean("starred").notNull().default(false),
+    readAt: timestamp("read_at", { withTimezone: true }),
     providerMessageId: text("provider_message_id"),
     receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
