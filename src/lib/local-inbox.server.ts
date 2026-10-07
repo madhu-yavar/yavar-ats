@@ -9,7 +9,7 @@
 import { and, desc, eq, ilike, inArray } from "drizzle-orm";
 
 import { db } from "../server/db";
-import { inboxMessages, organizations, requisitions } from "@db/schema";
+import { candidates, inboxMessages, organizations, requisitions } from "@db/schema";
 import { ingestCandidate, parseCv } from "./intake.server";
 
 export const INBOX_DOMAIN = process.env["INBOUND_EMAIL_DOMAIN"] ?? "careers.atsiq.yavar.ai";
@@ -218,12 +218,26 @@ export async function receiveMail(mail: InboundMail): Promise<InboundResult> {
   });
 
   if (!cv) {
+    // A plain reply still threads to its candidate when we know the sender —
+    // replies from unknown senders stay unlinked until reply tokens (roadmap).
+    let knownCandidateId: string | null = null;
+    if (sender.email) {
+      const [known] = await db
+        .select({ id: candidates.id })
+        .from(candidates)
+        .where(and(eq(candidates.email, sender.email), eq(candidates.orgId, org.id)))
+        .limit(1);
+      knownCandidateId = known?.id ?? null;
+    }
     return finish({
       status: filedDocs.length ? "stored" : "skipped",
       detail: filedDocs.length
         ? `${filedDocs.length} pre-onboarding document(s) filed for validation: ${filedDocs.join(", ")}.`
-        : "No CV attached — nothing to file.",
+        : knownCandidateId
+          ? "Reply from a known candidate — see the message body."
+          : "No CV attached — nothing to file.",
       messageId: savedId,
+      candidateId: knownCandidateId,
     });
   }
 

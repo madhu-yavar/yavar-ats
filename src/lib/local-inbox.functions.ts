@@ -78,6 +78,32 @@ export const orgInbox = createServerFn({ method: "GET" })
     };
   });
 
+/** One mail with its body, for the inbox reader pane. Org-scoped. */
+export const getInboxMessage = createServerFn({ method: "GET" })
+  .middleware([requireOrg])
+  .inputValidator((data: unknown) => z.object({ id: z.string().uuid() }).parse(data))
+  .handler(async ({ data, context }) => {
+    const [row] = await db
+      .select({
+        id: inboxMessages.id,
+        to_address: inboxMessages.toAddress,
+        from_email: inboxMessages.fromEmail,
+        from_name: inboxMessages.fromName,
+        subject: inboxMessages.subject,
+        body: inboxMessages.body,
+        attachment_name: inboxMessages.attachmentName,
+        status: inboxMessages.status,
+        detail: inboxMessages.detail,
+        candidate_id: inboxMessages.candidateId,
+        received_at: inboxMessages.receivedAt,
+      })
+      .from(inboxMessages)
+      .where(and(eq(inboxMessages.id, data.id), eq(inboxMessages.orgId, context.orgId)))
+      .limit(1);
+    if (!row) throw new Error("Message not found.");
+    return { ...row, received_at: row.received_at.toISOString() };
+  });
+
 export const retryInboxMessage = createServerFn({ method: "POST" })
   .middleware([requireOrg])
   .inputValidator((data: unknown) => z.object({ messageId: z.string().uuid() }).parse(data))

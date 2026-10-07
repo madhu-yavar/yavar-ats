@@ -3,9 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Check, Copy, Loader2, RefreshCw, Trash2 } from "lucide-react";
+import { Check, Copy, Loader2, Mail, RefreshCw, Trash2 } from "lucide-react";
 
 import {
+  getInboxMessage,
   orgInbox,
   removeInboxMessage,
   retryInboxMessage,
@@ -15,6 +16,14 @@ import {
 import { EmptyState, PageHeader } from "@/components/ats";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -66,8 +75,15 @@ function InboxPage() {
   const fetchInbox = useServerFn(orgInbox);
   const retry = useServerFn(retryInboxMessage);
   const remove = useServerFn(removeInboxMessage);
+  const fetchMessage = useServerFn(getInboxMessage);
 
   const inbox = useQuery({ queryKey: ["org_inbox"], queryFn: () => fetchInbox({}) });
+  const [reading, setReading] = useState<string | null>(null);
+  const message = useQuery({
+    queryKey: ["org_inbox_message", reading],
+    queryFn: () => fetchMessage({ data: { id: reading! } }),
+    enabled: Boolean(reading),
+  });
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [busy, setBusy] = useState<string | null>(null);
@@ -284,7 +300,16 @@ function InboxPage() {
                         <span className="block text-xs text-muted-foreground">{m.from_email}</span>
                       ) : null}
                     </td>
-                    <td className="max-w-xs py-2 pr-3 truncate">{m.subject ?? "—"}</td>
+                    <td className="max-w-xs py-2 pr-3">
+                      <button
+                        type="button"
+                        className="block truncate text-left text-foreground underline-offset-2 hover:text-primary hover:underline"
+                        onClick={() => setReading(m.id)}
+                        title="Read this mail"
+                      >
+                        {m.subject ?? "(no subject)"}
+                      </button>
+                    </td>
                     <td className="max-w-[12rem] py-2 pr-3 truncate font-mono text-xs">
                       {m.attachment_name ?? "—"}
                     </td>
@@ -341,6 +366,53 @@ function InboxPage() {
             </table>
           )}
         </div>
+
+        <Dialog open={Boolean(reading)} onOpenChange={(o) => !o && setReading(null)}>
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Mail className="size-4 text-muted-foreground" />
+                {message.data?.subject ?? "(no subject)"}
+              </DialogTitle>
+              <DialogDescription>
+                {message.data
+                  ? `${message.data.from_name ?? message.data.from_email ?? "Unknown sender"} · ${new Date(message.data.received_at).toLocaleString()}`
+                  : "Loading…"}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 text-sm">
+              <div className="space-y-1 rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+                <div>
+                  From: <span className="num">{message.data?.from_email ?? "—"}</span>
+                </div>
+                <div>
+                  To: <span className="num">{message.data?.to_address ?? "—"}</span>
+                </div>
+                {message.data?.attachment_name ? (
+                  <div>
+                    Attachment: <span className="num">{message.data.attachment_name}</span>
+                  </div>
+                ) : null}
+                {message.data?.detail ? <div>Outcome: {message.data.detail}</div> : null}
+              </div>
+              <div className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-md border border-border p-3 leading-relaxed">
+                {message.data?.body || "(no readable body — this mail arrived without plain text)"}
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              {message.data?.candidate_id ? (
+                <Button asChild variant="outline">
+                  <Link to="/candidates/$id" params={{ id: message.data.candidate_id }}>
+                    Open candidate
+                  </Link>
+                </Button>
+              ) : null}
+              <Button variant="ghost" onClick={() => setReading(null)}>
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
